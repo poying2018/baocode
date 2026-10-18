@@ -30,16 +30,21 @@ class CacheEmojiSheetStore implements EmojiSheetStore {
   @override
   Future<void> download(Uri url, String name) async {
     await Directory(_dir).create(recursive: true);
-    // The Google set alone, as kept before the others were.
-    final before = p.join(
-      DataDirectory.current.cacheDir,
-      'emoji',
-      'google-${EmojiSheet.version}',
+    // Other versions' sheets, the Google set alone as kept before the
+    // others were among them: their catalog is not this one's, and 45 MB
+    // apiece is worth taking out.
+    final root = Directory(
+      p.join(DataDirectory.current.cacheDir, 'emoji'),
     );
     try {
-      await Directory(before).delete(recursive: true);
+      await for (final entry in root.list(followLinks: false)) {
+        if (entry is Directory &&
+            p.basename(entry.path) != EmojiSheet.version) {
+          await entry.delete(recursive: true);
+        }
+      }
     } on Object {
-      // Not there.
+      // Nothing there yet.
     }
     await HttpDownloader().download(url, _file(name).path);
   }

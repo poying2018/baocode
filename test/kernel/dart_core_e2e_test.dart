@@ -297,9 +297,15 @@ void main() {
       KernelTask? foreground() => transcript.tasks
           .where((t) => !t.background && t.toolUseId != null)
           .firstOrNull;
-      await until(() => foreground() != null);
+      await until(
+        () => foreground() != null,
+        what: 'a foreground task ${shown(transcript)}',
+      );
       kernel.moveToBackground(foreground()!.toolUseId!);
-      await until(() => shown(transcript).contains('text: moved on'));
+      await until(
+        () => shown(transcript).contains('text: moved on'),
+        what: 'the turn on ${shown(transcript)}',
+      );
       expect(
         shown(transcript),
         contains('terminal: sleep 3; echo bg-done (background)'),

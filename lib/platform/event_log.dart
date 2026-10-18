@@ -75,7 +75,11 @@ class EventLog {
   }
 
   void _append(String text) {
-    File(path).writeAsStringSync(text, mode: FileMode.append, flush: true);
+    // No flush: each one is a flush to the disk, and the events come in
+    // bursts (a window dragged, views laid out) on the thread that draws.
+    // What is written is there for a reader at once; only a power cut
+    // before the system writes it out loses it.
+    File(path).writeAsStringSync(text, mode: FileMode.append);
     _size += text.length;
   }
 }
