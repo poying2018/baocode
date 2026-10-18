@@ -1348,12 +1348,11 @@ class ClaudeTranslator {
       }
     }
     if (lines.isEmpty) return false;
-    final slash = path.lastIndexOf('/');
     _put(
       id,
       CodeDiffItem(
-        fileName: path.substring(slash + 1),
-        directory: slash < 0 ? '' : path.substring(0, slash),
+        fileName: fileNameOf(path),
+        directory: directoryOf(path),
         lines: lines,
         added: added,
         removed: removed,

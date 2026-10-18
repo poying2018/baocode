@@ -701,9 +701,20 @@ class FileChange {
   /// that over.
   final bool conflict;
 
-  String get fileName => path.split('/').last;
-  String get directory {
-    final index = path.lastIndexOf('/');
-    return index < 0 ? '' : path.substring(0, index);
-  }
+  String get fileName => fileNameOf(path);
+  String get directory => directoryOf(path);
 }
+
+/// The name of the file [path] names, whichever separator it is written
+/// with: an agent on Windows says `C:\project\a.dart`, on macOS
+/// `/project/a.dart`, and either may be about another machine's files.
+String fileNameOf(String path) => path.split(_pathSeparators).last;
+
+/// [path] without its file name, its separators as they were written;
+/// empty for a bare name.
+String directoryOf(String path) {
+  final index = path.lastIndexOf(_pathSeparators);
+  return index < 0 ? '' : path.substring(0, index);
+}
+
+final _pathSeparators = RegExp(r'[\\/]');
