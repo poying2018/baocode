@@ -324,8 +324,18 @@ class ClaudeCodeKernel
   }
 
   /// The model asked for, as the CLI names it (e.g. `opus[1m]`), or a
-  /// provider's ([modelRef]).
-  String? _model;
+  /// provider's ([modelRef]). BaoCode's own core has no model of its own:
+  /// on it, one of no upstream is the first upstream's model.
+  String? get _model {
+    final picked = _pickedModel;
+    if (_providers.builtinAvailable || _providers.resolve(picked) != null) {
+      return picked;
+    }
+    return _providers.firstModel;
+  }
+
+  set _model(String? model) => _pickedModel = model;
+  String? _pickedModel;
 
   /// What the process was started on: [_providerKey] then. A provider
   /// is taken up only at start, so another is by a restart (see
@@ -2684,19 +2694,18 @@ class ClaudeCodeKernel
   /// Each name [provider]'s models are asked for by, with each effort
   /// through the proxy.
   static List<String> _requestedModels(ModelProvider provider) => {
-    for (final info in provider.models)
-      if (info.enabled) ...[
-        requestedModel(provider, info),
-        if (provider.protocol.proxied)
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort),
-        if (provider.protocol == ProviderProtocol.openaiResponses ||
-            provider.protocol == ProviderProtocol.codex) ...[
-          requestedModel(provider, info, fast: true),
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort, fast: true),
-        ],
+    for (final info in provider.enabledModels) ...[
+      requestedModel(provider, info),
+      if (provider.protocol.proxied)
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort),
+      if (provider.protocol == ProviderProtocol.openaiResponses ||
+          provider.protocol == ProviderProtocol.codex) ...[
+        requestedModel(provider, info, fast: true),
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort, fast: true),
       ],
+    ],
   }.toList();
 
   /// The efforts Claude Code itself takes (`--effort`, `effortLevel`).
@@ -2746,8 +2755,9 @@ class ClaudeCodeKernel
     options: () {
       final providers = _providers.enabled;
       return [
-        // Shown unless turned off in Settings → Models.
-        if (!_providers.builtinHidden)
+        // Shown unless turned off in Settings → Models; never on BaoCode's
+        // own core, which runs on the upstreams alone.
+        if (_providers.builtinOffered)
           if (_models.isEmpty)
             // Its models not known (it is not logged in, or no session has
             // started on it yet): picking this starts one, which lists them.
@@ -2796,6 +2806,8 @@ class ClaudeCodeKernel
     },
     selected: () {
       if (_custom != null) return _model;
+      // BaoCode's own core with no upstream: none to run on.
+      if (!_providers.builtinAvailable) return null;
       return switch (_currentModel?.value) {
         final value? => _baseOf(value),
         null => _models.isEmpty ? 'default' : null,

@@ -97,7 +97,7 @@ class BrowserSettingsPage extends StatelessWidget {
       children: [
         if (!bridge.supported)
           SettingsCard(
-            children: [SettingsRow(label: l10n.browserSettingsMacOSOnly)],
+            children: [SettingsRow(label: l10n.browserSettingsUnsupported)],
           )
         else ...[
           SettingsCard(

@@ -57,6 +57,63 @@ enum ProviderAuth {
       values.where((value) => value.id == id).firstOrNull ?? auto;
 }
 
+/// What a model of an upstream is for.
+enum ModelKind {
+  /// A conversation: offered in the picker.
+  chat('chat'),
+
+  /// Pictures, asked of the Images API (`/images/generations`): the
+  /// agents' `generate_image`.
+  image('image'),
+
+  /// Pictures, asked in a conversation (Chat Completions with
+  /// `modalities`, as OpenRouter's Gemini image models): the agents'
+  /// `generate_image`, not the picker.
+  imageChat('image-chat');
+
+  const ModelKind(this.id);
+
+  /// As settings.json has it.
+  final String id;
+
+  /// Whether it makes pictures, not conversations.
+  bool get generatesImages => this != chat;
+
+  static ModelKind? parse(Object? id) =>
+      values.where((value) => value.id == id).firstOrNull;
+}
+
+/// What a model of [id] is for, as its name tells: an image model's of
+/// the known families; else a conversation's.
+ModelKind guessModelKind(String id) {
+  final name = id.toLowerCase().split('/').last;
+  final words = name.split(RegExp(r'[-_.:\s]+'));
+  // Not a video model's (`grok-imagine-video`): those are not made here.
+  if (words.contains('video')) return ModelKind.chat;
+  final image = words.any(_imageWords.contains);
+  // Gemini's image models (Nano Banana, however a relay spells it) answer
+  // in a conversation.
+  if (name.contains('banana') || (name.startsWith('gemini') && image)) {
+    return ModelKind.imageChat;
+  }
+  if (image || _imageModel.hasMatch(name)) return ModelKind.image;
+  return ModelKind.chat;
+}
+
+/// The words of a name that say it makes pictures (`gpt-image-2`,
+/// `grok-imagine-image`, `qwen-image-edit`).
+const _imageWords = {'image', 'images', 'imagine', 'img'};
+
+/// The image models of OpenAI (GPT Image, DALL·E), Google (Imagen),
+/// ByteDance (Seedream), Zhipu (CogView), Alibaba (Wanx, Qwen-Image),
+/// Black Forest Labs (FLUX), Stability, Kwai (Kolors), Tencent (Hunyuan),
+/// Ideogram, Recraft and Midjourney's relays.
+final _imageModel = RegExp(
+  r'^(?:gpt-image|chatgpt-image|dall-e|imagen-|seedream|doubao-seedream|'
+  r'cogview|wanx|wan2\.\d+-t2i|wan\d*-?t2i|qwen-image|flux|stable-diffusion|'
+  r'sdxl|sd3|kolors|hunyuan-image|hunyuanimage|ideogram|recraft|midjourney|mj_)',
+);
+
 /// One model of an upstream.
 class ProviderModel {
   const ProviderModel({
@@ -69,6 +126,7 @@ class ProviderModel {
     this.enabled = true,
     this.custom = false,
     this.missing = false,
+    this._kind,
   });
 
   /// The efforts offered unless the model has its own: `none` turns its
@@ -128,6 +186,16 @@ class ProviderModel {
   /// Listed once, but no longer by the upstream: kept, and marked.
   final bool missing;
 
+  /// What it is for, as set (by the user, or as the upstream listed it);
+  /// null to go by its name ([guessModelKind]).
+  final ModelKind? _kind;
+
+  /// What it is for: as set, else as its name tells.
+  ModelKind get kind => _kind ?? guessModelKind(id);
+
+  /// What it is for, as set; null when it goes by its name.
+  ModelKind? get kindSet => _kind;
+
   String get displayName => switch (label?.trim()) {
     final label? when label.isNotEmpty => label,
     _ => id,
@@ -171,6 +239,7 @@ class ProviderModel {
     bool? enabled,
     bool? custom,
     bool? missing,
+    ModelKind? Function()? kind,
   }) => ProviderModel(
     id: id ?? this.id,
     label: label == null ? this.label : label(),
@@ -181,6 +250,7 @@ class ProviderModel {
     enabled: enabled ?? this.enabled,
     custom: custom ?? this.custom,
     missing: missing ?? this.missing,
+    kind: kind == null ? _kind : kind(),
   );
 
   Map<String, Object?> toJson() => {
@@ -193,6 +263,7 @@ class ProviderModel {
     if (!enabled) 'enabled': false,
     if (custom) 'custom': true,
     if (missing) 'missing': true,
+    'kind': ?_kind?.id,
   };
 
   static ProviderModel? fromJson(Object? json) {
@@ -224,6 +295,7 @@ class ProviderModel {
       enabled: json['enabled'] != false,
       custom: json['custom'] == true,
       missing: json['missing'] == true,
+      kind: ModelKind.parse(json['kind']),
     );
   }
 
@@ -238,7 +310,8 @@ class ProviderModel {
       other.images == images &&
       other.enabled == enabled &&
       other.custom == custom &&
-      other.missing == missing;
+      other.missing == missing &&
+      other._kind == _kind;
 
   @override
   int get hashCode => Object.hash(
@@ -251,6 +324,7 @@ class ProviderModel {
     enabled,
     custom,
     missing,
+    _kind,
   );
 
   static bool _sameList<T>(List<T>? a, List<T>? b) {
@@ -551,9 +625,16 @@ class ModelProvider {
   ProviderAccount? account(String id) =>
       accounts.where((account) => account.id == id).firstOrNull;
 
+  /// The conversation models offered in the picker.
   List<ProviderModel> get enabledModels => [
     for (final model in models)
-      if (model.enabled) model,
+      if (model.enabled && !model.kind.generatesImages) model,
+  ];
+
+  /// The image models turned on: the agents' `generate_image`'s.
+  List<ProviderModel> get imageModels => [
+    for (final model in models)
+      if (model.enabled && model.kind.generatesImages) model,
   ];
 
   ProviderModel? model(String id) =>

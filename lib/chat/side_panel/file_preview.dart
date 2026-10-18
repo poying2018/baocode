@@ -11,6 +11,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:path/path.dart' as p;
 
+import '../../base/smooth_scroll.dart';
 import '../../ide/file_service.dart';
 import '../../ide/ide_agent_edits.dart';
 import '../../ide/ide_code_editor.dart';
@@ -792,7 +793,7 @@ class _Lines extends StatefulWidget {
 }
 
 class _LinesState extends State<_Lines> {
-  final _scroll = ScrollController();
+  final _scroll = SmoothScrollController();
   final _sideways = ScrollController();
   late final _selection = _LinesSelection(
     (first, last, text) => widget.onCopy?.call(first, last, text),

@@ -12,6 +12,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../base/smooth_scroll.dart';
 import '../l10n/l10n.dart';
 import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
@@ -132,7 +133,7 @@ class _Agent extends _Entry {
 class _IdeChatHistoryState extends State<IdeChatHistory> {
   final _query = TextEditingController();
   final _input = FocusNode();
-  final _scroll = ScrollController();
+  final _scroll = SmoothScrollController();
 
   /// Archived agents listed too, in a group of their own at the end.
   bool _archived = false;

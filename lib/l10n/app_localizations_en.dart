@@ -1421,6 +1421,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cmdToggleSidePanel => 'Toggle Side Panel';
 
   @override
+  String get cmdToggleSidePanelPosition => 'Toggle Side Panel Position';
+
+  @override
   String get cmdSidePanelChanges => 'Show Agent Changes';
 
   @override
@@ -1622,6 +1625,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sidePanelHide => 'Hide side panel';
+
+  @override
+  String get sidePanelMoveLeft => 'Move to the Left of the Conversation';
+
+  @override
+  String get sidePanelMoveRight => 'Move to the Right of the Conversation';
 
   @override
   String get sidePanelChanges => 'Changes';
@@ -2304,6 +2313,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get toolUsed => 'Used';
 
   @override
+  String get toolGeneratingImage => 'Generating image';
+
+  @override
+  String get toolGeneratedImage => 'Generated image';
+
+  @override
+  String get toolImageFailed => 'Image not generated';
+
+  @override
+  String get toolImageWaiting => 'Generate image';
+
+  @override
+  String get imagePickTitle => 'Pick the model to generate it with';
+
+  @override
+  String get imagePickGenerate => 'Generate';
+
+  @override
+  String get imagePickDecline => 'Skip';
+
+  @override
+  String get imageSetDefault => 'Set as default';
+
+  @override
+  String get imageDefaultSet => 'Set as default image model';
+
+  @override
   String get toolProposingGoal => 'Proposing a goal';
 
   @override
@@ -2506,7 +2542,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get turnSpeedHint => 'Output speed';
+  String get turnSpeedHint => 'Average output speed';
+
+  @override
+  String turnOutputTokens(String tokens) {
+    return '↓ $tokens tokens';
+  }
+
+  @override
+  String get turnOutputTokensHint => 'Written so far this turn';
+
+  @override
+  String get turnSpeedLiveHint => 'Output speed';
 
   @override
   String get turnDurationHint => 'Time this turn took';
@@ -2596,7 +2643,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get activityMusings =>
-      'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nReticulating splines\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nTuning the vibes\nBinding the monad\nLifting into the monad\nAsking the oracle\nStirring the pot\nPolishing the plan';
+      'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nBinding the monad\nAsking the oracle\nStirring the pot\nPolishing the plan';
+
+  @override
+  String activityMusingsCommand(String name) {
+    return 'Squinting at $name\'s output\nDigesting what $name said\nPicking through $name\'s output\nNodding along to $name';
+  }
+
+  @override
+  String activityMusingsCommandFailed(String name) {
+    return 'Staring down $name\'s error\nAsking $name what went wrong\nUntangling $name\'s complaint\nConsoling $name';
+  }
+
+  @override
+  String activityMusingsRead(String name) {
+    return 'Leafing through $name\nGetting to know $name\nPulling threads in $name\nReading between the lines of $name';
+  }
+
+  @override
+  String activityMusingsEdit(String name) {
+    return 'Admiring the new $name\nDouble-checking $name\nHoping $name still compiles\nGiving $name a once-over';
+  }
+
+  @override
+  String activityMusingsSearch(String name) {
+    return 'Panning $name results for gold\nSifting through $name matches\nFollowing $name leads';
+  }
+
+  @override
+  String activityMusingsFolder(String name) {
+    return 'Poking around $name\nTaking roll call in $name\nSizing up $name';
+  }
+
+  @override
+  String activityMusingsWeb(String name) {
+    return 'Taking notes from $name\nDigesting $name';
+  }
+
+  @override
+  String activityMusingsAgent(String name) {
+    return 'Debriefing $name\nGrading $name\'s homework\nGoing over $name\'s findings';
+  }
+
+  @override
+  String activityMusingsMcp(String name) {
+    return 'Unwrapping $name\'s reply\nSeeing what $name sent back';
+  }
+
+  @override
+  String get activityMusingsBrowser =>
+      'Peering at the page\nSquinting at the screenshot';
+
+  @override
+  String get activityMusingsImage =>
+      'Admiring the fresh picture\nNitpicking the new image';
+
+  @override
+  String get activityMusingsDenied =>
+      'Finding another way\nTaking the scenic route';
 
   @override
   String get composerCommands => 'Commands';
@@ -3406,6 +3510,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get generalSettingsCommitAttributionDescription =>
       'Who the commits and pull requests an agent writes credit. Applies to agents started after a change; Claude Code only for now.';
+
+  @override
+  String get generalSettingsClaudeCore => 'Core';
+
+  @override
+  String get generalSettingsClaudeCoreDescription =>
+      'What runs Claude Code sessions. The built-in core is BaoCode\'s own, written in Dart: the same tools, settings, CLAUDE.md, skills, subagents, hooks, MCP servers and session files as the CLI; it runs on the upstreams added in Settings → Models alone, never on a model the machine\'s Claude Code setup names. The CLI is Anthropic\'s, and follows that setup; pick it to sign in with a Claude subscription. Applies to sessions started after a change, on this machine and on remote hosts.';
+
+  @override
+  String get generalSettingsClaudeCoreBuiltin => 'Built-in (Dart)';
+
+  @override
+  String get generalSettingsClaudeCoreCli => 'Claude Code CLI';
 
   @override
   String get generalSettingsQueuedMessages => 'Messages Sent While Working';
@@ -6803,6 +6920,38 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsNoImages => 'Does not take images';
 
   @override
+  String get modelsKind => 'Used for';
+
+  @override
+  String get modelsKindChat => 'Conversations';
+
+  @override
+  String get modelsKindImage => 'Image generation (Images API)';
+
+  @override
+  String get modelsKindImageChat => 'Image generation (in a conversation)';
+
+  @override
+  String get modelsKindDescription =>
+      'Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.';
+
+  @override
+  String get modelsImageBadge => 'Image';
+
+  @override
+  String get modelsImage => 'Image model';
+
+  @override
+  String get modelsImageDescription =>
+      'What agents make pictures with (the generate_image tool), unless you ask them for another; asked each time, you pick it in the conversation. Turn on image models in an upstream\'s list.';
+
+  @override
+  String get modelsImageFirst => 'Ask each time';
+
+  @override
+  String get modelsImageNone => 'None turned on';
+
+  @override
   String get modelsSave => 'Save';
 
   @override
@@ -8528,6 +8677,28 @@ class AppLocalizationsEn extends AppLocalizations {
       'Has AI make the selection clearer, in your words, without adding structure';
 
   @override
+  String get composerPolish => 'Polish';
+
+  @override
+  String get composerPolishing => 'Polishing…';
+
+  @override
+  String get composerPolishHint =>
+      'Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back';
+
+  @override
+  String composerPolishFailed(String error) {
+    return 'Could not polish: $error';
+  }
+
+  @override
+  String get generalSettingsComposerPolish => 'Polish button';
+
+  @override
+  String get generalSettingsComposerPolishDescription =>
+      'A button in the message box that has the auxiliary model make what you wrote clearer before you send it';
+
+  @override
   String stashPolishFailed(String error) {
     return 'Could not polish: $error';
   }
@@ -9344,8 +9515,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Let agents use your own browser, signed in as you: open pages, read them, click and type in the tabs you share with them. You can watch every step in the side panel.';
 
   @override
-  String get browserSettingsMacOSOnly =>
-      'The browser is available on macOS only for now.';
+  String get browserSettingsUnsupported =>
+      'The browser is available on macOS and Windows only for now.';
 
   @override
   String get browserSettingsEnabled => 'Let Agents Use the Browser';

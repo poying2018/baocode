@@ -297,8 +297,24 @@ class RemoteServer {
         (await _claude.locate()).executable;
     handlers[RemoteProtocol.claudeStart] = (params, _) async {
       final args = paramsOf(params);
-      final cli = await _claude.locate();
       final cwd = args['cwd'] as String;
+      if (args['core'] == 'builtin') {
+        if (!Directory(cwd).existsSync()) {
+          throw IdeFileNotFoundException(cwd);
+        }
+        return _track(
+          await ServerClaude.startBuiltin(
+            cwd: cwd,
+            arguments: (args['arguments'] as List).cast<String>(),
+            settings: (args['settings'] as Map?)?.cast<String, Object?>(),
+            cleared: (args['cleared'] as List? ?? const []).cast<String>(),
+            environment:
+                (args['environment'] as Map?)?.cast<String, String>() ??
+                const {},
+          ),
+        );
+      }
+      final cli = await _claude.locate();
       if (!Directory(cwd).existsSync()) {
         throw IdeFileNotFoundException(cwd);
       }

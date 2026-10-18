@@ -184,6 +184,35 @@ Root: HKA; Subkey: "Software\Classes\baocode\DefaultIcon"; ValueType: string; \
 Root: HKA; Subkey: "Software\Classes\baocode\shell\open\command"; \
   ValueType: string; ValueName: ""; \
   ValueData: """{app}\baocode.exe"" --baocode-link ""%1"""
+; The browsers' native messaging host for BaoCode's extension, always
+; (windows/BrowserBridge): a browser finds dev.baocode.browser.json, beside
+; baocode.exe, by its key, and the manifest names the host beside it.
+; Chrome's key is also the one Brave, Vivaldi and other Chromium browsers
+; read; Edge and Chromium read their own. The keys above go at uninstall
+; too when nothing else is left in them (the browser is not installed).
+Root: HKA; Subkey: "Software\Google"; ValueType: none; \
+  Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Google\Chrome"; ValueType: none; \
+  Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Google\Chrome\NativeMessagingHosts"; \
+  ValueType: none; Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Google\Chrome\NativeMessagingHosts\dev.baocode.browser"; \
+  ValueType: string; ValueName: ""; \
+  ValueData: "{app}\dev.baocode.browser.json"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Microsoft\Edge"; ValueType: none; \
+  Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts"; \
+  ValueType: none; Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Microsoft\Edge\NativeMessagingHosts\dev.baocode.browser"; \
+  ValueType: string; ValueName: ""; \
+  ValueData: "{app}\dev.baocode.browser.json"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Chromium"; ValueType: none; \
+  Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Chromium\NativeMessagingHosts"; \
+  ValueType: none; Flags: uninsdeletekeyifempty
+Root: HKA; Subkey: "Software\Chromium\NativeMessagingHosts\dev.baocode.browser"; \
+  ValueType: string; ValueName: ""; \
+  ValueData: "{app}\dev.baocode.browser.json"; Flags: uninsdeletekey
 ; Unticked: what an earlier install added goes.
 Root: HKA; Subkey: "Software\Classes\*\shell\BaoCode"; ValueType: none; \
   Tasks: not contextmenu; Flags: deletekey

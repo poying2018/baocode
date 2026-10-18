@@ -1384,6 +1384,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cmdToggleSidePanel => '切换侧栏';
 
   @override
+  String get cmdToggleSidePanelPosition => '切换侧栏位置';
+
+  @override
   String get cmdSidePanelChanges => '显示智能体变更';
 
   @override
@@ -1582,6 +1585,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidePanelHide => '隐藏侧栏';
+
+  @override
+  String get sidePanelMoveLeft => '移到对话左侧';
+
+  @override
+  String get sidePanelMoveRight => '移到对话右侧';
 
   @override
   String get sidePanelChanges => '变更';
@@ -2229,6 +2238,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get toolUsed => '已使用';
 
   @override
+  String get toolGeneratingImage => '正在生成图片';
+
+  @override
+  String get toolGeneratedImage => '已生成图片';
+
+  @override
+  String get toolImageFailed => '图片未生成';
+
+  @override
+  String get toolImageWaiting => '生成图片';
+
+  @override
+  String get imagePickTitle => '选择用来生成的模型';
+
+  @override
+  String get imagePickGenerate => '生成';
+
+  @override
+  String get imagePickDecline => '不生成';
+
+  @override
+  String get imageSetDefault => '设为默认';
+
+  @override
+  String get imageDefaultSet => '已设为默认图片模型';
+
+  @override
   String get toolProposingGoal => '正在提议目标';
 
   @override
@@ -2422,7 +2458,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get turnSpeedHint => '输出速度';
+  String get turnSpeedHint => '平均输出速度';
+
+  @override
+  String turnOutputTokens(String tokens) {
+    return '↓ $tokens tokens';
+  }
+
+  @override
+  String get turnOutputTokensHint => '本轮已输出';
+
+  @override
+  String get turnSpeedLiveHint => '输出速度';
 
   @override
   String get turnDurationHint => '本轮耗时';
@@ -2511,7 +2558,61 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activityMusings =>
-      '冥思苦想\n琢磨一下\n慢慢酝酿\n深思熟虑\n文火慢炖\n入味中\n修修补补\n融会贯通\n反复掂量\n连点成线\n追一个直觉\n酝酿计划\n孵化方案\n权衡利弊\n理清头绪\n赶着一群 token\n召唤上下文\n网格化样条曲线\n请教小黄鸭\n看茶叶占卜\n在餐巾纸上打草稿\n在页边涂鸦\n眯眼看 diff\n数括号\n和编译器交朋友\n与类型系统谈判\n驯服边界情况\n追踪调用栈\n翻阅文档\n探索代码库\n把鸭子排成一排\n摇一摇魔法 8 号球\n预热神经元\n折叠思绪\n调整状态\n绑定 Monad\n提升进 Monad\n求问神谕\n搅一搅锅\n打磨计划';
+      '冥思苦想\n琢磨一下\n慢慢酝酿\n深思熟虑\n文火慢炖\n修修补补\n融会贯通\n反复掂量\n连点成线\n追一个直觉\n酝酿计划\n孵化方案\n权衡利弊\n理清头绪\n赶着一群 token\n召唤上下文\n请教小黄鸭\n在餐巾纸上打草稿\n眯眼看 diff\n数括号\n和编译器交朋友\n与类型系统谈判\n驯服边界情况\n追踪调用栈\n翻阅文档\n探索代码库\n摇一摇魔法 8 号球\n绑定 Monad\n求问神谕\n打磨计划\n打个腹稿\n掐指一算\n抽丝剥茧\n顺藤摸瓜\n在脑子里跑一遍\n把思路捋直\n拆解问题';
+
+  @override
+  String activityMusingsCommand(String name) {
+    return '对着 $name 的输出点点头\n品一品 $name 的输出\n给 $name 的输出划重点\n看 $name 跑出了什么名堂\n把 $name 的结果过一遍';
+  }
+
+  @override
+  String activityMusingsCommandFailed(String name) {
+    return '和 $name 的报错大眼瞪小眼\n盯着 $name 的报错挠头\n给 $name 的报错号号脉\n琢磨 $name 为什么不高兴\n顺着 $name 的报错往回找';
+  }
+
+  @override
+  String activityMusingsRead(String name) {
+    return '把 $name 翻来覆去地看\n在 $name 里找线头\n跟 $name 混个脸熟\n在 $name 的字里行间找答案\n把 $name 记在心里';
+  }
+
+  @override
+  String activityMusingsEdit(String name) {
+    return '欣赏刚改好的 $name\n替 $name 捏把汗\n回头再瞄一眼 $name\n想想 $name 还缺点啥\n给 $name 收个尾';
+  }
+
+  @override
+  String activityMusingsSearch(String name) {
+    return '在 $name 处结果里淘金\n从 $name 处结果里挑出真身\n顺着 $name 条线索摸过去';
+  }
+
+  @override
+  String activityMusingsFolder(String name) {
+    return '在 $name 里东张西望\n给 $name 点个名\n摸清 $name 的家底';
+  }
+
+  @override
+  String activityMusingsWeb(String name) {
+    return '从 $name 抄点笔记\n消化 $name 上看来的东西';
+  }
+
+  @override
+  String activityMusingsAgent(String name) {
+    return '听 $name 汇报\n批改 $name 交上来的作业\n消化 $name 带回来的情报';
+  }
+
+  @override
+  String activityMusingsMcp(String name) {
+    return '拆 $name 寄回来的包裹\n看 $name 回了些什么';
+  }
+
+  @override
+  String get activityMusingsBrowser => '端详页面截图\n看看浏览器里发生了什么';
+
+  @override
+  String get activityMusingsImage => '端详刚画好的图\n给新图挑挑刺';
+
+  @override
+  String get activityMusingsDenied => '收到，换条路走\n另想办法';
 
   @override
   String get composerCommands => '命令';
@@ -3272,6 +3373,19 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get generalSettingsCommitAttributionDescription =>
       'Agent 在它写的提交和 Pull Request 中添加的署名。更改对之后启动的 Agent 生效；目前仅支持 Claude Code。';
+
+  @override
+  String get generalSettingsClaudeCore => '内核';
+
+  @override
+  String get generalSettingsClaudeCoreDescription =>
+      '运行 Claude Code 会话的内核。内置内核是 BaoCode 自己用 Dart 写的：工具、设置、CLAUDE.md、Skills、子代理、Hooks、MCP 服务器和会话文件都与 CLI 相同；它只用 设置 → 模型 里添加的上游，不用本机 Claude Code 配置的模型。CLI 是 Anthropic 的命令行程序，跟随本机配置；用 Claude 订阅账号登录请选它。更改对之后启动的会话生效，本机和远程主机都适用。';
+
+  @override
+  String get generalSettingsClaudeCoreBuiltin => '内置（Dart）';
+
+  @override
+  String get generalSettingsClaudeCoreCli => 'Claude Code CLI';
 
   @override
   String get generalSettingsQueuedMessages => '工作中发送的消息';
@@ -6384,6 +6498,38 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsNoImages => '不支持图片';
 
   @override
+  String get modelsKind => '用途';
+
+  @override
+  String get modelsKindChat => '对话';
+
+  @override
+  String get modelsKindImage => '图片生成（Images API）';
+
+  @override
+  String get modelsKindImageChat => '图片生成（对话接口）';
+
+  @override
+  String get modelsKindDescription =>
+      '图片模型不出现在模型选择器里：agent 通过 generate_image 工具用它们生成图片。';
+
+  @override
+  String get modelsImageBadge => '图片';
+
+  @override
+  String get modelsImage => '图片生成模型';
+
+  @override
+  String get modelsImageDescription =>
+      'agent 生成图片（generate_image 工具）时用的模型，除非你让它换一个；选「每次询问」时在对话里选。图片模型在上游的模型列表里启用。';
+
+  @override
+  String get modelsImageFirst => '每次询问';
+
+  @override
+  String get modelsImageNone => '未启用图片模型';
+
+  @override
   String get modelsSave => '保存';
 
   @override
@@ -8044,6 +8190,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashPolishHint => '让 AI 把选中的文字理顺，保持你的原意，不加结构';
 
   @override
+  String get composerPolish => '润色';
+
+  @override
+  String get composerPolishing => '润色中…';
+
+  @override
+  String get composerPolishHint =>
+      '润色：用辅助模型把消息改得更清楚，保留你的意思和口吻；图片、文件、代码和链接原样不动，可撤销';
+
+  @override
+  String composerPolishFailed(String error) {
+    return '润色失败：$error';
+  }
+
+  @override
+  String get generalSettingsComposerPolish => '润色按钮';
+
+  @override
+  String get generalSettingsComposerPolishDescription =>
+      '在输入框里显示润色按钮，发送前用辅助模型把写的内容改得更清楚';
+
+  @override
   String stashPolishFailed(String error) {
     return '没能润色：$error';
   }
@@ -8833,7 +9001,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '让 agent 用你自己的浏览器，沿用你的登录状态：在你共享给它的标签页里打开网页、读取内容、点击和输入。它的每一步操作都能在侧边栏里看到。';
 
   @override
-  String get browserSettingsMacOSOnly => '浏览器功能目前只支持 macOS。';
+  String get browserSettingsUnsupported => '浏览器功能目前只支持 macOS 和 Windows。';
 
   @override
   String get browserSettingsEnabled => '允许 agent 使用浏览器';

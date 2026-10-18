@@ -48,11 +48,12 @@ Map<String, String> launchEnvironment({
     ClaudeModelVariables.sonnet: roles.sonnet ?? model,
     // The background work: the model picked, unless one is set for it.
     ClaudeModelVariables.haiku: roles.haiku ?? model,
-    ClaudeModelVariables.subagent: ?roles.subagent,
+    // Empty for none: not one the user's own settings name.
+    ClaudeModelVariables.subagent: roles.subagent ?? '',
     // Over the model a subagent's definition names, or the agent asks for
     // ("sonnet", "haiku": the model picked, here): else the one set for
     // subagents is used only where neither says.
-    if (roles.subagent != null) ClaudeModelVariables.subagentForce: '1',
+    ClaudeModelVariables.subagentForce: roles.subagent != null ? '1' : '',
     // Unknown Anthropic-compatible models can still accept output_config.effort.
     if (!provider.protocol.proxied)
       ClaudeModelVariables.alwaysEnableEffort: '1',

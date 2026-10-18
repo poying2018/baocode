@@ -13,6 +13,24 @@ void main() {
     expect(ClaudeSdkTools.servers, isEmpty);
   });
 
+  test('a tool always loaded says so, not to be deferred', () async {
+    ClaudeSdkTools.register(
+      ClaudeSdkTool(
+        name: 'echo',
+        description: 'Says it back.',
+        inputSchema: const {'type': 'object'},
+        alwaysLoad: true,
+        run: (input, call) async => '',
+      ),
+    );
+    final list = await ClaudeSdkTools.handle({
+      'id': 1,
+      'method': 'tools/list',
+    }, call);
+    final tools = (list['result'] as Map)['tools'] as List;
+    expect(tools.single, containsPair('_meta', {'anthropic/alwaysLoad': true}));
+  });
+
   test('lists and calls its tools, failures as errors', () async {
     ClaudeSdkTools.register(
       ClaudeSdkTool(
@@ -41,6 +59,7 @@ void main() {
     }, call);
     final tools = (list['result'] as Map)['tools'] as List;
     expect(tools.single, containsPair('name', 'echo'));
+    expect((tools.single as Map).containsKey('_meta'), isFalse);
 
     final ok = await ClaudeSdkTools.handle({
       'id': 2,

@@ -6,6 +6,8 @@ import '../network/network_proxy_io.dart';
 import '../workspace/editor_launcher.dart';
 import 'codex/codex_accounts_io.dart';
 import 'codex/codex_service.dart';
+import 'image_api.dart';
+import 'image_generation_io.dart';
 import 'launch_environment.dart';
 import 'model_provider.dart';
 import 'model_providers.dart';
@@ -30,6 +32,19 @@ final ModelProxy _proxy = ModelProxy(
   findProxy: (url) => NetworkProxy.instance.findProxy(url),
   codex: _codex,
 );
+
+/// The app's image generation, over [ModelProviders.current].
+final ImageGenerator _images = ImageGenerator(
+  codex: _codex,
+  key: (id) => ModelProviders.current.key(id),
+);
+
+Future<List<GeneratedImage>> generateImages(
+  ModelProvider provider,
+  ProviderModel model,
+  ImageRequest request, {
+  String? session,
+}) => _images.generate(provider, model, request, session: session);
 
 Future<List<RemoteModel>> listUpstreamModels(
   ModelProvider provider,

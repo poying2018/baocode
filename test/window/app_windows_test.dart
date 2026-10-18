@@ -716,6 +716,29 @@ void main() {
       expect(harness.folders, isEmpty);
     });
 
+    testWidgets('macOS: one in full screen leaves it before it closes, then '
+        'the window it covered comes in front (#148)', (tester) async {
+      final harness = _Harness(tester);
+      await harness.start();
+      harness.windows.showChat();
+      final a = (await harness.windows.showFolder('/w/a'))!;
+      harness.host
+        ..fullScreen.add(a.viewId)
+        ..log.clear();
+      expect(await harness.windows.requestClose(a), isTrue);
+      expect(harness.host.log, [
+        'leaveFullScreen ${a.viewId}',
+        'close ${a.viewId}',
+        'focus 0',
+      ]);
+
+      // Not in full screen, as before: the system's next window in front.
+      final b = (await harness.windows.showFolder('/w/b'))!;
+      harness.host.log.clear();
+      await harness.windows.requestClose(b);
+      expect(harness.host.log, ['close ${b.viewId}']);
+    });
+
     testWidgets('the chat\'s window hides; the one behind it comes in front', (
       tester,
     ) async {

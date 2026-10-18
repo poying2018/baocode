@@ -25,6 +25,7 @@ import 'diff_editor_model.dart';
 import 'document_snapshot.dart';
 import 'editor_scrollbar.dart';
 import 'editor_surface.dart';
+import 'wheel_glide.dart';
 
 /// What the diff gives one of a diff editor's editors.
 class DiffEditorSide {
@@ -502,10 +503,42 @@ class _DiffOverview extends StatefulWidget {
   State<_DiffOverview> createState() => _DiffOverviewState();
 }
 
-class _DiffOverviewState extends State<_DiffOverview> {
+class _DiffOverviewState extends State<_DiffOverview>
+    with SingleTickerProviderStateMixin {
   bool _hover = false;
   bool _dragging = false;
   double _dragOffset = 0;
+
+  /// A mouse wheel's notches gliding the editors, stopped as anything else
+  /// scrolls them.
+  WheelGlider? _wheel;
+  bool _gliding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.scroll.addListener(_scrolled);
+  }
+
+  @override
+  void didUpdateWidget(_DiffOverview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.scroll != widget.scroll) {
+      oldWidget.scroll.removeListener(_scrolled);
+      widget.scroll.addListener(_scrolled);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.scroll.removeListener(_scrolled);
+    _wheel?.dispose();
+    super.dispose();
+  }
+
+  void _scrolled() {
+    if (!_gliding) _wheel?.stop();
+  }
 
   ScrollbarSlider _slider(double top) => ScrollbarSlider.compute(
     trackSize: widget.viewportHeight,
@@ -548,9 +581,30 @@ class _DiffOverviewState extends State<_DiffOverview> {
   }
 
   void _signal(PointerSignalEvent event) {
-    if (event is PointerScrollEvent) {
-      _scrollTo(widget.scroll.value.dy + event.scrollDelta.dy);
+    if (event is! PointerScrollEvent) return;
+    final dy = event.scrollDelta.dy;
+    if (event.kind != PointerDeviceKind.mouse) {
+      _scrollTo(widget.scroll.value.dy + dy);
+      return;
     }
+    // Over a few frames, as the editors take a wheel's notch.
+    (_wheel ??= WheelGlider(vsync: this, move: _glide)).add(
+      Offset(0, dy),
+      at: widget.scroll.value,
+      max: Offset(0, _maxTop()),
+      frame: WheelGlide.frameOf(context),
+    );
+  }
+
+  ({bool x, bool y}) _glide(Offset by) {
+    final top = widget.scroll.value.dy + by.dy;
+    _gliding = true;
+    try {
+      _scrollTo(top);
+    } finally {
+      _gliding = false;
+    }
+    return (x: true, y: widget.scroll.value.dy == top);
   }
 
   @override

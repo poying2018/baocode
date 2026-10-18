@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
+import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/claude_code/claude_environment.dart';
 import 'package:baocode/icons/project_icon.dart';
 import 'package:baocode/models/launch_environment.dart';
@@ -284,6 +285,33 @@ void main() {
       // Its provider gone, it is automatic again.
       await providers.remove('gw');
       expect(providers.auxiliaryModel, isNull);
+    });
+
+    test('BaoCode\'s own core has no Claude Code of the machine\'s: its '
+        'models and Haiku, picked on the CLI, stand for none', () async {
+      final providers = ModelProviders.memory(providers: [_gateway]);
+      await providers.setDefaultModel('opus');
+      await providers.setAuxiliaryModel(builtinProviderId);
+      await providers.setActionsModel(builtinProviderId);
+      expect(providers.builtinOffered, isTrue);
+      expect(providers.defaultModel, 'opus');
+      expect(providers.auxiliary(null), (model: null, exact: true));
+
+      ClaudeCore.current = () => ClaudeCore.builtin;
+      expect(providers.builtinAvailable, isFalse);
+      expect(providers.builtinOffered, isFalse);
+      expect(providers.defaultModel, isNull);
+      // Automatic: the model given, by its provider's Haiku tier.
+      expect(providers.auxiliary('@gw/gpt-5'), (
+        model: '@gw/gpt-5',
+        exact: false,
+      ));
+      expect(providers.actions, (model: null, exact: false));
+      expect(providers.firstModel, '@gw/gpt-5');
+      await providers.setDefaultModel('@gw/gpt-5');
+      expect(providers.defaultModel, '@gw/gpt-5');
+
+      expect(ModelProviders.memory().firstModel, isNull);
     });
 
     test('a provider without models offered is not in the picker', () {
@@ -628,8 +656,9 @@ void main() {
       );
       expect(env['ANTHROPIC_API_KEY'], 'sk-ant');
       expect(env['ANTHROPIC_AUTH_TOKEN'], '');
-      expect(env.containsKey('CLAUDE_CODE_SUBAGENT_MODEL'), isFalse);
-      expect(env.containsKey('CLAUDE_CODE_SUBAGENT_MODEL_FORCE'), isFalse);
+      // None set: not one the user's own settings name either.
+      expect(env['CLAUDE_CODE_SUBAGENT_MODEL'], '');
+      expect(env['CLAUDE_CODE_SUBAGENT_MODEL_FORCE'], '');
     });
 
     test('an OpenAI upstream goes through the proxy, never through the '

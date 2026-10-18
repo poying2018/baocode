@@ -15,8 +15,10 @@ import 'package:bao_remote/files.dart' show IdeFileNotFoundException;
 
 import '../kernel/agent_kernel.dart';
 import '../kernel/claude_code/claude_code_transport.dart';
+import '../kernel/claude_code/claude_core_setting.dart';
 import '../kernel/claude_code/claude_haiku.dart';
 import '../kernel/claude_code/claude_storage_io.dart';
+import '../kernel/claude_code/dart_core_transport.dart';
 import '../kernel/claude_code/process_transport.dart';
 import '../models/launch_environment.dart';
 import 'remote_claude_install.dart';
@@ -29,11 +31,27 @@ const remoteClaudeInstallCommand =
     'curl -fsSL https://claude.ai/install.sh | bash';
 
 /// Claude Code where [launch]'s project is: on its host for a remote one.
-Future<ClaudeCodeTransport> startClaude(ClaudeLaunch launch) {
+/// BaoCode's own core only on an upstream's model ([ClaudeLaunch.env]):
+/// never on what the machine's Claude Code setup names.
+Future<ClaudeCodeTransport> startClaude(ClaudeLaunch launch) async {
+  if (ClaudeCore.current() == ClaudeCore.builtin && launch.env == null) {
+    throw const ClaudeUnavailable(ClaudeCore.noModel);
+  }
   final host = RemoteLocation.hostOf(launch.cwd);
-  if (host == null) return startClaudeProcess(launch);
+  if (host == null) {
+    // On this machine: BaoCode's own core, unless the CLI is picked.
+    return switch (ClaudeCore.current()) {
+      ClaudeCore.builtin => startDartCore(launch),
+      ClaudeCore.cli => startClaudeProcess(launch),
+    };
+  }
   return RemoteClaudeTransport.start(SshHosts.instance[host], launch);
 }
+
+/// The core asked for on a remote host ([RemoteClient.startClaude]'s
+/// `core`); a server of before runs the CLI.
+String? get _remoteCore =>
+    ClaudeCore.current() == ClaudeCore.builtin ? 'builtin' : null;
 
 /// [executable] refused an option BaoCode starts it with, where [cwd]'s
 /// project is: whether another, newer, may be started instead. On this
@@ -217,6 +235,7 @@ Future<String> askRemoteHaiku(
       arguments: claudeHaikuArguments(system, model: model),
       settings: remoteEnv == null ? null : {'env': remoteEnv},
       cleared: [if (remoteEnv != null) ...ClaudeModelVariables.inherited],
+      core: _remoteCore,
     );
   } on Object catch (error) {
     throw ClaudeHaikuException('Claude Code on ${host.host}: $error');
@@ -308,6 +327,7 @@ class RemoteClaudeTransport implements ClaudeCodeTransport {
       settings: started.hasSecrets ? started.settings : null,
       cleared: [if (env != null) ...ClaudeModelVariables.inherited],
       environment: ClaudeLaunch.environment,
+      core: _remoteCore,
     );
     try {
       RemoteProcess process;

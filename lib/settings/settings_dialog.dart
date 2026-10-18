@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../base/smooth_scroll.dart';
 import '../ide/ide_color_theme_picker.dart' show ideSelectColorThemeCommandId;
 import '../keybindings/default_keybindings.dart' show openKeybindingsCommandId;
 import '../keybindings/key_chord.dart';
@@ -724,24 +725,27 @@ class SettingsDialogState extends State<SettingsDialog> {
           ),
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-            children: [
-              for (final (i, sections) in groups.indexed) ...[
-                // Groups apart, as Cursor's: by room, not headings.
-                if (i > 0) const SizedBox(height: 14),
-                for (final section in sections)
-                  _NavItem(
-                    icon: icon(section),
-                    label: label(context, section),
-                    selected: section == _section,
-                    onTap: () {
-                      show(section);
-                      _closeDrawer();
-                    },
-                  ),
+          child: SmoothScrolling(
+            builder: (context, controller) => ListView(
+              controller: controller,
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              children: [
+                for (final (i, sections) in groups.indexed) ...[
+                  // Groups apart, as Cursor's: by room, not headings.
+                  if (i > 0) const SizedBox(height: 14),
+                  for (final section in sections)
+                    _NavItem(
+                      icon: icon(section),
+                      label: label(context, section),
+                      selected: section == _section,
+                      onTap: () {
+                        show(section);
+                        _closeDrawer();
+                      },
+                    ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ],

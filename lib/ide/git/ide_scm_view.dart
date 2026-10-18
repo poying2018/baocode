@@ -39,6 +39,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../../base/smooth_scroll.dart';
 import '../../chat/composer/composer_files.dart';
 import '../../chat/composer/file_drag.dart';
 import '../../keybindings/keybinding_service.dart';
@@ -152,7 +153,7 @@ class IdeGitGraphController extends ChangeNotifier {
 
   final Set<String> expanded;
   final FocusNode focusNode = FocusNode(debugLabel: 'scm graph');
-  final ScrollController scroll = ScrollController();
+  final ScrollController scroll = SmoothScrollController();
 
   /// The commits whose changes were asked for, and those that came.
   final Set<String> _asked = {};
@@ -586,7 +587,7 @@ class IdeScmViewState extends State<IdeScmView>
     with IdeKeyboardList<IdeScmView> {
   final FocusNode _inputFocus = FocusNode(debugLabel: 'scm input');
   final FocusNode _listFocus = FocusNode(debugLabel: 'scm list');
-  final ScrollController _changesScroll = ScrollController();
+  final ScrollController _changesScroll = SmoothScrollController();
 
   /// Each repository's Publish Branch, where the menu of remotes opens.
   final Map<IdeGitRepository, GlobalKey> _publishKeys = {};

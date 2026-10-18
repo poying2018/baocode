@@ -9,6 +9,7 @@ import 'dart:typed_data';
 import 'package:bao_remote/client.dart';
 import 'package:bao_remote/files.dart' show IdeFileExistsException;
 import 'package:bao_remote/local.dart' show ClaudeEnvironment, CliLocator;
+import 'package:bao_agent/testing.dart';
 import 'package:bao_remote/server.dart' show ServerClaude;
 import 'package:baocode/chat/panels/health_banner.dart';
 import 'package:baocode/ide/git/git_model.dart' show IdeGitGroup;
@@ -19,8 +20,11 @@ import 'package:baocode/ide/lsp/language_features.dart';
 import 'package:baocode/ide/lsp/lsp_server_definition.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
+import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/l10n/l10n.dart';
+import 'package:baocode/models/launch_environment.dart';
+import 'package:baocode/models/model_provider.dart';
 import 'package:baocode/remote/open_remote.dart';
 import 'package:baocode/remote/project_host.dart';
 import 'package:baocode/remote/remote_files.dart';
@@ -425,6 +429,9 @@ void main() {
     late Directory config;
 
     setUp(() {
+      // The CLI there, asked for.
+      ClaudeCore.current = () => ClaudeCore.cli;
+      addTearDown(() => ClaudeCore.current = () => ClaudeCore.fallback);
       home = Directory.systemTemp.createTempSync('baocode-remote-home-');
       config = Directory(p.join(home.path, '.claude'))..createSync();
       fake = File(p.join(home.path, 'fake-claude'))
@@ -589,6 +596,137 @@ printf '%s\n' "$line"
       );
       expect(hosts['dev'].installingClaude, isNull);
       expect(Directory(p.join(dataDir.path, 'claude')).existsSync(), isFalse);
+    });
+  });
+
+  group('Claude Code on the built-in core', () {
+    late Directory home;
+    late FakeApi api;
+    final self = ServerClaude.selfCommand;
+
+    setUp(() async {
+      home = Directory.systemTemp.createTempSync('baocode-remote-core-');
+      api = await FakeApi.start(errands: (_) => Reply.text('A title'));
+      ClaudeCore.current = () => ClaudeCore.builtin;
+      // The server, from its source, run as the core.
+      ServerClaude.selfCommand = () => [
+        p.join(p.dirname(Platform.resolvedExecutable), 'dart'),
+        p.absolute('packages/bao_remote/bin/baocode_server.dart'),
+      ];
+      if (!File(ServerClaude.selfCommand().first).existsSync()) {
+        ServerClaude.selfCommand = () => [
+          'dart',
+          p.absolute('packages/bao_remote/bin/baocode_server.dart'),
+        ];
+      }
+    });
+    tearDown(() async {
+      ClaudeCore.current = () => ClaudeCore.fallback;
+      ServerClaude.selfCommand = self;
+      await api.close();
+      home.deleteSync(recursive: true);
+    });
+
+    Map<String, String> hostEnvironment({bool key = true}) => {
+      'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin',
+      'HOME': home.path,
+      'BAOCODE_CLAUDE_DATA_PATH': p.join(home.path, '.claude'),
+      if (key) ...{
+        'ANTHROPIC_API_KEY': 'sk-host',
+        'ANTHROPIC_BASE_URL': api.baseUrl,
+      },
+    };
+
+    test('runs there: the server run as the core, its session kept there '
+        'as the CLI keeps one', () async {
+      ClaudeEnvironment.use(hostEnvironment());
+      api.model.script.addAll([
+        Reply.tool('Write', {
+          'file_path': p.join(root, 'there.txt'),
+          'content': 'from the core\n',
+        }),
+        Reply.text('written there'),
+      ]);
+      final location = RemoteLocation.of('dev', root);
+      // On an upstream of this machine's Settings → Models, over the
+      // host's own key.
+      final transport = await startClaude(
+        ClaudeLaunch(
+          cwd: location,
+          permissionMode: 'acceptEdits',
+          model: 'claude-sonnet-4-5',
+          env: launchEnvironment(
+            provider: ModelProvider(
+              id: 'up',
+              name: 'Upstream',
+              baseUrl: api.baseUrl,
+              auth: ProviderAuth.apiKey,
+            ),
+            model: 'claude-sonnet-4-5',
+            key: 'sk-upstream',
+          ),
+        ),
+      );
+      expect(transport, isA<RemoteClaudeTransport>());
+      final messages = <Map<String, Object?>>[];
+      transport.messages.listen(messages.add);
+      transport
+        ..write({
+          'type': 'control_request',
+          'request_id': 'init',
+          'request': {'subtype': 'initialize'},
+        })
+        ..write({
+          'type': 'user',
+          'message': {'role': 'user', 'content': 'write there.txt'},
+        });
+      await until(
+        () => messages.any((m) => m['type'] == 'result'),
+        timeout: const Duration(seconds: 90),
+      );
+      final result = messages.firstWhere((m) => m['type'] == 'result');
+      expect(result['result'], 'written there');
+      expect(
+        File(p.join(root, 'there.txt')).readAsStringSync(),
+        'from the core\n',
+      );
+      expect(api.headers.map((h) => h['x-api-key']).toSet(), {'sk-upstream'});
+      expect(api.model.requests.map((r) => r.body['model']).toSet(), {
+        'claude-sonnet-4-5',
+      });
+      final init = messages.firstWhere(
+        (m) => m['type'] == 'system' && m['subtype'] == 'init',
+      );
+      expect(init['cwd'], root);
+      transport.close();
+      await transport.exited.timeout(const Duration(seconds: 20));
+      final sessions = await const ClaudeCatalog().sessionsIn(location);
+      expect([for (final s in sessions) s.id], [init['session_id']]);
+    }, timeout: const Timeout(Duration(minutes: 3)));
+
+    test('no upstream: not started there on the host\'s own setup, nor '
+        'its CLI', () async {
+      final fake = File(p.join(home.path, 'fake-claude'))
+        ..writeAsStringSync('#!/bin/sh\ntouch "${home.path}/cli-ran"\n');
+      Process.runSync('chmod', ['+x', fake.path]);
+      final environment = {
+        ...hostEnvironment(),
+        'BAOCODE_CLAUDE_PATH': fake.path,
+      };
+      CliLocator.use(environment);
+      ClaudeEnvironment.use(environment);
+      await expectLater(
+        startClaude(ClaudeLaunch(cwd: RemoteLocation.of('dev', root))),
+        throwsA(
+          isA<ClaudeUnavailable>().having(
+            (error) => error.message,
+            'message',
+            ClaudeCore.noModel,
+          ),
+        ),
+      );
+      expect(File(p.join(home.path, 'cli-ran')).existsSync(), isFalse);
+      expect(api.headers, isEmpty);
     });
   });
 
@@ -779,10 +917,9 @@ printf '%s\n' "$line"
       final folder = shown.last.itemsFor!(p.join(root, 'lib'));
       (folder.first as IdeQuickPickItem).onAccept!();
       await until(
-        () => shown.last
-            .itemsFor!('')
-            .whereType<IdeQuickPickItem>()
-            .any((i) => i.label == 'a.dart'),
+        () => shown.last.itemsFor!('').whereType<IdeQuickPickItem>().any(
+          (i) => i.label == 'a.dart',
+        ),
       );
       expect(opened, RemoteLocation.of('dev', file));
     });
@@ -805,9 +942,9 @@ printf '%s\n' "$line"
       final items = shown.single.itemsFor!('nowhere');
       (items.first as IdeQuickPickItem).onAccept!();
       await until(
-        () => shown.last.items
-            .whereType<IdeQuickPickItem>()
-            .any((i) => i.label == 'The host could not be reached.'),
+        () => shown.last.items.whereType<IdeQuickPickItem>().any(
+          (i) => i.label == 'The host could not be reached.',
+        ),
       );
       final failed = shown.last.items.whereType<IdeQuickPickItem>().toList();
       expect(failed.first.label, 'The host could not be reached.');
@@ -849,7 +986,9 @@ printf '%s\n' "$line"
       expect(chosen, rect);
     });
 
-    testWidgets('the entry clicked hands its rect to onTapRect', (tester) async {
+    testWidgets('the entry clicked hands its rect to onTapRect', (
+      tester,
+    ) async {
       Rect? tapped;
       await tester.pumpWidget(
         MaterialApp(

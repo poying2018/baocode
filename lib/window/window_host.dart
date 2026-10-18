@@ -94,6 +94,11 @@ abstract class WindowHost {
   /// only hidden.
   Future<void> close(int viewId);
 
+  /// Takes [viewId]'s window out of full screen, before it is closed or
+  /// hidden (macOS: in full screen, its Space would go black as it goes):
+  /// whether it was in it.
+  Future<bool> leaveFullScreen(int viewId) async => false;
+
   /// Shows [viewId]'s window in front of the others, the keyboard's.
   Future<void> focus(int viewId);
 
@@ -150,6 +155,8 @@ abstract class WindowHost {
 ///   create {frame?, title, width?, engineId}
 ///                                a window: its view's id
 ///   close viewId, focus viewId, hide viewId
+///   leaveFullScreen viewId       (macOS) out of full screen, once it is:
+///                                whether it was in it
 ///   setTitle {viewId, title, path?}, setEdited {viewId, edited}
 ///   frame viewId                 {x, y, width, height, maximized,
 ///                                fullscreen, screen}
@@ -256,6 +263,7 @@ class ChannelWindowHost extends WindowHost {
   static const _logged = {
     'create',
     'close',
+    'leaveFullScreen',
     'focus',
     'hide',
     'quit',
@@ -305,6 +313,11 @@ class ChannelWindowHost extends WindowHost {
 
   @override
   Future<void> close(int viewId) => _invoke('close', viewId);
+
+  @override
+  Future<bool> leaveFullScreen(int viewId) async =>
+      AppPlatform.isMacOS &&
+      (await _invoke<bool>('leaveFullScreen', viewId) ?? false);
 
   @override
   Future<void> focus(int viewId) => _invoke('focus', viewId);

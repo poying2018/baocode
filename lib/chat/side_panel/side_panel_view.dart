@@ -61,9 +61,10 @@ import 'git_changes.dart';
 import 'side_panel_controller.dart';
 import 'terminal_preview.dart';
 
-/// [child] (the conversations) and, at its right while [panel] shows, the
-/// side panel [builder] builds: beside it, its left edge dragged to make
-/// it wider or narrower (a double click gives back its width), narrower
+/// [child] (the conversations) and, at its right (its left, as [panel] is
+/// [AgentSidePanel.atLeft]) while [panel] shows, the side panel [builder]
+/// builds: beside it, its edge toward them dragged to make it wider or
+/// narrower (a double click gives back its width), narrower
 /// where the conversations would have less than [minChat]; over it, where
 /// they would beside it at its least.
 
@@ -85,9 +86,10 @@ class AgentSidePanelArea extends StatefulWidget {
   final AgentSidePanel panel;
   final WidgetBuilder builder;
 
-  /// While the panel is hidden, over the conversations' top right, clear of
-  /// their scrollbar: their column keeps clear of it ([railInset]), not
-  /// their title bar nor their scrollbar, which reach the edge.
+  /// While the panel is hidden, over the conversations' top right (left,
+  /// the panel at their left), clear of their scrollbar: their column keeps
+  /// clear of it ([railInset]), not their title bar nor their scrollbar,
+  /// which reach the edge.
   final Widget? rail;
 
   /// How far down [rail] is: under the conversation's title bar, where it
@@ -170,6 +172,9 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
           shown && room - AgentSidePanel.minWidth < AgentSidePanelArea.minChat,
         );
         final overlay = _overlay;
+        final atLeft = _panel.atLeft;
+        final beside = shown && !overlay;
+        final rail = !shown && widget.rail != null;
         final width = overlay
             ? math.min(_panel.width, math.max(0.0, room - 48))
             : math.max(
@@ -190,23 +195,23 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
           children: [
             Positioned(
               key: const ValueKey('chat'),
-              left: 0,
               top: 0,
               bottom: 0,
               // Up to the sash's line; the rest of the sash is over it, so
               // nothing shows between the two.
-              right: shown && !overlay ? width + 1 : 0,
+              left: beside && atLeft ? width + 1 : 0,
+              right: beside && !atLeft ? width + 1 : 0,
               child: ChatColumnInset(
-                right: !shown && widget.rail != null
-                    ? AgentSidePanelArea.railInset
-                    : 0,
+                right: rail && !atLeft ? AgentSidePanelArea.railInset : 0,
+                left: rail && atLeft ? AgentSidePanelArea.railInset : 0,
                 child: widget.child,
               ),
             ),
-            if (!shown && widget.rail != null)
+            if (rail)
               Positioned(
                 key: const ValueKey('rail'),
-                right: AgentSidePanelArea.railRight,
+                left: atLeft ? AgentSidePanelArea.railRight : null,
+                right: atLeft ? null : AgentSidePanelArea.railRight,
                 top: widget.railTop,
                 child: widget.rail!,
               ),
@@ -223,7 +228,8 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
                 key: const ValueKey('panel'),
                 top: 0,
                 bottom: 0,
-                right: 0,
+                left: atLeft ? 0 : null,
+                right: atLeft ? null : 0,
                 width: width + AgentSidePanelArea.sashWidth,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -238,8 +244,12 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
+                    // The sash on the side of the conversations.
+                    textDirection: atLeft
+                        ? TextDirection.rtl
+                        : TextDirection.ltr,
                     children: [
-                      _sash(),
+                      _sash(atLeft: atLeft),
                       Expanded(
                         // Never laid out narrower than its least: squeezed
                         // a while (the sidebar giving way), what has no
@@ -298,7 +308,9 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
         ),
       );
 
-  Widget _sash() => MouseRegion(
+  /// The strip on the panel's edge beside the conversations: its left,
+  /// or its right [atLeft].
+  Widget _sash({required bool atLeft}) => MouseRegion(
     cursor: SystemMouseCursors.resizeColumn,
     child: GestureDetector(
       key: const ValueKey('side-panel-sash'),
@@ -314,8 +326,9 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
         final room =
             (context.size?.width ?? double.infinity) -
             AgentSidePanelArea.minChat;
+        final moved = details.globalPosition.dx - start.x;
         _panel.width = math.min(
-          start.width - (details.globalPosition.dx - start.x),
+          atLeft ? start.width + moved : start.width - moved,
           math.max(AgentSidePanel.minWidth, room),
         );
       },
@@ -327,7 +340,8 @@ class _AgentSidePanelAreaState extends State<AgentSidePanelArea> {
       },
       child: Container(
         width: AgentSidePanelArea.sashWidth,
-        alignment: Alignment.centerRight,
+        // Its line against the panel.
+        alignment: atLeft ? Alignment.centerLeft : Alignment.centerRight,
         // At rest the line between the two; dragged, as thick as the IDE's
         // sashes, in their `sash.hoverBorder`.
         child: AnimatedContainer(
@@ -1491,6 +1505,21 @@ class _SectionBar extends StatelessWidget {
                   onTap: () => panel.showSection(session, section),
                 ),
               const Spacer(),
+              // To the conversations' other side.
+              Center(
+                child: IdeActionButton(
+                  key: const ValueKey('side-panel-move'),
+                  icon: Codicons.arrowSwap,
+                  tooltip: KeybindingService.instance.titleWithKeybinding(
+                    panel.atLeft
+                        ? l10n.sidePanelMoveRight
+                        : l10n.sidePanelMoveLeft,
+                    ChatCommandIds.toggleSidePanelPosition,
+                  ),
+                  onPressed: () => panel.atLeft = !panel.atLeft,
+                ),
+              ),
+              const SizedBox(width: 2),
               // The plan's page has no list to show or hide.
               if (shown != SidePanelSection.plan) ...[
                 Center(

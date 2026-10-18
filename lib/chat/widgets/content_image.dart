@@ -298,6 +298,21 @@ void showChatImages(BuildContext context, List<ChatImage> images, int index) {
 /// being read): a 16:9 one's, as wide as they may be.
 const contentImagePlaceholder = _ImageBox(child: ImageShimmer());
 
+/// Where a picture yet to be made shows, a light sweeping across it: as
+/// big as one of [aspectRatio] (width over height) shows once it is there,
+/// as wide as they may be.
+class ContentImagePlaceholder extends StatelessWidget {
+  const ContentImagePlaceholder({super.key, this.aspectRatio = 1});
+
+  final double aspectRatio;
+
+  @override
+  Widget build(BuildContext context) => _ImageBox(
+    size: Size(contentImageMaxWidth, contentImageMaxWidth / aspectRatio),
+    child: const ImageShimmer(startAfter: Duration.zero),
+  );
+}
+
 const _placeholder = SizedBox(
   width: contentImageMaxWidth,
   child: AspectRatio(aspectRatio: 16 / 9, child: ImageShimmer()),
@@ -353,12 +368,20 @@ Widget _broken() => Center(
 );
 
 /// The place of a picture yet to show, as big as it is given: still at
-/// first, so one quick to come only shows; past [delay], a light sweeping
-/// across it as [ShimmerText]'s does.
+/// first, so one quick to come only shows; past [startAfter], a skeleton's
+/// wave: a soft band of light going across it, left to right, over and
+/// over.
 class ImageShimmer extends StatefulWidget {
-  const ImageShimmer({super.key});
+  const ImageShimmer({super.key, this.startAfter = delay});
 
   static const delay = Duration(milliseconds: 200);
+
+  /// Still until then: [delay], none for one known to take long (a
+  /// picture being made).
+  final Duration startAfter;
+
+  /// One sweep.
+  static const period = Duration(milliseconds: 1600);
 
   @override
   State<ImageShimmer> createState() => _ImageShimmerState();
@@ -368,14 +391,14 @@ class _ImageShimmerState extends State<ImageShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1600),
+    duration: ImageShimmer.period,
   );
   late final Timer _start;
 
   @override
   void initState() {
     super.initState();
-    _start = Timer(ImageShimmer.delay, _controller.repeat);
+    _start = Timer(widget.startAfter, _controller.repeat);
   }
 
   @override
@@ -387,26 +410,33 @@ class _ImageShimmerState extends State<ImageShimmer>
 
   @override
   Widget build(BuildContext context) {
-    final light = AppColors.text.withValues(alpha: .07);
+    final base = AppColors.code;
+    // Lighter than what it is on, in either theme: as skeletons are.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final light = Color.alphaBlend(
+      Colors.white.withValues(alpha: dark ? .07 : .6),
+      base,
+    );
     return ColoredBox(
-      color: AppColors.code,
+      color: base,
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
           if (!_controller.isAnimating) return const SizedBox.expand();
-          final t = _controller.value * 3 - 1;
           return SizedBox.expand(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  begin: const Alignment(-1, -.4),
-                  end: const Alignment(1, .4),
+                  begin: const Alignment(-1, -.3),
+                  end: const Alignment(1, .3),
                   colors: [
-                    light.withValues(alpha: 0),
+                    base.withValues(alpha: 0),
                     light,
-                    light.withValues(alpha: 0),
+                    base.withValues(alpha: 0),
                   ],
-                  stops: [t - .3, t, t + .3],
+                  stops: const [.3, .5, .7],
+                  // From wholly before it to wholly past it.
+                  transform: _Sliding(_controller.value * 2 - 1),
                 ),
               ),
             ),
@@ -415,6 +445,17 @@ class _ImageShimmerState extends State<ImageShimmer>
       ),
     );
   }
+}
+
+/// A gradient moved across by [fraction] of its box's width.
+class _Sliding extends GradientTransform {
+  const _Sliding(this.fraction);
+
+  final double fraction;
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) =>
+      Matrix4.translationValues(bounds.width * fraction, 0, 0);
 }
 
 /// The size in pixels of the picture in [bytes], as its header says

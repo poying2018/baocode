@@ -209,7 +209,12 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
   String _auxiliaryName(BuildContext context, String? value) {
     final l10n = context.l10n;
     if (value == null) return l10n.modelsAuxiliaryAuto;
-    if (value == builtinProviderId) return l10n.modelsAuxiliaryBuiltin;
+    if (value == builtinProviderId) {
+      // Not there on BaoCode's own core: automatic in its place.
+      return _providers.builtinAvailable
+          ? l10n.modelsAuxiliaryBuiltin
+          : l10n.modelsAuxiliaryAuto;
+    }
     return _defaultName(context, value);
   }
 
@@ -231,6 +236,56 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
           current: current,
           onPick: set,
         ),
+      ),
+    );
+  }
+
+  /// The image model: what the agents make pictures with.
+  Widget _imageRow(BuildContext context) {
+    final l10n = context.l10n;
+    final current = _providers.imageModel;
+    final models = _providers.imageModels;
+    // The default first among them, where it is still there.
+    final shown = switch ((current, models.firstOrNull)) {
+      (_, null) => l10n.modelsImageNone,
+      (final String picked, (:final provider, :final model))
+          when modelRef(provider.id, model.id) == picked =>
+        '${provider.name} · ${model.displayName}',
+      _ => l10n.modelsImageFirst,
+    };
+    void set(String? model) => unawaited(_providers.setImageModel(model));
+    final providers = <ModelProvider>[];
+    for (final (:provider, model: _) in models) {
+      if (!providers.contains(provider)) providers.add(provider);
+    }
+    return SettingsRow(
+      label: l10n.modelsImage,
+      description: l10n.modelsImageDescription,
+      trailing: SettingsDropdown(
+        current: shown,
+        semanticLabel: l10n.modelsChoiceLabel(l10n.modelsImage, shown),
+        entries: () => [
+          IdeMenuAction(
+            l10n.modelsImageFirst,
+            checked: current == null,
+            enabled: models.isNotEmpty,
+            onSelected: () => set(null),
+          ),
+          if (providers.isNotEmpty) const IdeMenuSeparator(),
+          for (final provider in providers)
+            IdeMenuAction(
+              provider.name,
+              checked: parseModelRef(current)?.provider == provider.id,
+              submenu: [
+                for (final model in provider.imageModels)
+                  IdeMenuAction(
+                    model.displayName,
+                    checked: current == modelRef(provider.id, model.id),
+                    onSelected: () => set(modelRef(provider.id, model.id)),
+                  ),
+              ],
+            ),
+        ],
       ),
     );
   }
@@ -272,7 +327,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
                         unawaited(_providers.setDefaultModel(null)),
                   ),
                   const IdeMenuSeparator(),
-                  if (!_providers.builtinHidden)
+                  if (_providers.builtinOffered)
                     IdeMenuAction(
                       l10n.modelsBuiltinDefault,
                       checked: current == 'default',
@@ -300,22 +355,26 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
               ),
             ),
             _auxiliaryRow(context),
+            _imageRow(context),
           ],
         ),
         SettingsGroup(
           title: l10n.modelsProviders,
           children: [
-            _ProviderRow(
-              icon: const ProviderIcon(builtinProviderId, size: 16),
-              name: l10n.modelsBuiltinName,
-              badge: l10n.modelsBuiltinBadge,
-              detail: l10n.modelsBuiltinDescription,
-              status: _providers.builtinHidden ? _Status.off : _Status.ready,
-              enabled: !_providers.builtinHidden,
-              switchLabel: l10n.modelsEnableProvider(l10n.modelsBuiltinName),
-              onEnabled: (value) =>
-                  unawaited(_providers.setBuiltinHidden(!value)),
-            ),
+            // Claude Code as set up on this machine: the CLI's alone, not
+            // BaoCode's own core's.
+            if (_providers.builtinAvailable)
+              _ProviderRow(
+                icon: const ProviderIcon(builtinProviderId, size: 16),
+                name: l10n.modelsBuiltinName,
+                badge: l10n.modelsBuiltinBadge,
+                detail: l10n.modelsBuiltinDescription,
+                status: _providers.builtinHidden ? _Status.off : _Status.ready,
+                enabled: !_providers.builtinHidden,
+                switchLabel: l10n.modelsEnableProvider(l10n.modelsBuiltinName),
+                onEnabled: (value) =>
+                    unawaited(_providers.setBuiltinHidden(!value)),
+              ),
             // The newest at a site BaoCode lists first (one imported later
             // takes the place of one before); the rest in their order.
             for (final provider in [
@@ -1148,7 +1207,13 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
                     IdeButton(
                       label: l10n.modelsTestModels,
                       secondary: true,
-                      onPressed: () => unawaited(_testModels(shown)),
+                      onPressed: () => unawaited(
+                        _testModels([
+                          // Not the image models': a picture costs.
+                          for (final model in shown)
+                            if (!model.kind.generatesImages) model,
+                        ]),
+                      ),
                     ),
                   if (provider.models.isNotEmpty)
                     IdeButton(
@@ -1510,7 +1575,13 @@ class _ModelRow extends StatelessWidget {
                       const SizedBox(width: 6),
                       ModelBadge(l10n.modelsCustom),
                     ],
-                    if (!model.images) ...[
+                    if (model.kind.generatesImages) ...[
+                      const SizedBox(width: 6),
+                      ModelBadge(
+                        l10n.modelsImageBadge,
+                        tooltip: l10n.modelsKindDescription,
+                      ),
+                    ] else if (!model.images) ...[
                       const SizedBox(width: 6),
                       ModelBadge(l10n.modelsNoImages),
                     ],
@@ -1564,7 +1635,9 @@ class _ModelRow extends StatelessWidget {
                       IdeMenuAction(l10n.modelsRemove, onSelected: onRemove),
                       IdeMenuAction(
                         l10n.modelsTestModel,
-                        enabled: test?.running != true,
+                        enabled:
+                            test?.running != true &&
+                            !model.kind.generatesImages,
                         onSelected: onTest,
                       ),
                     ],

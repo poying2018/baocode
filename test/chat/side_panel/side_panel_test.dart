@@ -12,6 +12,7 @@ import 'package:baocode/chat/side_panel/file_link.dart';
 import 'package:baocode/chat/side_panel/file_open.dart';
 import 'package:baocode/chat/side_panel/file_preview.dart';
 import 'package:baocode/chat/side_panel/side_panel_controller.dart';
+import 'package:baocode/chat/chat_column.dart';
 import 'package:baocode/chat/side_panel/side_panel_view.dart';
 import 'package:baocode/chat/widgets/edit_step.dart';
 import 'package:baocode/chat/widgets/fold_line.dart';
@@ -1347,6 +1348,73 @@ void main() {
     expect(_scrim, findsNothing);
     await tester.pump(AgentSidePanelArea.overlayDelay);
     expect(_scrim, findsOneWidget);
+  });
+
+  testWidgets('moved to the conversations\' left: its page, tab and width '
+      'kept, its edge toward them dragged; kept for the next run (#145)', (
+    tester,
+  ) async {
+    final (:panel, :session, files: _) = await _pumpChat(tester);
+    panel.open(session, const FileOpenRequest('/p/lib/main.dart'));
+    await tester.pumpAndSettle();
+    final width = tester.getSize(find.byType(AgentSidePanelView)).width;
+    expect(tester.getTopRight(find.byType(AgentSidePanelView)).dx, 1600);
+
+    await tester.tap(find.byKey(const ValueKey('side-panel-move')));
+    await tester.pumpAndSettle();
+    expect(panel.atLeft, isTrue);
+    final view = find.byType(AgentSidePanelView);
+    expect(tester.getTopLeft(view).dx, 0);
+    expect(tester.getSize(view).width, width);
+    expect(find.byType(FilePreview), findsOneWidget);
+    // The conversations at its right, up to the sash's line.
+    expect(tester.getTopLeft(find.byType(ChatScreen)).dx, width + 1);
+
+    // Its right edge dragged right: wider.
+    final sash = find.byKey(const ValueKey('side-panel-sash'));
+    expect(tester.getTopLeft(sash).dx, width);
+    await tester.drag(sash, const Offset(100, 0));
+    await tester.pumpAndSettle();
+    expect(panel.width, closeTo(width + 100, 1));
+
+    final kept = AgentSidePanel(state: panel.toJson());
+    addTearDown(kept.dispose);
+    expect(kept.atLeft, isTrue);
+
+    panel.atLeft = false;
+    await tester.pumpAndSettle();
+    expect(tester.getTopRight(view).dx, 1600);
+    expect(panel.toJson(), isNot(contains('atLeft')));
+  });
+
+  testWidgets('hidden at their left, its rail is at the conversations\' top '
+      'left, their column clear of it', (tester) async {
+    _bigWindow(tester);
+    final panel = AgentSidePanel()..atLeft = true;
+    addTearDown(panel.dispose);
+    const rail = SizedBox(key: ValueKey('my-rail'), width: 28, height: 80);
+    await tester.pumpWidget(
+      _app(
+        AgentSidePanelArea(
+          panel: panel,
+          railTop: 40,
+          rail: rail,
+          builder: (context) => const SizedBox(),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    final at = tester.getTopLeft(find.byKey(const ValueKey('my-rail')));
+    expect(at, const Offset(AgentSidePanelArea.railRight, 40));
+    final inset = tester.widget<ChatColumnInset>(find.byType(ChatColumnInset));
+    expect((inset.left, inset.right), (AgentSidePanelArea.railInset, 0));
+
+    panel.atLeft = false;
+    await tester.pump();
+    expect(
+      tester.getTopRight(find.byKey(const ValueKey('my-rail'))).dx,
+      1600 - AgentSidePanelArea.railRight,
+    );
   });
 
   testWidgets('where the panel is too wide beside the conversations, it is '

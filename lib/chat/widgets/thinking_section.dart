@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../base/smooth_scroll.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/app_theme.dart';
 import 'agent_step.dart' show AgentStep;
@@ -103,7 +104,7 @@ class _ThinkingSectionState extends State<ThinkingSection> {
   /// Seven lines of text.
   static const _liveMaxHeight = 13 * 1.6 * 7;
 
-  final ScrollController _scrollController = ScrollController();
+  final _scrollController = SmoothScrollController();
   bool _contentAbove = false;
 
   bool get _streaming => widget.seconds == null;
@@ -138,9 +139,10 @@ class _ThinkingSectionState extends State<ThinkingSection> {
     super.didUpdateWidget(oldWidget);
     _syncClock();
     if (widget.text == oldWidget.text || !_scrollController.hasClients) return;
-    // Follow new lines, unless scrolled up to read earlier ones.
+    // Follow new lines, unless scrolled up to read earlier ones (or a wheel
+    // is taking it there).
     final position = _scrollController.position;
-    if (position.pixels < position.maxScrollExtent - 2) return;
+    if (_scrollController.headedTo < position.maxScrollExtent - 2) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scrollController.hasClients) return;
       final position = _scrollController.position;

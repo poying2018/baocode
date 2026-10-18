@@ -40,6 +40,10 @@ const _installersRelative = r'build\installers';
 const _required = [
   'baocode.exe',
   'flutter_windows.dll',
+  // The browsers' native messaging host and its manifest, which the
+  // installer's keys point the browsers to (windows/BrowserBridge).
+  'baocode-browser-host.exe',
+  'dev.baocode.browser.json',
   // The VC++ runtime, carried rather than taken from System32, which may
   // be older than the build's (see windows/CMakeLists.txt).
   'msvcp140.dll',

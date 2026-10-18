@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart'
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../base/smooth_scroll.dart';
 import '../chat/composer/composer_files.dart';
 import '../chat/widgets/hover_builder.dart';
 import '../chat/widgets/scroll_edge_fade.dart';
@@ -125,7 +126,7 @@ class StashViewState extends State<StashView>
   };
 
   /// The cards' scrolling, to bring one into view ([reveal]).
-  final _scroll = ScrollController();
+  final _scroll = SmoothScrollController();
 
   /// Each card's, once built: where it is, to scroll to.
   final Map<int, GlobalKey> _cardKeys = {};
@@ -280,6 +281,28 @@ class StashViewState extends State<StashView>
     );
   }
 
+  /// The stash just made with New, whose text has the keyboard as it
+  /// shows.
+  int? _writing;
+
+  /// New: a stash written in here, beside the cards, at once (the panel is
+  /// the shortcut's, over other apps); of the project shown, if one is.
+  Future<void> _new() async {
+    final id = await _controller.draft(project: _singleProject);
+    if (!mounted) return;
+    setState(() {
+      _writing = id;
+      _open = id;
+      _picked.clear();
+    });
+  }
+
+  /// The project the page shows, when it shows one alone.
+  String? get _singleProject =>
+      _projects.length == 1 && _projects.single.isNotEmpty
+      ? _projects.single
+      : null;
+
   /// Imports issues as stashes (see [showStashImportDialog]): about the
   /// project shown, if one is; the stash shown when it is one.
   Future<void> _import() async {
@@ -288,9 +311,7 @@ class StashViewState extends State<StashView>
     final notes = await showStashImportDialog(
       context,
       forge: forge,
-      project: _projects.length == 1 && _projects.single.isNotEmpty
-          ? _projects.single
-          : null,
+      project: _singleProject,
     );
     if (notes != null && notes.length == 1 && mounted) show(notes.single.id);
   }
@@ -535,6 +556,7 @@ class StashViewState extends State<StashView>
                     key: ValueKey(id ?? open.id),
                     controller: _controller,
                     id: id ?? open.id,
+                    autofocus: (id ?? open.id) == _writing,
                     onOpenAgent: widget.onOpenAgent,
                     onOpenLink: _openLink,
                     onClose: () => setState(() => _open = null),
@@ -742,7 +764,7 @@ class StashViewState extends State<StashView>
             SidebarIconButton(
               icon: Codicons.add,
               tooltip: l10n.stashNewTooltip,
-              onTap: () => unawaited(_controller.present()),
+              onTap: () => unawaited(_new()),
             ),
             if (_controller.forge != null)
               SidebarIconButton(
@@ -1340,10 +1362,14 @@ class StashDetail extends StatefulWidget {
     this.onOpenAgent,
     this.onOpenLink,
     this.onClose,
+    this.autofocus = false,
   });
 
   final StashController controller;
   final int id;
+
+  /// Whether its text has the keyboard as it shows (one just made).
+  final bool autofocus;
 
   /// Shows a conversation it is carried out in; none where there is none
   /// to show it in.
@@ -1663,6 +1689,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
             store: _controller.store,
             id: note.id,
             create: (body) async => note.id,
+            autofocus: widget.autofocus,
             refs: _controller.refs(_openLink),
             placeholder: context.l10n.stashPlaceholder,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),

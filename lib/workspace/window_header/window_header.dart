@@ -636,6 +636,11 @@ class _WindowHeaderState extends State<WindowHeader> {
             shortcut: _shortcut(ChatCommandIds.toggleSidePanel),
             onSelected: toggle,
           ),
+        if (run != null && widget.onToggleSidePanel != null)
+          command(
+            l10n.cmdToggleSidePanelPosition,
+            ChatCommandIds.toggleSidePanelPosition,
+          ),
         HeaderMenuItem(
           l10n.menuKeepOnTop,
           checked: widget.pinned,

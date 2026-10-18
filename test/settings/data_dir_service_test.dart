@@ -43,6 +43,8 @@ void main() {
       ('extensions/extensions.json', '[]'),
       // The browser plugin's profile (see lib/browser/).
       ('browser/profile/Default/Cookies', 'chromium'),
+      // The pictures agents made (see lib/images/).
+      ('images/2026-10-17/a-fox-120000.png', 'png'),
       // Where the providers' keys are kept where the system has no
       // keychain of its own (see secret_store_io.dart).
       ('secrets/provider.abc123', 'sk-kept'),
@@ -182,6 +184,9 @@ void main() {
       'extensions/extensions.json',
       'icons',
       'icons/index.json',
+      'images',
+      'images/2026-10-17',
+      'images/2026-10-17/a-fox-120000.png',
       'keymaps',
       'keymaps/vim.json',
       'language-packs',
@@ -215,8 +220,8 @@ void main() {
       Link(p.join(target, 'servers', 'tool-link')).targetSync(),
       p.join(target, 'servers', 'tool', 'bin', 'tool'),
     );
-    expect(progress.first, (0, 17));
-    expect(progress.last, (17, 17));
+    expect(progress.first, (0, 18));
+    expect(progress.last, (18, 18));
     // The old folder is as it was: the web view's files included.
     expect(File(p.join(current, 'Cookies')).existsSync(), isTrue);
     expect(File(p.join(current, 'state', 'state.json')).existsSync(), isTrue);
@@ -278,7 +283,7 @@ void main() {
       File(p.join(target, 'icons', 'index.json')).readAsStringSync(),
       '[{"id": "a"}]',
     );
-    expect(progress.last, (17, 17));
+    expect(progress.last, (18, 18));
     expect(jsonDecode(pointer().readAsStringSync())['dataDir'], target);
   });
 

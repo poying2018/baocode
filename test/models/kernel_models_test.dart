@@ -4,6 +4,7 @@ import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
 import 'package:baocode/kernel/claude_code/claude_code_translator.dart';
+import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/kernel/transcript.dart';
@@ -169,6 +170,39 @@ void main() {
       kernel.model.options.map((o) => o.group?.id),
       isNot(contains(builtinProviderId)),
     );
+    kernel.dispose();
+  });
+
+  test('on BaoCode\'s own core, the machine\'s Claude Code is not offered: '
+      'a model of none (one of its own, picked on the CLI) is the first '
+      'upstream\'s', () async {
+    ClaudeCore.current = () => ClaudeCore.builtin;
+    final (:kernel, :launches, clis: _, :environments) = start(providers, {
+      'model': 'opus',
+    });
+    kernel.prepare();
+    await pumpEventQueue();
+    expect(kernel.model.options.map((o) => o.group?.id).toSet(), {
+      'gw',
+      'other',
+    });
+    expect(kernel.model.selected, '@gw/gpt-5');
+    // Started on it, as on any upstream: its environment over the user's.
+    expect(launches.single.env, isNotNull);
+    expect(environments.single.$1, 'gw');
+    kernel.model.select('@other/m');
+    expect(kernel.model.selected, '@other/m');
+    kernel.dispose();
+  });
+
+  test('on BaoCode\'s own core with no upstream, nothing is picked', () async {
+    ClaudeCore.current = () => ClaudeCore.builtin;
+    final (:kernel, launches: _, clis: _, environments: _) = start(
+      ModelProviders.memory(),
+      const {'model': 'opus'},
+    );
+    expect(kernel.model.options, isEmpty);
+    expect(kernel.model.selected, isNull);
     kernel.dispose();
   });
 

@@ -24,6 +24,7 @@ import 'package:baocode/chat/widgets/shimmer_text.dart';
 import 'package:baocode/chat/widgets/thinking_section.dart';
 import 'package:baocode/chat/widgets/chat_item_view.dart';
 import 'package:baocode/chat/widgets/user_message_bubble.dart';
+import 'package:baocode/chat/chat_find.dart';
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/chat_screen.dart';
@@ -1447,6 +1448,39 @@ void main() {
       expect(tester.element(find.byType(ActivityRow)), same(row));
       session.stop();
       await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a message opened as another closes makes room for all of '
+        'its editor', (tester) async {
+      // Tall enough for all four turns: the one message's editor closes, in
+      // view, as the other's opens.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pumpScreen(tester, historyCount: 32);
+      Rect editor() => tester.getRect(
+        find.descendant(
+          of: find.byType(ChatHistoryView),
+          matching: find.byType(ChatComposer),
+        ),
+      );
+      Rect row(int index) => tester.getRect(
+        find.byWidgetPredicate(
+          (widget) => widget is ChatFindRow && widget.index == index,
+        ),
+      );
+      await tester.tap(bubble('第 4 轮'));
+      await settleAnimations(tester);
+      final height = editor().height;
+      await tester.tap(bubble('第 2 轮'));
+      await settleAnimations(tester);
+
+      // The two messages are alike: their editors are as tall.
+      expect(editor().height, height);
+      // Its row is as tall as the editor, not as the message was: what
+      // follows it is below the editor, not under it.
+      expect(row(8).height, moreOrLessEquals(height));
+      expect(row(9).top, greaterThan(editor().bottom));
     });
 
     testWidgets('an edited message replaces the rest of the conversation', (

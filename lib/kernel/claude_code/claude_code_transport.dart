@@ -227,6 +227,10 @@ class ClaudeLaunch {
     'CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD': '1',
   };
 
+  /// How the model's thinking comes back: summarized, for the chat to
+  /// show (the newest models leave it out unless asked).
+  static const thinkingDisplay = 'summarized';
+
   List<String> get arguments => _arguments(withSettings: true);
 
   /// [arguments] without the flag settings, for when they are given
@@ -245,7 +249,7 @@ class ClaudeLaunch {
     '--permission-prompt-tool',
     'stdio',
     '--thinking-display',
-    'summarized',
+    thinkingDisplay,
     // A prompt_suggestion message after each turn.
     if (promptSuggestions) '--prompt-suggestions',
     if (permissionMode case final mode?) ...['--permission-mode', mode],

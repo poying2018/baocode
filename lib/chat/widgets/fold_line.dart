@@ -222,7 +222,8 @@ Widget? _thumbnails(
 /// order: what their fold shows, small, so they are not hidden in it.
 List<ChatImage> foldImages(Iterable<ChatItem> items) => [
   for (final item in items)
-    if (item is ToolCallItem) ...toolImages(item),
+    // Pictures made show whole, out of the fold (see [standsOutOfWork]).
+    if (item is ToolCallItem && !standsOutOfWork(item)) ...toolImages(item),
 ];
 
 /// The files a turn edited, and the lines added and removed in them.

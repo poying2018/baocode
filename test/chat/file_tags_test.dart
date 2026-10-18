@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/chat_feed.dart';
 import 'package:baocode/chat/chat_history_view.dart';
@@ -132,6 +133,31 @@ void main() {
     expect(find.byType(InteractiveViewer), findsOneWidget);
     expect(read.last, '/p/shots/old.png');
     expect(opened, isEmpty);
+  }, variant: _desktop);
+
+  testWidgets('an image\'s tag is centered on the text of its line, '
+      'whatever its line height', (tester) async {
+    await pump(tester, screenshots, inPanel: true);
+
+    final chip = find.byType(FileImageChip).first;
+    final paragraph = tester.renderObject<RenderParagraph>(
+      find.ancestor(of: chip, matching: find.byType(RichText)).first,
+    );
+    final dot = paragraph.text
+        .toPlainText(includePlaceholders: true)
+        .indexOf('·');
+    // The glyphs' box, without the line's leading.
+    final glyphs = paragraph
+        .getBoxesForSelection(
+          TextSelection(baseOffset: dot, extentOffset: dot + 1),
+        )
+        .single
+        .toRect()
+        .shift(paragraph.localToGlobal(Offset.zero));
+    final tag = tester.getRect(
+      find.descendant(of: chip, matching: find.byType(Container)).first,
+    );
+    expect(tag.center.dy, moreOrLessEquals(glyphs.center.dy, epsilon: .5));
   }, variant: _desktop);
 
   testWidgets('an image too big to show small is not read for its tag', (

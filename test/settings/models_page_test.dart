@@ -4,6 +4,7 @@ import 'package:baocode/icons/brand_logos.dart';
 import 'package:baocode/icons/project_icon.dart';
 import 'package:baocode/ide/ide_hover.dart';
 import 'package:baocode/ide/ide_back_button.dart';
+import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/claude_code/claude_haiku.dart';
 import 'package:baocode/models/codex/codex_service.dart';
 import 'package:baocode/models/codex/codex_usage.dart';
@@ -170,6 +171,28 @@ void main() {
     await tester.pump();
     // No page of its own to open, nor delete.
     expect(find.text('Connection'), findsNothing);
+  });
+
+  testWidgets('on BaoCode\'s own core there is no built-in provider: '
+      'neither listed nor offered as the default', (tester) async {
+    ClaudeCore.current = () => ClaudeCore.builtin;
+    // Picked on the CLI: Claude Code's own default, and its Haiku.
+    await providers.setDefaultModel('default');
+    await providers.setAuxiliaryModel(builtinProviderId);
+    await pump(tester);
+    expect(find.text("Claude Code (this machine's setup)"), findsNothing);
+    expect(find.text('Built-in'), findsNothing);
+    // As for none: the last one picked, automatic.
+    expect(find.text('Last picked'), findsOneWidget);
+    expect(find.text('Automatic'), findsOneWidget);
+    await tester.tap(find.text('Last picked'));
+    await tester.pumpAndSettle();
+    expect(find.text('Claude Code default'), findsNothing);
+    await tester.tapAt(Offset.zero);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Automatic'));
+    await tester.pumpAndSettle();
+    expect(find.text("Claude Code Haiku (this machine's setup)"), findsNothing);
   });
 
   testWidgets('an upstream is added, set up, its models fetched and its '

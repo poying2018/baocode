@@ -2792,6 +2792,12 @@ abstract class AppLocalizations {
   /// **'Toggle Side Panel'**
   String get cmdToggleSidePanel;
 
+  /// No description provided for @cmdToggleSidePanelPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Toggle Side Panel Position'**
+  String get cmdToggleSidePanelPosition;
+
   /// No description provided for @cmdSidePanelChanges.
   ///
   /// In en, this message translates to:
@@ -2995,6 +3001,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hide side panel'**
   String get sidePanelHide;
+
+  /// No description provided for @sidePanelMoveLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to the Left of the Conversation'**
+  String get sidePanelMoveLeft;
+
+  /// No description provided for @sidePanelMoveRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to the Right of the Conversation'**
+  String get sidePanelMoveRight;
 
   /// The side panel's tab listing the files the agent changed.
   ///
@@ -4154,6 +4172,60 @@ abstract class AppLocalizations {
   /// **'Used'**
   String get toolUsed;
 
+  /// No description provided for @toolGeneratingImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating image'**
+  String get toolGeneratingImage;
+
+  /// No description provided for @toolGeneratedImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Generated image'**
+  String get toolGeneratedImage;
+
+  /// No description provided for @toolImageFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Image not generated'**
+  String get toolImageFailed;
+
+  /// No description provided for @toolImageWaiting.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate image'**
+  String get toolImageWaiting;
+
+  /// No description provided for @imagePickTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick the model to generate it with'**
+  String get imagePickTitle;
+
+  /// No description provided for @imagePickGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get imagePickGenerate;
+
+  /// No description provided for @imagePickDecline.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get imagePickDecline;
+
+  /// No description provided for @imageSetDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as default'**
+  String get imageSetDefault;
+
+  /// No description provided for @imageDefaultSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Set as default image model'**
+  String get imageDefaultSet;
+
   /// No description provided for @toolProposingGoal.
   ///
   /// In en, this message translates to:
@@ -4385,8 +4457,26 @@ abstract class AppLocalizations {
   /// No description provided for @turnSpeedHint.
   ///
   /// In en, this message translates to:
-  /// **'Output speed'**
+  /// **'Average output speed'**
   String get turnSpeedHint;
+
+  /// The tokens the model has written so far in the turn under way, e.g. "↓ 1.2k tokens".
+  ///
+  /// In en, this message translates to:
+  /// **'↓ {tokens} tokens'**
+  String turnOutputTokens(String tokens);
+
+  /// No description provided for @turnOutputTokensHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Written so far this turn'**
+  String get turnOutputTokensHint;
+
+  /// No description provided for @turnSpeedLiveHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Output speed'**
+  String get turnSpeedLiveHint;
 
   /// No description provided for @turnDurationHint.
   ///
@@ -4535,8 +4625,80 @@ abstract class AppLocalizations {
   /// What the agent 'does' while the model has yet to answer: whimsical phrases, one per line, shown one at a time with dots after them. Any number of lines.
   ///
   /// In en, this message translates to:
-  /// **'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nReticulating splines\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nTuning the vibes\nBinding the monad\nLifting into the monad\nAsking the oracle\nStirring the pot\nPolishing the plan'**
+  /// **'Pondering\nNoodling\nPercolating\nCogitating\nSimmering\nMarinating\nTinkering\nGrokking\nMulling it over\nConnecting the dots\nChasing a hunch\nBrewing a plan\nHatching a plan\nWeighing the options\nUntangling threads\nHerding tokens\nSummoning context\nAsking the rubber duck\nReading the tea leaves\nSketching on a napkin\nDoodling in the margins\nSquinting at the diff\nCounting parentheses\nBefriending the compiler\nNegotiating with types\nWrangling edge cases\nTracing the stack\nFlipping through the docs\nSpelunking the codebase\nLining up the ducks\nShaking the magic 8-ball\nWarming up the neurons\nFolding thoughts\nBinding the monad\nAsking the oracle\nStirring the pot\nPolishing the plan'**
   String get activityMusings;
+
+  /// Musings, as activityMusings, after a command it ran: {name} is the command, e.g. "flutter test". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Squinting at {name}\'s output\nDigesting what {name} said\nPicking through {name}\'s output\nNodding along to {name}'**
+  String activityMusingsCommand(String name);
+
+  /// Musings, as activityMusings, after a command it ran that failed: {name} is the command, e.g. "flutter test". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Staring down {name}\'s error\nAsking {name} what went wrong\nUntangling {name}\'s complaint\nConsoling {name}'**
+  String activityMusingsCommandFailed(String name);
+
+  /// Musings, as activityMusings, after a file it read: {name} is the file name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Leafing through {name}\nGetting to know {name}\nPulling threads in {name}\nReading between the lines of {name}'**
+  String activityMusingsRead(String name);
+
+  /// Musings, as activityMusings, after a file it changed: {name} is the file name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Admiring the new {name}\nDouble-checking {name}\nHoping {name} still compiles\nGiving {name} a once-over'**
+  String activityMusingsEdit(String name);
+
+  /// Musings, as activityMusings, after a search it made: {name} is how many matches, e.g. "12". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Panning {name} results for gold\nSifting through {name} matches\nFollowing {name} leads'**
+  String activityMusingsSearch(String name);
+
+  /// Musings, as activityMusings, after a folder it listed: {name} is the folder name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Poking around {name}\nTaking roll call in {name}\nSizing up {name}'**
+  String activityMusingsFolder(String name);
+
+  /// Musings, as activityMusings, after a page it fetched: {name} is the site, e.g. "dart.dev". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Taking notes from {name}\nDigesting {name}'**
+  String activityMusingsWeb(String name);
+
+  /// Musings, as activityMusings, after a subagent that reported back: {name} is the subagent's type, e.g. "Explore". One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Debriefing {name}\nGrading {name}\'s homework\nGoing over {name}\'s findings'**
+  String activityMusingsAgent(String name);
+
+  /// Musings, as activityMusings, after an MCP tool it called: {name} is the MCP tool's name. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Unwrapping {name}\'s reply\nSeeing what {name} sent back'**
+  String activityMusingsMcp(String name);
+
+  /// Musings, as activityMusings, after something it did in the browser. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Peering at the page\nSquinting at the screenshot'**
+  String get activityMusingsBrowser;
+
+  /// Musings, as activityMusings, after a picture it generated. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Admiring the fresh picture\nNitpicking the new image'**
+  String get activityMusingsImage;
+
+  /// Musings, as activityMusings, after a tool call the user denied. One per line, any number of lines.
+  ///
+  /// In en, this message translates to:
+  /// **'Finding another way\nTaking the scenic route'**
+  String get activityMusingsDenied;
 
   /// Suggestion menu title.
   ///
@@ -5785,6 +5947,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Who the commits and pull requests an agent writes credit. Applies to agents started after a change; Claude Code only for now.'**
   String get generalSettingsCommitAttributionDescription;
+
+  /// Settings → General → Claude Code row: what runs Claude Code sessions, BaoCode's built-in core (written in Dart) or the Claude Code CLI.
+  ///
+  /// In en, this message translates to:
+  /// **'Core'**
+  String get generalSettingsClaudeCore;
+
+  /// No description provided for @generalSettingsClaudeCoreDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'What runs Claude Code sessions. The built-in core is BaoCode\'s own, written in Dart: the same tools, settings, CLAUDE.md, skills, subagents, hooks, MCP servers and session files as the CLI; it runs on the upstreams added in Settings → Models alone, never on a model the machine\'s Claude Code setup names. The CLI is Anthropic\'s, and follows that setup; pick it to sign in with a Claude subscription. Applies to sessions started after a change, on this machine and on remote hosts.'**
+  String get generalSettingsClaudeCoreDescription;
+
+  /// Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app.
+  ///
+  /// In en, this message translates to:
+  /// **'Built-in (Dart)'**
+  String get generalSettingsClaudeCoreBuiltin;
+
+  /// Claude Code core choice: Anthropic's Claude Code command-line program, run as a process.
+  ///
+  /// In en, this message translates to:
+  /// **'Claude Code CLI'**
+  String get generalSettingsClaudeCoreCli;
 
   /// No description provided for @generalSettingsQueuedMessages.
   ///
@@ -11061,6 +11247,66 @@ abstract class AppLocalizations {
   /// **'Does not take images'**
   String get modelsNoImages;
 
+  /// No description provided for @modelsKind.
+  ///
+  /// In en, this message translates to:
+  /// **'Used for'**
+  String get modelsKind;
+
+  /// No description provided for @modelsKindChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations'**
+  String get modelsKindChat;
+
+  /// No description provided for @modelsKindImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image generation (Images API)'**
+  String get modelsKindImage;
+
+  /// No description provided for @modelsKindImageChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Image generation (in a conversation)'**
+  String get modelsKindImageChat;
+
+  /// No description provided for @modelsKindDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.'**
+  String get modelsKindDescription;
+
+  /// No description provided for @modelsImageBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get modelsImageBadge;
+
+  /// No description provided for @modelsImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Image model'**
+  String get modelsImage;
+
+  /// No description provided for @modelsImageDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'What agents make pictures with (the generate_image tool), unless you ask them for another; asked each time, you pick it in the conversation. Turn on image models in an upstream\'s list.'**
+  String get modelsImageDescription;
+
+  /// No description provided for @modelsImageFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask each time'**
+  String get modelsImageFirst;
+
+  /// No description provided for @modelsImageNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None turned on'**
+  String get modelsImageNone;
+
   /// No description provided for @modelsSave.
   ///
   /// In en, this message translates to:
@@ -13869,6 +14115,42 @@ abstract class AppLocalizations {
   /// **'Has AI make the selection clearer, in your words, without adding structure'**
   String get stashPolishHint;
 
+  /// No description provided for @composerPolish.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish'**
+  String get composerPolish;
+
+  /// No description provided for @composerPolishing.
+  ///
+  /// In en, this message translates to:
+  /// **'Polishing…'**
+  String get composerPolishing;
+
+  /// No description provided for @composerPolishHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back'**
+  String get composerPolishHint;
+
+  /// No description provided for @composerPolishFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not polish: {error}'**
+  String composerPolishFailed(String error);
+
+  /// No description provided for @generalSettingsComposerPolish.
+  ///
+  /// In en, this message translates to:
+  /// **'Polish button'**
+  String get generalSettingsComposerPolish;
+
+  /// No description provided for @generalSettingsComposerPolishDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A button in the message box that has the auxiliary model make what you wrote clearer before you send it'**
+  String get generalSettingsComposerPolishDescription;
+
   /// No description provided for @stashPolishFailed.
   ///
   /// In en, this message translates to:
@@ -15243,11 +15525,11 @@ abstract class AppLocalizations {
   /// **'Let agents use your own browser, signed in as you: open pages, read them, click and type in the tabs you share with them. You can watch every step in the side panel.'**
   String get browserSettingsDescription;
 
-  /// No description provided for @browserSettingsMacOSOnly.
+  /// No description provided for @browserSettingsUnsupported.
   ///
   /// In en, this message translates to:
-  /// **'The browser is available on macOS only for now.'**
-  String get browserSettingsMacOSOnly;
+  /// **'The browser is available on macOS and Windows only for now.'**
+  String get browserSettingsUnsupported;
 
   /// No description provided for @browserSettingsEnabled.
   ///

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../browser/browser_steps.dart';
+import '../../images/image_steps.dart';
 import '../../l10n/l10n.dart';
 import '../chat_models.dart';
 import 'activity_row.dart';
@@ -70,6 +71,11 @@ class ChatItemView extends StatelessWidget {
         expanded: expanded,
         onToggle: onToggle,
       ),
+      final ToolCallItem tool when tool.kind == ToolKind.image => ImageStep(
+        item: tool,
+        expanded: expanded,
+        onToggle: onToggle,
+      ),
       ThinkingItem(:final text, :final seconds, :final startedAt) =>
         ThinkingSection(
           text: text,
@@ -135,8 +141,18 @@ class ChatItemView extends StatelessWidget {
         expanded: expanded,
         onToggle: onToggle,
       ),
-      LiveStatusItem(:final label, :final whimsical, :final visible) =>
-        ActivityRow(label: label, whimsical: whimsical, visible: visible),
+      LiveStatusItem(
+        :final label,
+        :final whimsical,
+        :final visible,
+        :final cue,
+      ) =>
+        ActivityRow(
+          label: label,
+          whimsical: whimsical,
+          visible: visible,
+          cue: cue,
+        ),
     };
   }
 }
