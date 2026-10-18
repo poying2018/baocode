@@ -271,6 +271,11 @@ class ClaudeCodeKernel
   /// Turns stopped here: the CLI's word that it took one up (sent just
   /// before, it may not have yet) does not start it again.
   final Set<String> _stoppedTurns = {};
+
+  /// Turns taken up again after the process died mid-turn, since the last
+  /// turn ended or a process started clean: the one chance a flaky exit
+  /// gets before the failure is shown plain (see [_exited]).
+  int _resumeAttempts = 0;
   final Map<String, _Permission> _permissions = {};
   String? _pendingTitle;
 
@@ -895,6 +900,9 @@ class ClaudeCodeKernel
     final turn = _turn;
     if (turn == null) return;
     _turn = null;
+    // A turn that ended whole spent the process's one chance to be
+    // restarted after an unexpected exit: the next turn gets it back.
+    if (!interrupted) _resumeAttempts = 0;
     if (interrupted) _cancelSdkCalls();
     worked ??= switch (_turnStarted) {
       final started? => DateTime.now().difference(started),
@@ -2168,6 +2176,26 @@ class ClaudeCodeKernel
 
   void _exited(int code, String stderr, {String? executable}) {
     final wasReady = _health.status == KernelHealthStatus.ready;
+    // A process that died with a turn under way mends itself, once. That
+    // it readied and ran, and says nothing of the account or the CLI's
+    // age, makes an exit a fluke (a proxy refusing the upstream, a
+    // killed worker) rather than a setup that cannot work; and the
+    // conversation lives in the CLI's own session file, not in the
+    // process. So the turn ends stopped and goes again at once on a
+    // fresh process resumed over it — the path a provider switch takes
+    // (see [_send]) — and the user never has to send the message twice.
+    // Once per clean turn: a process that dies again at once is failed
+    // plainly, not restarted for ever.
+    final turn = _turn;
+    final resumable =
+        turn != null &&
+        wasReady &&
+        _sessionId != null &&
+        !_stoppedTurns.contains(turn) &&
+        _resumeAttempts == 0 &&
+        _sent.containsKey(turn) &&
+        !_notLoggedIn(stderr) &&
+        !_tooOld(stderr);
     _teardown();
     if (!wasReady &&
         _starting != null &&
@@ -2179,18 +2207,57 @@ class ClaudeCodeKernel
       _tooOldExit = (executable, stderr);
       return;
     }
-    if (_turn != null) {
+    if (turn != null) {
       emit(
         ItemUpserted(
           nextSeq,
-          'exit:${_turn!}',
-          const NoticeItem(
-            NoticeKind.error,
-            'Claude Code stopped unexpectedly',
-          ),
+          resumable ? 'retry:$turn' : 'exit:$turn',
+          resumable
+              ? NoticeItem(
+                  NoticeKind.retry,
+                  '${_failureMessage(stderr, remote: _remoteHost)}\n'
+                  'The turn is taken up again.',
+                )
+              : const NoticeItem(
+                  NoticeKind.error,
+                  'Claude Code stopped unexpectedly',
+                ),
         ),
       );
-      _endTurn(interrupted: true);
+      // A turn taken up again is not over: only its process died, and it
+      // ends (or does not) by what the next one says. Stopping it here
+      // would mark the message failed in the transcript, which cannot
+      // open again under the id it was sent with.
+      if (!resumable) _endTurn(interrupted: true);
+    }
+    if (resumable) {
+      _resumeAttempts++;
+      // The questions the dead process was asking die with it; the CLI
+      // on the session asks again only if the model asks again.
+      for (final id in _permissions.keys) {
+        emit(InteractionResolved(nextSeq, id));
+      }
+      _permissions.clear();
+      // What waited behind the turn was given to the process that died,
+      // or waits for none: it all goes again after the turn, in order,
+      // kept visible as queued the while.
+      final waiting = [for (final id in _queued) ?_sent[id]];
+      _queued.clear();
+      _held.clear();
+      // Whatever was mid-stream settles where it got to; what comes from
+      // the new process is whole again from the resumed conversation.
+      _translator.settle();
+      _translator.begin();
+      _setHealth(KernelHealth.idle);
+      // The message goes again whole: the resumed process reads the
+      // conversation from its own session file, where a turn that died
+      // mid-way left nothing. `_whenReady` starts the new process; the
+      // waiting ones queue behind it as under a running turn.
+      _write(_sent[turn]!, ask: _work == 'ask');
+      for (final message in waiting) {
+        _submit(message);
+      }
+      return;
     }
     for (final id in _queued) {
       emit(ItemRemoved(nextSeq, id));

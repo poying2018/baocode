@@ -1052,6 +1052,182 @@ void main() {
       kernel.dispose();
     });
 
+    test(
+      'an exit mid-turn takes the turn up again on a resumed process',
+      () async {
+        final clis = [FakeCli(), FakeCli()];
+        var next = 0;
+        final kernel = ClaudeCodeKernel(
+          MockKernels.claudeCode,
+          const KernelContext(cwd: '/p'),
+          start: (_) async => clis[next++],
+        );
+        final transcript = Transcript();
+        kernel.events.listen(transcript.apply);
+        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+        await pumpEventQueue();
+        // The CLI says the session it runs, as `init` does.
+        clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u1');
+
+        // The process dies with the turn under way: a fluke, not a setup
+        // that cannot work — the turn says so, and goes again.
+        clis[0].push(ClaudeExit.message(1, 'socket hang up'));
+        await pumpEventQueue();
+        final notices = [
+          for (var i = 0; i < transcript.length; i++)
+            if (transcript.itemAt(i) case NoticeItem(:final kind, :final text))
+              (kind, text),
+        ];
+        expect(notices.single.$1, NoticeKind.retry);
+        expect(notices.single.$2, contains('taken up again'));
+        // The turn is not over: only its process died. It stays open, and
+        // the transcript keeps streaming as if the stop never came.
+        expect(transcript.activeTurn, 'u1');
+
+        // The second process is started, resumed over the same session, and
+        // takes the message again whole.
+        await pumpEventQueue();
+        expect(clis[1].users.single['uuid'], 'u1');
+        // And answers, ending the turn as any process would.
+        clis[1].push({
+          'type': 'result',
+          'subtype': 'success',
+          'is_error': false,
+          'duration_ms': 5,
+        });
+        await pumpEventQueue();
+        expect(transcript.activeTurn, isNull);
+        kernel.dispose();
+      },
+    );
+
+    test('the resumed process is started over the kept session', () async {
+      final clis = [FakeCli(), FakeCli()];
+      final launches = <ClaudeLaunch>[];
+      ClaudeLaunch? seen;
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (launch) async {
+          seen = launch;
+          launches.add(launch);
+          return clis[launches.length - 1];
+        },
+      );
+      final transcript = Transcript();
+      kernel.events.listen(transcript.apply);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+      clis[0].push(ClaudeExit.message(1, 'socket hang up'));
+      await pumpEventQueue();
+      await pumpEventQueue();
+      expect(launches, hasLength(2));
+      expect(launches.first.resume, isNull);
+      expect(launches.last.resume, 's1');
+      expect(seen, isNotNull);
+      kernel.dispose();
+    });
+
+    test('a process that dies again mid the retry is failed plainly', () async {
+      final clis = [FakeCli(), FakeCli(), FakeCli()];
+      var next = 0;
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (_) async => clis[next++],
+      );
+      final transcript = Transcript();
+      kernel.events.listen(transcript.apply);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+
+      clis[0].push(ClaudeExit.message(1, 'socket hang up'));
+      await pumpEventQueue();
+      await pumpEventQueue();
+      // The retry ran; it dies too. No second chance: the turn ends
+      // stopped with the plain word, and the health says failed.
+      clis[1].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+      clis[1].push(ClaudeExit.message(1, 'socket hang up'));
+      await pumpEventQueue();
+      final kinds = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) case NoticeItem(:final kind)) kind,
+      ];
+      expect(kinds, [NoticeKind.retry, NoticeKind.error]);
+      expect(kernel.health.status, KernelHealthStatus.failed);
+      expect(next, 2); // a third process was never started
+      kernel.dispose();
+    });
+
+    test('a turn that ended whole spends no retry: the next dies once, '
+        'is taken up once', () async {
+      final clis = [FakeCli(), FakeCli(), FakeCli()];
+      var next = 0;
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (_) async => clis[next++],
+      );
+      final transcript = Transcript();
+      kernel.events.listen(transcript.apply);
+      kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+      await pumpEventQueue();
+      clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+      clis[0].push({
+        'type': 'result',
+        'subtype': 'success',
+        'is_error': false,
+        'duration_ms': 10,
+      });
+      await pumpEventQueue();
+      expect(transcript.activeTurn, isNull);
+
+      // A second turn on the same process; its mid-turn exit is the
+      // process's first death, so it is taken up again.
+      kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+      await pumpEventQueue();
+      clis[0].push(ClaudeExit.message(1, 'socket hang up'));
+      await pumpEventQueue();
+      await pumpEventQueue();
+      expect(transcript.activeTurn, 'u2');
+      expect(clis[1].users.single['uuid'], 'u2');
+      kernel.dispose();
+    });
+
+    test('an exit that says not logged in is failed, not retried', () async {
+      final clis = [FakeCli(), FakeCli()];
+      var next = 0;
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (_) async => clis[next++],
+      );
+      final transcript = Transcript();
+      kernel.events.listen(transcript.apply);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+      clis[0].push(ClaudeExit.message(1, 'Please login again'));
+      await pumpEventQueue();
+      final kinds = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) case NoticeItem(:final kind)) kind,
+      ];
+      expect(kinds, [NoticeKind.error]);
+      expect(transcript.activeTurn, isNull);
+      expect(kernel.health.status, KernelHealthStatus.failed);
+      kernel.dispose();
+    });
+
     test('a question comes as can_use_tool and is answered in kind', () async {
       final cli = FakeCli();
       final (:kernel, :transcript, events: _) = claude(cli);
