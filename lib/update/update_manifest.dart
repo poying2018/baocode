@@ -5,8 +5,10 @@ import 'dart:convert';
 import 'version.dart';
 
 /// Where the app looks for its next version: the release manifest
-/// dl.baocode.dev serves (docs/auto-update.md has its format).
-const defaultManifestUrl = 'https://dl.baocode.dev/releases/latest.json';
+/// published with this fork's GitHub releases (docs/auto-update.md has
+/// its format).
+const defaultManifestUrl =
+    'https://github.com/poying2018/baocode/releases/latest/download/latest.json';
 
 /// The environment variable that points the app at another manifest, to
 /// try a release before it is published (a local server's, say).
@@ -24,9 +26,11 @@ class UpdateManifestException implements Exception {
 }
 
 /// Which download links a manifest may give: https on baocode.dev (or a
-/// subdomain of it), and [extraOrigins] besides — the origin of a manifest
-/// [manifestUrlVariable] points at, so a release can be tried from where it
-/// is served before it is published.
+/// subdomain of it), on github.com (a release asset, and the
+/// githubusercontent.com hosts GitHub redirects it to), and
+/// [extraOrigins] besides — the origin of a manifest
+/// [manifestUrlVariable] points at, so a release can be tried from where
+/// it is served before it is published.
 class UpdateUrlPolicy {
   const UpdateUrlPolicy({this.extraOrigins = const {}});
 
@@ -38,7 +42,11 @@ class UpdateUrlPolicy {
       ? const UpdateUrlPolicy()
       : UpdateUrlPolicy(extraOrigins: {manifest.origin});
 
-  static const domain = 'baocode.dev';
+  static const domains = [
+    'baocode.dev',
+    'github.com',
+    'githubusercontent.com',
+  ];
 
   final Set<String> extraOrigins;
 
@@ -53,7 +61,7 @@ class UpdateUrlPolicy {
     return url.scheme == 'https' &&
         !url.hasPort &&
         url.userInfo.isEmpty &&
-        (host == domain || host.endsWith('.$domain'));
+        domains.any((domain) => host == domain || host.endsWith('.$domain'));
   }
 }
 
@@ -220,7 +228,7 @@ class UpdateManifest {
     if (url == null) throw const UpdateManifestException('"url" is missing');
     if (!policy.allows(url)) {
       throw UpdateManifestException(
-        '"$url" is not an https link on ${UpdateUrlPolicy.domain}',
+        '"$url" is not an https link on ${UpdateUrlPolicy.domains.join(', ')}',
       );
     }
     final size = json['size'];

@@ -32,12 +32,11 @@ class UpdateController {
   /// Opens a file in the app the system opens it with: the install's log.
   final Future<void> Function(String path)? openFile;
 
-  /// [version]'s notes on the site's changelog (tool/build_changelog.dart
-  /// makes it), the Chinese page for [languageCode] `zh`.
-  static Uri changelogUrl(AppVersion version, String languageCode) => Uri.parse(
-    'https://baocode.dev/${languageCode.startsWith('zh') ? 'zh/' : ''}'
-    'changelog#v${version.marketing}',
-  );
+  /// [version]'s notes on this fork's GitHub release page.
+  static Uri changelogUrl(AppVersion version, String languageCode) =>
+      Uri.parse(
+        'https://github.com/poying2018/baocode/releases/tag/v$version',
+      );
 
   bool _restarting = false;
 

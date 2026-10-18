@@ -23,10 +23,9 @@
 // the same version keeps the other platforms' entries, so the Windows and the
 // macOS installers can be signed on their own machines one after the other.
 //
-// Each link ends in `?sha256=<the file's first 16 hex digits>`: a file
-// published again under the same name (a release redone) is another address
-// to the CDN, which keeps downloads for a year, so no one is served the old
-// one. The app names a download by the path alone.
+// Each link is the release asset of the version's GitHub release:
+// https://github.com/poying2018/baocode/releases/download/v<version>/<file>.
+// The app names a download by the path alone.
 //
 // Besides what the app reads, `downloads` gives the download page
 // (site/site.js) what it offers: the disk images (--dmg-arm64, --dmg-x64),
@@ -39,13 +38,12 @@ import 'package:baocode/update/update_signature.dart';
 import 'package:baocode/update/version.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
-/// Where the downloads go: `<base>/<1.2.0>/<file>`.
-const _releasesBase = 'https://dl.baocode.dev/releases';
+/// Where the downloads go: a release asset of this fork's GitHub releases.
+const _releasesBase = 'https://github.com/poying2018/baocode/releases/download';
 
-/// [name]'s link, for the file whose SHA-256 is [sha256].
-Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
-  '$_releasesBase/${version.marketing}/$name?sha256=${sha256.substring(0, 16)}',
-);
+/// [name]'s link: the release of [version] carries it.
+Uri _link(AppVersion version, String name) =>
+    Uri.parse('$_releasesBase/v$version/$name');
 
 /// The Macs built for, each its own download (tool/build_macos.dart), and
 /// the app takes its processor's (lib/update/installer_io.dart).
@@ -154,7 +152,7 @@ Future<void> main(List<String> arguments) async {
     }
     final name = file.uri.pathSegments.last;
     assets[platform] = UpdateAsset(
-      url: _link(version, name, sha256),
+      url: _link(version, name),
       size: size,
       sha256: sha256,
       signature: signature,
@@ -175,7 +173,7 @@ Future<void> main(List<String> arguments) async {
     if (!dmg.existsSync()) _fail('No such file: ${dmg.path}');
     final sha256 = '${await crypto.sha256.bind(dmg.openRead()).first}';
     downloads[platform] = {
-      'url': '${_link(version, dmg.uri.pathSegments.last, sha256)}',
+      'url': '${_link(version, dmg.uri.pathSegments.last)}',
       'size': dmg.lengthSync(),
       'sha256': sha256,
     };
