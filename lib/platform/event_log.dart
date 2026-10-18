@@ -41,6 +41,11 @@ class EventLog {
   bool _started = false;
   int _size = 0;
 
+  /// What is written, one write after another, off the thread that draws:
+  /// a write to the disk takes milliseconds here, and the events come in
+  /// bursts (a window dragged, views laid out).
+  Future<void> _writing = Future.value();
+
   /// Writes [message] under [category] (`window`, `theme`…), timed.
   void record(String category, String message) {
     try {
@@ -49,6 +54,10 @@ class EventLog {
       // The log is no reason to fail: a disk full, a folder gone.
     }
   }
+
+  /// What has been written, once it is: a test reading the file, or the
+  /// last events before the app goes.
+  Future<void> flush() => _writing;
 
   void _write(String line) {
     if (!_started) {
@@ -68,19 +77,26 @@ class EventLog {
 
   void _rollIfFull(int adding) {
     if (_size == 0 || _size + adding <= maxBytes) return;
-    final previous = File(previousPath);
-    if (previous.existsSync()) previous.deleteSync();
-    File(path).renameSync(previousPath);
     _size = 0;
+    _writing = _writing.then<void>((_) async {
+      final previous = File(previousPath);
+      if (await previous.exists()) await previous.delete();
+      await File(path).rename(previousPath);
+    }).catchError((Object _) {
+      // A folder gone, a file in use: the next events start a new file.
+    });
   }
 
   void _append(String text) {
-    // No flush: each one is a flush to the disk, and the events come in
-    // bursts (a window dragged, views laid out) on the thread that draws.
-    // What is written is there for a reader at once; only a power cut
-    // before the system writes it out loses it.
-    File(path).writeAsStringSync(text, mode: FileMode.append);
+    // No flush: each one is a flush to the disk. What is written is there
+    // for a reader at once; only a power cut before the system writes it
+    // out loses it.
     _size += text.length;
+    _writing = _writing.then<void>((_) async {
+      await File(path).writeAsString(text, mode: FileMode.append);
+    }).catchError((Object _) {
+      // The log is no reason to fail.
+    });
   }
 }
 
