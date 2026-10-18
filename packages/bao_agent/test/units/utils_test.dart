@@ -9,6 +9,7 @@ import 'package:bao_agent/src/tools/diff.dart';
 import 'package:bao_agent/src/tools/glob_pattern.dart';
 import 'package:bao_agent/src/util/cancel.dart';
 import 'package:bao_agent/src/util/html_markdown.dart';
+import 'package:bao_agent/src/engine/tasks.dart';
 import 'package:bao_agent/src/engine/transcript.dart';
 import 'package:bao_agent/src/util/json.dart';
 import 'package:bao_agent/src/util/processes.dart';
@@ -467,4 +468,54 @@ void main() {
       '…${'x' * 10}',
     );
   });
+
+  group('ForegroundCommand', () {
+    /// A Process that is only an argument: the output is tested on its own.
+    final _Never = _FakeProcess();
+
+    test('what runs past what is kept is dropped as it comes', () {
+      final running = ForegroundCommand(
+        process: _Never,
+        command: 'echo',
+        description: 'Echo',
+        toolUseId: 't1',
+      );
+      // A chunk far over the limit: caught up to it, and then no more.
+      running.addStdout(utf8.encode('a' * (ForegroundCommand.keepBytes + 10)));
+      expect(running.stdout.toString(), 'a' * ForegroundCommand.keepBytes);
+      expect(running.trimmed, isTrue);
+      running.addStdout(utf8.encode('b' * 1000));
+      expect(running.stdout.length, ForegroundCommand.keepBytes);
+    });
+
+    test('what fits is kept whole, and not trimmed', () {
+      final running = ForegroundCommand(
+        process: _Never,
+        command: 'echo',
+        description: 'Echo',
+        toolUseId: 't1',
+      );
+      for (var i = 0; i < 10; i++) {
+        running.addStdout(utf8.encode('line $i\n'));
+      }
+      running.addStderr(utf8.encode('bad\n'));
+      expect(
+        running.stdout.toString(),
+        [for (var i = 0; i < 10; i++) 'line $i\n'].join(),
+      );
+      expect(running.stdout.length, lessThan(ForegroundCommand.keepBytes));
+      expect(running.stderr.toString(), 'bad\n');
+      expect(running.trimmed, isFalse);
+    });
+  });
+}
+
+/// A Process that is only an argument: what its output comes to is tested
+/// on its own. Everything else answers as if it had ended.
+class _FakeProcess implements Process {
+  @override
+  Future<int> get exitCode => Future.value(0);
+
+  @override
+  noSuchMethod(Invocation invocation) => Future.value(0);
 }

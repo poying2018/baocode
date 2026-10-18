@@ -291,6 +291,15 @@ End with the pull request's URL, for the user to open.''';
       if (stderr.isNotEmpty) stderr,
     ];
     var text = parts.join('\n');
+    // What ran past what is kept was dropped as it came: say so, rather
+    // than let the cut read as if it were all there was.
+    if (running.trimmed) {
+      text = [
+        if (text.isNotEmpty) text,
+        '[output trimmed while running: more was printed than a command\'s '
+            'result holds]',
+      ].join('\n');
+    }
     if (timedOut) {
       text = [
         if (text.isNotEmpty) text,

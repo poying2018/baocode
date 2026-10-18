@@ -398,6 +398,17 @@ class ForegroundCommand {
   final StringBuffer stdout = StringBuffer();
   final StringBuffer stderr = StringBuffer();
 
+  /// How much of each is kept in memory: four times what a command's
+  /// result is shown as ([bash_tool.defaultMaxOutput], twice over for a
+  /// middle that is cut out), it has no use. A build that prints without
+  /// end would otherwise hold it all until it ends.
+  static const keepBytes = 4 * 30000;
+
+  /// Whether what has been kept is [keepBytes]' worth, so what comes next
+  /// is dropped; the result then shows the truncated marker too.
+  bool get trimmed => _trimmed;
+  bool _trimmed = false;
+
   /// Set once it went to the background, as that task.
   BackgroundTask? task;
 
@@ -414,7 +425,7 @@ class ForegroundCommand {
     if (_sink case final sink?) {
       sink.add(bytes);
     } else {
-      stdout.write(utf8.decode(bytes, allowMalformed: true));
+      _write(stdout, bytes);
     }
   }
 
@@ -422,7 +433,25 @@ class ForegroundCommand {
     if (_sink case final sink?) {
       sink.add(bytes);
     } else {
-      stderr.write(utf8.decode(bytes, allowMalformed: true));
+      _write(stderr, bytes);
+    }
+  }
+
+  /// The head of it, and then nothing: a command's result is cut at far
+  /// less, so what follows has no use and the memory is worth keeping.
+  void _write(StringBuffer buffer, List<int> bytes) {
+    if (_trimmed) return;
+    if (buffer.length >= keepBytes) {
+      _trimmed = true;
+      return;
+    }
+    buffer.write(utf8.decode(bytes, allowMalformed: true));
+    if (buffer.length > keepBytes) {
+      final line = buffer.toString().substring(0, keepBytes);
+      buffer
+        ..clear()
+        ..write(line);
+      _trimmed = true;
     }
   }
 
