@@ -1,0 +1,84 @@
+# Signs a release's manifest with the key kept in the repository's
+# BAOCODE_UPDATE_SIGNING_KEY secret — the private key never sits on a
+# disk: GitHub holds it encrypted, and only this repository's workflows
+# can read it.
+#
+#   Actions → Sign release manifest → Run workflow
+#     tag    the release to sign, e.g. v1.2.0+14 (checked out, so the
+#            manifest carries that tag's pubspec version)
+#     asset  the installer already uploaded to that release
+#
+# It downloads the installer from the release, signs its SHA-256, and
+# uploads latest.json beside it (the app reads
+# releases/latest/download/latest.json).
+name: Sign release manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.2.0+14)'
+        required: true
+      asset:
+        description: 'Installer asset name in that release'
+        required: true
+        default: 'BaoCode-1.2.0-setup.exe'
+      notes-zh:
+        description: 'Release notes (zh), optional'
+        required: false
+      notes-en:
+        description: 'Release notes (en), optional'
+        required: false
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.5
+
+jobs:
+  sign:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Download the installer
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/${{ inputs.asset }}" \
+            "https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/${{ inputs.asset }}"
+
+      - name: Sign the manifest
+        env:
+          BAOCODE_UPDATE_SIGNING_KEY: ${{ runner.temp }}/signing.key
+          SIGNING_SEED: ${{ secrets.BAOCODE_UPDATE_SIGNING_KEY }}
+          NOTES_ZH: ${{ inputs.notes-zh }}
+          NOTES_EN: ${{ inputs.notes-en }}
+        run: |
+          if [ -z "$SIGNING_SEED" ]; then
+            echo "::error::The BAOCODE_UPDATE_SIGNING_KEY secret is not set."
+            exit 1
+          fi
+          printf '%s\n' "$SIGNING_SEED" > "$BAOCODE_UPDATE_SIGNING_KEY"
+          args=(--windows "$RUNNER_TEMP/${{ inputs.asset }}" \
+                --manifest "$RUNNER_TEMP/latest.json")
+          [ -n "$NOTES_ZH" ] && args+=(--notes-zh "$NOTES_ZH")
+          [ -n "$NOTES_EN" ] && args+=(--notes-en "$NOTES_EN")
+          dart run tool/release_manifest.dart "${args[@]}"
+
+      - name: Upload the manifest to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ inputs.tag }}" "$RUNNER_TEMP/latest.json" \
+            --repo "${{ github.repository }}" --clobber
