@@ -14,7 +14,7 @@ The interface is drawn by Flutter directly to the GPU, so the app starts in a
 fraction of a second and a single window is measured in megabytes rather than
 gigabytes.
 
-![BaoCode's workbench: the project list, one conversation, and the editor with Source Control open](site/shots/main-ide.webp)
+![BaoCode's workbench: the Explorer, an open editor and terminal, and a conversation side by side](site/shots/main-ide.webp)
 
 ## What you get
 
