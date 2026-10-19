@@ -29,6 +29,54 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.3.1">
+    <h2 class="plain"><a href="#v1.3.1">1.3.1</a></h2>
+    <p>Remote projects work again</p>
+    <p>The app used to download a remote host's server from upstream's dl.baocode.dev, which never had a build of ours: a server's version is a hash of what it carries, so only the machine that made it has that one. Every SSH connection asked for a file that was not there.</p>
+    <ul>
+    <li>The builds are now published in this repository's releases, named by their version, so an app built months ago still downloads the one it was built with. The first connection to a host downloads that platform's server, checks its size and SHA-256 against servers.json, and pushes it over ssh as before.</li>
+    <li>The installer carries the build made from these sources (Linux x64 and arm64): nothing to compile by hand.</li>
+    <li>Coming straight from 1.3.0+15, this also includes 1.3.0+16: BaoCode's own core reminds the model when its to-do list has gone unwritten, so the panel no longer sits still for half an hour, and such notes to the model no longer show as a tool's output.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.3.0">
+    <h2 class="plain"><a href="#v1.3.0">1.3.0</a></h2>
+    <p>A core of our own</p>
+    <p>This release replaces Claude Code's core with one written in Dart, and makes it the default: no CLI to install, with sessions, CLAUDE.md, skills, subagents and MCP servers working as before. Windows can share your own browsers too, and agents can draw on an upstream's image models. Plus the composer, the side panel, scrolling and a batch of fixes.</p>
+    <p>New</p>
+    <ul>
+    <li>Our own core (Settings → General → Claude Code → Core): it runs on the upstreams of Settings → Models alone, with no Claude Code CLI on the machine. Sessions are still kept where and as the CLI keeps them, so you can switch between the two cores without losing a conversation. The built-in core uses an upstream's key; a Claude subscription's login belongs to the CLI alone, so switch back to the CLI to use one.</li>
+    <li>No upstream, no session: the built-in core never falls back on the CLI's setup or the machine's environment variables. Without an upstream it says so, and offers to add one or to switch back to the CLI.</li>
+    <li>Your browsers on Windows: the installer carries the bridge between them and the app (baocode-browser-host.exe), registers it for Chrome, Edge and Chromium, and takes it out at uninstall. The extension is unchanged.</li>
+    <li>Drawing: agents generate images with an upstream's image models. With no default image model it asks which to use, and a picture made with another one offers Set as default. Pictures go to the path you asked for, else to images/date/ in the data folder.</li>
+    <li>Polish in the composer keeps its tags, images and code, instead of flattening them to plain text.</li>
+    <li>The side panel moves to the conversations' left, and back.</li>
+    <li>New on the Stash page writes beside the cards, typed in at once, without another window.</li>
+    <li>A mouse wheel glides lists, trees and editors instead of stepping through them.</li>
+    <li>A turn under way shows its output tokens and speed live at its end.</li>
+    <li>The status row muses on the step just done.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>A window closed while maximised or full screen leaves it first, with no black Space.</li>
+    <li>What has no room in the sidebar or Stash gives way, instead of pushing its row off screen.</li>
+    <li>A customize detail page's actions flush right, not halfway.</li>
+    <li>The built-in core's tools, results and prompts are in its own words, with the CLI's behaviour.</li>
+    <li>Events are logged off the drawing thread, not one disk write at a time: dragging a window and laying views out stays smooth.</li>
+    <li>The emoji sheets of older versions are taken out when a new one is fetched, instead of 45 MB more each time.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Streamed text wrapped anew under a selection tells layout after it.</li>
+    <li>Live speed is right when deltas come close together.</li>
+    <li>Asked for a picture, an agent reaches for the image tool instead of writing about it.</li>
+    <li>A message's editor opened as another closes gets all its room.</li>
+    <li>On Windows, a diff card names its file and folder instead of showing the whole absolute path.</li>
+    <li>And a batch of smaller problems.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.2.0">
     <h2 class="plain"><a href="#v1.2.0">1.2.0</a></h2>
     <p>Meet Stash</p>
