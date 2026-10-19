@@ -368,6 +368,58 @@ void main() {
       expect(toolVerb(ToolKind.question), 'Asked');
     });
 
+    test('a note sent the model along a result is not the tool\'s output', () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      )..turnId = '11111111-1111-4111-8111-111111111111';
+      translator
+        ..translate({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': 'msg-1',
+            'role': 'assistant',
+            'content': [
+              {
+                'type': 'tool_use',
+                'id': 'tool-1',
+                'name': 'Bash',
+                'input': {'command': 'echo hi', 'description': 'Say hi'},
+              },
+            ],
+          },
+        })
+        ..translate({
+          'type': 'user',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'tool_result',
+                'tool_use_id': 'tool-1',
+                'content': [
+                  {'type': 'text', 'text': 'hi\n'},
+                  {
+                    'type': 'text',
+                    'text':
+                        '<system-reminder>\nThe to-do list has not been written '
+                        'for a while.\n</system-reminder>',
+                  },
+                ],
+              },
+            ],
+          },
+        });
+      final terminal = [
+        for (var i = 0; i < transcript.length; i++) transcript.itemAt(i),
+      ].whereType<TerminalItem>().single;
+      expect(terminal.output.trim(), 'hi');
+    });
+
     test('a message sent to an agent reads on its line, in full opened', () {
       final transcript = Transcript();
       var seq = 0;

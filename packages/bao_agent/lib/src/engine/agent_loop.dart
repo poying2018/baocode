@@ -146,6 +146,11 @@ class AgentLoop {
   final List<Map<String, Object?>> denials = [];
   String _lastText = '';
 
+  /// The tool calls run since the to-do list was last written, and the
+  /// list it was: what [_withTodoReminder] is timed by.
+  int _callsSinceTodos = 0;
+  List<Map<String, Object?>> _todosSeen = const [];
+
   /// Runs the agent until it ends its turn.
   Future<LoopResult> runTurn(CancelToken cancel) async {
     var stopHookActive = false;
@@ -765,6 +770,43 @@ class AgentLoop {
     });
   }
 
+  /// How many calls that left the to-do list alone are let pass before
+  /// the model is reminded of it.
+  static const _todosRemindAfter = 5;
+
+  /// What the model is told when it works on and on without touching the
+  /// list the user watches.
+  static const _todosReminder =
+      '<system-reminder>\nThe to-do list has not been written for a while, so '
+      'it no longer says where you are: the user sees a list that stopped '
+      'moving. Write it again with TodoWrite before you go on, what is done '
+      'marked completed and the one you are on in_progress. Do not mention '
+      'this reminder to the user.\n</system-reminder>';
+
+  /// [output] as it is answered, with the reminder an open list left
+  /// unwritten through [_todosRemindAfter] calls earns: the user watches
+  /// it, and it stopped saying where the work is.
+  ToolOutput _withTodoReminder(ToolOutput output) {
+    final todos = session.mainTodos;
+    if (!identical(todos, _todosSeen)) {
+      _todosSeen = todos;
+      _callsSinceTodos = 0;
+      return output;
+    }
+    if (!isMain || ++_callsSinceTodos < _todosRemindAfter) return output;
+    _callsSinceTodos = 0;
+    if (!todos.any((todo) => todo['status'] != 'completed')) return output;
+    return ToolOutput(
+      [
+        ..._contentBlocks(output.content),
+        {'type': 'text', 'text': _todosReminder},
+      ],
+      isError: output.isError,
+      result: output.result,
+      followUp: output.followUp,
+    );
+  }
+
   void _appendResult(_Call call, ToolOutput output, {bool emitResult = true}) {
     final content = output.content;
     final block = <String, Object?>{
@@ -927,7 +969,7 @@ class AgentLoop {
       return false;
     }
     call.done = true;
-    _appendResult(call, output);
+    _appendResult(call, _withTodoReminder(output));
     return stop;
   }
 

@@ -174,6 +174,56 @@ void main() {
       expect(result['oldTodos'], isEmpty);
       expect(result['newTodos'], todos);
     });
+
+    test('a list left unwritten through five calls is reminded of', () async {
+      h = await Harness.start(files: {'a.txt': 'one\n'});
+      final path = p.join(h.cwd, 'a.txt');
+      h.model.script.addAll([
+        Reply.tool('TodoWrite', {
+          'todos': [
+            {'content': 'One', 'status': 'in_progress', 'activeForm': 'One'},
+          ],
+        }),
+        for (var i = 0; i < 5; i++)
+          Reply.tool('Read', {'file_path': path}),
+        Reply.tool('TodoWrite', {
+          'todos': [
+            {'content': 'One', 'status': 'completed', 'activeForm': 'One'},
+            {'content': 'Two', 'status': 'in_progress', 'activeForm': 'Two'},
+          ],
+        }),
+        for (var i = 0; i < 5; i++)
+          Reply.tool('Read', {'file_path': path}),
+        Reply.text('ok'),
+      ]);
+      await h.turn('work');
+      final results = h.toolResults;
+      // Written, then four quiet reads: nothing said of the list.
+      for (final result in results.take(5)) {
+        expect('${result['content']}', isNot(contains('has not been written')));
+      }
+      // The fifth: the model is told the list it stopped moving.
+      expect('${results[5]['content']}', contains('has not been written'));
+      // Writing it again starts the count over.
+      for (final result in results.skip(7).take(4)) {
+        expect('${result['content']}', isNot(contains('has not been written')));
+      }
+      expect('${results[11]['content']}', contains('has not been written'));
+    });
+
+    test('no reminder without an open list', () async {
+      h = await Harness.start(files: {'a.txt': 'one\n'});
+      final path = p.join(h.cwd, 'a.txt');
+      h.model.script.addAll([
+        for (var i = 0; i < 6; i++) Reply.tool('Read', {'file_path': path}),
+        Reply.text('ok'),
+      ]);
+      await h.turn('work');
+      expect(h.toolResults, hasLength(6));
+      for (final result in h.toolResults) {
+        expect('${result['content']}', isNot(contains('has not been written')));
+      }
+    });
   });
 
   group('web', () {

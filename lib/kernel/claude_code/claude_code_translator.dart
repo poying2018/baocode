@@ -1787,10 +1787,19 @@ class ClaudeTranslator {
     final List<Object?> blocks => [
       for (final block in blocks)
         if (_map(block)['text'] case final String text)
-          ?_withoutImageSaved(text),
+          ?_shownResult(text),
     ].join('\n'),
     _ => '',
   };
+
+  /// A result block's text as shown: nothing for a note sent the model
+  /// along the result (`<system-reminder>…</system-reminder>`: the
+  /// engine's to-do reminder and the like are not the tool's output).
+  static String? _shownResult(String text) =>
+      text.trimLeft().startsWith('<system-reminder>') &&
+          text.trimRight().endsWith('</system-reminder>')
+      ? null
+      : _withoutImageSaved(text);
 
   /// [text] without the lines where the CLI says it saved a picture a tool
   /// returned (`[Image: source: /…/tool-results/….png]`, for the agent):
