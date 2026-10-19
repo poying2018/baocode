@@ -14,6 +14,8 @@ The interface is drawn by Flutter directly to the GPU, so the app starts in a
 fraction of a second and a single window is measured in megabytes rather than
 gigabytes.
 
+![BaoCode's workbench: the project list, one conversation, and the editor with Source Control open](site/shots/main-ide.webp)
+
 ## What you get
 
 | Area | Highlights |
@@ -31,6 +33,18 @@ Some of these are deliberately narrow ports of their upstream counterparts.
 [`packages/bao_editor/PARITY.md`](packages/bao_editor/PARITY.md) and
 [`packages/bao_xterm/PARITY.md`](packages/bao_xterm/PARITY.md) record the exact
 differences rather than claiming full parity.
+
+## A closer look
+
+| Composer | Models |
+| --- | --- |
+| ![The composer holding several pasted images, an inline file reference and a model picker](site/shots/composer.webp) | ![Adding an upstream that speaks Anthropic's API, OpenAI Chat Completions or OpenAI Responses](site/shots/models.webp) |
+| Images, pasted files and quoted line ranges stay in the sentence. Long pastes are written to disk and referenced by path so the agent can read them. | Point an upstream at Anthropic's API, OpenAI Chat Completions or OpenAI Responses. The local proxy handles the translation; the key goes to the OS credential store. |
+
+| Source Control | Themes |
+| --- | --- |
+| ![Source Control with the change list, commit message and commit graph beside the editor](site/shots/ide.webp) | ![Choosing a VS Code color theme from the editor's theme picker](site/shots/themes-dark.webp) |
+| Stage a subset, write the message, and read the graph without leaving the window. Claude Code can draft the commit message. | The editor, transcript, terminal and sidebar all follow the selected VS Code theme. |
 
 ## How the pieces fit
 
