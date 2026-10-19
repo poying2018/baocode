@@ -62,6 +62,11 @@ const _stockEngineSha256 =
 const _patchedEngineSha256 =
     'd20feefdf335b0e3ae92f4e2f1b1892b5bd9d4c80b194b14b8bb87b34b9591d5';
 
+/// Where the remote server's builds are published: a release of this
+/// repository tagged with their VERSION (tool/build_remote_server.dart).
+const _remoteRepo = 'poying2018/baocode';
+const _remoteBase = 'https://github.com/$_remoteRepo/releases/download';
+
 Future<void> main(List<String> arguments) async {
   if (!Platform.isWindows) {
     _fail(
@@ -184,18 +189,15 @@ Future<void> main(List<String> arguments) async {
     stdout
       ..writeln()
       ..writeln('The app downloads the remote server published:')
-      ..writeln('  https://dl.baocode.dev/releases/remote/$remoteVersion/');
+      ..writeln('  $_remoteBase/$remoteVersion/');
   } else {
     stdout
       ..writeln()
-      ..writeln('Upload the remote server\'s builds, which the app downloads')
-      ..writeln('(their folder is named by the build: the macOS one\'s, if it')
-      ..writeln('differs, goes beside it; or publish them with a server-* tag')
-      ..writeln('and package with --remote-release):')
-      ..writeln(
-        '  ${downloads.path}\\*  ->  '
-        'https://dl.baocode.dev/releases/remote/$remoteVersion/',
-      );
+      ..writeln('Publish the remote server\'s builds, which the app downloads,')
+      ..writeln('where servers.json says they are:')
+      ..writeln('  gh release create $remoteVersion --repo $_remoteRepo \\')
+      ..writeln('    --title "$remoteVersion" --notes "" --latest=false \\')
+      ..writeln('    ${downloads.path}\\*');
   }
   stdout.writeln();
   stdout.writeln(

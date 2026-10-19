@@ -28,7 +28,8 @@
 // builds (tool/build_macos.dart, tool/build_windows.dart): the app
 // downloads the one a host needs the first time, checks it against
 // servers.json, and keeps it (lib/remote/remote_binaries.dart). The .gz
-// files are uploaded to where servers.json says.
+// files go to a release of this repository tagged with VERSION, which the
+// script prints the way to make.
 import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
@@ -37,8 +38,15 @@ import 'package:crypto/crypto.dart';
 
 const _platforms = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'];
 
-/// Where the gzipped builds are downloaded from: `<base>/<VERSION>/<file>`.
-const _downloadsBase = 'https://dl.baocode.dev/releases/remote';
+/// The repository whose releases the builds are published in.
+const _repository = 'poying2018/baocode';
+
+/// Where the gzipped builds are downloaded from: `<base>/<VERSION>/<file>`,
+/// a release of [_repository] tagged with the build's VERSION. A build is
+/// what its sources are, so a version is never written twice: an older
+/// app's URL keeps working.
+const _downloadsBase =
+    'https://github.com/$_repository/releases/download';
 
 Future<void> main(List<String> arguments) async {
   final root = File.fromUri(Platform.script).parent.parent.absolute;
@@ -129,6 +137,16 @@ Future<void> main(List<String> arguments) async {
     '${const JsonEncoder.withIndent('  ').convert({'version': name, 'files': files})}\n',
   );
   _step('Done: ${out.path} ($name)');
+  stdout
+    ..writeln()
+    ..writeln('Publish the builds, which the app downloads, where')
+    ..writeln('servers.json says they are:')
+    ..writeln('  gh release create $name --repo $_repository \\')
+    ..writeln('    --title "$name" --notes "" --latest=false \\')
+    ..writeln(
+      '    ${out.path}/baocode-server-*.gz ${out.path}/servers.json '
+      '${out.path}/VERSION',
+    );
 }
 
 /// [platform] for people: `Linux x64`, `macOS arm64`.
