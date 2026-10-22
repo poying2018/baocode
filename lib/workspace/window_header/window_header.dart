@@ -443,11 +443,17 @@ class _WindowHeaderState extends State<WindowHeader> {
 
   /// Where [key]'s widget is in the window, in the app's own pixels; null
   /// while it is not laid out, or was not built at all (no project, so no
-  /// editor button).
+  /// editor button). The whole rectangle rides the interface's zoom — a
+  /// corner taken through it and a size taken not through it would tell
+  /// the window a control narrower than drawn, leaving its right to drag
+  /// the window when zoomed in.
   Rect? _rect(GlobalKey key) {
     final box = key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.attached || !box.hasSize) return null;
-    return box.localToGlobal(Offset.zero) & box.size;
+    return MatrixUtils.transformRect(
+      box.getTransformTo(null),
+      Offset.zero & box.size,
+    );
   }
 
   bool get _ide => widget.ide ?? widget.workspace.layout == WorkspaceLayout.ide;

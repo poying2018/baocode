@@ -15,6 +15,7 @@ import 'package:baocode/ide/terminal/terminal_instance.dart';
 import 'package:baocode/main.dart';
 import 'package:baocode/settings/settings_dialog.dart';
 import 'package:baocode/sidebar/sidebar.dart';
+import 'package:baocode/theme/code_font.dart';
 import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/theme/app_theme.dart';
 import 'package:baocode/workspace/back_to_chat_button.dart';
@@ -99,6 +100,30 @@ void main() {
     List<Object?> controls(MethodCall call) =>
         (call.arguments as Map)['controls'] as List<Object?>;
     expect(controls(reports().last), isNot(controls(reports().first)));
+  }, variant: _windows);
+
+  testWidgets('zoomed in, the window hears the buttons as large as they '
+      'are drawn: their right edge stays Flutter\'s rather than dragging '
+      'the window', (tester) async {
+    CodeFont.uiScale.value = 125;
+    addTearDown(() => CodeFont.uiScale.value = CodeFont.defaultUiScale);
+    final (_, calls) = await pumpWindowsApp(tester);
+    await tester.pump();
+    final report = calls.lastWhere(
+      (call) => call.method == 'setHitTestAreas',
+    );
+    final close = ((report.arguments as Map)['buttons'] as Map)['close']
+        as Map<Object?, Object?>;
+    // The zoom rides the size as it rides the corner: reported unzoomed,
+    // a button's right (11 of its 46 pixels at 125%) would drag the window.
+    expect(close['width'], AppMetrics.windowButtonWidth * 1.25);
+    expect(close['height'], AppMetrics.headerHeight * 1.25);
+    // And the close button reaches the window's own right edge (the app is
+    // pumped at 1400 physical pixels, the header flush right).
+    expect(
+      (close['left']! as double) + (close['width']! as double),
+      closeTo(1400, 1),
+    );
   }, variant: _windows);
 
   testWidgets('Back to Chat takes Open in Fast Ide\'s place as it is, so '

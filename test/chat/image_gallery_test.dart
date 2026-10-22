@@ -92,4 +92,35 @@ void main() {
     expect(find.byKey(const ValueKey('image-next')), findsNothing);
     expect(find.textContaining(' / '), findsNothing);
   });
+
+  testWidgets('the zoom of a picture takes the window, not the box the '
+      'picture first measured: clipped to its own size, a zoom shows '
+      'nothing more', (tester) async {
+    late BuildContext context;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (built) {
+            context = built;
+            return const SizedBox();
+          },
+        ),
+      ),
+    );
+    showImagePreview(
+      context,
+      ImageAttachment(bytes: Uint8List.fromList(_png), mediaType: 'image/png'),
+    );
+    await tester.pumpAndSettle();
+    // The pixel shows at its natural size, but the viewer that zooms it is
+    // the window, less its margins: a viewer sized to the picture alone
+    // would clip any zoom to that first 1x1.
+    final viewer = tester.getRect(find.byType(InteractiveViewer));
+    final picture = tester.getRect(find.byType(Image));
+    expect(viewer.center, picture.center);
+    // The margins the preview leaves (40) with the dialog's own inset on
+    // top of them: the viewer reaches far past the picture it holds.
+    expect(viewer.width - picture.width, greaterThan(60));
+    expect(viewer.height - picture.height, greaterThan(30));
+  });
 }
