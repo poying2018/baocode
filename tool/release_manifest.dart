@@ -56,9 +56,10 @@ import 'package:crypto/crypto.dart' as crypto;
 const _releasesBase =
     'https://github.com/poying2018/baocode/releases/download';
 
-/// [name]'s link, for the file whose SHA-256 is [sha256].
+/// [name]'s link, for the file whose SHA-256 is [sha256]. The version is
+/// the marketing one (1.5.1), as the release's tag carries it.
 Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
-  '$_releasesBase/v$version/$name',
+  '$_releasesBase/v${version.marketing}/$name',
 );
 
 /// The Macs built for, each its own download (tool/build_macos.dart), and
@@ -76,6 +77,10 @@ const _editions = ['', _channel];
 /// Where the private key's path is given.
 const _keyVariable = 'BAOCODE_UPDATE_SIGNING_KEY';
 
+/// What an encrypted key file starts with: DPAPI (CurrentUser) over the
+/// seed, base64.
+const _dpapiPrefix = 'dpapi:';
+
 const _usage = '''
 Usage:
   dart run tool/release_manifest.dart [--windows <setup.exe>]
@@ -88,8 +93,12 @@ Usage:
       [--manifest <latest.json>]
   dart run tool/release_manifest.dart --generate-key <file>
   dart run tool/release_manifest.dart --public-key
+  dart run tool/release_manifest.dart --encrypt-key <file> --out <file>
+  dart run tool/release_manifest.dart --decrypt-key <file> --out <file>
 
-The private key's path is read from \$$_keyVariable.''';
+The private key's path is read from \$$_keyVariable. It may be encrypted
+with Windows DPAPI (CurrentUser), which is read in memory: only the
+account that wrote it, on that machine, can.''';
 
 Future<void> main(List<String> arguments) async {
   final options = _parse(arguments);
@@ -98,6 +107,12 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   if (options['generate-key'] case final path?) return _generateKey(path);
+  if (options['encrypt-key'] case final path?) {
+    return _encryptKey(path, options['out']);
+  }
+  if (options['decrypt-key'] case final path?) {
+    return _decryptKey(path, options['out']);
+  }
   final seed = _readKey();
   final publicKey = UpdateSignature.publicKeyOf(seed);
   if (options.containsKey('public-key')) {
@@ -316,13 +331,81 @@ String _readKey() {
   }
   final file = File(path);
   if (!file.existsSync()) _fail('No key at $path (\$$_keyVariable).');
-  final seed = file.readAsStringSync().trim();
+  final text = file.readAsStringSync().trim();
+  if (!text.startsWith(_dpapiPrefix)) return _seedOf(text, path);
+  if (!Platform.isWindows) {
+    _fail(
+      '$path is DPAPI-encrypted: only the Windows account that wrote it '
+      'can read it.',
+    );
+  }
+  return _seedOf(
+    _dpapi(text.substring(_dpapiPrefix.length), protect: false),
+    path,
+  );
+}
+
+/// The seed [text] holds: 32 bytes, base64.
+String _seedOf(String text, String path) {
   try {
-    if (base64.decode(seed).length == 32) return seed;
+    if (base64.decode(text).length == 32) return text;
   } on FormatException {
     // Below.
   }
   _fail('$path does not hold a key (32 bytes, base64).');
+}
+
+/// Windows DPAPI (CurrentUser) over [seed], base64; or back.
+String _dpapi(String seed, {required bool protect}) {
+  final call = protect ? 'Protect' : 'Unprotect';
+  final script = [
+    'Add-Type -AssemblyName System.Security',
+    "\$in = [Convert]::FromBase64String('$seed')",
+    "\$out = [Security.Cryptography.ProtectedData]::$call(\$in, \$null, 'CurrentUser')",
+    '[Convert]::ToBase64String(\$out)',
+  ].join('; ');
+  final result = Process.runSync('powershell', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-Command',
+    script,
+  ]);
+  if (result.exitCode != 0) {
+    _fail(
+      'DPAPI $call failed: ${result.stderr.toString().trim()}',
+    );
+  }
+  return result.stdout.toString().trim();
+}
+
+/// Wraps the plain key at [path] with Windows DPAPI, for the current user
+/// and this machine only, and writes it to [out] (required).
+void _encryptKey(String path, String? out) {
+  if (out == null) _fail('--encrypt-key needs --out <file>.');
+  if (!Platform.isWindows) {
+    _fail('DPAPI encryption is Windows-only.');
+  }
+  final seed = _seedOf(File(path).readAsStringSync().trim(), path);
+  final file = File(out);
+  file.parent.createSync(recursive: true);
+  file.writeAsStringSync('$_dpapiPrefix${_dpapi(seed, protect: true)}\n');
+  stdout
+    ..writeln('Wrote the encrypted key to $out.')
+    ..writeln('Point \$$_keyVariable at it to sign releases; it reads only')
+    ..writeln('under this Windows account, on this machine.');
+}
+
+/// Writes the plain key [path] holds (an encrypted one included) to [out].
+void _decryptKey(String path, String? out) {
+  if (out == null) _fail('--decrypt-key needs --out <file>.');
+  final text = File(path).readAsStringSync().trim();
+  final seed = text.startsWith(_dpapiPrefix)
+      ? _dpapi(text.substring(_dpapiPrefix.length), protect: false)
+      : text;
+  final file = File(out);
+  file.parent.createSync(recursive: true);
+  file.writeAsStringSync('$seed\n');
+  stdout.writeln('Wrote the plain key to $out. Keep it safe.');
 }
 
 String _pubspecVersion(File pubspec) {

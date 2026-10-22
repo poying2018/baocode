@@ -49,8 +49,12 @@ void main() {
   });
 
   tearDown(() async {
-    // Made read-only by a test.
-    await Process.run('chmod', ['-R', 'u+w', temp.path]);
+    // Made read-only by a test (where there are modes to make it so).
+    try {
+      await Process.run('chmod', ['-R', 'u+w', temp.path]);
+    } on ProcessException {
+      // No chmod on Windows: no mode bits there to take away.
+    }
     await temp.delete(recursive: true);
   });
 
