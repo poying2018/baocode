@@ -13,6 +13,12 @@ import 'package:path/path.dart' as p;
 
 const fixtures = 'test/fixtures/lsp/mason';
 const mac = MasonPlatform('darwin', 'arm64');
+const win = MasonPlatform('win', 'x64');
+
+/// Whether [file] may be run: its executable bit on Unix, its being a file
+/// on Windows (where there are none).
+bool _executable(File file) =>
+    Platform.isWindows ? file.existsSync() : file.statSync().mode & 0x40 != 0;
 
 /// Serves fixture files for URLs by their last path segment; never the
 /// network.
@@ -54,8 +60,13 @@ class FakeRunner implements CommandRunner {
     Map<String, String>? environment,
   }) async {
     if (executable == 'chmod') {
-      final result = await Process.run('chmod', arguments);
-      return CommandResult(result.exitCode, stderr: '${result.stderr}');
+      try {
+        final result = await Process.run('chmod', arguments);
+        return CommandResult(result.exitCode, stderr: '${result.stderr}');
+      } on ProcessException {
+        // No chmod on Windows: the mode is the file's business there.
+        return const CommandResult(0);
+      }
     }
     calls.add((p.basename(executable), arguments, environment));
     if (exitCode != 0) {
@@ -67,13 +78,31 @@ class FakeRunner implements CommandRunner {
     Future<void> touch(String path) async {
       await File(path).create(recursive: true);
       await File(path).writeAsString('#!/bin/sh\n');
-      await Process.run('chmod', ['+x', path]);
+      try {
+        await Process.run('chmod', ['+x', path]);
+      } on ProcessException {
+        // No chmod on Windows; the injected platform says executable
+        // there anyway.
+      }
     }
 
     switch (p.basename(executable)) {
-      case 'npm':
+      case 'npm' || 'npm.cmd':
         final prefix = arguments[arguments.indexOf('--prefix') + 1];
         await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls'));
+        await touch(
+          p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
+        );
+      case 'node' || 'node.exe' || 'node.EXE'
+        when arguments.isNotEmpty &&
+            arguments.first.endsWith('npm-cli.js'):
+        // Run as node with npm's own script (Windows): the same install,
+        // the same things left behind.
+        final prefix = arguments[arguments.indexOf('--prefix') + 1];
+        await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls'));
+        await touch(
+          p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
+        );
       case 'python3' when arguments.contains('venv'):
         await touch(p.join(arguments.last, 'bin', 'python'));
       case 'python':
@@ -196,7 +225,11 @@ void main() {
           'fi\n'
           'printf "%s\\n" "\$@" > "${p.join(dir.path, 'args')}"\n',
         );
-      Process.runSync('chmod', ['755', java.path, '$package/mason-bin/jdtls']);
+      try {
+        Process.runSync('chmod', ['755', java.path, '$package/mason-bin/jdtls']);
+      } on ProcessException {
+        // No chmod on Windows.
+      }
     }
 
     Future<ProcessResult> run() => Process.run(
@@ -256,12 +289,32 @@ void main() {
   Future<void> tool(String name) async {
     final path = p.join(toolsDir, name);
     await File(path).writeAsString('#!/bin/sh\n');
-    await Process.run('chmod', ['+x', path]);
+    try {
+      await Process.run('chmod', ['+x', path]);
+    } on ProcessException {
+      // No chmod on Windows; the platform under test says executable
+      // there anyway.
+    }
+  }
+
+  /// A Windows-style Node folder: only `npm.cmd` (and node) on PATH, npm's
+  /// Bash script beside it as a plain extensionless file, and its
+  /// `npm-cli.js` where the .cmd points.
+  Future<void> windowsTools() async {
+    await File(p.join(toolsDir, 'node.exe')).writeAsString('node');
+    await File(p.join(toolsDir, 'npm.cmd')).writeAsString('@echo off\r\n');
+    await File(p.join(toolsDir, 'npm')).writeAsString('#!/bin/sh\n');
+    final script = File(
+      p.join(toolsDir, 'node_modules', 'npm', 'bin', 'npm-cli.js'),
+    );
+    await script.parent.create(recursive: true);
+    await script.writeAsString('// npm\n');
   }
 
   MasonServerProvider provider({
     FakeDownloader? downloader,
     FakeRunner? runner,
+    MasonPlatform platform = mac,
   }) => MasonServerProvider(
     registry: registry,
     installRoot: root,
@@ -274,7 +327,7 @@ void main() {
         }),
     runner: runner ?? FakeRunner(),
     environment: () async => environment,
-    platform: mac,
+    platform: platform,
   );
 
   LspServerDefinition server(String command, [String? package]) =>
@@ -409,7 +462,7 @@ void main() {
         wrapper.readAsStringSync(),
         contains(r'exec node "$dir/libexec/fake-ls-1.0/bin/fake-ls" "$@"'),
       );
-      expect(wrapper.statSync().mode & 0x40, isNot(0));
+      expect(_executable(wrapper), isTrue);
       final location = await mason.locate(server('fake-tar-node', 'fake-tar'));
       expect((location as LspServerFound).executable, wrapper.path);
     });
@@ -418,7 +471,7 @@ void main() {
       final mason = provider();
       await mason.install('fake-gz');
       final bin = File(p.join(root, 'fake-gz', 'fake-ls'));
-      expect(bin.statSync().mode & 0x40, isNot(0));
+      expect(_executable(bin), isTrue);
       expect(
         await mason.locate(server('fake-gz-ls', 'fake-gz')),
         isA<LspServerFound>(),
@@ -477,6 +530,45 @@ void main() {
           server('fake-npm-ls', 'fake-npm'),
         ) as LspServerFound).executable,
         p.join(dir, 'node_modules', '.bin', 'fake-npm-ls'),
+      );
+    });
+
+    test('npm on Windows: npm.cmd answers for npm, run through node',
+        () async {
+      final runner = FakeRunner();
+      final mason = provider(runner: runner, platform: win);
+      // node there, but only npm's Bash script (nvm-windows', the
+      // installer's folder keeps it beside npm.cmd): the bare name is not
+      // a Win32 program, and starting it is what says so.
+      await File(p.join(toolsDir, 'node.exe')).writeAsString('node');
+      await File(p.join(toolsDir, 'npm')).writeAsString('#!/bin/sh\n');
+      await expectLater(
+        mason.install('fake-npm'),
+        throwsA(
+          isA<LspInstallException>().having(
+            (e) => e.message,
+            'message',
+            'Installing fake-npm needs npm, which is not on PATH',
+          ),
+        ),
+      );
+      // npm.cmd answering: its own npm-cli.js runs with node, the quotes
+      // of a Program Files path and a spaced user name kept by both.
+      await windowsTools();
+      await mason.install('fake-npm');
+      final (npm, arguments, env) = runner.calls.single;
+      expect(npm.toLowerCase(), 'node.exe');
+      expect(arguments.first, endsWith(p.join('node_modules', 'npm', 'bin', 'npm-cli.js')));
+      expect(arguments, containsAllInOrder(['install', '--no-audit']));
+      expect(env?['PATH'], toolsDir);
+      final dir = p.join(root, 'fake-npm');
+      expect(
+        (await mason.locate(
+          server('fake-npm-ls', 'fake-npm'),
+        ) as LspServerFound).executable,
+        // The bin is the .cmd on Windows, as npm writes it there; the path
+        // inside the package keeps the manifest's own separators.
+        p.join(dir, 'node_modules/.bin/fake-npm-ls.cmd'),
       );
     });
 

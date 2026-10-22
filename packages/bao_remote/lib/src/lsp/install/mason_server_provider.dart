@@ -314,9 +314,9 @@ class MasonServerProvider implements LspServerProvider {
             'private': true,
           }),
         );
-        await _command(
-          'npm install',
+        final (npm, npmArguments) = await npmInvocation(
           tools['npm']!,
+          tools['node'],
           [
             'install',
             '--prefix',
@@ -327,6 +327,11 @@ class MasonServerProvider implements LspServerProvider {
             '${purl.fullName}@${plan.version}',
             ...plan.extraPackages,
           ],
+        );
+        await _command(
+          'npm install',
+          npm,
+          npmArguments,
           directory,
           environment,
         );
@@ -526,16 +531,19 @@ class MasonServerProvider implements LspServerProvider {
     ].join('\n');
   }
 
-  /// [command] on [environment]'s PATH (with `PATHEXT` on Windows).
+  /// [command] on [environment]'s PATH, as `cmd.exe` resolves it on Windows
+  /// and the shell does elsewhere. On Windows only the `PATHEXT` extensions
+  /// answer for a bare name: the extensionless file beside `npm.cmd` in a
+  /// Node folder (nvm-windows', the installer's) is npm's Bash script, and
+  /// starting it as a Win32 program is what says "not a valid Win32
+  /// application".
   Future<String?> which(String command, Map<String, String> environment) async {
     final path = environment['PATH'] ?? environment['Path'] ?? '';
     final extensions = platform.isWindows
-        ? [
-            '',
-            ...(environment['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
-                .split(';')
-                .where((extension) => extension.isNotEmpty),
-          ]
+        ? (environment['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
+            .split(';')
+            .where((extension) => extension.isNotEmpty)
+            .toList()
         : const [''];
     for (final directory in path.split(platform.isWindows ? ';' : ':')) {
       if (directory.isEmpty) continue;
@@ -545,6 +553,31 @@ class MasonServerProvider implements LspServerProvider {
       }
     }
     return null;
+  }
+
+  /// How to run npm on this platform: [executable] with [arguments]. On
+  /// Windows, when `npm.cmd`'s own `npm-cli.js` sits beside it, run that
+  /// with node directly — which is all `npm.cmd` does, and it keeps both
+  /// the quotes a `Program Files` path needs and the quotes a user name
+  /// with a space needs, which `cmd.exe` drops when the command line has
+  /// both; the script path is the one `npm.cmd` itself resolves to.
+  Future<(String, List<String>)> npmInvocation(
+    String npm,
+    String? node,
+    List<String> arguments,
+  ) async {
+    if (!platform.isWindows) return (npm, arguments);
+    final script = p.join(
+      p.dirname(npm),
+      'node_modules',
+      'npm',
+      'bin',
+      'npm-cli.js',
+    );
+    if (node != null && await File(script).exists()) {
+      return (node, [script, ...arguments]);
+    }
+    return (npm, arguments);
   }
 
   Future<bool> _isExecutable(String path) async {
