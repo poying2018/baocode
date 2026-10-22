@@ -10,6 +10,7 @@
 #                                              build, and put the installers
 #                                              at the release, to send to
 #                                              testers (no update)
+#                                              send to testers (no update)
 #   git tag test-channel-foo && git push origin test-channel-foo
 #                                              the same, of the channel build
 #                                              alone
@@ -215,17 +216,13 @@ jobs:
         run: |
           mkdir -p out
           # The standard build, then the channel build's, ending in -channel.
-          # This fork publishes the Windows build only for now.
+          # This fork publishes the Windows build only for now; the macOS
+          # and Linux ones are built by hand when they are wanted.
           editions=('' -channel)
           [ "$CHANNEL_ONLY" = true ] && editions=(-channel)
           for edition in "${editions[@]}"; do
             cp dist/windows$edition/BaoCode-$MARKETING-setup$edition.exe out/
           done
-          # The remote server, under the name both apps' servers.json give it;
-          # servers.json too, for an app packaged with --remote-release.
-          remote="out/remote/$(cat dist/remote/VERSION)"
-          mkdir -p "$remote"
-          cp dist/remote/*.gz dist/remote/servers.json "$remote/"
           find out -type f | sort
       - name: Sign the release into latest.json
         env:
@@ -281,25 +278,12 @@ jobs:
           for file in out/BaoCode-*; do
             gh release upload "v$MARKETING" "$file" --clobber
           done
-      - name: Upload the remote server, beside the release
-        if: env.CHANNEL_ONLY != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # The remote server's builds are published here too, so an app
-          # built months ago still downloads the one it was built with.
-          version=$(cat dist/remote/VERSION)
-          for file in dist/remote/*.gz dist/remote/servers.json; do
-            gh release upload "v$MARKETING" "$file" --clobber
-          done
-          jq -n --arg version "$version" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
-            '{version: $version, tag: $tag, commit: $commit}' > remote-latest.json
-          gh release upload "v$MARKETING" remote-latest.json --clobber
       - name: Upload latest.json, last
         if: env.CHANNEL_ONLY != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The app reads this from the release beside the installers; it is
-          # uploaded last, so an app that sees it finds the files it names.
+          # The app reads this from the release beside the installers; it
+          # is uploaded last, so an app that sees it finds the files it
+          # names.
           gh release upload "v$MARKETING" out/latest.json --clobber

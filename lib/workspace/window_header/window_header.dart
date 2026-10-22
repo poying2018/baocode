@@ -447,6 +447,9 @@ class _WindowHeaderState extends State<WindowHeader> {
   /// corner taken through it and a size taken not through it would tell
   /// the window a control narrower than drawn, leaving its right to drag
   /// the window when zoomed in.
+  /// editor button). Its size taken through the interface's zoom as its
+  /// corner is: else, zoomed in, the right of a control (the editor
+  /// button's chevron) is left to drag the window.
   Rect? _rect(GlobalKey key) {
     final box = key.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.attached || !box.hasSize) return null;
