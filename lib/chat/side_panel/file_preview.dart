@@ -512,7 +512,7 @@ class _FilePreviewState extends State<FilePreview> {
             ),
           if (_isMarkdown && _markdown != null)
             _TextButton(
-              label: _source ? l10n.sidePanelPreview : l10n.sidePanelEdit,
+              label: _source ? l10n.sidePanelPreview : l10n.sidePanelSource,
               onPressed: () => setState(() => _source = !_source),
             ),
           if ((widget.agentEdit, _agent) case (final edit?, _?)
@@ -575,17 +575,26 @@ class _FilePreviewState extends State<FilePreview> {
         );
       case _Text(:final lines):
         if (_markdown case final model? when !_source) {
-          return IdeMarkdownPreview(
+          // The file's own text, its edit's: edited here, as in its source.
+          final edit = _edit;
+          final editable =
+              edit != null &&
+              !_request.agentChange &&
+              identical(model, edit.controller.document);
+          final preview = IdeMarkdownPreview(
             key: ValueKey((_request.path, widget.reveal)),
             path: _request.path,
             model: model,
             readBytes: widget.readBytes ?? readFileBytes,
             pathContext: widget.paths,
-            readOnly: true,
+            readOnly: !editable,
+            // Its source's editor told, which keeps whether it is saved.
+            onEdited: edit?.controller.syncFromDocument,
             initialLine: _request.range?.start,
             onOpenFile: _openLinked,
             onOpenExternal: (uri) => unawaited(openExternal(uri.toString())),
           );
+          return editable ? _saved(edit, preview) : preview;
         }
         if (_edit case final edit?) return _editing(edit);
         final range = _request.range;
@@ -613,20 +622,28 @@ class _FilePreviewState extends State<FilePreview> {
     }
   }
 
+  /// [child], where [edit] is edited, saving it with the IDE's keys.
+  Widget _saved(SidePanelFileEdit edit, Widget child) => CallbackShortcuts(
+    bindings: {
+      AppPlatform.isMacOS
+          ? const SingleActivator(LogicalKeyboardKey.keyS, meta: true)
+          : const SingleActivator(LogicalKeyboardKey.keyS, control: true): () =>
+          unawaited(edit.save()),
+    },
+    child: child,
+  );
+
   /// The file's text in the IDE's editor, the lines asked for marked until
   /// it is edited; saved with the IDE's keys.
   Widget _editing(SidePanelFileEdit edit) {
-    final save = AppPlatform.isMacOS
-        ? const SingleActivator(LogicalKeyboardKey.keyS, meta: true)
-        : const SingleActivator(LogicalKeyboardKey.keyS, control: true);
     final range = _range;
     final marked =
         range != null &&
         !_request.agentChange &&
         identical(_markedIn, edit.controller.document.snapshot);
-    return CallbackShortcuts(
-      bindings: {save: () => unawaited(edit.save())},
-      child: IdeCodeEditor(
+    return _saved(
+      edit,
+      IdeCodeEditor(
         key: _editor,
         controller: edit.controller,
         path: _request.path,

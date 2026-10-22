@@ -67,7 +67,11 @@ when others were not.
     held past the top as the list scrolls, double and triple clicks, Cmd+A,
     a selection kept while an answer streams below it) and in the editor
     (`editor`: the same, and Shift+Down held; `huge_file`: Cmd+A and
-    Cmd+C on 90,000 lines, Shift+Page Down).
+    Cmd+C on 90,000 lines, Shift+Page Down), and in a stash (`stash`: the
+    same, and a drag held past the bottom; `stash_huge`: 50,000 characters
+    dragged over, its frames' build checked against a short stash's), and
+    in a markdown file's preview (`markdown_huge`: 50,000 characters
+    dragged over, against 2,000, then the wheel and flings).
   - `caret.*`: the editor's caret moved by the arrows, pages, to the ends
     (`editor`); the chat's input typed into, also while the agent answers
     (`composer`); both then left alone, to see the app at rest.

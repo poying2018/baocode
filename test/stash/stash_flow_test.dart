@@ -25,8 +25,6 @@ import 'package:baocode/theme/material_file_icons.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart'
-    show FlutterQuillLocalizations;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/workspace/pin_window_button.dart';
 import 'package:baocode/workspace/workspace.dart';
@@ -191,10 +189,7 @@ void main() {
         answer.future;
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          FlutterQuillLocalizations.delegate,
-        ],
+        localizationsDelegates: const [AppLocalizations.delegate],
         home: Material(
           child: StashPanelView(controller: controller, viewId: 0),
         ),
@@ -259,10 +254,7 @@ void main() {
     controller.showAll = true;
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          FlutterQuillLocalizations.delegate,
-        ],
+        localizationsDelegates: const [AppLocalizations.delegate],
         home: Material(
           child: StashPanelView(controller: controller, viewId: 0),
         ),
@@ -318,10 +310,7 @@ void main() {
     });
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          FlutterQuillLocalizations.delegate,
-        ],
+        localizationsDelegates: const [AppLocalizations.delegate],
         home: Material(
           child: StashPanelView(controller: controller, viewId: 7),
         ),
@@ -354,10 +343,7 @@ void main() {
     controller.showAll = true;
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          FlutterQuillLocalizations.delegate,
-        ],
+        localizationsDelegates: const [AppLocalizations.delegate],
         home: Material(
           child: StashPanelView(controller: controller, viewId: 0),
         ),

@@ -6,12 +6,14 @@
 // method would.
 
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import 'perf_follow.dart';
 import 'perf_probe.dart';
 
 /// The text input client the focus is in (the editor's state is one): what
@@ -116,20 +118,24 @@ class PerfInput {
     int steps = 60,
     Duration every = const Duration(milliseconds: 8),
     Duration hold = Duration.zero,
+    void Function(Offset at)? moved,
   }) async {
     await dragAlong(
       [for (var i = 0; i <= steps; i++) Offset.lerp(from, to, i / steps)!],
       every: every,
       hold: hold,
+      moved: moved,
     );
   }
 
   /// The left button pressed at the first of [points], moved through the
-  /// rest, released at the last.
+  /// rest, released at the last; [moved] told of each move as it is
+  /// handled.
   Future<void> dragAlong(
     List<Offset> points, {
     Duration every = const Duration(milliseconds: 8),
     Duration hold = Duration.zero,
+    void Function(Offset at)? moved,
   }) async {
     hover(points.first);
     final pointer = ++_pointer;
@@ -160,6 +166,7 @@ class PerfInput {
           buttons: kPrimaryMouseButton,
         ),
       );
+      moved?.call(point);
       at = point;
     }
     if (hold > Duration.zero) await Future<void>.delayed(hold);
@@ -190,6 +197,7 @@ class PerfInput {
   void wheel(Offset at, double dy, {double dx = 0}) {
     if (_mouseAt != at) hover(at);
     PerfProbe.instance.mark(PerfMark.scroll);
+    PerfFollow.input(dy);
     _send(
       PointerScrollEvent(
         viewId: _viewId,
@@ -239,6 +247,7 @@ class PerfInput {
       await Future<void>.delayed(every);
       pan += Offset(0, dy);
       PerfProbe.instance.mark(PerfMark.scroll);
+      PerfFollow.input(-dy);
       _send(
         PointerPanZoomUpdateEvent(
           viewId: _viewId,
@@ -260,6 +269,113 @@ class PerfInput {
         position: at,
       ),
     );
+  }
+
+  /// Fingers on the trackpad moving the content [distance] (down, positive)
+  /// in [time], as a hand does: from rest and back to rest before they
+  /// lift; or, a [flick], faster and faster until they lift at their
+  /// fastest. At the trackpad's 120Hz.
+  Future<void> stroke(
+    Offset at,
+    double distance,
+    Duration time, {
+    bool flick = false,
+  }) {
+    final ticks = math.max(2, time.inMicroseconds ~/ 8333);
+    double along(double s) => flick ? s * s : (1 - math.cos(math.pi * s)) / 2;
+    return swipe(at, [
+      for (var i = 1; i <= ticks; i++)
+        distance * (along(i / ticks) - along((i - 1) / ticks)),
+    ]);
+  }
+
+  /// A mouse whose wheel scrolls smoothly (a free-spinning wheel, a
+  /// driver's smoothing): many small deltas [every] apart, [distance] in
+  /// all over [time], fastest midway.
+  Future<void> smoothWheel(
+    Offset at,
+    double distance,
+    Duration time, {
+    Duration every = const Duration(milliseconds: 8),
+  }) async {
+    final ticks = math.max(2, time.inMicroseconds ~/ every.inMicroseconds);
+    double along(double s) => (1 - math.cos(math.pi * s)) / 2;
+    for (var i = 1; i <= ticks; i++) {
+      wheel(at, distance * (along(i / ticks) - along((i - 1) / ticks)));
+      await Future<void>.delayed(every);
+    }
+  }
+
+  /// The scrolling of a hand recorded (`record.hands`): its wheel events
+  /// and trackpad gestures, at [at], as far apart as they came.
+  Future<void> replay(Offset at, List<Map<String, Object?>> events) async {
+    final clock = Stopwatch()..start();
+    var pointer = 0;
+    var pan = Offset.zero;
+    for (final event in events) {
+      final due = Duration(microseconds: (event['t']! as num).toInt());
+      final wait = due - clock.elapsed;
+      if (wait > Duration.zero) await Future<void>.delayed(wait);
+      final dx = (event['dx'] as num? ?? 0).toDouble();
+      final dy = (event['dy'] as num? ?? 0).toDouble();
+      switch (event['type']) {
+        case 'wheel' when event['kind'] == 'mouse':
+          wheel(at, dy, dx: dx);
+        case 'wheel':
+          // A device of precise deltas the system gives as a scroll, not
+          // as a gesture (a Magic Mouse's, some drivers').
+          if (_mouseAt != at) hover(at);
+          PerfProbe.instance.mark(PerfMark.scroll);
+          PerfFollow.input(dy);
+          _send(
+            PointerScrollEvent(
+              viewId: _viewId,
+              timeStamp: _now,
+              kind: PointerDeviceKind.trackpad,
+              device: _trackpad,
+              position: at,
+              scrollDelta: Offset(dx, dy),
+            ),
+          );
+        case 'start':
+          pointer = ++_pointer;
+          pan = Offset.zero;
+          _send(
+            PointerPanZoomStartEvent(
+              viewId: _viewId,
+              timeStamp: _now,
+              device: _trackpad,
+              pointer: pointer,
+              position: at,
+            ),
+          );
+        case 'update':
+          pan += Offset(dx, dy);
+          PerfProbe.instance.mark(PerfMark.scroll);
+          PerfFollow.input(-dy);
+          _send(
+            PointerPanZoomUpdateEvent(
+              viewId: _viewId,
+              timeStamp: _now,
+              device: _trackpad,
+              pointer: pointer,
+              position: at,
+              pan: pan,
+              panDelta: Offset(dx, dy),
+            ),
+          );
+        case 'end':
+          _send(
+            PointerPanZoomEndEvent(
+              viewId: _viewId,
+              timeStamp: _now,
+              device: _trackpad,
+              pointer: pointer,
+              position: at,
+            ),
+          );
+      }
+    }
   }
 
   // --- Keys ------------------------------------------------------------------

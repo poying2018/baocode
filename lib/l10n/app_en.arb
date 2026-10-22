@@ -743,10 +743,6 @@
   "@sidePanelSource": {
     "description": "Shows a markdown file's text."
   },
-  "sidePanelEdit": "Edit",
-  "@sidePanelEdit": {
-    "description": "Shows a markdown file's text in the side panel, to edit."
-  },
   "sidePanelNoOriginal": "The file before the agent's changes is not known: showing it as it is.",
   "@sidePanelNoOriginal": {
     "description": "Over a side panel preview asked for a diff it cannot show."
@@ -6226,6 +6222,9 @@
   "stashNew": "New stash",
   "stashLinkOpen": "Open link",
   "stashLinkEdit": "Edit link",
+  "stashLinkCopy": "Copy link address",
+  "stashLinkRemove": "Remove link",
+  "stashFormatMenu": "Format",
   "stashDraft": "Draft",
   "stashCodeChip": "Code",
   "stashTableChip": "Table",
@@ -6261,6 +6260,27 @@
   "@stashFormatCodeBlock": {
     "description": "Selection bar menu: makes the lines a code block, typed in in place."
   },
+  "markdownTableInsertRowAbove": "Insert row above",
+  "@markdownTableInsertRowAbove": {
+    "description": "Menu of a markdown table's row (from its handle) and column: what it does to them."
+  },
+  "markdownTableInsertRowBelow": "Insert row below",
+  "markdownTableDeleteRow": "Delete row",
+  "markdownTableInsertColumnLeft": "Insert column left",
+  "markdownTableInsertColumnRight": "Insert column right",
+  "markdownTableDeleteColumn": "Delete column",
+  "markdownTableAlignLeft": "Align left",
+  "markdownTableAlignCenter": "Align center",
+  "markdownTableAlignRight": "Align right",
+  "markdownTableDuplicateRow": "Duplicate row",
+  "markdownTableMoveRowUp": "Move row up",
+  "markdownTableMoveRowDown": "Move row down",
+  "markdownTableClearRow": "Clear row",
+  "markdownTableDuplicateColumn": "Duplicate column",
+  "markdownTableMoveColumnLeft": "Move column left",
+  "markdownTableMoveColumnRight": "Move column right",
+  "markdownTableClearColumn": "Clear column",
+  "markdownTableDeleteTable": "Delete table",
   "stashFormatClear": "Clear formatting",
   "stashPolish": "Polish",
   "stashPolishing": "Polishing…",

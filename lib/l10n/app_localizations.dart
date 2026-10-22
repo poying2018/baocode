@@ -3068,12 +3068,6 @@ abstract class AppLocalizations {
   /// **'Source'**
   String get sidePanelSource;
 
-  /// Shows a markdown file's text in the side panel, to edit.
-  ///
-  /// In en, this message translates to:
-  /// **'Edit'**
-  String get sidePanelEdit;
-
   /// Over a side panel preview asked for a diff it cannot show.
   ///
   /// In en, this message translates to:
@@ -14007,6 +14001,24 @@ abstract class AppLocalizations {
   /// **'Edit link'**
   String get stashLinkEdit;
 
+  /// No description provided for @stashLinkCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy link address'**
+  String get stashLinkCopy;
+
+  /// No description provided for @stashLinkRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove link'**
+  String get stashLinkRemove;
+
+  /// No description provided for @stashFormatMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get stashFormatMenu;
+
   /// No description provided for @stashDraft.
   ///
   /// In en, this message translates to:
@@ -14156,6 +14168,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Code block'**
   String get stashFormatCodeBlock;
+
+  /// Menu of a markdown table's row (from its handle) and column: what it does to them.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert row above'**
+  String get markdownTableInsertRowAbove;
+
+  /// No description provided for @markdownTableInsertRowBelow.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert row below'**
+  String get markdownTableInsertRowBelow;
+
+  /// No description provided for @markdownTableDeleteRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete row'**
+  String get markdownTableDeleteRow;
+
+  /// No description provided for @markdownTableInsertColumnLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert column left'**
+  String get markdownTableInsertColumnLeft;
+
+  /// No description provided for @markdownTableInsertColumnRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert column right'**
+  String get markdownTableInsertColumnRight;
+
+  /// No description provided for @markdownTableDeleteColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete column'**
+  String get markdownTableDeleteColumn;
+
+  /// No description provided for @markdownTableAlignLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Align left'**
+  String get markdownTableAlignLeft;
+
+  /// No description provided for @markdownTableAlignCenter.
+  ///
+  /// In en, this message translates to:
+  /// **'Align center'**
+  String get markdownTableAlignCenter;
+
+  /// No description provided for @markdownTableAlignRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Align right'**
+  String get markdownTableAlignRight;
+
+  /// No description provided for @markdownTableDuplicateRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate row'**
+  String get markdownTableDuplicateRow;
+
+  /// No description provided for @markdownTableMoveRowUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Move row up'**
+  String get markdownTableMoveRowUp;
+
+  /// No description provided for @markdownTableMoveRowDown.
+  ///
+  /// In en, this message translates to:
+  /// **'Move row down'**
+  String get markdownTableMoveRowDown;
+
+  /// No description provided for @markdownTableClearRow.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear row'**
+  String get markdownTableClearRow;
+
+  /// No description provided for @markdownTableDuplicateColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate column'**
+  String get markdownTableDuplicateColumn;
+
+  /// No description provided for @markdownTableMoveColumnLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'Move column left'**
+  String get markdownTableMoveColumnLeft;
+
+  /// No description provided for @markdownTableMoveColumnRight.
+  ///
+  /// In en, this message translates to:
+  /// **'Move column right'**
+  String get markdownTableMoveColumnRight;
+
+  /// No description provided for @markdownTableClearColumn.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear column'**
+  String get markdownTableClearColumn;
+
+  /// No description provided for @markdownTableDeleteTable.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete table'**
+  String get markdownTableDeleteTable;
 
   /// No description provided for @stashFormatClear.
   ///

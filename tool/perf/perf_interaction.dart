@@ -10,17 +10,27 @@
 // answer streams, a caret off screen, is the app failing the user whatever
 // its frames.
 
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:flutter_quill/flutter_quill.dart' show QuillEditor;
+import 'package:bao_markdown/bao_markdown.dart'
+    show
+        MarkdownEditor,
+        MarkdownController,
+        MarkdownEditorState,
+        MarkdownEditing,
+        RenderMdLine;
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/composer/composer.dart';
 import 'package:baocode/chat/side_panel/side_panel_view.dart';
 import 'package:baocode/sidebar/sidebar.dart';
 import 'package:baocode/stash/stash_controller.dart';
+import 'package:baocode/stash/stash_editor.dart';
 import 'package:baocode/stash/stash_view.dart';
 import 'package:baocode/workspace/chat_drag.dart';
 import 'package:baocode/workspace/chat_grid.dart';
@@ -152,6 +162,129 @@ Element? _rowOf(PerfContext c, AgentThread thread) =>
     c.find<ChatDragSource>(where: (w) => identical(w.thread, thread));
 
 StashController get _stash => StashController.current!;
+
+/// A stash's text in [element] (a [StashEditor]'s), as a hand works it.
+class _StashHand {
+  _StashHand(this.c, this.element);
+
+  final PerfContext c;
+  Element element;
+
+  MarkdownController get controller => switch (element.widget) {
+    StashEditor(:final controller) => controller,
+    MarkdownEditor(:final controller) => controller,
+    _ => throw StateError('no markdown editor'),
+  };
+
+  /// Its text, inside the padding (a stash's 20 at the sides, 12 at the
+  /// top; a markdown preview's, as wide as a page).
+  Rect get area {
+    final rect = c.rectOf(element);
+    if (element.widget case MarkdownEditor(:final padding)) {
+      return Rect.fromLTRB(
+        rect.left + padding.left,
+        rect.top + 12,
+        rect.right - padding.right,
+        rect.bottom - 12,
+      );
+    }
+    return rect.deflate(24);
+  }
+
+  /// What lays its text out, and where.
+  MarkdownEditorState? get editor => switch (element) {
+    StatefulElement(:final StashEditorState state) => state.markdownEditor,
+    StatefulElement(:final MarkdownEditorState state) => state,
+    _ => null,
+  };
+
+  /// A selection's bar shows over the text: put away before the next.
+  /// Not by a click: one lands on the bar where it shows (its Polish
+  /// opens the menu of models, over everything), or makes a double.
+  Future<void> collapse() async {
+    final selection = controller.selection;
+    controller.selection = TextSelection.collapsed(
+      offset: selection.extentOffset,
+    );
+    await c.settle(_short);
+  }
+
+  /// Whether [at] is over its text: a click there goes to the editor, no
+  /// tag's or block's own region (a picture's, a table's) on the way.
+  static bool onText(Offset at) {
+    final hit = HitTestResult();
+    final binding = WidgetsBinding.instance;
+    binding.hitTestInView(
+      hit,
+      at,
+      binding.platformDispatcher.implicitView!.viewId,
+    );
+    for (final entry in hit.path) {
+      switch (entry.target) {
+        case RenderMdLine(:final isText):
+          return isText;
+        case RenderPointerListener() ||
+            RenderMouseRegion() ||
+            RenderSemanticsGestureHandler():
+          return false;
+      }
+    }
+    return false;
+  }
+
+  /// [count] drags over the text, 40 moves each: what each copies, and
+  /// whether the selection kept up with the pointer: after each move, it
+  /// ends at the character under it.
+  Future<List<int>> drags(int count, PerfRecording r) async {
+    final editor = this.editor;
+    final copies = <int>[];
+    var moves = 0;
+    final behind = <int>[];
+    for (var i = 0; i < count; i++) {
+      final at = area;
+      var top = at.top + 30 + i * 22.0;
+      // From a line of text, not a block (a code block, a table) of its
+      // own that takes the press.
+      while (!onText(Offset(at.left + 10, top)) && top < at.center.dy) {
+        top += 6;
+      }
+      await c.input.drag(
+        Offset(at.left + 10, top),
+        Offset(at.left + min(320, at.width - 20), top + 180),
+        steps: 40,
+        moved: (point) {
+          final selection = controller.selection;
+          final under = editor!.offsetAt(point);
+          // A drag only begins past a few pixels: from then on.
+          if (selection.isCollapsed || under == null) return;
+          moves++;
+          if (selection.extentOffset != under) {
+            behind.add(under - selection.extentOffset);
+          }
+        },
+      );
+      await c.settle(_short);
+      final copied = controller.selection.isCollapsed ? '' : await c.copy();
+      copies.add(copied?.length ?? 0);
+      // Too little copied (see the check below): what was, in the log.
+      if ((copied?.length ?? 0) <= 40) {
+        final selection = controller.selection;
+        PerfContext.log(
+          'drag $i copied ${jsonEncode(copied)}, selected '
+          '${jsonEncode(controller.substring(selection.start, selection.end))}',
+        );
+      }
+      await collapse();
+    }
+    r.extra['selectionBehind'] = '${behind.length} of $moves moves';
+    c.check(
+      editor != null && moves > count * 30 && behind.isEmpty,
+      'the selection follows the pointer, each move: behind it after '
+      '${behind.length} of $moves (by ${behind.take(8).toList()} chars)',
+    );
+    return copies;
+  }
+}
 
 /// Shows the stashes' page, and [id] beside its cards if given.
 Future<void> _showStash(PerfContext c, [int? id]) async {
@@ -691,6 +824,376 @@ final List<PerfScenario> interactionScenarios = [
     },
   ),
 
+  PerfScenario(
+    'select.stash',
+    'A stash of 2,000 characters (as long as most are) beside the cards: text '
+        'dragged over, words and paragraphs by double and triple clicks, '
+        'Shift+Down held; then a stash of 12,000 '
+        'characters dragged over and held past the bottom.',
+    (c) async {
+      await c.history(c.agent, 2);
+      final short = await _stash.store.create(
+        body: '# ${c.content.identifier()}\n\n${c.content.reply(2000)}',
+      );
+      final long = await _stash.store.create(
+        body: '# ${c.content.identifier()}\n\n${c.content.reply(12000)}',
+      );
+      await _showStash(c, short.id);
+      await c.settle(const Duration(seconds: 1));
+      final found = c.find<StashEditor>();
+      c.check(found != null, 'the stash\'s editor shows');
+      if (found == null) return;
+      final hand = _StashHand(c, found);
+      MarkdownController controller() => hand.controller;
+      Rect area() => hand.area;
+      MarkdownEditorState? editorIn() => hand.editor;
+      Future<void> collapse() => hand.collapse();
+      bool onText(Offset at) => _StashHand.onText(at);
+      Future<List<int>> drags(int count, PerfRecording r) =>
+          hand.drags(count, r);
+
+      // Points on words of its text, [count] of them from the top down: the
+      // word and its paragraph (its line's text, after its marks), the
+      // point inside the word, not at its edge.
+      List<(Offset, String, String)> wordSpots(int count) {
+        final editor = editorIn();
+        if (editor == null) return const [];
+        final markdown = controller();
+        final text = markdown.text;
+        final letter = RegExp(r'\w');
+        final found = <(Offset, String, String)>[];
+        final at = area();
+        for (var y = at.top + 40; y < at.bottom - 40; y += 44) {
+          for (var x = at.left + 40; x < at.right - 60; x += 23) {
+            final near = editor.offsetAt(Offset(x, y));
+            // On the middle of the line nearest (a caret's height of it:
+            // its glyphs'), not between lines nor in a block's padding.
+            final line = near == null ? null : editor.caretRect(near);
+            if (line == null) continue;
+            final point = Offset(x, line.center.dy);
+            final offset = editor.offsetAt(point);
+            if (offset == null ||
+                !onText(point) ||
+                offset < 1 ||
+                offset >= text.length ||
+                !letter.hasMatch(text[offset]) ||
+                !letter.hasMatch(text[offset - 1])) {
+              continue;
+            }
+            var start = offset, end = offset;
+            while (start > 0 && letter.hasMatch(text[start - 1])) {
+              start--;
+            }
+            while (end < text.length && letter.hasMatch(text[end])) {
+              end++;
+            }
+            if (end - start < 3) continue;
+            final index = markdown.lineAt(offset);
+            final paragraph = markdown.substring(
+              markdown.lineStart(index) + markdown.textStartOf(index),
+              markdown.lineEnd(index),
+            );
+            found.add((point, text.substring(start, end), paragraph));
+            break;
+          }
+          if (found.length == count) break;
+        }
+        return found;
+      }
+
+      await c.phase('drag', (r) async {
+        final copies = await drags(6, r);
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the stash selects and copies its text: $copies chars',
+        );
+      });
+      await c.phase('clicks', (r) async {
+        var words = 0, lines = 0;
+        final picked = <String>[];
+        String selected() => controller().selectedText;
+
+        final spots = wordSpots(5);
+        c.check(spots.length == 5, 'words to click: ${spots.length} of 5');
+        for (final (spot, word, paragraph) in spots) {
+          await c.input.clicks(spot, 2);
+          await c.settle(_short);
+          if (selected() == word) words++;
+          await c.settle(const Duration(milliseconds: 600));
+          await c.input.clicks(spot, 3);
+          await c.settle(_short);
+          final line = selected();
+          if (line == paragraph) lines++;
+          picked.add('$word: ${line.length} of ${paragraph.length} chars');
+          await collapse();
+          await c.settle(const Duration(milliseconds: 600));
+        }
+        r.extra['picked'] = picked;
+        c.check(
+          words == spots.length,
+          'double clicks select the word: $words of ${spots.length}',
+        );
+        c.check(
+          lines == spots.length,
+          'triple clicks select the word\'s paragraph: $lines of '
+          '${spots.length} ($picked)',
+        );
+      });
+      await c.phase('shift_keys', (r) async {
+        final at = area();
+        await c.input.click(Offset(at.left + 4, at.top + 30));
+        await c.settle(const Duration(milliseconds: 600));
+        final base = controller().selection.baseOffset;
+        final top =
+            editorIn()!.caretRect(base)!.top + c.scrolledIn(hand.element);
+        // Not Shift+Right: on macOS the input method moves the caret
+        // sideways (moveRight:), which these keys do not go through.
+        await c.input.repeat(LogicalKeyboardKey.arrowDown, 30, shift: true);
+        await c.settle(_short);
+        final selection = controller().selection;
+        r.extra['selectedChars'] = selection.end - selection.start;
+        // Down a line for each press: as many lines as the window is wide
+        // wraps them into, whatever characters they hold. Measured in the
+        // text, as far as it scrolled; its lines 14px at 1.55.
+        final editor = editorIn()!;
+        final line = editor.caretRect(selection.extentOffset)!;
+        final lines =
+            (line.top + c.scrolledIn(hand.element) - top) / (14 * 1.55);
+        r.extra['selectedLines'] = lines.round();
+        c.check(
+          selection.baseOffset == base && lines >= 25,
+          'Shift+Down held 30 times selects on from the caret: '
+          '${lines.round()} lines down',
+        );
+        await collapse();
+      });
+      // Not Cmd+A: on macOS it comes by the menu's selectAll:, which these
+      // keys do not go through.
+
+      await _showStash(c, long.id);
+      await c.settle(const Duration(seconds: 1));
+      hand.element = c.find<StashEditor>()!;
+      c.check(
+        controller().length > 10000,
+        'the long stash shows: ${controller().length} chars',
+      );
+      // Opened at its end (where its caret is): from its top, as one reads
+      // it, room below to scroll into.
+      c.scrollableIn(hand.element)?.position.jumpTo(0);
+      await c.settle(_short);
+      await c.phase('drag_long', (r) async {
+        final copies = await drags(6, r);
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the long stash copies its text: $copies chars',
+        );
+      });
+      await c.phase('autoscroll', (r) async {
+        final before = c.scrolledIn(hand.element);
+        final at = area();
+        await c.input.drag(
+          Offset(at.left + 10, at.center.dy),
+          Offset(at.left + 200, at.bottom + 40),
+          steps: 30,
+          hold: const Duration(seconds: 2),
+        );
+        await c.settle(_short);
+        final scrolled = c.scrolledIn(hand.element) - before;
+        r.extra['scrolledPx'] = scrolled.round();
+        c.check(
+          scrolled > at.height / 2,
+          'a selection held past the bottom scrolls the stash: '
+          '${scrolled.round()}px',
+        );
+        await collapse();
+      });
+    },
+  ),
+
+  PerfScenario(
+    'select.stash_huge',
+    'A stash of 50,000 characters beside the cards, dragged over from its '
+        'top, the middle and its end; one of 2,000 dragged over first, as '
+        'what to compare with: a drag builds no more in the long one.',
+    (c) async {
+      final short = await _stash.store.create(
+        body: '# ${c.content.identifier()}\n\n${c.content.reply(2000)}',
+      );
+      final huge = await _stash.store.create(
+        body: '# ${c.content.identifier()}\n\n${c.content.reply(50000)}',
+      );
+      await _showStash(c, short.id);
+      await c.settle(const Duration(seconds: 1));
+      final found = c.find<StashEditor>();
+      c.check(found != null, 'the stash\'s editor shows');
+      if (found == null) return;
+      final hand = _StashHand(c, found);
+      c.scrollableIn(hand.element)?.position.jumpTo(0);
+      await c.settle(_short);
+      await c.phase('drag_short', (r) async {
+        final copies = await hand.drags(6, r);
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the stash copies its text: $copies chars',
+        );
+      });
+
+      await _showStash(c, huge.id);
+      await c.settle(const Duration(seconds: 1));
+      hand.element = c.find<StashEditor>()!;
+      c.check(
+        hand.controller.length > 45000,
+        'the long stash shows: ${hand.controller.length} chars',
+      );
+      final position = c.scrollableIn(hand.element)!.position;
+      await c.phase('drag_huge', (r) async {
+        final copies = <int>[];
+        // At its top, its middle and its end: as cheap wherever it is.
+        for (final at in [0.0, 0.5, 1.0]) {
+          // Its length as laid out so far (rows not yet seen are
+          // reckoned): once there, as far again as it really goes.
+          for (var i = 0; i < 2; i++) {
+            position.jumpTo(position.maxScrollExtent * at);
+            await c.settle(_short);
+          }
+          copies.addAll(await hand.drags(2, r));
+        }
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the long stash copies its text: $copies chars',
+        );
+      });
+      final shortP90 = _figure(c, 'drag_short', 'frames.buildMs.p90');
+      final hugeP90 = _figure(c, 'drag_huge', 'frames.buildMs.p90');
+      if (shortP90 is num && hugeP90 is num) {
+        c.check(
+          hugeP90 < 2,
+          'a drag over 50,000 characters builds its frames in under 2ms '
+          '(p90): ${hugeP90}ms',
+        );
+        // As long as what a drag shows changes, not the text.
+        c.check(
+          hugeP90 <= shortP90 * 1.25 + 0.3,
+          'a drag builds as much in a long stash as in a short one (p90): '
+          '${hugeP90}ms, against ${shortP90}ms',
+        );
+      }
+    },
+  ),
+
+  PerfScenario(
+    'select.markdown_huge',
+    'Fast Ide on a markdown file of 50,000 characters, edited in its '
+        'preview: dragged over from its top, the middle and its end, then '
+        'the wheel spun through it and trackpad flings; one of 2,000 '
+        'dragged over first, as what to compare with.',
+    (c) async {
+      final short = '${c.project.root}/docs/short.md';
+      final huge = '${c.project.root}/docs/huge.md';
+      Directory('${c.project.root}/docs').createSync(recursive: true);
+      for (final (path, length) in [(short, 2000), (huge, 50000)]) {
+        File(path).writeAsStringSync(
+          '# ${c.content.identifier()}\n\n${c.content.reply(length)}',
+        );
+      }
+      final workbench = await c.openIde();
+      Future<_StashHand?> open(String path) async {
+        unawaited(workbench.workspace.open(path));
+        final length = File(path).readAsStringSync().length;
+        await c.until(
+          () =>
+              c.find<MarkdownEditor>(
+                where: (editor) => editor.controller.length == length,
+              ) !=
+              null,
+          'the preview of $path',
+        );
+        await c.settle(const Duration(seconds: 1));
+        final found = c.find<MarkdownEditor>();
+        return found == null ? null : _StashHand(c, found);
+      }
+
+      final hand = await open(short);
+      c.check(hand != null, 'the markdown file shows as its preview');
+      if (hand == null) return;
+      await c.phase('drag_short', (r) async {
+        final copies = await hand.drags(6, r);
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the preview copies its text: $copies chars',
+        );
+      });
+
+      final long = await open(huge);
+      if (long == null) return;
+      c.check(
+        long.controller.length > 45000,
+        'the long file shows: ${long.controller.length} chars',
+      );
+      final position = c.scrollableIn(long.element)!.position;
+      await c.phase('drag_huge', (r) async {
+        final copies = <int>[];
+        // At its top, its middle and its end: as cheap wherever it is.
+        for (final at in [0.0, 0.5, 1.0]) {
+          // Its length as laid out so far (lines not yet seen are
+          // reckoned): once there, as far again as it really goes.
+          for (var i = 0; i < 2; i++) {
+            position.jumpTo(position.maxScrollExtent * at);
+            await c.settle(_short);
+          }
+          copies.addAll(await long.drags(2, r));
+        }
+        r.extra['copiedChars'] = copies;
+        c.check(
+          copies.every((n) => n > 40),
+          'a drag over the long file copies its text: $copies chars',
+        );
+      });
+      final at = c.rectOf(long.element).center;
+      position.jumpTo(0);
+      await c.settle(_short);
+      await c.phase('spin', (r) async {
+        await c.input.spin(at, 60, 40, every: const Duration(milliseconds: 16));
+        await c.settle(const Duration(milliseconds: 500));
+        final down = position.pixels;
+        await c.input.spin(
+          at,
+          -60,
+          40,
+          every: const Duration(milliseconds: 16),
+        );
+        await c.settle(const Duration(milliseconds: 500));
+        r.extra['scrolledPx'] = down.round();
+        c.check(down > 300, 'the wheel scrolls the preview: ${down.round()}px');
+      });
+      await c.phase('fling', (r) async {
+        for (var i = 0; i < 4; i++) {
+          await c.input.swipe(at, List.filled(20, i.isEven ? -40 : 40));
+          await c.settle(const Duration(milliseconds: 900));
+        }
+      });
+      final shortP90 = _figure(c, 'drag_short', 'frames.buildMs.p90');
+      final hugeP90 = _figure(c, 'drag_huge', 'frames.buildMs.p90');
+      if (shortP90 is num && hugeP90 is num) {
+        c.check(
+          hugeP90 < 2,
+          'a drag over 50,000 characters builds its frames in under 2ms '
+          '(p90): ${hugeP90}ms',
+        );
+        c.check(
+          hugeP90 <= shortP90 * 1.25 + 0.3,
+          'a drag builds as much in a long file as in a short one (p90): '
+          '${hugeP90}ms, against ${shortP90}ms',
+        );
+      }
+    },
+  ),
+
   // --- The caret ---------------------------------------------------------------
   PerfScenario(
     'caret.editor',
@@ -760,11 +1263,24 @@ final List<PerfScenario> interactionScenarios = [
     (c) async {
       await c.history(c.agent, 10);
       await c.settle();
-      Element? editor() => c.find<QuillEditor>();
+      // The input's editor, not another's (a stash's, a preview's).
+      Element? editor() {
+        Element? found;
+        void visit(Element element) {
+          if (found != null) return;
+          if (element.widget is MarkdownEditor) {
+            found = element;
+            return;
+          }
+          element.visitChildren(visit);
+        }
+
+        c.find<ChatComposer>()?.visitChildren(visit);
+        return found;
+      }
+
       String typed() =>
-          (editor()?.widget as QuillEditor?)?.controller.document
-              .toPlainText() ??
-          '';
+          (editor()?.widget as MarkdownEditor?)?.controller.text ?? '';
       final composer = c.find<ChatComposer>();
       c.check(composer != null && editor() != null, 'the chat has an input');
       if (editor() == null) return;
@@ -895,6 +1411,42 @@ final List<PerfScenario> interactionScenarios = [
         );
         await c.settle(const Duration(milliseconds: 500));
         c.check(down > 300, 'the wheel scrolls the cards: ${down.round()}px');
+      });
+      await c.phase('fling', (r) async {
+        for (var i = 0; i < 4; i++) {
+          await c.input.swipe(at, List.filled(20, i.isEven ? -40 : 40));
+          await c.settle(const Duration(milliseconds: 900));
+        }
+      });
+    },
+  ),
+  PerfScenario(
+    'scroll.stash_note',
+    'A stash of 12,000 characters beside the cards: the wheel spun down and '
+        'up through it, then trackpad flings.',
+    (c) async {
+      final note = await _stash.store.create(
+        body: '# ${c.content.identifier()}\n\n${c.content.reply(12000)}',
+      );
+      await _showStash(c, note.id);
+      await c.settle(const Duration(seconds: 1));
+      final editor = c.find<StashEditor>();
+      c.check(editor != null, 'the stash\'s editor shows');
+      if (editor == null) return;
+      final at = c.rectOf(editor).center;
+      await c.phase('spin', (r) async {
+        await c.input.spin(at, 60, 40, every: const Duration(milliseconds: 16));
+        await c.settle(const Duration(milliseconds: 500));
+        final down = c.scrolledIn(editor);
+        await c.input.spin(
+          at,
+          -60,
+          40,
+          every: const Duration(milliseconds: 16),
+        );
+        await c.settle(const Duration(milliseconds: 500));
+        r.extra['scrolledPx'] = down.round();
+        c.check(down > 300, 'the wheel scrolls the stash: ${down.round()}px');
       });
       await c.phase('fling', (r) async {
         for (var i = 0; i < 4; i++) {

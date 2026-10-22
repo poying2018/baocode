@@ -16,6 +16,7 @@ Future<void> _open(
   required Rect anchor,
   required List<IdeMenuEntry> entries,
   bool alignRight = false,
+  bool iconsInCheckColumn = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -36,6 +37,7 @@ Future<void> _open(
       context,
       anchor: anchor,
       alignRight: alignRight,
+      iconsInCheckColumn: iconsInCheckColumn,
       entries: entries,
     ),
   );
@@ -159,6 +161,33 @@ void main() {
     final label = tester.widget<Text>(find.text('Disconnect')).style!.color;
     final icon = tester.element(find.byIcon(Codicons.debugDisconnect));
     expect(IconTheme.of(icon).color, label);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('icons in the check column: where a check is, at the panel\'s '
+      'start; one checked shows its check instead', (tester) async {
+    await _open(
+      tester,
+      size: size,
+      anchor: const Rect.fromLTWH(20, 20, 100, 26),
+      iconsInCheckColumn: true,
+      entries: const [
+        IdeMenuAction('Copy', icon: Icon(Codicons.copy)),
+        IdeMenuAction('Left', icon: Icon(Codicons.arrowLeft), checked: true),
+      ],
+    );
+    final panel = tester.getRect(_panels);
+    final copy = tester.getRect(find.byIcon(Codicons.copy));
+    expect(copy.size, const Size(16, 16));
+    expect(copy.left - panel.left, lessThan(26));
+    expect(copy.right, lessThan(tester.getRect(find.text('Copy')).left));
+    // The labels where they are with no icons.
+    expect(
+      tester.getRect(find.text('Copy')).left,
+      tester.getRect(find.text('Left')).left,
+    );
+    expect(find.byIcon(Codicons.arrowLeft), findsNothing);
+    expect(find.byIcon(Codicons.menuSelection), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

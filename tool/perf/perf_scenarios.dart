@@ -20,6 +20,7 @@ import 'package:baocode/workspace/workspace.dart';
 
 import 'perf_content.dart';
 import 'perf_input.dart';
+import 'perf_hands.dart';
 import 'perf_interaction.dart';
 import 'perf_probe.dart';
 import 'perf_stress.dart';
@@ -111,6 +112,11 @@ class PerfContext {
 
   /// What the app last copied, kept from the clipboard (see perf_app.dart).
   static String? copied;
+
+  /// What the engine's pointer data went to before the perf app took it
+  /// away from the desktop (see perf_app.dart): given back while a hand is
+  /// recorded (`record.hands`).
+  static ui.PointerDataPacketCallback? desktopPointers;
 
   static void log(String message) =>
       stderr.writeln('BAOCODE_PERF_LOG $message');
@@ -557,6 +563,7 @@ final List<PerfScenario> perfScenarios = [
   ..._scenarios,
   ...stressScenarios,
   ...interactionScenarios,
+  ...handScenarios,
 ];
 
 final List<PerfScenario> _scenarios = [

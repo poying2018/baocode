@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:baocode/chat/composer/composer_embeds.dart';
+import 'package:bao_markdown/bao_markdown.dart';
 import 'package:bao_editor/monaco/flutter/diff_editor.dart';
 import 'package:bao_editor/monaco/flutter/editor_surface.dart';
 
@@ -11,6 +13,7 @@ import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/composer/composer.dart';
 import 'package:baocode/chat/composer/composer_files.dart';
 import 'package:baocode/chat/chat_session.dart';
+import 'package:baocode/chat/side_panel/file_edit.dart';
 import 'package:baocode/chat/side_panel/file_link.dart';
 import 'package:baocode/chat/side_panel/file_open.dart';
 import 'package:baocode/chat/side_panel/file_preview.dart';
@@ -46,8 +49,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_quill/flutter_quill.dart'
-    show FlutterQuillLocalizations, QuillEditor;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -105,7 +106,6 @@ void _bigWindow(WidgetTester tester) {
 
 Widget _app(Widget home) => MaterialApp(
   theme: buildAppTheme(),
-  localizationsDelegates: const [FlutterQuillLocalizations.delegate],
   home: Material(child: home),
 );
 
@@ -422,7 +422,6 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: buildAppTheme(),
-          localizationsDelegates: const [FlutterQuillLocalizations.delegate],
           builder: (context, child) {
             final media = MediaQuery.of(context);
             return SystemTextScale(
@@ -984,14 +983,18 @@ void main() {
     await tester.tap(find.text('Add to Chat'));
     await tester.pumpAndSettle();
     final composer = find.byType(ChatComposer);
-    String composed() => tester
-        .widget<QuillEditor>(
-          find.descendant(of: composer, matching: find.byType(QuillEditor)),
-        )
-        .controller
-        .document
-        .toPlainText();
-    expect(composed(), '\uFFFC \n');
+    String composed() => composerShownText(
+      tester
+          .widget<MarkdownEditor>(
+            find.descendant(
+              of: composer,
+              matching: find.byType(MarkdownEditor),
+            ),
+          )
+          .controller
+          .text,
+    );
+    expect(composed(), '\uFFFC ');
     final drag = await tester.startGesture(
       tester.getCenter(row('staged.dart')),
       kind: PointerDeviceKind.mouse,
@@ -1140,19 +1143,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Add to Chat'));
     await tester.pumpAndSettle();
-    final composed = jsonEncode(
-      tester
-          .widget<QuillEditor>(
-            find.descendant(
-              of: find.byType(ChatComposer),
-              matching: find.byType(QuillEditor),
-            ),
-          )
-          .controller
-          .document
-          .toDelta()
-          .toJson(),
-    );
+    final composed = tester
+        .widget<MarkdownEditor>(
+          find.descendant(
+            of: find.byType(ChatComposer),
+            matching: find.byType(MarkdownEditor),
+          ),
+        )
+        .controller
+        .text;
     expect(composed, contains('lib/a'));
     expect(composed, isNot(contains('main.dart')));
 
@@ -2208,5 +2207,139 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.byType(AgentSidePanelView), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a markdown file is edited in its preview, as it shows, and '
+      'saved with ⌘S; only shown, it is not', (tester) async {
+    _bigWindow(tester);
+    final files = _Files({'/p/notes.md': '# Notes\n\nhello\n'});
+    SidePanelFileEdit? edit;
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/notes.md'),
+          files: files,
+          onEdit: (made) => edit = made,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(MarkdownEditor);
+    expect(tester.widget<MarkdownEditor>(preview).readOnly, isFalse);
+    // Its text is the edit's: no other to keep in step.
+    final controller = tester.widget<MarkdownEditor>(preview).controller;
+    expect(controller.text, edit!.controller.document.text);
+
+    tester.widget<MarkdownEditor>(preview).focusNode!.requestFocus();
+    controller.selection = const TextSelection.collapsed(offset: 14);
+    await tester.pump();
+    final told = tester
+        .state<MarkdownEditorState>(preview)
+        .currentTextEditingValue!;
+    final at = told.selection.extentOffset;
+    tester.testTextInput.updateEditingValue(
+      TextEditingValue(
+        text: told.text.replaceRange(at, at, ' world'),
+        selection: TextSelection.collapsed(offset: at + 6),
+      ),
+    );
+    await tester.pump();
+    expect(edit!.controller.document.text, '# Notes\n\nhello world\n');
+    expect(edit!.dirty, isTrue);
+    expect(files.texts['/p/notes.md'], '# Notes\n\nhello\n');
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pumpAndSettle();
+    expect(files.texts['/p/notes.md'], '# Notes\n\nhello world\n');
+    expect(edit!.dirty, isFalse);
+
+    // Its source, the same text, a click away.
+    await tester.tap(find.text('Source'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkdownEditor), findsNothing);
+    expect(find.byType(IdeCodeEditor), findsOneWidget);
+    await tester.tap(find.text('Preview'));
+    await tester.pumpAndSettle();
+
+    // Only shown (a revision's): not edited.
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          key: const ValueKey('shown'),
+          request: const FileOpenRequest('/p/notes.md', readOnly: true),
+          files: files,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.widget<MarkdownEditor>(preview).readOnly, isTrue);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a mark put on in the preview (at both ends) is one step '
+      'Undo takes back whole', (tester) async {
+    _bigWindow(tester);
+    const text = '# Notes\n\nSome text here.\n';
+    final files = _Files({'/p/notes.md': text});
+    SidePanelFileEdit? edit;
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/notes.md'),
+          files: files,
+          onEdit: (made) => edit = made,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(MarkdownEditor);
+    final controller = tester.widget<MarkdownEditor>(preview).controller;
+    tester.widget<MarkdownEditor>(preview).focusNode!.requestFocus();
+    controller.selection = const TextSelection(
+      baseOffset: 14,
+      extentOffset: 23,
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> command(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.byIcon(Codicons.code));
+    await tester.pumpAndSettle();
+    expect(edit!.controller.document.text, '# Notes\n\nSome `text here`.\n');
+    expect(edit!.dirty, isTrue);
+    await command(LogicalKeyboardKey.keyZ);
+    expect(edit!.controller.document.text, text);
+
+    await command(LogicalKeyboardKey.keyB);
+    expect(edit!.controller.document.text, '# Notes\n\nSome **text here**.\n');
+    await command(LogicalKeyboardKey.keyZ);
+    expect(edit!.controller.document.text, text);
+    expect(edit!.dirty, isFalse);
+
+    // Typed on, a word: one step too, its source's editor told between.
+    controller.selection = const TextSelection.collapsed(offset: 14);
+    await tester.pump();
+    for (final typed in ['a', 'b']) {
+      final told = tester
+          .state<MarkdownEditorState>(preview)
+          .currentTextEditingValue!;
+      final at = told.selection.extentOffset;
+      tester.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: told.text.replaceRange(at, at, typed),
+          selection: TextSelection.collapsed(offset: at + 1),
+        ),
+      );
+      await tester.pump();
+    }
+    expect(edit!.controller.document.text, '# Notes\n\nSome abtext here.\n');
+    await command(LogicalKeyboardKey.keyZ);
+    expect(edit!.controller.document.text, text);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }

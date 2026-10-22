@@ -486,11 +486,7 @@ class _ChatScreenState extends State<ChatScreen>
     final bar = SizedBox(
       height: AppMetrics.titleBarHeight,
       child: CustomMultiChildLayout(
-        delegate: _TitleBarLayout(
-          inset: inset,
-          maxWidth: _maxContentWidth,
-          minimap: _minimap,
-        ),
+        delegate: _TitleBarLayout(inset: inset),
         children: [
           if (widget.leading case final leading?)
             LayoutId(id: _TitleBarSlot.leading, child: leading),
@@ -499,9 +495,8 @@ class _ChatScreenState extends State<ChatScreen>
             child: Row(
               children: [
                 Expanded(
-                  // The title, where the conversation begins: at its start,
-                  // as the row macOS draws has it (Windows draws none of
-                  // it: see window_header/).
+                  // The title at the bar's start, as the row macOS draws
+                  // has it (Windows draws none of it: see window_header/).
                   child: Align(alignment: Alignment.centerLeft, child: title),
                 ),
               ],
@@ -981,23 +976,13 @@ double _columnWidth(double width, double maxWidth, {required bool minimap}) =>
     );
 
 /// The title bar's [_TitleBarSlot.leading] at [inset], clear of the traffic
-/// lights; the title across the conversation's column, clear of the
-/// leading; the buttons ([_TitleBarSlot.trailing]) at the bar's right end,
+/// lights; the title after it, at the bar's left, not the conversation's
+/// column; the buttons ([_TitleBarSlot.trailing]) at the bar's right end,
 /// the window's as the IDE's title bar has them, not the column's.
 class _TitleBarLayout extends MultiChildLayoutDelegate {
-  _TitleBarLayout({
-    required this.inset,
-    required this.maxWidth,
-    required this.minimap,
-  });
+  _TitleBarLayout({required this.inset});
 
   final double inset;
-
-  /// The conversation's column's at most.
-  final double maxWidth;
-
-  /// Whether the column leaves a minimap its room.
-  final bool minimap;
 
   /// Between the leading and the title.
   static const _gap = 6.0;
@@ -1034,22 +1019,17 @@ class _TitleBarLayout extends MultiChildLayoutDelegate {
       );
       end += trailing.width + _gap;
     }
-    final column =
-        (size.width - _columnWidth(size.width, maxWidth, minimap: minimap)) / 2;
-    final left = math.max(start, column);
-    final width = math.max(0.0, size.width - left - math.max(end, column));
+    final width = math.max(0.0, size.width - start - end);
     layoutChild(
       _TitleBarSlot.title,
       BoxConstraints.tightFor(width: width, height: size.height),
     );
-    positionChild(_TitleBarSlot.title, Offset(left, 0));
+    positionChild(_TitleBarSlot.title, Offset(start, 0));
   }
 
   @override
   bool shouldRelayout(_TitleBarLayout oldDelegate) =>
-      oldDelegate.inset != inset ||
-      oldDelegate.maxWidth != maxWidth ||
-      oldDelegate.minimap != minimap;
+      oldDelegate.inset != inset;
 }
 
 /// [child] across the conversation's column (see [_columnWidth]), level

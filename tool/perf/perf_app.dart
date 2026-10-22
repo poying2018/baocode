@@ -269,6 +269,7 @@ class _KeptMessenger implements BinaryMessenger {
 /// nothing.
 void _isolateFromTheDesktop() {
   final binding = WidgetsBinding.instance;
+  PerfContext.desktopPointers = binding.platformDispatcher.onPointerDataPacket;
   binding.platformDispatcher.onPointerDataPacket = (_) {};
   SystemChannels.lifecycle.setMessageHandler((message) async {
     if (message == AppLifecycleState.resumed.toString()) {

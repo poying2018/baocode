@@ -36,6 +36,8 @@ Usage: dart run tool/perf/run.dart [options] [scenario or prefix...]
   --trace-detail      ...with every layout and paint in it too
   --shots             a picture of the window after each phase
   --size WxH          the size the app is laid out in (default 1024x760)
+  --record FILE       where record.hands keeps the hand it records
+  --hands FILE        the recording follow.replay plays back
   --list              the scenarios, and exit
 ''';
 
@@ -98,6 +100,8 @@ Future<void> main(List<String> arguments) async {
         traceDetail: options.traceDetail,
         shots: options.shots ? '$out/shots' : null,
         size: options.size,
+        record: options.record,
+        hands: options.hands,
       );
       final seconds = (watch.elapsedMilliseconds / 1000).toStringAsFixed(1);
       if (result == null) {
@@ -205,6 +209,8 @@ class _Options {
   bool shots = false;
   bool list = false;
   String? size;
+  String? record;
+  String? hands;
 
   static _Options? parse(List<String> arguments) {
     final options = _Options();
@@ -239,6 +245,10 @@ class _Options {
             options.shots = true;
           case '--size':
             options.size = value();
+          case '--record':
+            options.record = File(value()).absolute.path;
+          case '--hands':
+            options.hands = File(value()).absolute.path;
           case '--list':
             options.list = true;
           case '-h' || '--help':
@@ -264,6 +274,7 @@ List<(String, String)> _scenarios(String repo) {
       'perf_scenarios.dart',
       'perf_stress.dart',
       'perf_interaction.dart',
+      'perf_hands.dart',
     ])
       File('$repo/tool/perf/$file').readAsStringSync(),
   ].join('\n');
@@ -336,6 +347,8 @@ Future<Map<String, Object?>?> _runOnce(
   bool traceDetail = false,
   String? shots,
   String? size,
+  String? record,
+  String? hands,
 }) async {
   final log = File('${out.substring(0, out.length - 5)}.log').openWrite();
   final process = await Process.start(
@@ -356,6 +369,8 @@ Future<Map<String, Object?>?> _runOnce(
       },
       'BAOCODE_PERF_SHOTS': ?shots,
       'BAOCODE_PERF_SIZE': ?size,
+      'BAOCODE_PERF_RECORD': ?record,
+      'BAOCODE_PERF_HANDS': ?hands,
     },
   );
   process.stdout.listen(log.add);

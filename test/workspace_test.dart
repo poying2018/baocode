@@ -6,10 +6,10 @@ import 'dart:typed_data';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_quill/quill_delta.dart';
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/chat_session.dart';
+import 'package:baocode/chat/composer/composer_embeds.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
 import 'package:baocode/kernel/claude_code/mock_claude_code_transport.dart';
@@ -222,13 +222,13 @@ void main() {
       number: 1,
     );
     keptThread().session.draft.save(
-      Delta()..insert('Half a question\n'),
+      'Half a question',
       const TextSelection.collapsed(offset: 4),
       [image],
     );
     workspace.create(project: keptThread().project);
     newThread().session.draft.save(
-      Delta()..insert('Not asked yet\n'),
+      'Not asked yet',
       const TextSelection(baseOffset: 0, extentOffset: 3),
       const [],
     );
@@ -242,14 +242,14 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     workspace = await pumpLoaded(tester, drafts: drafts);
     final kept = keptThread().session.draft;
-    expect(kept.content, Delta()..insert('Half a question\n'));
+    expect(kept.content, 'Half a question');
     expect(kept.selection, const TextSelection.collapsed(offset: 4));
     expect(kept.images.single.bytes, [1, 2, 3]);
     expect(kept.images.single.name, 'shot.png');
     expect(kept.images.single.number, 1);
     workspace.create(project: keptThread().project);
     final draft = newThread().session.draft;
-    expect(draft.content, Delta()..insert('Not asked yet\n'));
+    expect(draft.content, 'Not asked yet');
     expect(
       draft.selection,
       const TextSelection(baseOffset: 0, extentOffset: 3),
@@ -257,12 +257,47 @@ void main() {
 
     // Emptied: not kept.
     keptThread().session.draft.save(
-      Delta()..insert('\n'),
+      '',
       const TextSelection.collapsed(offset: 0),
       const [],
     );
     await tester.pump(const Duration(milliseconds: 600));
     expect((await drafts.read()).keys, {'new:/tmp/project'});
+  });
+
+  testWidgets('a draft kept by a version before, as the old editor\'s '
+      'operations, comes back as text, its tags tags', (tester) async {
+    final tag = ComposerTokenEmbed.file('/tmp/project/lib/main.dart');
+    final drafts = MemoryPreferenceStore({
+      FakeCatalog.kept.id: {
+        'content': [
+          {'insert': 'see '},
+          {
+            'insert': {tag.type: tag.data},
+          },
+          {
+            'insert': ' now',
+            'attributes': {'header': 2},
+          },
+          {'insert': '\n'},
+        ],
+        // After the tag: one character of the old text.
+        'base': 5,
+        'extent': 5,
+        'images': const [],
+      },
+    });
+    final workspace = await pumpLoaded(tester, drafts: drafts);
+    final draft = workspace.threads
+        .firstWhere((thread) => thread.id == FakeCatalog.kept.id)
+        .session
+        .draft;
+    expect(draft.content, 'see ${tag.atom} now');
+    expect(
+      draft.selection,
+      TextSelection.collapsed(offset: 'see ${tag.atom}'.length),
+    );
+    expect(composerPlainText(draft.content!), 'see ${tag.plainText} now');
   });
 
   testWidgets('an opened folder becomes the first project', (tester) async {

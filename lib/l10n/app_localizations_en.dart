@@ -1662,9 +1662,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelSource => 'Source';
 
   @override
-  String get sidePanelEdit => 'Edit';
-
-  @override
   String get sidePanelNoOriginal =>
       'The file before the agent\'s changes is not known: showing it as it is.';
 
@@ -8632,6 +8629,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stashLinkEdit => 'Edit link';
 
   @override
+  String get stashLinkCopy => 'Copy link address';
+
+  @override
+  String get stashLinkRemove => 'Remove link';
+
+  @override
+  String get stashFormatMenu => 'Format';
+
+  @override
   String get stashDraft => 'Draft';
 
   @override
@@ -8707,6 +8713,60 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get stashFormatCodeBlock => 'Code block';
+
+  @override
+  String get markdownTableInsertRowAbove => 'Insert row above';
+
+  @override
+  String get markdownTableInsertRowBelow => 'Insert row below';
+
+  @override
+  String get markdownTableDeleteRow => 'Delete row';
+
+  @override
+  String get markdownTableInsertColumnLeft => 'Insert column left';
+
+  @override
+  String get markdownTableInsertColumnRight => 'Insert column right';
+
+  @override
+  String get markdownTableDeleteColumn => 'Delete column';
+
+  @override
+  String get markdownTableAlignLeft => 'Align left';
+
+  @override
+  String get markdownTableAlignCenter => 'Align center';
+
+  @override
+  String get markdownTableAlignRight => 'Align right';
+
+  @override
+  String get markdownTableDuplicateRow => 'Duplicate row';
+
+  @override
+  String get markdownTableMoveRowUp => 'Move row up';
+
+  @override
+  String get markdownTableMoveRowDown => 'Move row down';
+
+  @override
+  String get markdownTableClearRow => 'Clear row';
+
+  @override
+  String get markdownTableDuplicateColumn => 'Duplicate column';
+
+  @override
+  String get markdownTableMoveColumnLeft => 'Move column left';
+
+  @override
+  String get markdownTableMoveColumnRight => 'Move column right';
+
+  @override
+  String get markdownTableClearColumn => 'Clear column';
+
+  @override
+  String get markdownTableDeleteTable => 'Delete table';
 
   @override
   String get stashFormatClear => 'Clear formatting';

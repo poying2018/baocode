@@ -1622,9 +1622,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelSource => '源码';
 
   @override
-  String get sidePanelEdit => '编辑';
-
-  @override
   String get sidePanelNoOriginal => '不知道智能体修改前的文件内容，显示当前内容。';
 
   @override
@@ -8143,6 +8140,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashLinkEdit => '编辑链接';
 
   @override
+  String get stashLinkCopy => '复制链接地址';
+
+  @override
+  String get stashLinkRemove => '移除链接';
+
+  @override
+  String get stashFormatMenu => '格式';
+
+  @override
   String get stashDraft => '草稿';
 
   @override
@@ -8218,6 +8224,60 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashFormatCodeBlock => '代码块';
+
+  @override
+  String get markdownTableInsertRowAbove => '在上方插入行';
+
+  @override
+  String get markdownTableInsertRowBelow => '在下方插入行';
+
+  @override
+  String get markdownTableDeleteRow => '删除行';
+
+  @override
+  String get markdownTableInsertColumnLeft => '在左侧插入列';
+
+  @override
+  String get markdownTableInsertColumnRight => '在右侧插入列';
+
+  @override
+  String get markdownTableDeleteColumn => '删除列';
+
+  @override
+  String get markdownTableAlignLeft => '左对齐';
+
+  @override
+  String get markdownTableAlignCenter => '居中对齐';
+
+  @override
+  String get markdownTableAlignRight => '右对齐';
+
+  @override
+  String get markdownTableDuplicateRow => '复制行';
+
+  @override
+  String get markdownTableMoveRowUp => '上移行';
+
+  @override
+  String get markdownTableMoveRowDown => '下移行';
+
+  @override
+  String get markdownTableClearRow => '清空行';
+
+  @override
+  String get markdownTableDuplicateColumn => '复制列';
+
+  @override
+  String get markdownTableMoveColumnLeft => '左移列';
+
+  @override
+  String get markdownTableMoveColumnRight => '右移列';
+
+  @override
+  String get markdownTableClearColumn => '清空列';
+
+  @override
+  String get markdownTableDeleteTable => '删除表格';
 
   @override
   String get stashFormatClear => '清除格式';

@@ -29,8 +29,9 @@ class FakeForgeHttp implements ForgeHttp {
     final route =
         routes[key] ??
         routes['$method ${url.replace(query: '').toString().replaceAll('?', '')}'];
-    if (route == null)
+    if (route == null) {
       return const ForgeResponse(404, '{"message":"Not Found"}');
+    }
     return switch (route(request)) {
       final ForgeResponse response => response,
       final answer => ForgeResponse(200, jsonEncode(answer)),

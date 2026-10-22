@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:quill_native_bridge/quill_native_bridge.dart';
 
 import '../chat/chat_models.dart';
 import '../chat/composer/composer_files.dart';
@@ -207,7 +208,10 @@ abstract final class WindowControls {
   /// Keeps the macOS traffic lights level with the title bar Flutter draws
   /// as the interface is zoomed: [drop] (the window's points) below where
   /// the system puts them. Said once a change; 0 is where they start.
-  static Future<void> setTitleBarDrop(double drop, {required int viewId}) async {
+  static Future<void> setTitleBarDrop(
+    double drop, {
+    required int viewId,
+  }) async {
     if (!AppPlatform.isMacOS) return;
     if ((_titleBarDrops[viewId] ?? 0) == drop) return;
     _titleBarDrops[viewId] = drop;
@@ -497,6 +501,24 @@ abstract final class WindowControls {
       }
     }
     return (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+  }
+
+  /// The clipboard's HTML (a web page's, a document's copied), where the
+  /// platform can say.
+  static Future<String?> readPasteboardHtml() async {
+    final bridge = QuillNativeBridge();
+    try {
+      if (!await bridge.isSupported(
+        QuillNativeBridgeFeature.getClipboardHtml,
+      )) {
+        return null;
+      }
+      return await bridge.getClipboardHtml();
+    } on MissingPluginException {
+      return null;
+    } on PlatformException {
+      return null;
+    }
   }
 
   /// Images on the clipboard, when what it holds is images rather than

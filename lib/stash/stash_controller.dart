@@ -3,7 +3,6 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_quill/flutter_quill.dart' show ChangeSource;
 import 'package:path/path.dart' as p;
 
 import '../forge/forge_accounts.dart';
@@ -18,7 +17,6 @@ import 'stash_ai.dart';
 import 'stash_editor.dart' show StashRefs, stashTextPart, stashTextRewrite;
 import 'stash_host.dart';
 import 'stash_io_stub.dart' if (dart.library.io) 'stash_io.dart' as io;
-import 'stash_markdown.dart';
 import 'stash_note.dart';
 import 'stash_note_editor.dart';
 import 'stash_settings.dart';
@@ -462,7 +460,7 @@ class StashController extends ChangeNotifier {
     if (note == null) return;
     final asked = switch (StashNoteEditorState.showing(id)?.editor) {
       final editor? => editor.textPart,
-      null => stashTextPart(stashDocument(note.body), store.absolute),
+      null => stashTextPart(note.body, store.absolute),
     };
     if (asked == null) return;
     final cancellation = StashClarifyCancellation();
@@ -513,11 +511,8 @@ class StashController extends ChangeNotifier {
     }
     final note = store.byId(id);
     if (note == null) return false;
-    final document = stashDocument(note.body);
-    final rewritten = stashTextRewrite(document, asked, reply, store.absolute);
-    if (rewritten == null) return false;
-    document.compose(rewritten.change, ChangeSource.local);
-    final body = stashDeltaToMarkdown(document.toDelta());
+    final body = stashTextRewrite(note.body, asked, reply, store.absolute);
+    if (body == null) return false;
     await store.update(id, (note) => note.body = body);
     return true;
   }

@@ -812,7 +812,6 @@ printf '%s\n' "$line"
             switch (item) {
               IdeQuickPickSeparator(:final label) => '-- $label',
               IdeQuickPickItem(:final label) => label,
-              _ => '?',
             },
         ],
         ['-- Added', 'Ubuntu', 'dev', '-- ~/.ssh/config', 'prod'],
