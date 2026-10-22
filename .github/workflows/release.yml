@@ -487,11 +487,13 @@ jobs:
           [ -f "release-notes/$MARKETING.en.md" ] && notes=(--notes-file "release-notes/$MARKETING.en.md")
           # Published again: the release is made anew, on the tag's commit.
           gh release delete "v$MARKETING" --yes 2>/dev/null || true
-          gh release create "v$MARKETING" --title "BaoCode $MARKETING" "${notes[@]}" \
-            out/BaoCode-$MARKETING-arm64.dmg out/BaoCode-$MARKETING-x64.dmg out/BaoCode-$MARKETING-setup.exe \
-            out/BaoCode-$MARKETING-linux-amd64.deb out/BaoCode-$MARKETING-linux-arm64.deb \
-            out/BaoCode-$MARKETING-linux-amd64.tar.gz out/BaoCode-$MARKETING-linux-arm64.tar.gz \
-            out/BaoCode-$MARKETING-mac-arm64.zip out/BaoCode-$MARKETING-mac-x64.zip
+          gh release create "v$MARKETING" --title "BaoCode $MARKETING" "${notes[@]}"
+          # Every build gathered: the standard one and the channel build's,
+          # whose files end in -channel. The manifest names both, so both
+          # are here.
+          for file in out/BaoCode-*; do
+            gh release upload "v$MARKETING" "$file" --clobber
+          done
       - name: Upload the remote server, beside the release
         if: env.CHANNEL_ONLY != 'true'
         env:
