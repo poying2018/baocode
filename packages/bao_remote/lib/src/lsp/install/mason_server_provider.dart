@@ -318,9 +318,6 @@ class MasonServerProvider implements LspServerProvider {
         // [npmCommand]); the arguments are the same either way.
         final (npm, npmArguments) = await npmCommand(
           tools['npm']!,
-          tools['node'],
-        final (npm, npmArguments) = await npmCommand(
-          tools['npm']!,
           tools['node']!,
         );
         await _command(
@@ -536,12 +533,6 @@ class MasonServerProvider implements LspServerProvider {
     ].join('\n');
   }
 
-  /// How to run npm: on Windows its `npm-cli.js` with [node] when it is
-  /// beside `npm.cmd`, as that is all `npm.cmd` does, and `cmd.exe` drops
-  /// the quotes of a command line where both npm's path (`C:\Program
-  /// Files\nodejs`) and an argument (a user name with a space) have them.
-  Future<(String, List<String>)> npmCommand(String npm, String? node) async {
-    if (platform.isWindows && node != null) {
   /// How to run [npm]: on Windows its `npm-cli.js` with [node] when it is
   /// beside `npm.cmd`, as that is all `npm.cmd` does, and `cmd.exe` drops
   /// the quotes of a command line where both npm's path (`C:\Program
