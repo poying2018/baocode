@@ -393,6 +393,7 @@ jobs:
     runs-on: ubuntu-latest
     # The update signing key is this repository's secret (the same one the
     # app's own manifest is signed with).
+    environment: release
     permissions:
       contents: write # the GitHub release
     env:
