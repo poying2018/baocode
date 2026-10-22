@@ -156,6 +156,8 @@ jobs:
     name: Remote server
     needs: check
     uses: ./.github/workflows/remote.yml
+    permissions:
+      contents: write # the remote server's release
 
   # Each build once per edition (check's editions): the channel build's
   # files and artifacts end in -channel.

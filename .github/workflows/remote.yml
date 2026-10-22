@@ -104,11 +104,12 @@ jobs:
     # Its own server-* tag only: called by Release, the release publishes.
     if: github.event_name == 'push' && startsWith(github.ref_name, 'server-')
     runs-on: ubuntu-latest
+    # The release environment, as the release's own jobs have it: the
+    # permissions to write the release come with it.
+    environment: release
     concurrency:
       group: remote-publish
       cancel-in-progress: false
-    permissions:
-      contents: write # the GitHub release
     env:
       VERSION: ${{ needs.build.outputs.version }}
     steps:
