@@ -30,6 +30,30 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.5.2">
+    <h2 class="plain"><a href="#v1.5.2">1.5.2</a></h2>
+    <p>Markdown, edited where it shows</p>
+    <p>The stashes, a markdown file's preview and the chat's input are now one editor
+    of markdown: it shows the text as markdown, the marks it carries are the ones
+    the caret is in, and it is edited where it is written rather than in a
+    separate box.</p>
+    <p>New</p>
+    <ul>
+    <li>One markdown editor for the stashes, a markdown file's preview and the chat's input: the text is shown as markdown, and the formatting bar follows the caret, offering the marks that make sense there.</li>
+    <li>A markdown file's preview is edited in place: the text under the caret changes as you type, with no separate editing window.</li>
+    <li>The stashes keep their formatting bar in a preview too, in code as well: only the proofreading marks are offered there.</li>
+    <li>The formatting bar follows the selection as the text scrolls, and goes away while the selection is out of view. A whole styling of the text is one Undo.</li>
+    <li>Tables are edited in their cells: rows and columns get handles and menus of their own, bars add them, a cell's text is picked from the first press, and cells dragged across are picked as a spreadsheet's (copied, cut, cleared, pasted). The outline follows the lines and is round at the table's corners, and a wide table gets a scrollbar while the mouse is over it.</li>
+    <li>Links show as they do when clicked, with a bubble over them to open, copy, edit or remove them; a link opened with the keyboard's command key stays where it went. A right click has the clipboard's, the Undo's, the link's and the selection's marks.</li>
+    <li>Inline code's ground is painted under the selection, an emptied line keeps its height, and the caret is as high as its line.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>The editor of the chat's input is quicker to draw: it no longer redraws what the text behind the caret does not change.</li>
+    <li>A selection made across lines keeps its marks as the text is edited around it.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.5.1">
     <h2 class="plain"><a href="#v1.5.1">1.5.1</a></h2>
     <p>Linux, and the SSH that does not need a terminal</p>
