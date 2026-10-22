@@ -7,15 +7,25 @@
 
 import 'dart:async';
 
-import '../../chat/chat_models.dart' show ToolKind;
+import '../../chat/chat_models.dart' show ToolCallItem, ToolKind;
 
 /// Where a tool is called from: the agent's working directory (its
 /// project's path, as the workspace has it) and its session.
 class ClaudeSdkCall {
-  const ClaudeSdkCall({required this.cwd, this.sessionId, this.cancelled});
+  const ClaudeSdkCall({
+    required this.cwd,
+    this.sessionId,
+    this.cancelled,
+    this.toolUseId,
+  });
 
   final String cwd;
   final String? sessionId;
+
+  /// The tool use it answers, as Claude Code says (`_meta`'s
+  /// `claudecode/toolUseId`): its step's in the conversation
+  /// ([ToolCallItem.callId]).
+  final String? toolUseId;
 
   /// Completes once the call is given up: the turn stopped, or the agent
   /// cancelled it. A tool that waits long (on the user, say) stops then.
@@ -33,6 +43,8 @@ class ClaudeSdkTool {
     required this.run,
     this.kind,
     this.summary,
+    this.files,
+    this.alwaysLoad = false,
   });
 
   final String name;
@@ -48,6 +60,15 @@ class ClaudeSdkTool {
   /// answered) what it answered: the step's line, when the agent did not
   /// say it (an input's `description`, as Bash's).
   final String Function(Map<String, Object?> input, String? output)? summary;
+
+  /// The files its pictures were saved to, one each, from what it answered
+  /// ([ToolCallItem.imageFiles]): in place of the CLI's copies.
+  final List<String> Function(String output)? files;
+
+  /// Always in the model's prompt, never deferred behind Claude Code's tool
+  /// search (where it would see only its name): for a tool it should think
+  /// of unprompted.
+  final bool alwaysLoad;
 }
 
 /// An image as MCP content, for a tool's answer.
@@ -77,6 +98,16 @@ abstract final class ClaudeSdkTools {
   static void register(ClaudeSdkTool tool) => _tools[tool.name] = tool;
 
   static void unregister(String name) => _tools.remove(name);
+
+  /// What each feature tells the agent of its tools, by feature: the
+  /// server's instructions, in the agent's system prompt.
+  static final Map<String, String> _instructions = {};
+
+  /// Has the server tell the agent [text] for [feature]; null takes it
+  /// back.
+  static void instruct(String feature, String? text) => text == null
+      ? _instructions.remove(feature)
+      : _instructions[feature] = text;
 
   /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
   /// this server's.
@@ -111,6 +142,8 @@ abstract final class ClaudeSdkTools {
           'protocolVersion': params['protocolVersion'] ?? '2024-11-05',
           'capabilities': {'tools': <String, Object?>{}},
           'serverInfo': {'name': server, 'version': '1.0.0'},
+          if (_instructions.isNotEmpty)
+            'instructions': _instructions.values.join('\n\n'),
         });
       case 'tools/list':
         return result({
@@ -120,6 +153,7 @@ abstract final class ClaudeSdkTools {
                 'name': tool.name,
                 'description': tool.description,
                 'inputSchema': tool.inputSchema,
+                if (tool.alwaysLoad) '_meta': {'anthropic/alwaysLoad': true},
               },
           ],
         });
@@ -151,6 +185,10 @@ abstract final class ClaudeSdkTools {
               cwd: call.cwd,
               sessionId: call.sessionId,
               cancelled: cancel.future,
+              toolUseId: switch (params['_meta']) {
+                {'claudecode/toolUseId': final String id} => id,
+                _ => null,
+              },
             ),
           );
           return result({

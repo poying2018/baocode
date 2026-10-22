@@ -202,6 +202,11 @@ void main() {
     // The IDE's editor, the skill's text in it.
     final editor = _inView(find.byType(IdeCodeEditor));
     expect(editor, findsOneWidget);
+    // Its actions flush right, over the editor's right edge (#149).
+    expect(
+      tester.getTopRight(_inView(find.text('Save'))).dx,
+      moreOrLessEquals(tester.getTopRight(editor).dx, epsilon: 16),
+    );
     expect(_editorText(tester), contains('Body'));
     await tester.tap(_inView(find.byType(EditorSurface)));
     await tester.pump();
@@ -360,6 +365,14 @@ void main() {
     expect(
       _inView(find.text('npm warn\nError: Cannot find module x')),
       findsOneWidget,
+    );
+    // Its button flush right in the panel, not halfway (#149).
+    expect(
+      tester.getTopRight(_inView(find.text('Test connection'))).dx,
+      moreOrLessEquals(
+        tester.getTopRight(_inView(find.byType(EditorSurface))).dx,
+        epsilon: 32,
+      ),
     );
     await tester.tap(_inView(find.text('Test connection')));
     await tester.pump();

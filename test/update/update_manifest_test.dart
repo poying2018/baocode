@@ -160,7 +160,7 @@ void main() {
       }
     });
 
-    test('downloads have to be https links on baocode.dev', () {
+    test('downloads have to be https links on baocode.dev or GitHub', () {
       UpdateManifest at(String url) => UpdateManifest.parse(
         _manifest(platforms: {'windows-x64': _asset(url: url)}),
       );
@@ -185,6 +185,8 @@ void main() {
         'https://baocode.dev/releases/x.exe',
         'https://BAOCODE.dev/releases/x.exe',
         'https://cdn.baocode.dev/x.exe',
+        'https://github.com/poying2018/baocode/releases/download/v1.2.0+14/BaoCode-1.2.0-setup.exe',
+        'https://objects.githubusercontent.com/x.exe',
       ]) {
         expect(at(url).assetFor('windows-x64'), isNotNull, reason: url);
       }

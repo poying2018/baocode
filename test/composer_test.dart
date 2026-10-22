@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -24,6 +25,7 @@ import 'package:baocode/chat/widgets/shimmer_text.dart';
 import 'package:baocode/chat/widgets/thinking_section.dart';
 import 'package:baocode/chat/widgets/chat_item_view.dart';
 import 'package:baocode/chat/widgets/user_message_bubble.dart';
+import 'package:baocode/chat/chat_find.dart';
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/chat_screen.dart';
@@ -542,6 +544,25 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('focused, the input does not draw on every frame: Quill\'s '
+      'hidden caret does not fade in and out on Apple platforms', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    await pumpScreen(tester);
+    await typeText(tester, 'Plan');
+    // What typing set off (the send button's coming in) done.
+    await tester.pump(const Duration(milliseconds: 500));
+    // Over a few of the caret's blinks: no animation, only its timers.
+    var animating = 0;
+    for (var i = 0; i < 40; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+      if (SchedulerBinding.instance.transientCallbackCount > 0) animating++;
+    }
+    expect(animating, 0);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
   testWidgets('tokens never change the line height', (tester) async {
     await pumpScreen(tester);
     double height() => tester.getSize(find.byType(ChatComposer)).height;
@@ -911,9 +932,10 @@ void main() {
       await composerController(tester).clipboardPaste();
       await tester.pump();
       expect(
-        composerController(tester).document.toDelta().toList().where(
-          (op) => op.data is Map,
-        ),
+        composerController(tester).document
+            .toDelta()
+            .toList()
+            .where((op) => op.data is Map),
         hasLength(1),
       );
 
@@ -1447,6 +1469,39 @@ void main() {
       expect(tester.element(find.byType(ActivityRow)), same(row));
       session.stop();
       await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('a message opened as another closes makes room for all of '
+        'its editor', (tester) async {
+      // Tall enough for all four turns: the one message's editor closes, in
+      // view, as the other's opens.
+      tester.view.physicalSize = const Size(800, 2400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pumpScreen(tester, historyCount: 32);
+      Rect editor() => tester.getRect(
+        find.descendant(
+          of: find.byType(ChatHistoryView),
+          matching: find.byType(ChatComposer),
+        ),
+      );
+      Rect row(int index) => tester.getRect(
+        find.byWidgetPredicate(
+          (widget) => widget is ChatFindRow && widget.index == index,
+        ),
+      );
+      await tester.tap(bubble('第 4 轮'));
+      await settleAnimations(tester);
+      final height = editor().height;
+      await tester.tap(bubble('第 2 轮'));
+      await settleAnimations(tester);
+
+      // The two messages are alike: their editors are as tall.
+      expect(editor().height, height);
+      // Its row is as tall as the editor, not as the message was: what
+      // follows it is below the editor, not under it.
+      expect(row(8).height, moreOrLessEquals(height));
+      expect(row(9).top, greaterThan(editor().bottom));
     });
 
     testWidgets('an edited message replaces the rest of the conversation', (

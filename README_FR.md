@@ -42,7 +42,7 @@ BaoCode est une application native qui dessine directement son interface sur le 
 
 ## Prérequis
 
-- macOS 12 ou ultérieur (un téléchargement pour Apple silicon, un pour Intel), ou Windows 10 ou ultérieur (x64).
+- macOS 12 ou ultérieur (un téléchargement pour Apple silicon, un pour Intel), Windows 10 ou ultérieur (x64), ou Linux : Ubuntu 22.04 ou ultérieur et les autres distributions basées sur Debian (un .deb pour x64, un pour arm64).
 - [Claude Code](https://github.com/anthropics/claude-code) installé.
 
 ## Compilation depuis les sources
@@ -75,14 +75,14 @@ La CI compile et publie les versions lorsqu'un tag `v*` est poussé. Versions, s
 | [packages/bao_xterm](packages/bao_xterm) | Portage de xterm.js en Dart |
 | [packages/bao_pty](packages/bao_pty) | Pseudo-terminaux Dart : forkpty sur macOS et Linux, ConPTY sur Windows |
 | [packages/bao_remote](packages/bao_remote) | Composant distant servi par SSH |
-| [macos/](macos), [windows/](windows) | Lanceurs natifs |
+| [macos/](macos), [windows/](windows), [linux/](linux) | Lanceurs natifs |
 | [tool/](tool) | Scripts de compilation, de packaging et de publication |
 | [site/](site) | Sources du site [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Notes de conception |
 
 ## Retours
 
-Les issues sont les bienvenues. Le projet amont n'accepte pas les Pull Requests.
+Les issues et les Pull Requests sont les bienvenues. Discutez d'abord d'un changement dans une issue ; les Pull Requests trop volumineuses ou non discutées au préalable ne sont pas acceptées. Voir [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 

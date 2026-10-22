@@ -17,7 +17,8 @@ class UpdateRelease {
 
   final UpdateManifest manifest;
 
-  /// The platform key it is for (`windows-x64`, `macos-arm64`, `macos-x64`).
+  /// The platform key it is for (`windows-x64`, `macos-arm64`, `macos-x64`,
+  /// `linux-x64`, `linux-arm64`).
   final String platform;
   final UpdateAsset asset;
 
@@ -75,7 +76,9 @@ abstract interface class PreparedUpdate {
 class ManualUpdateRequired implements Exception {
   const ManualUpdateRequired(this.reason);
 
-  static final downloadPage = Uri.parse('https://baocode.dev/download');
+  static final downloadPage = Uri.parse(
+    'https://github.com/poying2018/baocode/releases/latest',
+  );
 
   final String reason;
 

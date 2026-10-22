@@ -10,6 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
+import '../base/smooth_scroll.dart';
 import '../ide/ide_find_widget.dart';
 import '../ide/ide_hover.dart';
 import '../l10n/l10n.dart';
@@ -23,7 +24,9 @@ import 'chat_models.dart';
 import 'chat_session.dart';
 import 'composer/composer.dart';
 import 'composer/composer_draft.dart';
+import 'reply_scroll.dart';
 import 'side_panel/file_link_menu.dart';
+import 'steadiness.dart';
 import 'step_folds.dart';
 import 'user_message_style.dart';
 import 'widgets/chat_item_view.dart';
@@ -32,6 +35,7 @@ import 'widgets/edge_fade_mask.dart';
 import 'widgets/content_image.dart' show ChatImage, ChatImages;
 import 'widgets/fold_line.dart';
 import 'widgets/hover_builder.dart';
+import 'widgets/lazy_segment.dart' show SelectionEndHolder;
 import 'widgets/turn_footer.dart';
 import 'widgets/user_message_bubble.dart';
 
@@ -112,11 +116,39 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// Whether a turn was under way, as last seen: to tell when it ends.
   bool _wasLive = false;
 
-  void _refold() => _folds = StepFolds.of(
-    _feed.itemCount,
-    _feed.itemAt,
-    live: _feed.isStreaming,
+  void _refold() {
+    _folds = StepFolds.of(
+      _feed.itemCount,
+      _feed.itemAt,
+      live: _feed.isStreaming,
+    );
+    _liveStart = null;
+    if (!_feed.isStreaming) return;
+    for (var index = _feed.itemCount - 1; index >= 0; index--) {
+      if (_feed.itemAt(index) case UserMessageItem(queued: false)) {
+        _liveStart = index + 1;
+        break;
+      }
+    }
+  }
+
+  /// Where the turn under way's items start; null when none is.
+  int? _liveStart;
+
+  /// What shows of the turn under way only while it lasts, steadied: a
+  /// closed run's step under way, a thought open as it streams. What is
+  /// done in a blink never shows, rather than flash; what showed stays a
+  /// moment before it folds away.
+  late final Steadiness _steady = Steadiness(
+    onChange: () {
+      if (mounted) setState(() {});
+    },
   );
+
+  bool _isLive(int index) => switch (_liveStart) {
+    final start? => index >= start,
+    null => false,
+  };
 
   bool _isFoldOpen(StepFold fold) =>
       _foldOpen[fold.key] ??
@@ -129,8 +161,26 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     setState(() => _foldOpen[fold.key] = !_isFoldOpen(fold));
   }
 
-  StepRow _rowAt(int index) =>
-      _folds.rowAt(index, _feed.itemAt(index), _isFoldOpen);
+  /// What row [index] shows. Of a run under way the user has not opened
+  /// or closed: its step under way once it has run a moment, and a step
+  /// that showed kept a moment before it folds away (see [_steady]).
+  StepRow _rowAt(int index) {
+    final item = _shownAt(index);
+    final row = _folds.rowAt(index, item, _isFoldOpen);
+    if (!_isLive(index) || !isQuickStep(item) || row.work != null) return row;
+    final steps = _folds.stepsAt(index);
+    if (steps != null && _foldOpen.containsKey(steps.key)) return row;
+    final key = (#row, index);
+    final bool shown;
+    if (steps == null) {
+      // Showing anyway: from now, to keep it a moment once a run takes it.
+      shown = _steady.shows(key, wanted: row.item, delayed: false);
+    } else {
+      // A closed run's: shown only while under way.
+      shown = _steady.shows(key, wanted: row.item);
+    }
+    return (work: row.work, steps: row.steps, item: shown);
+  }
 
   /// Whether row [index] shows nothing: a closed fold hides its item.
   bool _isHidden(int index) => switch (_rowAt(index)) {
@@ -166,6 +216,22 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     );
   }
 
+  /// Under the status row of the turn under way, the last of all, whether
+  /// the row shows or not: how fast the model writes, how long the turn
+  /// has taken, and the tokens so far.
+  Widget? _liveFooter(int index) {
+    if (!_feed.isStreaming || index != _feed.itemCount - 1) return null;
+    return switch (_feed.itemAt(index)) {
+      LiveStatusItem(:final output, :final startedAt)
+          when startedAt != null || (output?.tokens ?? 0) > 0 =>
+        TurnFooter(
+          live: output ?? const TurnOutput(tokens: 0),
+          since: startedAt,
+        ),
+      _ => null,
+    };
+  }
+
   /// The work fold of the last turn, if it folds.
   StepFold? _lastTurnWork() {
     for (var index = _feed.itemCount - 1; index >= 0; index--) {
@@ -179,7 +245,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// and its item unless folded away.
   String _plainTextOf(int index) {
     final item = _shownAt(index);
-    final row = _folds.rowAt(index, item, _isFoldOpen);
+    final row = _rowAt(index);
     final l10n = context.l10n;
     return [
       if (row.work case StepFold(:final worked?) && final fold)
@@ -389,6 +455,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     resolve: _resolveItemPoint,
     beyondBuilt: _beyondBuiltItems,
     plainTextOf: _plainTextOf,
+    itemCount: () => _feed.itemCount,
     onDragEdge: _autoScrollToward,
   );
   bool _reselectScheduled = false;
@@ -442,7 +509,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   @override
   void initState() {
     super.initState();
-    _scrollController.laidOut = _keepShownLaidOut;
+    _scrollController
+      ..laidOut = _keepShownLaidOut
+      ..stopAt = _replyStart;
     _find
       ..feed = _feed
       ..addListener(_findChanged);
@@ -548,6 +617,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   @override
   void dispose() {
+    _steady.dispose();
     _feed.removeListener(_handleSessionChanged);
     _find
       ..removeListener(_findChanged)
@@ -567,8 +637,15 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     super.dispose();
   }
 
-  bool _isExpanded(int index) =>
-      _expanded[index] ?? defaultExpanded(_shownAt(index));
+  /// Open as the user left it; else as [defaultExpanded] says, steadied
+  /// while the turn is under way: a thought of a blink stays closed.
+  bool _isExpanded(int index) {
+    if (_expanded[index] case final open?) return open;
+    final item = _shownAt(index);
+    final open = defaultExpanded(item);
+    if (!_isLive(index) || item is! ThinkingItem) return open;
+    return _steady.shows((#open, index), wanted: open);
+  }
 
   /// What row [index] shows: a run of thoughts as one (see [StepFolds]).
   ChatItem _shownAt(int index) => _folds.shownAt(index, _feed.itemAt(index));
@@ -742,7 +819,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (_firstShown() case (:final index, above: _)) {
       // Still laid out as it was, at its index before.
       _keepShown = switch (_endAboveOf(index + count, laidOutAt: index)) {
-        final end? => (index: index + count, above: end),
+        final end? => (
+          index: index + count,
+          above: end,
+          scrolled: _scrollController.scrolled,
+        ),
         null => null,
       };
     }
@@ -754,19 +835,23 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   }
 
   /// The row shown first when rows were put before it, and how far its end
-  /// was above the view's top: put back there once the list is laid out.
-  ({int index, double above})? _keepShown;
+  /// was above the view's top, and the list scrolled then (see
+  /// [_BottomAnchoredScrollController.scrolled]): put back there once the
+  /// list is laid out.
+  ({int index, double above, double scrolled})? _keepShown;
 
   /// How far the list is to move to put the row shown first back where it
   /// was (see [_keepShown]), once laid out: the rows before it laid out,
   /// those estimated, but the one the view's top came to, measured below
-  /// it.
+  /// it. Moved on as far as the list was scrolled meanwhile (a wheel's
+  /// notch, in the frame they came in), not back.
   double _keepShownLaidOut() {
     final keep = _keepShown;
     _keepShown = null;
     if (keep == null) return 0;
     final above = _endAboveOf(keep.index);
-    return above == null ? 0 : keep.above - above;
+    if (above == null) return 0;
+    return keep.above - above + _scrollController.scrolled - keep.scrolled;
   }
 
   /// How far row [index]'s end is above the view's top, if it is laid out:
@@ -902,11 +987,17 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   void _handleScroll() {
     if (_userScrolling) {
-      final position = _scrollController.position;
+      final position =
+          _scrollController.position as _BottomAnchoredScrollPosition;
+      final end = position.maxScrollExtent - 1;
       // Re-anchor only at the very end: any tolerance would snap a small
-      // scroll up straight back to the bottom on the next layout.
+      // scroll up straight back to the bottom on the next layout. Nor while
+      // a wheel's notch takes the list up from there: its first frame may
+      // move it less than that.
       _scrollController.anchored =
-          position.pixels >= position.maxScrollExtent - 1;
+          position.pixels >= end && position.headedTo >= end;
+      // Taken to the end: what is written is followed again.
+      if (_scrollController.anchored) _toReplyStart = false;
     }
     if (_shownAtBottom != _atBottom) {
       setState(() => _shownAtBottom = _atBottom);
@@ -1146,11 +1237,43 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   }
 
   bool _handleMetricsChanged(ScrollMetricsNotification notification) {
+    // Let go of as it laid out (see [_replyStart]).
+    if (_shownAtBottom != _atBottom) {
+      setState(() => _shownAtBottom = _atBottom);
+    }
     _syncEdgeFades();
     _scheduleStickyUpdate();
     _editorMoved.value++;
     _wantEarlier();
     return false;
+  }
+
+  /// Whether the list, following the reply to a message sent, stops with
+  /// the message at the top ([ReplyScroll.start]): until the user takes it
+  /// back to the end, or the turn ends.
+  bool _toReplyStart = false;
+
+  /// The offset that has the message of the turn under way at the top,
+  /// as its stuck copy would be, while the list stops there; null while it
+  /// does not, or the message is not laid out. Read during layout.
+  double? _replyStart() {
+    if (!_toReplyStart || ReplyScroll.current.value != ReplyScroll.start) {
+      return null;
+    }
+    final index = (_liveStart ?? 0) - 1;
+    if (index < 0) return null;
+    for (final item in _laidOutItems()) {
+      if (_indexOf(item) != index) continue;
+      final offset =
+          (item.parentData! as SliverMultiBoxAdaptorParentData).layoutOffset;
+      final sliver = item.parent;
+      if (offset == null || sliver is! RenderSliver) return null;
+      return sliver.constraints.precedingScrollExtent +
+          offset +
+          _gapBefore(index) -
+          _stickyInset;
+    }
+    return null;
   }
 
   void _setAnchored(bool value) {
@@ -1166,6 +1289,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     final startedStreaming = _feed.isStreaming && !_wasLive;
     final ended = _wasLive && !_feed.isStreaming;
     _wasLive = _feed.isStreaming;
+    if (moved > 0 || ended || startedStreaming) _steady.clear();
     // A turn the agent took up on its own (a background task's report)
     // leaves the user reading where they are, the turns they read open.
     final sent = _feed.isStreaming && !_feed.isUnprompted;
@@ -1195,7 +1319,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _feed.editing = null;
     }
     // Sending a message always brings the live turn into view.
-    if (startedStreaming && sent) _jumpToBottom();
+    if (startedStreaming && sent) {
+      _jumpToBottom();
+      _toReplyStart = true;
+    }
+    if (ended) _toReplyStart = false;
     _itemsCame();
     _scheduleStickyUpdate();
     setState(() {});
@@ -1491,6 +1619,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                       child: ChatColumn(
                         maxWidth: widget.maxContentWidth,
                         right: _columnRight,
+                        left: _columnLeft,
                         room: _room,
                         roomFrom: ChatMinimap.roomFrom,
                         child: UserMessageBubble(
@@ -1539,6 +1668,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                   child: ChatColumn(
                     maxWidth: widget.maxContentWidth,
                     right: _columnRight,
+                    left: _columnLeft,
                     room: _room,
                     roomFrom: ChatMinimap.roomFrom,
                     // Opening, the message's frame grows into the editor's;
@@ -1573,6 +1703,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                               child: child,
                             ),
                       child: _SizeReporter(
+                        // Its own for each message opened: the one before's
+                        // editor (closed by the same press) is still here;
+                        // were it as tall as this one, its height reported
+                        // already, the placeholder would keep the message's.
+                        key: ObjectKey(_editComposerKey),
                         onSize: (size) => _setEditorHeight(size.height),
                         // Closing, it is only to be seen.
                         child: IgnorePointer(
@@ -1723,6 +1858,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       ChatColumn(
         maxWidth: widget.maxContentWidth,
         right: _columnRight,
+        left: _columnLeft,
         room: _room,
         roomFrom: ChatMinimap.roomFrom,
         child: Padding(
@@ -1753,6 +1889,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     final made = (
       widget.maxContentWidth,
       _columnRight,
+      _columnLeft,
       _room,
       ChatMinimap.roomFrom,
       _insetOf(index),
@@ -1782,11 +1919,14 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
             SizedBox(key: _editorPlaceholderKey, height: _editorShownHeight),
       );
     }
-    final row = _folds.rowAt(index, item, _isFoldOpen);
+    final row = _rowAt(index);
     final folds = [?row.work, ?row.steps];
-    // Folded away.
+    final footer = _turnFooter(index) ?? _liveFooter(index);
+    // Folded away (what the turn under way has written showing still).
     if (folds.isEmpty && !row.item) {
-      return const SizedBox(width: double.infinity);
+      return footer == null
+          ? const SizedBox(width: double.infinity)
+          : SizedBox(width: double.infinity, child: footer);
     }
     Widget? shown;
     if (row.item) {
@@ -1820,7 +1960,6 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         ),
       };
     }
-    final footer = _turnFooter(index);
     return _ItemSelectionScope(
       index: index,
       delegate: _selectionDelegate,
@@ -1885,6 +2024,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   };
 
   void _jumpToBottom() {
+    _toReplyStart = false;
     _setAnchored(true);
     if (_scrollController.hasClients) {
       final position = _scrollController.position;
@@ -1901,7 +2041,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// Row [index] as the minimap samples it.
   ChatMinimapRow _minimapRow(int index) {
     final item = _shownAt(index);
-    final row = _folds.rowAt(index, item, _isFoldOpen);
+    final row = _rowAt(index);
     final hidden = row.work == null && row.steps == null && !row.item;
     return (
       item: item,
@@ -2004,6 +2144,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       width - 2 * gutter,
       maxWidth: widget.maxContentWidth,
       right: math.max(0.0, _inset - gutter),
+      left: math.max(0.0, _insetLeft - gutter),
       room: _roomAt(gutter),
       roomFrom: ChatMinimap.roomFrom,
     );
@@ -2036,6 +2177,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// [ChatColumnInset]).
   double _inset = 0;
 
+  /// As [_columnRight] and [_inset], at the left (the side panel at the
+  /// conversations' left).
+  double _columnLeft = 0;
+  double _insetLeft = 0;
+
   /// The room the column keeps either side of it for the minimap, within
   /// the margin of [gutter] (see [ChatColumn.room]).
   double _roomAt(double gutter) =>
@@ -2061,6 +2207,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   Widget build(BuildContext context) {
     _built = null;
     final inset = _inset = ChatColumnInset.of(context);
+    final insetLeft = _insetLeft = ChatColumnInset.leftOf(context);
     // A picture shown whole goes on to the others: ← and →.
     return ChatImages(
       all: _images,
@@ -2068,15 +2215,18 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         builder: (context, constraints) {
           final gutter = chatGutter(constraints.maxWidth);
           final right = math.max(0.0, inset - gutter);
+          final left = math.max(0.0, insetLeft - gutter);
           final minimapFits =
               widget.minimap &&
               ChatMinimap.besides(_columnIn(constraints.maxWidth)) != null;
           if (_built == null ||
               gutter != _gutter ||
               right != _columnRight ||
+              left != _columnLeft ||
               minimapFits != _minimapFits) {
             _gutter = gutter;
             _columnRight = right;
+            _columnLeft = left;
             _minimapFits = minimapFits;
             _built = _buildHistory(context);
           }
@@ -2102,9 +2252,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         // Runs before the list handles the signal (that is resolved after
         // every target has seen it).
         onPointerSignal: (event) {
-          if (event is! PointerScrollEvent) return;
-          _lastWheel = DateTime.now();
-          _scrollController.signalKind = event.kind;
+          if (event is PointerScrollEvent) _lastWheel = DateTime.now();
         },
         child: MouseRegion(
           onEnter: (_) => _setPointerInside(true),
@@ -2373,15 +2521,19 @@ class _JumpToBottomButton extends StatelessWidget {
 /// Keeps the viewport pinned to the end while [anchored], applied during
 /// layout so growing content or a shrinking viewport never shows a frame
 /// that is off the bottom.
-class _BottomAnchoredScrollController extends ScrollController {
+class _BottomAnchoredScrollController extends SmoothScrollController {
   bool anchored = true;
+
+  /// While [anchored]: the furthest it follows to, if anywhere; there it
+  /// lets go (see [ReplyScroll.start]).
+  double? Function()? stopAt;
 
   /// Once the list is laid out: how far to move it, laid out again then.
   double Function()? laidOut;
 
-  /// The device of the scroll signal being handled (set before the list
-  /// handles it), so only mouse wheels get sped up.
-  PointerDeviceKind? signalKind;
+  /// How far the list has been scrolled in all (a wheel, a drag, a fling):
+  /// not what layout corrects it by.
+  double scrolled = 0;
 
   @override
   ScrollPosition createScrollPosition(
@@ -2396,7 +2548,13 @@ class _BottomAnchoredScrollController extends ScrollController {
   );
 }
 
-class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
+/// A mouse wheel's notches glide it ([WheelGliding]), each frame by what
+/// the curve went since the last: the list moves itself as it lays out a
+/// row above for the first time, taller or shorter than it took it for
+/// (see [_ChatHistoryViewState._estimateExtent]), to keep what shows where
+/// it was; all the way up a conversation just opened. That stays moved.
+class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext
+    with WheelGliding {
   _BottomAnchoredScrollPosition({
     required this.controller,
     required super.physics,
@@ -2406,42 +2564,12 @@ class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
 
   final _BottomAnchoredScrollController controller;
 
-  /// A mouse wheel's notch moves the list as Chrome's smooth scrolling
-  /// does (its `ScrollOffsetAnimationCurve`): by the distance the system
-  /// gives, as Chrome takes it, not sped up; eased in
-  /// and out, in 200 ms for a notch down to 100 ms for a long way; the next
-  /// notch takes the list on from where it is, at the speed it has, to
-  /// where the last was going and further. A trackpad's is as it comes.
   @override
-  void pointerScroll(double delta) {
-    if (controller.signalKind != PointerDeviceKind.mouse || delta == 0) {
-      super.pointerScroll(delta);
-      return;
-    }
-    final going = activity;
-    final from = going is _WheelScrollActivity ? going.to : pixels;
-    final target = (from + delta).clamp(minScrollExtent, maxScrollExtent);
-    if (target == pixels) return;
-    final distance = target - pixels;
-    final duration = _WheelScrollActivity.durationFor(distance);
-    // The speed it has, as the new curve's at its start.
-    final slope = going is _WheelScrollActivity
-        ? going.velocity * duration.inMicroseconds / 1e6 / distance
-        : 0.0;
-    // The user's, as a jump would be (the history reads it to anchor).
-    updateUserScrollDirection(
-      delta > 0 ? ScrollDirection.reverse : ScrollDirection.forward,
-    );
-    beginActivity(
-      _WheelScrollActivity(
-        this,
-        vsync: context.vsync,
-        from: pixels,
-        to: target,
-        duration: duration,
-        slope: slope,
-      ),
-    );
+  double setPixels(double newPixels) {
+    final before = pixels;
+    final overscroll = super.setPixels(newPixels);
+    controller.scrolled += pixels - before;
+    return overscroll;
   }
 
   @override
@@ -2458,6 +2586,20 @@ class _BottomAnchoredScrollPosition extends ScrollPositionWithSingleContext {
       minScrollExtent,
       maxScrollExtent,
     );
+    if (controller.anchored && hasPixels && activity is! DragScrollActivity) {
+      if (controller.stopAt?.call() case final stop?
+          when stop < maxScrollExtent) {
+        // As far as it follows: let go there (or here, past it already).
+        controller.anchored = false;
+        final target = math
+            .max(stop, pixels)
+            .clamp(minScrollExtent, maxScrollExtent);
+        if (target != pixels) {
+          correctPixels(target);
+          return false;
+        }
+      }
+    }
     if (controller.anchored &&
         hasPixels &&
         pixels != maxScrollExtent &&
@@ -2518,11 +2660,14 @@ class _ItemSelectionScopeState extends State<_ItemSelectionScope> {
   }
 }
 
-class _ItemRegistrar implements SelectionRegistrar {
+class _ItemRegistrar implements SelectionRegistrar, SelectionEndHolder {
   _ItemRegistrar(this.delegate, this.index);
 
   final _ChatSelectionDelegate delegate;
   int index;
+
+  @override
+  bool get holdsSelectionEnd => delegate._holdsEnd(index);
 
   @override
   void add(Selectable selectable) =>
@@ -2559,6 +2704,7 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
     required this.resolve,
     required this.beyondBuilt,
     required this.plainTextOf,
+    required this.itemCount,
     required this.onDragEdge,
   });
 
@@ -2570,6 +2716,7 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   /// Where to put an edge for the unbuilt item at an index.
   final Offset? Function(int index) beyondBuilt;
   final String Function(int index) plainTextOf;
+  final int Function() itemCount;
   final void Function(Offset globalPosition) onDragEdge;
 
   /// A Shift+click is in progress: it moves the end and keeps the start.
@@ -2582,6 +2729,11 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   final Map<Selectable, _ItemRegistrar> _items = {};
   _SelectionEdge? _start;
   _SelectionEdge? _end;
+
+  /// The selection is the whole history (Select All), not only what was
+  /// built when it was made: its ends are the first item's start and the
+  /// last's end, whole when not built.
+  bool _all = false;
   SelectionEdgeUpdateEvent? _dragEnd;
 
   /// Selected text of the end items, for when they are no longer built.
@@ -2598,6 +2750,12 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   }
 
   int _itemOf(Selectable selectable) => _items[selectable]?.index ?? -1;
+
+  /// Whether item [index] holds an end of what is selected (not of a
+  /// click's collapsed selection).
+  bool _holdsEnd(int index) =>
+      (_all || value.status == SelectionStatus.uncollapsed) &&
+      (_start?.point.index == index || _end?.point.index == index);
 
   @override
   Comparator<Selectable> get compareOrder => (a, b) {
@@ -2672,14 +2830,32 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
         return SelectionResult.none;
       case ClearSelectionEvent():
         _start = _end = null;
+        _all = false;
         _dragEnd = null;
         _endText.clear();
         return super.dispatchSelectionEvent(event);
+      // All of it, not the built items alone: the ends in the model, which
+      // the items built later (scrolled to) are selected from.
+      case SelectAllSelectionEvent() when itemCount() > 0:
+        result = super.dispatchSelectionEvent(event);
+        const granularity = TextGranularity.character;
+        _start = (
+          point: (index: 0, local: Offset.zero),
+          granularity: granularity,
+        );
+        _end = (
+          point: (index: itemCount() - 1, local: const Offset(1e6, 1e6)),
+          granularity: granularity,
+        );
+        _all = true;
+        _dragEnd = null;
       case SelectionEdgeUpdateEvent(type: SelectionEventType.startEdgeUpdate):
+        _all = false;
         _start = _edgeAt(event.globalPosition, event.granularity);
         _refreshEdgeLocations();
         result = super.dispatchSelectionEvent(event);
       case SelectionEdgeUpdateEvent():
+        _all = false;
         _end = _edgeAt(event.globalPosition, event.granularity);
         _dragEnd = event;
         _refreshEdgeLocations();
@@ -2688,12 +2864,14 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
       case SelectAllSelectionEvent() ||
           SelectWordSelectionEvent() ||
           SelectParagraphSelectionEvent():
+        _all = false;
         result = super.dispatchSelectionEvent(event);
         _start = _edgeFromGeometry(end: false);
         _end = _edgeFromGeometry(end: true);
         _dragEnd = null;
       case GranularlyExtendSelectionEvent(:final isEnd) ||
           DirectionallyExtendSelectionEvent(:final isEnd):
+        _all = false;
         _refreshEdgeLocations();
         result = super.dispatchSelectionEvent(event);
         if (isEnd) {
@@ -2810,6 +2988,7 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
   /// here or in a scroll view's (Flutter's).
   @override
   void didChangeSelectables() {
+    _reconcile();
     if (_changePending) return;
     _changePending = true;
     scheduleMicrotask(() {
@@ -2826,6 +3005,29 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
 
   bool _changePending = false;
   bool _disposed = false;
+
+  /// Lists each piece of registered text once, and nothing else.
+  ///
+  /// Flutter merges the text added in a frame into the list in a loop that
+  /// also brings what it merges up to date with the selection; text that
+  /// goes meanwhile (a code block's scroll view, whose content changes as
+  /// it streams) is taken off what is to be merged, not off the list it is
+  /// merged into, and stays there: unregistered, disposed, still sent the
+  /// selection's events (which throw, and leave the selection half done:
+  /// a drag then selects nothing). Text added in that loop is dropped the
+  /// same way. Called after each merge.
+  void _reconcile() {
+    final listed = <Selectable>{};
+    for (final selectable in [...selectables]) {
+      if (!_items.containsKey(selectable) || !listed.add(selectable)) {
+        remove(selectable);
+      }
+    }
+    for (final selectable in _items.keys) {
+      // Waiting to be merged, or lost: add takes either once.
+      if (!listed.contains(selectable)) add(selectable);
+    }
+  }
 
   @override
   void dispose() {
@@ -2902,12 +3104,14 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate {
       buffer.write(text);
     }
 
-    write(_builtText(first) ?? _endText[first]);
+    // All of it: an end not built is its whole item.
+    String? whole(int index) => _all ? plainTextOf(index) : null;
+    write(_builtText(first) ?? _endText[first] ?? whole(first));
     if (last != first) {
       for (var index = first + 1; index < last; index++) {
         write(plainTextOf(index));
       }
-      write(_builtText(last) ?? _endText[last]);
+      write(_builtText(last) ?? _endText[last] ?? whole(last));
     }
     return buffer.isEmpty
         ? null
@@ -3005,7 +3209,7 @@ class _RenderStickyFollower extends RenderProxyBox {
 
 /// Reports [child]'s size after layout whenever it changes.
 class _SizeReporter extends SingleChildRenderObjectWidget {
-  const _SizeReporter({required this.onSize, required super.child});
+  const _SizeReporter({super.key, required this.onSize, required super.child});
 
   final ValueChanged<Size> onSize;
 
@@ -3347,152 +3551,5 @@ class _RenderBeforeLayout extends RenderProxyBox {
   void performLayout() {
     if (child case final child?) onLayout(child);
     super.performLayout();
-  }
-}
-
-/// A mouse wheel's scrolling from [from] to [to] in [duration], on Chrome's
-/// curve for it: ease-in-out (`cubic-bezier(0.42, 0, 0.58, 1)`), its first
-/// control point raised to start at [slope] (the speed the list had,
-/// relative to this move's), as Chrome's `EaseInOutWithInitialSlope`.
-class _WheelScrollActivity extends ScrollActivity {
-  _WheelScrollActivity(
-    super.delegate, {
-    required TickerProvider vsync,
-    required this.from,
-    required this.to,
-    required this.duration,
-    required double slope,
-  }) : _curve = _ChromeEaseInOut(slope.clamp(-1000.0, 1000.0)),
-       _shownAt = SchedulerBinding.instance.currentSystemFrameTimeStamp {
-    _ticker = vsync.createTicker(_tick)..start();
-  }
-
-  final double from;
-  final double to;
-  final Duration duration;
-  final _ChromeEaseInOut _curve;
-  late final Ticker _ticker;
-
-  /// The frame shown as it began, and when it is timed from: that frame,
-  /// or one before the first it moves the list in, if that was long ago.
-  /// As Chrome times it, so a notch taken up mid-way never holds the list
-  /// still for a frame.
-  final Duration _shownAt;
-  Duration? _startedAt;
-
-  static const _frame = Duration(microseconds: 16667);
-
-  /// How far through its time it is, 0 to 1.
-  double _x = 0;
-
-  /// How long Chrome takes to move [distance] for a wheel: from 12 frames
-  /// (at 60 a second) for 120 pixels or less, down to 6 for 480 or more
-  /// (its `kInverseDelta` duration).
-  static Duration durationFor(double distance) {
-    final frames = (14 - distance.abs() / 60).clamp(6.0, 12.0);
-    return Duration(microseconds: (frames / 60 * 1e6).round());
-  }
-
-  void _tick(Duration _) {
-    final now = SchedulerBinding.instance.currentSystemFrameTimeStamp;
-    final started = _startedAt ??= now - _frame > _shownAt
-        ? now - _frame
-        : _shownAt;
-    _x = ((now - started).inMicroseconds / duration.inMicroseconds).clamp(
-      0.0,
-      1.0,
-    );
-    final value = from + (to - from) * _curve.transform(_x);
-    if (delegate.setPixels(value).abs() > precisionErrorTolerance) {
-      delegate.goIdle();
-      return;
-    }
-    if (_x >= 1) delegate.goBallistic(0);
-  }
-
-  @override
-  void dispatchOverscrollNotification(
-    ScrollMetrics metrics,
-    BuildContext context,
-    double overscroll,
-  ) {
-    OverscrollNotification(
-      metrics: metrics,
-      context: context,
-      overscroll: overscroll,
-      velocity: velocity,
-    ).dispatch(context);
-  }
-
-  @override
-  bool get shouldIgnorePointer => false;
-
-  @override
-  bool get isScrolling => true;
-
-  /// Pixels a second, now.
-  @override
-  double get velocity {
-    final seconds = duration.inMicroseconds / 1e6;
-    if (seconds == 0 || _x >= 1) return 0;
-    return (to - from) * _curve.slopeAt(_x) / seconds;
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    super.dispose();
-  }
-}
-
-/// `cubic-bezier(0.42, y1, 0.58, 1)`, y1 = 0.42 × [slope]: ease-in-out
-/// starting at [slope], with its slope (dy/dx) anywhere.
-class _ChromeEaseInOut {
-  _ChromeEaseInOut(double slope) : _y1 = _x1 * slope;
-
-  static const _x1 = 0.42;
-  static const _x2 = 0.58;
-  final double _y1;
-  static const _y2 = 1.0;
-
-  static double _bezier(double a, double b, double t) =>
-      3 * (1 - t) * (1 - t) * t * a + 3 * (1 - t) * t * t * b + t * t * t;
-
-  static double _derivative(double a, double b, double t) =>
-      3 * (1 - t) * (1 - t) * a +
-      6 * (1 - t) * t * (b - a) +
-      3 * t * t * (1 - b);
-
-  /// The curve's parameter where its x is [x].
-  static double _solve(double x) {
-    var low = 0.0;
-    var high = 1.0;
-    var t = x;
-    // Newton's, kept between the bounds bisection narrows.
-    for (var i = 0; i < 12; i++) {
-      final error = _bezier(_x1, _x2, t) - x;
-      if (error.abs() < 1e-7) return t;
-      if (error > 0) {
-        high = t;
-      } else {
-        low = t;
-      }
-      final slope = _derivative(_x1, _x2, t);
-      final next = slope.abs() < 1e-6 ? (low + high) / 2 : t - error / slope;
-      t = next <= low || next >= high ? (low + high) / 2 : next;
-    }
-    return t;
-  }
-
-  double transform(double x) {
-    if (x <= 0) return 0;
-    if (x >= 1) return 1;
-    return _bezier(_y1, _y2, _solve(x));
-  }
-
-  double slopeAt(double x) {
-    final t = _solve(x.clamp(0.0, 1.0));
-    final dx = _derivative(_x1, _x2, t);
-    return dx == 0 ? 0 : _derivative(_y1, _y2, t) / dx;
   }
 }

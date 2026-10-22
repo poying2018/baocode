@@ -48,8 +48,14 @@ class Transcript {
 
   String? activeTurn;
 
+  /// When the turn under way began, as it was told.
+  DateTime? turnStartedAt;
+
   /// What the agent is busy with out of sight, while a turn runs.
   KernelActivity? activity;
+
+  /// What the model has written in the turn under way, and how fast.
+  TurnOutput? output;
   final Set<String> _endedTurns = {};
 
   /// Sequence of the last turn end; 0 before any.
@@ -121,7 +127,9 @@ class Transcript {
       case TurnStarted(:final turnId, :final unprompted):
         if (_endedTurns.contains(turnId)) return false;
         activeTurn = turnId;
+        turnStartedAt = DateTime.now();
         _activeUnprompted = unprompted;
+        output = null;
       case TurnEnded(
         :final turnId,
         :final interrupted,
@@ -130,8 +138,12 @@ class Transcript {
       ):
         if (!_endedTurns.add(turnId)) return false;
         lastTurnUnprompted = activeTurn == turnId && _activeUnprompted;
-        if (activeTurn == turnId) activeTurn = null;
+        if (activeTurn == turnId) {
+          activeTurn = null;
+          turnStartedAt = null;
+        }
         activity = null;
+        output = null;
         lastTurnEndSeq = event.seq;
         lastTurnInterrupted = interrupted;
         _pending.clear();
@@ -168,6 +180,8 @@ class Transcript {
         _truncate(at);
       case ActivityReported(activity: final reported):
         activity = reported;
+      case OutputReported(output: final reported):
+        output = reported;
       case UsageReported(usage: final reported):
         usage = reported;
       case TasksReported(tasks: final reported):

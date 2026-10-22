@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../base/smooth_scroll.dart';
 import '../../chat/chat_width.dart';
 import '../../chat/widgets/scroll_edge_fade.dart';
 import '../../ide/ide_switch.dart';
@@ -161,14 +162,18 @@ class SettingsColumn extends StatelessWidget {
         // lines of a description.
         return ScrollEdgeFade(
           fadeLength: 56,
-          child: ListView(
-            // Under the window's draggable strip already: the title near the
-            // nav's back button.
-            padding: EdgeInsets.fromLTRB(side, 16, side, 48),
-            // A section expanded or collapsed fades as it now ends.
-            children: [
-              for (final child in children) ScrollEdgeFadeContent(child: child),
-            ],
+          child: SmoothScrolling(
+            builder: (context, controller) => ListView(
+              controller: controller,
+              // Under the window's draggable strip already: the title near
+              // the nav's back button.
+              padding: EdgeInsets.fromLTRB(side, 16, side, 48),
+              // A section expanded or collapsed fades as it now ends.
+              children: [
+                for (final child in children)
+                  ScrollEdgeFadeContent(child: child),
+              ],
+            ),
           ),
         );
       },

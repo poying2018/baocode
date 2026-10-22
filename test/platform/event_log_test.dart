@@ -23,10 +23,11 @@ void main() {
   );
 
   test('a run starts with the version and the system, each event timed '
-      'under its category', () {
+      'under its category', () async {
     final events = log()
       ..record('window', '-> showStash')
       ..record('theme', 'Dark+ (dark)');
+    await events.flush();
 
     final lines = File(events.path).readAsLinesSync();
     expect(
@@ -42,9 +43,11 @@ void main() {
     ]);
   });
 
-  test('a run goes on after the last one in the same file', () {
-    log().record('app', 'first run');
-    log().record('app', 'second run');
+  test('a run goes on after the last one in the same file', () async {
+    final first = log()..record('app', 'first run');
+    await first.flush();
+    final second = log()..record('app', 'second run');
+    await second.flush();
 
     final text = File(log().path).readAsStringSync();
     expect(RegExp('--- BaoCode').allMatches(text), hasLength(2));
@@ -52,11 +55,12 @@ void main() {
   });
 
   test('past its size the file moves aside and a new one keeps the latest',
-      () {
+      () async {
     final events = log(maxBytes: 300);
     for (var i = 0; i < 12; i++) {
       events.record('views', 'event number $i');
     }
+    await events.flush();
 
     final current = File(events.path).readAsStringSync();
     final previous = File(events.previousPath).readAsStringSync();
@@ -71,13 +75,14 @@ void main() {
     ]);
   });
 
-  test('an error written to errors.log shows on the timeline too', () {
+  test('an error written to errors.log shows on the timeline too', () async {
     final events = EventLog.current = log();
     ErrorLog('${folder.path}/logs').record(
       StateError('no view\nmore detail'),
       null,
       source: 'uncaught',
     );
+    await events.flush();
 
     expect(
       File(events.path).readAsStringSync(),

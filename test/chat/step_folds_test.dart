@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/step_folds.dart';
@@ -197,6 +199,40 @@ void main() {
       final done = [...live]..[3] = _grep;
       final settled = _fold(done, live: true);
       expect(settled.rowAt(3, done[3], (_) => false).item, isFalse);
+    });
+
+    test('pictures made break a run, and show out of a closed turn', () {
+      final picture = ToolCallItem(
+        kind: ToolKind.image,
+        target: 'a fox',
+        images: [ImageAttachment(bytes: Uint8List(4), mediaType: 'image/png')],
+      );
+      final turn = <ChatItem>[
+        _prompt(),
+        _read,
+        _grep,
+        picture,
+        _read,
+        _grep,
+        _answer,
+      ];
+      expect(_folds(turn), ['work 1-6', 'steps 1-3', 'steps 4-6']);
+      final folds = _fold(turn);
+      bool shown(int i) => folds.rowAt(i, turn[i], (_) => false).item;
+      expect(
+        [for (var i = 1; i < 7; i++) shown(i)],
+        [false, false, true, false, false, true],
+      );
+      // Not while it is made, nor when it failed.
+      for (final status in [ToolStatus.running, ToolStatus.failed]) {
+        final other = [...turn]
+          ..[3] = ToolCallItem(
+            kind: ToolKind.image,
+            target: 'a fox',
+            status: status,
+          );
+        expect(_fold(other).rowAt(3, other[3], (_) => false).item, isFalse);
+      }
     });
   });
 

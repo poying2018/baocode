@@ -109,10 +109,11 @@ class SidePanelTabs {
 }
 
 /// The agent window's side panel, at the right of the conversations as
-/// the secondary side bar is in VS Code: the project's files, the changes
-/// of the agent focused and its background commands. Shown or not, its
-/// width, its lists' width and how changes are listed are the window's,
-/// kept between runs ([toJson]); the tabs open are each conversation's own.
+/// the secondary side bar is in VS Code (or at their left, [atLeft]): the
+/// project's files, the changes of the agent focused and its background
+/// commands. Shown or not, its side, its width, its lists' width and how
+/// changes are listed are the window's, kept between runs ([toJson]); the
+/// tabs open are each conversation's own.
 class AgentSidePanel extends ChangeNotifier {
   AgentSidePanel({Map<String, Object?>? state, this.onSave, this.settings}) {
     _read(state);
@@ -139,6 +140,7 @@ class AgentSidePanel extends ChangeNotifier {
     }
     if (state?['listShown'] case final bool shown) _listShown = shown;
     if (state?['changesAsTree'] case final bool tree) _changesAsTree = tree;
+    if (state?['atLeft'] case final bool left) _atLeft = left;
   }
 
   /// Told when what [toJson] gives changed, to keep it.
@@ -197,6 +199,19 @@ class AgentSidePanel extends ChangeNotifier {
   /// View as Tree), or as a list.
   bool get changesAsTree => _changesAsTree;
   bool _changesAsTree = true;
+
+  /// Whether it is at the conversations' left, not their right (Move Side
+  /// Panel Left / Right): it keeps its width and pages there.
+  bool get atLeft => _atLeft;
+  bool _atLeft = false;
+
+  set atLeft(bool left) {
+    if (left == _atLeft) return;
+    _atLeft = left;
+    _changed = true;
+    notifyListeners();
+    onSave?.call();
+  }
 
   final Expando<SidePanelTabs> _tabs = Expando();
 
@@ -539,6 +554,7 @@ class AgentSidePanel extends ChangeNotifier {
     'listWidth': _listWidth,
     'listShown': _listShown,
     'changesAsTree': _changesAsTree,
+    if (_atLeft) 'atLeft': true,
   };
 
   bool _disposed = false;

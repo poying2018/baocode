@@ -14,6 +14,7 @@ import 'package:bao_editor/monaco/flutter/editor_scrollbar.dart';
 import 'package:bao_editor/monaco/flutter/editor_surface.dart';
 import 'package:bao_editor/monaco/flutter/editor_surface_controller.dart';
 import 'package:bao_editor/monaco/flutter/editor_view_painters.dart';
+import 'package:bao_editor/monaco/flutter/wheel_glide.dart';
 import 'package:bao_editor/monaco/vs/editor/common/languages/language_configuration.dart';
 import 'package:bao_editor/monaco/vs/editor/contrib/folding/browser/folding_ranges.dart'
     show FoldRange;
@@ -582,6 +583,36 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('revealRange leaves a visible range be, and centers it when '
+      'asked to', (tester) async {
+    final controller = _controller(
+      List.generate(200, (i) => 'line $i').join('\n'),
+    );
+    controller.select(0, 0);
+    await _mount(tester, controller);
+    final view = tester.state(find.byType(EditorSurface)) as EditorSurfaceView;
+    final area = view.textArea!;
+    final lineHeight = view.lineHeight;
+    // The second line from the bottom of the viewport.
+    final line = (area.height / lineHeight).floor() - 2;
+    final target = controller.document.snapshot.lineStarts[line];
+    final before = view.caretRectAt(target)!;
+    expect(before.bottom, lessThanOrEqualTo(area.bottom));
+    expect(before.bottom, greaterThan(area.bottom - 3 * lineHeight));
+
+    view.revealRange(target, target + 1);
+    await tester.pump();
+    expect(view.caretRectAt(target)!.top, before.top);
+    expect(_gutter(tester).scrollTop, 0);
+
+    view.revealRange(target, target + 1, center: true);
+    await tester.pump();
+    expect(
+      view.caretRectAt(target)!.top,
+      closeTo(area.top + (area.height - lineHeight) / 2, 0.5),
+    );
+  });
+
   testWidgets('wheel scrolls, shift+wheel scrolls horizontally, beyond end', (
     tester,
   ) async {
@@ -595,13 +626,15 @@ void main() {
     await tester.sendEventToBinding(
       PointerScrollEvent(position: center, scrollDelta: const Offset(0, 1e6)),
     );
-    await tester.pump();
-    final gutter = _gutter(tester);
+    // A notch glides the view: under way a frame on, a third of the way.
+    await tester.pump(const Duration(microseconds: 16667));
+    var gutter = _gutter(tester);
+    final end = gutter.layout.contentHeight - gutter.layout.lineHeight;
+    expect(gutter.scrollTop / end, inInclusiveRange(0.3, 0.4));
+    await tester.pump(WheelGlide.duration);
+    gutter = _gutter(tester);
     // scrollBeyondLastLine: the last line can reach the top of the viewport.
-    expect(
-      gutter.scrollTop,
-      closeTo(gutter.layout.contentHeight - gutter.layout.lineHeight, 0.01),
-    );
+    expect(gutter.scrollTop, closeTo(end, 0.01));
     expect(gutter.layout.visibleLineNumbers.toList(), [41]);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -610,9 +643,155 @@ void main() {
     );
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump();
+    await tester.pump(WheelGlide.duration);
     expect(_painter<EditorTextPainter>(tester).scrollLeft, 120);
     expect(_painter<EditorScrollbarPainter>(tester).horizontal.needed, isTrue);
+
+    // A trackpad's at once.
+    final trackpad = await tester.createGesture(
+      kind: PointerDeviceKind.trackpad,
+    );
+    await trackpad.panZoomStart(center);
+    await trackpad.panZoomUpdate(center, pan: const Offset(0, 40));
+    await tester.pump();
+    expect(_gutter(tester).scrollTop, closeTo(end - 40, 0.01));
+    await trackpad.panZoomEnd();
   });
+
+  testWidgets('a wheel notch taken up mid-way goes on from where the view '
+      'is, adding to what the last had left; a trackpad stops it', (
+    tester,
+  ) async {
+    final controller = _controller(
+      List.generate(200, (i) => 'line $i').join('\n'),
+    );
+    controller.select(0, 0);
+    await _mount(tester, controller);
+    final center = tester.getCenter(find.byType(EditorSurface));
+    const frame = Duration(microseconds: 16667);
+    Future<void> wheel(double dy) => tester.sendEventToBinding(
+      PointerScrollEvent(position: center, scrollDelta: Offset(0, dy)),
+    );
+
+    await wheel(100);
+    await tester.pump(frame);
+    await tester.pump(frame);
+    final mid = _gutter(tester).scrollTop;
+    expect(mid, inExclusiveRange(0, 100));
+    await wheel(100);
+    var last = mid;
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(frame);
+      final now = _gutter(tester).scrollTop;
+      // Never still, nor back.
+      if (now < 200 - 0.01) expect(now, greaterThan(last), reason: 'frame $i');
+      last = now;
+    }
+    expect(last, closeTo(200, 0.01));
+
+    // Stopped by anything else that scrolls it.
+    await wheel(400);
+    await tester.pump(frame);
+    final stopped = _gutter(tester).scrollTop;
+    expect(stopped, inExclusiveRange(200, 600));
+    final trackpad = await tester.createGesture(
+      kind: PointerDeviceKind.trackpad,
+    );
+    await trackpad.panZoomStart(center);
+    await trackpad.panZoomUpdate(center, pan: const Offset(0, 10));
+    await tester.pump(frame);
+    await tester.pump(WheelGlide.duration);
+    expect(_gutter(tester).scrollTop, closeTo(stopped - 10, 0.01));
+    await trackpad.panZoomEnd();
+  });
+
+  testWidgets(
+    'a trackpad flick goes on as the fingers lift, as a list does, until '
+    'the fingers come down again or it reaches an end',
+    (tester) async {
+      final controller = _controller(
+        List.generate(400, (i) => 'line $i').join('\n'),
+      );
+      controller.select(0, 0);
+      await _mount(tester, controller);
+      final center = tester.getCenter(find.byType(EditorSurface));
+      const frame = Duration(microseconds: 16667);
+      var pointerId = 30;
+      var time = Duration.zero;
+
+      /// Fingers moving up by [step] in each of [steps] events 8 ms apart.
+      Future<TestPointer> flick(double step, {int steps = 6}) async {
+        final pointer = TestPointer(pointerId++, PointerDeviceKind.trackpad);
+        await tester.sendEventToBinding(
+          pointer.panZoomStart(center, timeStamp: time),
+        );
+        for (var i = 1; i <= steps; i++) {
+          time += const Duration(milliseconds: 8);
+          await tester.sendEventToBinding(
+            pointer.panZoomUpdate(
+              center,
+              pan: Offset(0, -step * i),
+              timeStamp: time,
+            ),
+          );
+        }
+        await tester.pump();
+        return pointer;
+      }
+
+      Future<void> lift(TestPointer pointer) async {
+        time += const Duration(milliseconds: 8);
+        await tester.sendEventToBinding(pointer.panZoomEnd(timeStamp: time));
+      }
+
+      var pointer = await flick(30);
+      expect(_gutter(tester).scrollTop, closeTo(180, 0.01));
+      await lift(pointer);
+      var last = 180.0;
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(frame);
+        final now = _gutter(tester).scrollTop;
+        if (i > 0) expect(now, greaterThan(last), reason: 'frame $i');
+        last = now;
+      }
+
+      // Fingers down: it stops where it is.
+      pointer = TestPointer(pointerId++, PointerDeviceKind.trackpad);
+      await tester.sendEventToBinding(
+        pointer.panZoomStart(center, timeStamp: time),
+      );
+      await tester.pump(frame);
+      final held = _gutter(tester).scrollTop;
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(_gutter(tester).scrollTop, held);
+      await lift(pointer);
+
+      // A short, slow move does not fling.
+      pointer = await flick(2);
+      final placed = _gutter(tester).scrollTop;
+      await lift(pointer);
+      await tester.pump(frame);
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(_gutter(tester).scrollTop, placed);
+
+      // Hard flicks reach the end and stop there, not past it and back.
+      final layout = _gutter(tester).layout;
+      final end = layout.contentHeight - layout.lineHeight;
+      for (var n = 0; n < 6; n++) {
+        await lift(await flick(120));
+        for (var i = 0; i < 30; i++) {
+          await tester.pump(frame);
+          expect(_gutter(tester).scrollTop, lessThanOrEqualTo(end + 0.01));
+        }
+      }
+      await tester.pumpAndSettle();
+      expect(_gutter(tester).scrollTop, closeTo(end, 0.01));
+    },
+    variant: const TargetPlatformVariant({
+      TargetPlatform.macOS,
+      TargetPlatform.windows,
+    }),
+  );
 
   testWidgets('drag selection auto-scrolls while outside the viewport', (
     tester,

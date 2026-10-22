@@ -7,6 +7,7 @@
 <meta name="description" content="What changed in each version of BaoCode.">
 <link rel="icon" href="/icon.png">
 <link rel="stylesheet" href="/style.css">
+<script src="/head.js"></script>
 <link rel="alternate" hreflang="en" href="https://baocode.dev/changelog">
 <link rel="alternate" hreflang="zh" href="https://baocode.dev/zh/changelog">
 </head>
@@ -28,6 +29,174 @@
 <main class="page changelog">
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
+
+  <section class="release" id="v1.5.1">
+    <h2 class="plain"><a href="#v1.5.1">1.5.1</a></h2>
+    <p>Linux, and the SSH that does not need a terminal</p>
+    <p>This release brings the upstream's 1.4 and 1.5 to this repository's own line of
+    releases: the app now runs on Linux, and a server to work on is set up in the
+    app rather than in a terminal first. The updates keep coming from this
+    repository's releases, as they have since 1.2.0.</p>
+    <p>New</p>
+    <ul>
+    <li>Linux: a package for Ubuntu and other Debian-based distributions, x64 and arm64, that keeps itself up to date as the Mac and Windows apps do. It opens folders and files with the system's own dialogs, has the system's right-click menus, and pastes text, files and pictures.</li>
+    <li>Linux updates itself: a new version is downloaded and checked as on the other systems, then installed once you enter your password, and BaoCode opens again.</li>
+    <li>Add SSH Server: the address, the port, the user and how to sign in (a password, a private key, or Automatic, as ssh does in a terminal) are asked in the app, and a pasted user@host:port is split up for you. The keys in ~/.ssh are offered, and a password is kept in the system keychain.</li>
+    <li>Jump hosts: a saved server can be picked to connect through, each asking for its own password.</li>
+    <li>A server met for the first time has its key remembered by itself. One whose key changed is told as such, and its old key can be removed to connect again.</li>
+    <li>Settings -&gt; SSH Servers: the servers added in the app and the hosts the sidebar has used, to edit, connect, disconnect or remove.</li>
+    <li>A core for each server: Automatic (the server's Claude Code CLI if it has one, else the built-in core), the built-in core, or the Claude Code CLI (installed there if missing). Remote hosts no longer follow this machine's core setting.</li>
+    <li>Setting up a model: with no model to run on yet, a welcome explains what an upstream is and adds one in a click, and the conversation starts by itself as soon as a model is there.</li>
+    <li>Agents use the user's own Chrome, through BaoCode's extension: the pages open, click and type, with the sign-ins already there, and every step of it in view in the side panel.</li>
+    <li>DevTools' debugging for the agents: sources and breakpoints, elements, requests, site data and memory.</li>
+    <li>Pictures show in the conversation: a tool's, and a message's own.</li>
+    <li>Checkpoints keep only the files the agents edited, not snapshots of the whole project, and an agent's changes can be reviewed part by part beside the chat.</li>
+    <li>A long conversation is read from its end, the earlier turns as the list is scrolled to its top; a phone may follow it so too.</li>
+    <li>The Windows installer carries a recent OpenSSH, used where the system's is too old or missing.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>Typing in the IDE is smoother: an edit goes through only the lines it changed, the input method is given only the lines around the caret, and typing no longer redraws the whole IDE.</li>
+    <li>Switching chat tabs in the IDE is faster: the chats seen last are kept, shown again at once where you left them.</li>
+    <li>Changes in the side panel open in the IDE's diff editor: the deleted code in the text where it is narrow, side by side once wide enough.</li>
+    <li>The live time, speed and tokens under a reply while the agent works are one switch now (Settings -&gt; General).</li>
+    <li>Through OpenCode's gateway, the requests of a conversation hit its prompt cache: faster, and cheaper.</li>
+    <li>Long replies and thoughts let go of what is far out of view; the editors share one tokenizer, and Skia's and the image cache are kept small.</li>
+    <li>The model menu opens scrolled to the model in use, and an upstream's models are listed by name in its settings page.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A picture zoomed in the preview grows over the window, not clipped to the box it first fitted to.</li>
+    <li>Zoomed in, the window's title bar buttons are clickable to their right edge: their size rides the interface's zoom as their corner does, so a button's right no longer drags the window.</li>
+    <li>On Windows, a language server installs with npm.cmd's own script (node running npm-cli.js), and only PATHEXT's extensions answer for a bare name on PATH: the Bash script nvm-windows keeps beside npm.cmd is no longer started as a Win32 program, which said it was not a valid Win32 application. A server started by a .cmd is killed with its tree, so its node does not go on serving under the cmd.exe that was killed.</li>
+    <li>Another upstream picked while a turn runs takes the next message, not the process on the one before; a message sent while the agent works waits for the turn running, or joins it when set to.</li>
+    <li>A turn stopped at the usage limit goes on once it resets, and an agent set to go on after the reset does.</li>
+    <li>Generated images, screenshots and pictures read stay in a conversation switched away from and back to.</li>
+    <li>Go to Definition (F12) centers its target, even one already on screen.</li>
+    <li>A mouse wheel scrolls the conversation as Chrome does, and moves it smoothly, each notch eased over a few frames.</li>
+    <li>A computer waking from sleep is no hang: the watchdog's clock leaves the sleep out.</li>
+    <li>The main window opens where it was left, as big, maximized if it was.</li>
+    <li>A NO_PROXY network is passed on to Claude Code too, and an address in one (100.64.0.0/10, Tailscale's) goes around the proxy, as curl reads it.</li>
+    <li>Queued messages are taken up one at a time, and one sent now goes alone.</li>
+    <li>The earlier turns come in before what is shown, which stays where it is, the spinner on till they are read.</li>
+    <li>Back in the window after an Alt+Tab, its first key types and its frames go on, no click needed.</li>
+    <li>A stash moved in place (an agent's write on Windows) shows without a restart, and a symbolic link is listed in the explorer as what it leads to.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.5.0">
+    <h2 class="plain"><a href="#v1.5.0">1.5.0</a></h2>
+    <p>Easy SSH</p>
+    <p>Connecting to a server no longer starts with setting up ssh in a terminal: type its address in BaoCode and connect, with the password, key and jump host in one form, and no terminal to accept the server's key the first time. Settings has a new SSH Servers page, where all your servers are kept, each with the core it runs.</p>
+    <p>New</p>
+    <ul>
+    <li>Add an SSH server: Add SSH Server… in the list of remote projects asks for the host, port and user, and how to sign in: a password, a private key, or Automatic (as ssh does in a terminal). A pasted user@host:port is split up, the keys in ~/.ssh are offered, and a password is kept in the system keychain. Saved, it connects in one click; a failed connection's page and the sidebar edit it too.</li>
+    <li>Jump hosts: pick a saved server to connect through, each asking for its own password.</li>
+    <li>A server connected to for the first time has its key remembered by itself. One whose key changed is told as such, and once you know it was reinstalled, its old key can be removed to connect again.</li>
+    <li>Settings → SSH Servers: the servers added in the app and the hosts the sidebar has used, to edit, connect, disconnect or remove; the hosts of ~/.ssh/config are listed apart, their file a click away.</li>
+    <li>A core for each server: Automatic (the server's Claude Code CLI if it has one, else the built-in core), the built-in core, or the Claude Code CLI (installed there if missing). Remote hosts no longer follow this machine's core setting.</li>
+    <li>Passwords on Windows 10: the installer carries a recent OpenSSH, used where the system's is too old or missing.</li>
+    <li>Settings → About: the version, the site, the changelog and the issues, and a way to star BaoCode on GitHub. Accounts is now Git Accounts.</li>
+    <li>The browser extension works on Linux, in Chrome, Chromium, Edge, Brave and Vivaldi.</li>
+    <li>A file another tool asks BaoCode to open as file:line:column (a front-end inspector's Open in Editor, say) opens at that line and column.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>Typing in the IDE is smoother: an edit goes through only the lines it changed, the input method is given only the lines around the caret, and typing no longer redraws the whole IDE.</li>
+    <li>Switching chat tabs in the IDE is faster: the chats seen last are kept, shown again at once where you left them.</li>
+    <li>Changes in the side panel open in the IDE's diff editor: the deleted code in the text where it is narrow, side by side once wide enough, with the overview of the changes at the right, and long files no longer slow it down.</li>
+    <li>The live time, speed and tokens under a reply while the agent works are one switch now (Settings → General).</li>
+    <li>Through OpenCode's gateway, the requests of a conversation hit its prompt cache: faster, and cheaper.</li>
+    <li>The model menu opens scrolled to the model in use.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A picture zoomed in the preview is no longer clipped to its first size.</li>
+    <li>Generated images, screenshots and pictures read stay in a conversation switched away from and back to.</li>
+    <li>After switching to another provider's model mid-conversation, messages go to the model picked; with the model in use removed, the one the picker shows is used rather than &quot;Not logged in&quot;.</li>
+    <li>Go to Definition (F12) centers its target, even one already on screen.</li>
+    <li>Windows: zoomed in, the title bar's buttons are clickable all the way to their right edge; installing language servers no longer fails with &quot;not a valid Win32 application&quot;.</li>
+    <li>The file manager is called by each system's own name (Finder, File Explorer…).</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.4.0">
+    <h2 class="plain"><a href="#v1.4.0">1.4.0</a></h2>
+    <p>Hello, Linux</p>
+    <p>BaoCode runs on Linux now: a package for Ubuntu and other Debian-based distributions, x64 and arm64, that keeps itself up to date like the Mac and Windows apps. And setting up a model the first time is a welcome rather than an error.</p>
+    <p>New</p>
+    <ul>
+    <li>Linux: download the .deb for your processor from baocode.dev/download (Ubuntu 22.04 or later, and other Debian-based distributions). It opens folders and files with the system's dialogs, has the system's right-click menus, and pastes text, files and pictures. Thanks to qyh1221, whose port this is.</li>
+    <li>Linux updates itself: a new version is downloaded and checked as on the other systems, then installed once you enter your password, and BaoCode opens again. A copy run from the tarball is pointed to the download page instead.</li>
+    <li>Setting up a model: with no model to run on yet (BaoCode's own core, before any upstream is added), a welcome explains what an upstream is and adds one in a click, opening its page in Settings → Models. The conversation starts by itself as soon as a model is there, with no retry. Until then, Set Up a Model sits in the model picker's place under the input, and in the command palette.</li>
+    <li>From your phone, Start on a plan the agent put to you starts it, as the desktop's button does.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>An upstream's models are listed by name, in its settings page, the fetched list and the model picker.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.3.1">
+    <h2 class="plain"><a href="#v1.3.1">1.3.1</a></h2>
+    <p>Remote projects work again</p>
+    <p>The app used to download a remote host's server from upstream's dl.baocode.dev, which never had a build of ours: a server's version is a hash of what it carries, so only the machine that made it has that one. Every SSH connection asked for a file that was not there.</p>
+    <ul>
+    <li>The builds are now published in this repository's releases, named by their version, so an app built months ago still downloads the one it was built with. The first connection to a host downloads that platform's server, checks its size and SHA-256 against servers.json, and pushes it over ssh as before.</li>
+    <li>The installer carries the build made from these sources (Linux x64 and arm64): nothing to compile by hand.</li>
+    <li>Coming straight from 1.3.0+15, this also includes 1.3.0+16: BaoCode's own core reminds the model when its to-do list has gone unwritten, so the panel no longer sits still for half an hour, and such notes to the model no longer show as a tool's output.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.3.0">
+    <h2 class="plain"><a href="#v1.3.0">1.3.0</a></h2>
+    <p>Good Friends with Chrome</p>
+    <p>This release is about the browser: agents can use your own Chrome now, opening pages, clicking, typing and debugging with your sign-ins, every step of it in view in the side panel. Agents can also make pictures with your upstreams' image models, and pictures show right in the chat. BaoCode has a core of its own; an agent's changes can be reviewed part by part beside the chat; long conversations open faster, and the mouse wheel keeps up with your hand. And a batch of problems is fixed.</p>
+    <p>New</p>
+    <ul>
+    <li>The browser: add the BaoCode extension (from the Chrome Web Store, or as a zip loaded unpacked) and agents can open pages, read them, click and type in your own Chrome, Edge, Brave or Arc, signed in as you are. They touch only the tabs you share with them (the BaoCode button in the browser's toolbar shares the tab you're on). The side panel shows the page they're working in as it happens, and you can work in it too. Turn it on or off and install it in Settings → Browser, on macOS and Windows.</li>
+    <li>Debugging in the browser: agents read the console and network requests, set breakpoints and step through code, see variables by their source-mapped names, find a page's React and Vue components and event handlers, look into performance, memory and unused CSS, block, mock and rewrite requests, and run a tab as on a phone or a slow network.</li>
+    <li>A debugging history of the browser: the pages, requests and console errors and warnings of the tabs you share are kept as they happen, with no recording to start. Say &quot;saving just failed&quot; and the agent looks it up itself. Detailed history keeps request and response bodies too, and your clicks and typing (never passwords). It stays on this computer; Settings shows how much room it takes and clears it, and you're told once it passes 1 GB.</li>
+    <li>Show the agent how: an agent can ask you to do something once in the browser, keep each step as a file in the project, and do it again in your browser later.</li>
+    <li>Making pictures: agents generate images with your upstreams' image models (the Images API, chat interfaces such as OpenRouter's and Gemini's, Codex's gpt-image-2). Pick the default image model in Settings → Models, or Ask each time to choose in the chat; image models stay out of the chat's model picker.</li>
+    <li>Pictures in the chat: what a tool returns as a picture (an image file read, a browser screenshot, an MCP tool's image) and local images in a message show in the conversation. Click one to see it whole, and ← → go through every picture in the chat; right-click to open it in the side panel or the IDE, copy its path or show it in Finder. Image files open in the side panel too.</li>
+    <li>The built-in core: BaoCode's own Claude Code core, with CLAUDE.md, skills, subagents, commands, hooks, plugins and MCP servers, on remote hosts too. Switch in Settings → General → Claude Code → Core: the CLI where Claude Code is installed, the built-in core otherwise. The built-in core uses only the upstreams added in Settings → Models; pick the CLI for a Claude subscription.</li>
+    <li>Reviewing changes beside the chat: the side panel's editor shows an agent's pending changes in the code, as the IDE does, each part to undo or keep on its own. The bar above goes to the previous and next change and keeps or undoes a file, or everything at once. The side panel's editor finds and replaces too.</li>
+    <li>Live usage: while an agent works, the time so far, the writing speed and the tokens roll by under the status line; a finished turn shows its time, speed, cost and tokens, still there when the session is opened again.</li>
+    <li>The status line's musings are now mostly about the step just done, its command or file by name.</li>
+    <li>Polish in the composer: the button beside the context ring has the model tidy your words, keeping tags, images, code and paths as they are, and it can be undone. Turn it off in Settings → General if you don't need it.</li>
+    <li>The side panel can move to the conversation's left: the button in its bar, or Toggle Side Panel Position in the command palette and the View menu.</li>
+    <li>Settings → Appearance → As a Reply Comes: Stay at its start stops following once your message reaches the top, so you read the reply from its beginning.</li>
+    <li>Settings → General turns off Suggest Next Prompt, saving the extra request each turn; Settings → Appearance hides the times in the sidebar.</li>
+    <li>The + on the Stash page starts a new note right there on the right, ready to type in.</li>
+    <li>Diagnostics: an event log of windows, views and the theme goes with the diagnostics uploaded from Settings → Updates, to track down windows that stop responding.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>A long conversation is read from its end, the earlier turns as you scroll to the top: it opens much faster. A very long turn loads a page at a time too.</li>
+    <li>The mouse wheel glides, eased and close behind your hand, in the chat, file trees, lists and editors, high refresh rate screens included. Trackpads are as they were.</li>
+    <li>Checkpoints keep only the files an agent edited instead of snapshots of the whole project, which could take gigabytes; old checkpoint repositories are deleted, and a session's checkpoints a month unused are tidied away.</li>
+    <li>Several thoughts in a row show as one.</li>
+    <li>Messages sent while an agent works: queued ones are taken one at a time, and one sent now goes alone.</li>
+    <li>Usage statistics: one anonymous ping a day, holding only a random install ID, the version, the operating system and the processor; the Send Usage Data switch is gone from the settings.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Another model or upstream picked while a task runs takes the next message, instead of the one before.</li>
+    <li>In a remote project, files from this computer dropped into the composer are copied to the remote host first.</li>
+    <li>Networks listed in NO_PROXY (such as Tailscale's 100.64.0.0/10) go around the proxy, and are passed on to Claude Code too.</li>
+    <li>The main window opens where it was left, as big, maximized if it was.</li>
+    <li>Windows: back in the window after Alt+Tab, the first key types and the window keeps drawing; waking from sleep is no longer taken for a hang.</li>
+    <li>macOS: closing a window in full screen no longer leaves a black Space.</li>
+    <li>Terminal: functions bash exports (environment modules' module and ml) reach the terminal whole.</li>
+    <li>The explorer shows a symbolic link as what it leads to, in remote projects too.</li>
+    <li>Stash: a note an agent writes on Windows shows without a restart; the page's filters stay as you last set them; clicking a card's conversation opens the note.</li>
+    <li>Sidebar: an agent opened from elsewhere, a new one included, is the one selected; with Stash or Customize shown, the earlier conversation isn't highlighted as well; what has no room gives way instead of being pushed out of its row.</li>
+    <li>A subagent continued opens from its row above the composer and goes on in its own card.</li>
+    <li>Conversations side by side each have their own side panel bar.</li>
+    <li>And smaller fixes: Tab takes the suggestion past an empty IME composition; a table's scrollbar shows again alongside the minimap; inline tags sit centered on their text; a message's editor gets all its room; the Customize details' buttons sit flush right; a link to a heading with a % in it opens.</li>
+    </ul>
+  </section>
 
   <section class="release" id="v1.2.0">
     <h2 class="plain"><a href="#v1.2.0">1.2.0</a></h2>

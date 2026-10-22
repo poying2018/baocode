@@ -251,6 +251,12 @@ String toolVerb(
           ? s.toolQuestionSkipped
           : s.toolAsked,
     ToolKind.goal => running ? s.toolProposingGoal : s.toolProposedGoal,
+    ToolKind.image =>
+      running
+          ? s.toolGeneratingImage
+          : status == ToolStatus.succeeded
+          ? s.toolGeneratedImage
+          : s.toolImageFailed,
     ToolKind.browser || ToolKind.other => running ? s.toolUsing : s.toolUsed,
   };
 }

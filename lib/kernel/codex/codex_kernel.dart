@@ -500,14 +500,13 @@ class CodexKernel
           oldLine++;
       }
     }
-    final slash = path.lastIndexOf('/');
     emit(
       ItemUpserted(
         nextSeq,
         id,
         CodeDiffItem(
-          fileName: path.substring(slash + 1),
-          directory: slash < 0 ? '' : path.substring(0, slash),
+          fileName: fileNameOf(path),
+          directory: directoryOf(path),
           lines: lines,
         ),
       ),

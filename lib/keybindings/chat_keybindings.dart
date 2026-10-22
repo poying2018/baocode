@@ -67,6 +67,10 @@ abstract final class ChatCommandIds {
   /// The side panel at the right of the conversations: the focused
   /// agent's changes and the files opened from its conversation.
   static const toggleSidePanel = 'baocode.chat.toggleSidePanel';
+
+  /// The side panel to the conversations' other side: their left, or
+  /// back to their right.
+  static const toggleSidePanelPosition = 'baocode.chat.toggleSidePanelPosition';
   static const sidePanelChanges = 'baocode.chat.sidePanel.changes';
   static const sidePanelFiles = 'baocode.chat.sidePanel.files';
   static const sidePanelTerminal = 'baocode.chat.sidePanel.terminal';
@@ -191,6 +195,7 @@ final List<CommandInfo> chatExtraCommands = [
     (ChatCommandIds.searchAgents, 'Search Agents'),
     (ChatCommandIds.openIde, 'Open in Fast Ide'),
     (ChatCommandIds.toggleSidePanel, 'Toggle Side Panel'),
+    (ChatCommandIds.toggleSidePanelPosition, 'Toggle Side Panel Position'),
     (ChatCommandIds.sidePanelChanges, 'Show Agent Changes'),
     (ChatCommandIds.sidePanelFiles, 'Show Agent Files'),
     (ChatCommandIds.sidePanelTerminal, 'Show Agent Terminals'),

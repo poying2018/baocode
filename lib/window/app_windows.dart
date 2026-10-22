@@ -212,6 +212,7 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
     this._updateSetting,
     Future<bool> Function(String path)? isDirectory,
     Future<String?> Function(String path)? takeFile,
+    Future<bool> Function(String path)? exists,
     bool Function()? hasTray,
     Future<AppExitResponse> Function()? quit,
     Future<void> Function()? nextFrame,
@@ -220,6 +221,7 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
        _mainWindow = mainWindow ?? (() => MainWindow.fallback),
        _isDirectory = isDirectory ?? _folderThere,
        _takeFile = takeFile ?? local.takeFile,
+       _exists = exists ?? local.exists,
        _hasTray = hasTray ?? (() => false),
        _quitOverride = quit,
        _nextFrame = nextFrame ?? (() => WidgetsBinding.instance.endOfFrame),
@@ -259,6 +261,7 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
 
   final Future<bool> Function(String path) _isDirectory;
   final Future<String?> Function(String path) _takeFile;
+  final Future<bool> Function(String path) _exists;
   final bool Function() _hasTray;
   final Future<AppExitResponse> Function()? _quitOverride;
 
@@ -762,7 +765,8 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
       return;
     }
     final folders = <CodeTarget>[], files = <CodeTarget>[];
-    for (final target in args.paths) {
+    for (final path in args.paths) {
+      final target = await _located(path);
       (await _isDirectory(target.path) ? folders : files).add(target);
     }
     if (folders.isEmpty && files.isEmpty) {
@@ -786,6 +790,16 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
       newWindow: args.newWindow && folders.isEmpty,
       reuse: args.reuseWindow,
     );
+  }
+
+  /// [target], or the file it names at a line: `a.vue:58:11` given without
+  /// `-g` (as tools that start an editor they do not know give it) is
+  /// a.vue at line 58, column 11, unless there is a file of that name.
+  Future<CodeTarget> _located(CodeTarget target) async {
+    final at = target.atLine;
+    if (at == null || RemoteLocation.isRemote(target.path)) return target;
+    if (await _exists(target.path) || !await _exists(at.path)) return target;
+    return at;
   }
 
   /// What the system asks to open: a request of the `code` command (on
@@ -1046,6 +1060,9 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
   }
 
   Future<void> _remove(AppWindow window) async {
+    // Out of full screen first, still drawn (see WindowHost.leaveFullScreen);
+    // then back to the window it covered.
+    final wasFullScreen = await host.leaveFullScreen(window.viewId);
     _ide.remove(window);
     _agents.remove(window);
     _mru.remove(window);
@@ -1059,6 +1076,7 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
     _save();
     if (_mru.firstWhereOrNull((w) => w.shown) case final front?) {
       WindowControls.activeViewId = front.viewId;
+      if (wasFullScreen) unawaited(host.focus(front.viewId));
     }
     await _quitIfNoneShows();
   }
@@ -1069,6 +1087,7 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
       ..remove(chat)
       ..add(chat);
     _changed();
+    await host.leaveFullScreen(chat.viewId);
     await host.hide(chat.viewId);
     _save();
     final front = active;
@@ -1290,6 +1309,9 @@ class AppWindows extends ChangeNotifier implements WindowHostEvents {
     if (!await _confirmUnsaved(windows)) return _decline(false);
     final front = recentIde;
     final ideInFront = front != null && identical(active, front);
+    for (final window in windows) {
+      await host.leaveFullScreen(window.viewId);
+    }
     if (ideInFront || !chat.shown) _focus(chat);
     // Their views' widgets go first, then the views; then the main window
     // takes the IDE.

@@ -1606,8 +1606,16 @@ class _CenteredOnText extends SingleChildRenderObjectWidget {
 
   /// Distance from the alphabetic baseline up to the glyph center.
   double _glyphCenterAboveBaseline(TextScaler scaler) {
+    // The line's leading, if any, even above and below: as the font's own
+    // metrics, else (proportional) more of it above, and the center higher.
+    // (`copyWith(height: null)` keeps the height.)
     final painter = TextPainter(
-      text: TextSpan(text: 'x', style: textStyle.copyWith(height: null)),
+      text: TextSpan(
+        text: 'x',
+        style: textStyle.copyWith(
+          leadingDistribution: TextLeadingDistribution.even,
+        ),
+      ),
       textDirection: TextDirection.ltr,
       textScaler: scaler,
     )..layout();

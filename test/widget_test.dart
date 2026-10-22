@@ -318,7 +318,7 @@ void main() {
     pointer.hover(tester.getCenter(list));
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, -40)));
     await tester.pump();
-    // The wheel's notches eased in (at most 200 ms, as Chrome's).
+    // The wheel's notches eased out (120 ms).
     await tester.pump(const Duration(milliseconds: 200));
     expect(marker.localToGlobal(Offset.zero).dy - before, closeTo(40, 0.5));
   });
@@ -505,7 +505,7 @@ void main() {
       await tester.sendEventToBinding(wheel.scroll(const Offset(0, -40)));
       await tester.pump(const Duration(milliseconds: 16));
     }
-    // The wheel's notches eased in (at most 200 ms, as Chrome's).
+    // The wheel's notches eased out (120 ms).
     await tester.pump(const Duration(milliseconds: 200));
     // End on a line of the list's own text, clear of the user message
     // stuck at its top (a point over that copy is a case of its own).
@@ -611,7 +611,7 @@ void main() {
           await tester.sendEventToBinding(wheel.scroll(const Offset(0, -60)));
           await tester.pump(const Duration(milliseconds: 16));
         }
-        // The wheel's notches eased in (at most 200 ms, as Chrome's).
+        // The wheel's notches eased out (120 ms).
         await tester.pump(const Duration(milliseconds: 200));
         // A terminal line on screen (cached items above are built too);
         // scroll on until one is.

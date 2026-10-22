@@ -65,7 +65,9 @@ class ModelSettingChoice {
     this.toggle = false,
   });
 
-  final KernelChoiceKind kind;
+  /// The kernel's setting it is; null for the app's own, shown beside them
+  /// (`chat.resumeAfterLimitReset`, in the model picker).
+  final KernelChoiceKind? kind;
   final List<KernelOption> options;
 
   /// What is in effect, or would stay so with the model picked; null
@@ -443,6 +445,28 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     }
   }
 
+  /// When the usage limit the agent stopped at resets (see
+  /// [ReportsUsageLimit]); null with none hit, and while a turn runs.
+  DateTime? get usageLimitResetsAt => switch (_kernel) {
+    ReportsUsageLimit(:final usageLimitResetsAt) when !isStreaming =>
+      usageLimitResetsAt,
+    _ => null,
+  };
+
+  /// Whether the next message is held to the account's usage limit: not
+  /// once on another provider's model.
+  bool get usageLimitApplies => switch (_kernel) {
+    ReportsUsageLimit(:final usageLimitApplies) => usageLimitApplies,
+    _ => true,
+  };
+
+  /// Whether an agent on [model] can go on by itself once the usage limit
+  /// it stopped at resets: on the account's own plan, which says when.
+  bool continuesAfterLimit(String model) => switch (_kernel) {
+    final ReportsUsageLimit kernel => kernel.usageLimitAppliesTo(model),
+    _ => false,
+  };
+
   bool get acceptsImages => _kernel is AcceptsImages;
 
   /// What the user would likely send next: offered while the agent waits
@@ -600,15 +624,21 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   ChatItem itemAt(int index) {
     if (index < _transcript.length) return _transcript.itemAt(index);
     // Waiting on its model unless its kernel says otherwise.
+    final output = _transcript.output;
     return switch (_transcript.activity?.kind) {
       KernelActivityKind.compacting => LiveStatusItem(
         'Compacting conversation',
         visible: _statusVisible,
+        output: output,
+        startedAt: _transcript.turnStartedAt,
       ),
       _ => LiveStatusItem(
         'Planning next move',
         whimsical: true,
         visible: _statusVisible,
+        output: output,
+        startedAt: _transcript.turnStartedAt,
+        cue: MusingCue.after(_last),
       ),
     };
   }

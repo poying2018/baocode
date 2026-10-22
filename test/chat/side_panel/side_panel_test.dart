@@ -1,6 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:bao_editor/monaco/flutter/diff_editor.dart';
+import 'package:bao_editor/monaco/flutter/editor_surface.dart';
+
 import 'package:baocode/ide/ide_notifications.dart';
 import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/kernel/kernel_types.dart';
@@ -12,6 +15,7 @@ import 'package:baocode/chat/side_panel/file_link.dart';
 import 'package:baocode/chat/side_panel/file_open.dart';
 import 'package:baocode/chat/side_panel/file_preview.dart';
 import 'package:baocode/chat/side_panel/side_panel_controller.dart';
+import 'package:baocode/chat/chat_column.dart';
 import 'package:baocode/chat/side_panel/side_panel_view.dart';
 import 'package:baocode/chat/widgets/edit_step.dart';
 import 'package:baocode/chat/widgets/fold_line.dart';
@@ -21,6 +25,7 @@ import 'package:baocode/ide/file_service.dart';
 import 'package:baocode/ide/git/commit_message.dart';
 import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/ide_scm_view.dart';
+import 'package:baocode/ide/ide_code_diff.dart';
 import 'package:baocode/ide/ide_code_editor.dart';
 import 'package:baocode/ide/ide_explorer.dart';
 import 'package:baocode/ide/ide_list.dart';
@@ -402,8 +407,9 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('read-only file and diff rows follow code size, not interface '
-      'size', (tester) async {
+  testWidgets('read-only file rows follow code size, not interface size', (
+    tester,
+  ) async {
     final scale = ValueNotifier(1.0);
     final originalSize = CodeFont.size.value;
     addTearDown(scale.dispose);
@@ -459,18 +465,13 @@ void main() {
       expect(lineHeight(), greaterThan(initial * 1.3));
     }
 
+    // Changes asked for, without the text before them: the text.
     await check(const FileOpenRequest('/p/a.dart', diff: true));
-    await check(
-      FileOpenRequest(
-        '/p/a.dart',
-        diff: true,
-        original: () async => 'one\nold',
-      ),
-    );
   });
 
-  testWidgets('file and diff line numbers stay visible during horizontal '
-      'scrolling', (tester) async {
+  testWidgets('file line numbers stay visible during horizontal scrolling', (
+    tester,
+  ) async {
     final ascii = 'x' * 175;
     final wide = '汉字' * 75;
     final files = _Files({'/p/a.dart': 'one\n$ascii\n$wide'});
@@ -526,13 +527,6 @@ void main() {
     }
 
     await check(const FileOpenRequest('/p/a.dart', diff: true));
-    await check(
-      FileOpenRequest(
-        '/p/a.dart',
-        diff: true,
-        original: () async => 'two\n$ascii\n$wide',
-      ),
-    );
   });
 
   testWidgets('short preview lines do not create horizontal overflow', (
@@ -571,8 +565,8 @@ void main() {
     expect(controller.position.maxScrollExtent, 0);
   });
 
-  testWidgets('lines selected in a diff copy one to a line, and paste '
-      'into the composer as a reference to them', (tester) async {
+  testWidgets('a diff shows in the IDE\'s diff editor; its lines copied '
+      'paste into the composer as a reference to them', (tester) async {
     addTearDown(CopiedCode.clear);
     String? copied;
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -598,25 +592,21 @@ void main() {
             diff: true,
             original: () async => 'one\ntwo\nthree',
           ),
-          files: _Files({'/p/a.dart': 'one\ntwo\nthree'}),
+          files: _Files({'/p/a.dart': 'one\nTWO\nthree'}),
         ),
       ),
     );
     await tester.pumpAndSettle();
-    final drag = await tester.startGesture(
-      tester.getTopLeft(find.text('one')) + const Offset(1, 4),
-      kind: PointerDeviceKind.mouse,
-    );
-    await tester.pump();
-    await drag.moveTo(tester.getBottomRight(find.text('three')));
-    await tester.pump();
-    await drag.up();
+    expect(find.byType(DiffEditor), findsOneWidget);
+    final surface = find.byType(EditorSurface).last;
+    await tester.tap(surface);
     await tester.pump();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyA);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(copied, 'one\ntwo\nthree');
+    expect(copied, 'one\nTWO\nthree');
     final reference = CopiedCode.matching(copied!);
     expect(
       (reference?.path, reference?.start, reference?.end),
@@ -1022,26 +1012,23 @@ void main() {
     );
     await tester.pumpAndSettle();
     final preview = find.byType(FilePreview);
-    for (final line in ['head one', 'main line 1', 'main line 2']) {
-      expect(
-        find.descendant(of: preview, matching: find.text(line)),
-        findsOneWidget,
-        reason: line,
+    (String, String) compared() {
+      final diff = tester.widget<IdeCodeDiff>(
+        find.descendant(of: preview, matching: find.byType(IdeCodeDiff)),
       );
+      return (diff.original, diff.modified);
     }
+
+    expect(compared(), (
+      'head one\nmain line 2\n',
+      'main line 1\nmain line 2\n',
+    ));
     // The staged one: HEAD against the index, not the file.
     await tester.tap(
       find.descendant(of: list, matching: find.text('staged.dart')),
     );
     await tester.pumpAndSettle();
-    expect(
-      find.descendant(of: preview, matching: find.text('staged text')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: preview, matching: find.text('on disk')),
-      findsNothing,
-    );
+    expect(compared(), ('before staging\n', 'staged text\n'));
     expect(panel.tabsOf(session).diffs, hasLength(2));
 
     // As a list, from the Source Control view's View & Sort: each file with
@@ -1315,6 +1302,32 @@ void main() {
     expect(find.byType(FilePreview), findsOneWidget);
   });
 
+  testWidgets('the panel\'s edge follows the pointer from where it shows, '
+      'though it was made wider than there is room for', (tester) async {
+    final (:panel, session: _, files: _) = await _pumpChat(tester);
+    panel.show();
+    // Room beside the conversations for 400; made 640, its default.
+    tester.view.physicalSize = const Size(
+      400 + AgentSidePanelArea.minChat + AgentSidePanelArea.sashWidth,
+      800,
+    );
+    await tester.pumpAndSettle();
+    expect(panel.width, AgentSidePanel.defaultWidth);
+    final sash = find.byKey(const ValueKey('side-panel-sash'));
+    final x = tester.getCenter(sash).dx;
+    // Narrower at once, not once the pointer has gone the 240 between.
+    await tester.drag(sash, const Offset(100, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(sash).dx, moreOrLessEquals(x + 100));
+    // Back as far as it shows, where it was; no further.
+    await tester.drag(sash, const Offset(-150, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(sash).dx, moreOrLessEquals(x));
+    await tester.drag(sash, const Offset(60, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getCenter(sash).dx, moreOrLessEquals(x + 60));
+  });
+
   testWidgets('a room short a while only (the sidebar giving way) does not '
       'put the panel over the conversations', (tester) async {
     final (:panel, :session, files: _) = await _pumpChat(tester);
@@ -1347,6 +1360,73 @@ void main() {
     expect(_scrim, findsNothing);
     await tester.pump(AgentSidePanelArea.overlayDelay);
     expect(_scrim, findsOneWidget);
+  });
+
+  testWidgets('moved to the conversations\' left: its page, tab and width '
+      'kept, its edge toward them dragged; kept for the next run (#145)', (
+    tester,
+  ) async {
+    final (:panel, :session, files: _) = await _pumpChat(tester);
+    panel.open(session, const FileOpenRequest('/p/lib/main.dart'));
+    await tester.pumpAndSettle();
+    final width = tester.getSize(find.byType(AgentSidePanelView)).width;
+    expect(tester.getTopRight(find.byType(AgentSidePanelView)).dx, 1600);
+
+    await tester.tap(find.byKey(const ValueKey('side-panel-move')));
+    await tester.pumpAndSettle();
+    expect(panel.atLeft, isTrue);
+    final view = find.byType(AgentSidePanelView);
+    expect(tester.getTopLeft(view).dx, 0);
+    expect(tester.getSize(view).width, width);
+    expect(find.byType(FilePreview), findsOneWidget);
+    // The conversations at its right, up to the sash's line.
+    expect(tester.getTopLeft(find.byType(ChatScreen)).dx, width + 1);
+
+    // Its right edge dragged right: wider.
+    final sash = find.byKey(const ValueKey('side-panel-sash'));
+    expect(tester.getTopLeft(sash).dx, width);
+    await tester.drag(sash, const Offset(100, 0));
+    await tester.pumpAndSettle();
+    expect(panel.width, closeTo(width + 100, 1));
+
+    final kept = AgentSidePanel(state: panel.toJson());
+    addTearDown(kept.dispose);
+    expect(kept.atLeft, isTrue);
+
+    panel.atLeft = false;
+    await tester.pumpAndSettle();
+    expect(tester.getTopRight(view).dx, 1600);
+    expect(panel.toJson(), isNot(contains('atLeft')));
+  });
+
+  testWidgets('hidden at their left, its rail is at the conversations\' top '
+      'left, their column clear of it', (tester) async {
+    _bigWindow(tester);
+    final panel = AgentSidePanel()..atLeft = true;
+    addTearDown(panel.dispose);
+    const rail = SizedBox(key: ValueKey('my-rail'), width: 28, height: 80);
+    await tester.pumpWidget(
+      _app(
+        AgentSidePanelArea(
+          panel: panel,
+          railTop: 40,
+          rail: rail,
+          builder: (context) => const SizedBox(),
+          child: const SizedBox.expand(),
+        ),
+      ),
+    );
+    final at = tester.getTopLeft(find.byKey(const ValueKey('my-rail')));
+    expect(at, const Offset(AgentSidePanelArea.railRight, 40));
+    final inset = tester.widget<ChatColumnInset>(find.byType(ChatColumnInset));
+    expect((inset.left, inset.right), (AgentSidePanelArea.railInset, 0));
+
+    panel.atLeft = false;
+    await tester.pump();
+    expect(
+      tester.getTopRight(find.byKey(const ValueKey('my-rail'))).dx,
+      1600 - AgentSidePanelArea.railRight,
+    );
   });
 
   testWidgets('where the panel is too wide beside the conversations, it is '
@@ -1700,21 +1780,22 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    final preview = find.byType(FilePreview);
-    for (final line in ['one', 'two', 'TWO', 'three']) {
-      expect(
-        find.descendant(of: preview, matching: find.text(line)),
-        findsOneWidget,
-        reason: line,
-      );
-    }
+    final model = tester
+        .widget<DiffEditor>(
+          find.descendant(
+            of: find.byType(FilePreview),
+            matching: find.byType(DiffEditor),
+          ),
+        )
+        .model;
+    expect(model.originalSnapshot?.text, 'one\ntwo\nthree\n');
+    expect(model.modified.text, 'one\nTWO\nthree\n');
     expect(
-      find.descendant(of: preview, matching: find.text('-')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: preview, matching: find.text('+')),
-      findsOneWidget,
+      [
+        for (final change in model.mappings!)
+          (change.original.startLineNumber, change.modified.startLineNumber),
+      ],
+      [(2, 2)],
     );
   });
 

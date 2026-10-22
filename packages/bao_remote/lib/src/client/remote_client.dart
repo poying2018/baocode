@@ -615,14 +615,16 @@ class RemoteClient {
   /// Starts Claude Code there with [arguments] in [cwd]: [settings] (flag
   /// settings with a key) written to a file only the user reads and given
   /// as `--settings`, the variables named in [cleared] set empty, then
-  /// [environment] over its own. Throws ClaudeUnavailable when it is not
-  /// installed there.
+  /// [environment] over its own. [core] `builtin` runs BaoCode's own core
+  /// there instead (a server of before runs the CLI). Throws
+  /// ClaudeUnavailable when the CLI is to run and is not installed there.
   Future<RemoteProcess> startClaude({
     required String cwd,
     required List<String> arguments,
     Map<String, Object?>? settings,
     List<String> cleared = const [],
     Map<String, String> environment = const {},
+    String? core,
   }) async => _process(
     _map(
       await peer.request(RemoteProtocol.claudeStart, {
@@ -631,6 +633,7 @@ class RemoteClient {
         'settings': ?settings,
         'cleared': cleared,
         'environment': environment,
+        'core': ?core,
       }),
     ),
   );

@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../../base/smooth_scroll.dart';
 import '../../keybindings/keybinding_service.dart';
 import '../../l10n/l10n.dart';
 import '../../theme/codicons.dart';
@@ -464,7 +465,7 @@ class IdeSearchViewState extends State<IdeSearchView>
   final FocusNode _includesFocus = FocusNode(debugLabel: 'search include');
   final FocusNode _excludesFocus = FocusNode(debugLabel: 'search exclude');
   final FocusNode _resultsFocus = FocusNode(debugLabel: 'search results');
-  final ScrollController _scroll = ScrollController();
+  final ScrollController _scroll = SmoothScrollController();
 
   /// The selection last scrolled into view.
   (String, IdeTextMatch?)? _revealed;

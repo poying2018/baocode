@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 
+import '../../base/smooth_scroll.dart';
 import '../../theme/app_theme.dart';
 import 'hover_builder.dart';
 import 'image_thumbnails.dart' show PreviewClick, PreviewPressScope;
@@ -270,11 +271,14 @@ class StepBody extends StatelessWidget {
       children: [
         ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
-          child: SingleChildScrollView(
-            reverse: followEnd,
-            padding: padding,
-            child: WheelLatch(
-              child: SizedBox(width: double.infinity, child: child),
+          child: SmoothScrolling(
+            builder: (context, controller) => SingleChildScrollView(
+              controller: controller,
+              reverse: followEnd,
+              padding: padding,
+              child: WheelLatch(
+                child: SizedBox(width: double.infinity, child: child),
+              ),
             ),
           ),
         ),

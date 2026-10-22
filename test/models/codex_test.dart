@@ -610,7 +610,8 @@ void main() {
       expect(['ws-a', 'ws-b'], contains(usage['chatgpt-account-id']));
 
       final models = await accounts.listModels(provider());
-      expect(models.map((m) => m.id), ['gpt-5']);
+      // Its pictures' model beside them, as the Codex CLI makes them.
+      expect(models.map((m) => m.id), ['gpt-5', codexImageModel]);
       final asked = openai.to('/backend-api/codex/models').single;
       expect(asked.headers['chatgpt-account-id'], 'ws-a');
       expect(asked.query['client_version'], codexClientVersion);

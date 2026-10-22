@@ -29,7 +29,10 @@ import 'claude_code_translator.dart';
 import 'claude_elicitation.dart';
 import 'claude_goal.dart';
 import 'claude_sdk_tools.dart';
+import 'turn_stats.dart';
 import 'control_channel.dart';
+import 'local_time_zone.dart';
+import 'usage_limit.dart';
 
 /// Reads a kept session: its conversation lines, oldest first, along the
 /// branch the session ended on.
@@ -97,6 +100,7 @@ class ClaudeCodeKernel
         SuggestsFiles,
         ReportsContext,
         ReportsUsage,
+        ReportsUsageLimit,
         RunsBackgroundTasks,
         QueuesMessages,
         RevertsChanges,
@@ -271,6 +275,11 @@ class ClaudeCodeKernel
   /// Turns stopped here: the CLI's word that it took one up (sent just
   /// before, it may not have yet) does not start it again.
   final Set<String> _stoppedTurns = {};
+
+  /// Turns taken up again after the process died mid-turn, since the last
+  /// turn ended or a process started clean: the one chance a flaky exit
+  /// gets before the failure is shown plain (see [_exited]).
+  int _resumeAttempts = 0;
   final Map<String, _Permission> _permissions = {};
   String? _pendingTitle;
 
@@ -293,6 +302,23 @@ class ClaudeCodeKernel
 
   static GlobalStorage? _modelCache;
   static const modelCacheKey = 'claudeCode.models';
+
+  /// Where what each turn took and spent is kept (main.dart sets it), for
+  /// its footer to show again when the session is opened later; none
+  /// kept when null. This machine's sessions only.
+  static TurnStats? turnStats;
+
+  /// [turnStats] for this session's history: none for a remote one's.
+  TurnStats? get _turnStats => _remoteHost == null ? turnStats : null;
+
+  /// What the kept session's turns took and spent, by prompt.
+  Future<Map<String, TurnRecord>> _keptTurns(SessionRecord session) async {
+    try {
+      return await _turnStats?.read(session.id) ?? const {};
+    } on Object {
+      return const {};
+    }
+  }
 
   /// The models [modelCache] kept, as the CLI listed them.
   static List<_ModelInfo> _keptModels() => [
@@ -319,14 +345,40 @@ class ClaudeCodeKernel
   }
 
   /// The model asked for, as the CLI names it (e.g. `opus[1m]`), or a
-  /// provider's ([modelRef]).
-  String? _model;
+  /// provider's ([modelRef]). BaoCode's own core has no model of its own:
+  /// on it, one of no upstream is the first upstream's model. A provider's
+  /// removed since falls back as the picker shows it: to Claude Code's own
+  /// if offered there, else to the first upstream's.
+  String? get _model {
+    final picked = _pickedModel;
+    if (_providers.resolve(picked) != null) return picked;
+    if (_providers.builtinAvailable &&
+        (parseModelRef(picked) == null || _providers.builtinOffered)) {
+      return picked;
+    }
+    return _providers.firstModel ??
+        (_providers.builtinAvailable ? picked : null);
+  }
+
+  set _model(String? model) => _pickedModel = model;
+  String? _pickedModel;
+
+  /// The provider's model the process was started on, which its
+  /// environment names for each of Claude Code's own (`ANTHROPIC_MODEL`,
+  /// `ANTHROPIC_DEFAULT_OPUS_MODEL`): whatever it was switched to since,
+  /// one removed leaves it no use (see [_providersChanged]).
+  String? _launchedModel;
 
   /// What the process was started on: [_providerKey] then. A provider
   /// is taken up only at start, so another is by a restart (see
   /// [_applyWindow]).
   String _launchedProvider = '';
   String? _reportedModel;
+
+  /// When the usage limit the last turn hit resets (see
+  /// [ReportsUsageLimit]): on the account's own plan only, a provider's
+  /// limits being its own.
+  DateTime? _limitResetsAt;
   // What the agent does (Agent, Ask, Plan) and how its actions are
   // approved, picked apart: the CLI runs the approvals as they are, but in
   // Plan, which is a permission mode of its own (see _cliMode). Ask is only
@@ -426,7 +478,37 @@ class ClaudeCodeKernel
   Future<void> _ensureStarted() {
     if (_disposed) return Future.error(StateError('disposed'));
     if (_running) return Future.value();
-    return _starting ??= _launch().whenComplete(() => _starting = null);
+    return _starting ??= _launch().whenComplete(() {
+      _starting = null;
+      // Out of view while it started: freed now, unless a message sent
+      // meanwhile has it at work.
+      if (_releaseWanted) release();
+    });
+  }
+
+  /// What a process started now is on: the provider, the model as it is
+  /// asked for, and the effort. A model of a provider gone falls back to
+  /// the CLI's.
+  ({String provider, String? model, String? effort}) get _launchTarget {
+    final custom = _custom;
+    final effort = switch (custom) {
+      (_, final info) => _effortFor(info),
+      null => _effort,
+    };
+    return (
+      provider: _providerKey,
+      model: switch (custom) {
+        (final provider, final info) => requestedModel(
+          provider,
+          info,
+          effort: effort,
+          fast: _pickedFast[_model] ?? false,
+        ),
+        null when parseModelRef(_model) != null => null,
+        null => _model,
+      },
+      effort: effort,
+    );
   }
 
   Future<void> _launch() async {
@@ -437,22 +519,10 @@ class ClaudeCodeKernel
     try {
       // On a provider of the user's: its model as it is asked for, the
       // environment that points Claude Code at it, and compaction within
-      // the model's window. A model of one gone falls back to the CLI's.
+      // the model's window.
       final custom = _custom;
-      final effort = switch (custom) {
-        (_, final info) => _effortFor(info),
-        null => _effort,
-      };
-      final model = switch (custom) {
-        (final provider, final info) => requestedModel(
-          provider,
-          info,
-          effort: effort,
-          fast: _pickedFast[_model] ?? false,
-        ),
-        null when parseModelRef(_model) != null => null,
-        null => _model,
-      };
+      final target = _launchTarget;
+      final (:model, :effort, provider: _) = target;
       // Through the proxy, the effort goes with the model's name; to
       // Anthropic's API, as Claude Code's own, if it is one of its.
       final direct = custom == null || !custom.$1.protocol.proxied;
@@ -473,7 +543,8 @@ class ClaudeCodeKernel
         }
       }
       final workspace = _workspace;
-      _launchedProvider = _providerKey;
+      _launchedProvider = target.provider;
+      _launchedModel = custom != null ? _model : null;
       _launchedWindow = _autocompact;
       _launchedSuggestions = PromptSuggestions.current();
       final sdkServers = ClaudeSdkTools.servers;
@@ -524,6 +595,12 @@ class ClaudeCodeKernel
         _cliMode = _mode;
         await control.request('set_permission_mode', {'mode': _mode});
       }
+      // Another model picked as it started (back in view, say), which it
+      // was not told: nothing was said to it yet, so it starts again on it.
+      if (_launchTarget != target) {
+        _teardown();
+        return await _launch();
+      }
       _setHealth(KernelHealth.ready);
       _syncGoal();
       final window = _window;
@@ -545,7 +622,11 @@ class ClaudeCodeKernel
       _tell('file_suggestions', {'query': ''});
       if (_pendingTitle case final title?) {
         _pendingTitle = null;
-        rename(title);
+        // Waited on: a process freed as soon as it is ready (out of view
+        // by then) would end before it took the title.
+        await control
+            .request('rename_session', {'title': title, 'source': 'host'})
+            .catchError((_) => const <String, Object?>{});
       }
       unawaited(_refreshContext());
     } on ClaudeUnavailable catch (error) {
@@ -556,6 +637,7 @@ class ClaudeCodeKernel
           ClaudeFolderGone(:final folder) => folder,
           _ => null,
         },
+        noModel: error is ClaudeNoModel,
       );
       rethrow;
     } on ControlError catch (error) {
@@ -575,7 +657,12 @@ class ClaudeCodeKernel
     }
   }
 
-  void _fail(String message, String? detail, {String? missingFolder}) {
+  void _fail(
+    String message,
+    String? detail, {
+    String? missingFolder,
+    bool noModel = false,
+  }) {
     _teardown();
     _setHealth(
       KernelHealth(
@@ -583,6 +670,7 @@ class ClaudeCodeKernel
         message: message,
         detail: detail,
         missingFolder: missingFolder,
+        noModel: noModel,
       ),
     );
   }
@@ -672,15 +760,16 @@ class ClaudeCodeKernel
       _permissions.isNotEmpty ||
       _starting != null;
 
-  /// Frees the process now if idle, else once the CLI says it is (one
-  /// that does not say keeps it until asked again).
+  /// Frees the process now if idle, else once it has started or the CLI
+  /// says it is idle (one that does not say keeps it until asked again).
   @override
   void release() {
-    if (_transport == null) return;
     if (_busy) {
       _releaseWanted = true;
       return;
     }
+    _releaseWanted = false;
+    if (_transport == null) return;
     _teardown();
     _setHealth(KernelHealth.idle);
   }
@@ -694,8 +783,9 @@ class ClaudeCodeKernel
   ///
   /// So is another provider, or one whose setup changed: the session goes
   /// on, resumed, on it. That even with tasks at work in the background
-  /// (a server it started), which end with the process: the user agreed
-  /// to the restart, and the message is not for the provider before.
+  /// (a server it started), which end with the process, or the CLI still
+  /// saying it is at work past its turn: the user agreed to the restart,
+  /// and the message is not for the provider before.
   void _applyWindow() {
     if (!_running) return;
     final otherProvider = _providerKey != _launchedProvider;
@@ -704,7 +794,7 @@ class ClaudeCodeKernel
         PromptSuggestions.current() == _launchedSuggestions) {
       return;
     }
-    if (otherProvider ? _working : _busy) return;
+    if (!otherProvider && _busy) return;
     _teardown();
     _translator.endTasks();
     _setHealth(KernelHealth.idle);
@@ -835,6 +925,13 @@ class ClaudeCodeKernel
     final askEnded = _inAsk && !ask;
     _inAsk = ask;
     _whenReady((transport) {
+      // Queued to go now, with tasks in the background: the CLI's interrupt
+      // ends those too, so the CLI stops the turn for it itself, once the
+      // call under way is done.
+      final spareBackground =
+          turn.now &&
+          _queued.contains(turn.id) &&
+          _translator.workingInBackground;
       transport.write({
         'type': 'user',
         'uuid': turn.id,
@@ -843,10 +940,12 @@ class ClaudeCodeKernel
         // Taken up once the turn before it ends, unless the user would have
         // it folded into the turn running, between its tool calls (the
         // CLI's own default).
-        'priority': switch (QueuedMessages.current()) {
-          QueuedMessages.afterTurn => 'later',
-          QueuedMessages.duringTurn => 'next',
-        },
+        'priority': spareBackground
+            ? 'now'
+            : switch (QueuedMessages.current()) {
+                QueuedMessages.afterTurn => 'later',
+                QueuedMessages.duringTurn => 'next',
+              },
         'message': {
           'role': 'user',
           'content': [
@@ -875,12 +974,13 @@ class ClaudeCodeKernel
       });
       // Queued behind the turn running: stopped once it is sent, so it is
       // taken up next, as when the user stops the turn.
-      if (turn.now && _queued.contains(turn.id)) cancel();
+      if (turn.now && _queued.contains(turn.id) && !spareBackground) cancel();
     });
   }
 
   void _beginTurn(String id, {bool unprompted = false}) {
     _turn = id;
+    _limitHit(null);
     _turnStarted = DateTime.now();
     _translator.turnId = id;
     emit(TurnStarted(nextSeq, id, unprompted: unprompted));
@@ -895,6 +995,9 @@ class ClaudeCodeKernel
     final turn = _turn;
     if (turn == null) return;
     _turn = null;
+    // A turn that ended whole spent the process's one chance to be
+    // restarted after an unexpected exit: the next turn gets it back.
+    if (!interrupted) _resumeAttempts = 0;
     if (interrupted) _cancelSdkCalls();
     worked ??= switch (_turnStarted) {
       final started? => DateTime.now().difference(started),
@@ -914,6 +1017,11 @@ class ClaudeCodeKernel
       emit(InteractionResolved(nextSeq, id));
     }
     _permissions.clear();
+    if (!interrupted && worked != null) {
+      if ((_turnStats, _sessionId) case (final stats?, final session?)) {
+        stats.write(session, turn, (worked: worked, usage: usage));
+      }
+    }
     emit(
       TurnEnded(
         nextSeq,
@@ -976,8 +1084,12 @@ class ClaudeCodeKernel
         if (id != turnId) id,
     ];
     // The only one in the CLI, the others held: next anyway, only the turn
-    // running is in the way.
-    if (!_held.containsKey(turnId) && others.every(_held.containsKey)) {
+    // running is in the way. Not with tasks in the background, which an
+    // interrupt ends too: it is sent again to be taken up next (see
+    // [_write]).
+    if (!_translator.workingInBackground &&
+        !_held.containsKey(turnId) &&
+        others.every(_held.containsKey)) {
       cancel();
       return;
     }
@@ -1587,6 +1699,7 @@ class ClaudeCodeKernel
         emitInfoChanged();
       case 'assistant':
         if (_countRequest(message)) _reportStats();
+        if (message['error'] == 'rate_limit') _limitSaid(message['message']);
         _translator.translate(message);
       case 'result':
         _result(message);
@@ -1738,6 +1851,7 @@ class ClaudeCodeKernel
     }
     if (message['is_error'] == true && message['result'] is String) {
       final error = message['result'] as String;
+      if (_limitResetsAt == null) _limitSaid(error);
       if (error.isNotEmpty) {
         final host = _remoteHost;
         emit(
@@ -1865,10 +1979,79 @@ class ClaudeCodeKernel
     _ => '$type',
   };
 
+  @override
+  DateTime? get usageLimitResetsAt => usageLimitApplies ? _limitResetsAt : null;
+
+  /// A provider's model picked: the next message goes there, the plan's
+  /// limit no bar to it.
+  @override
+  bool get usageLimitApplies => _providerKey.isEmpty;
+
+  @override
+  bool usageLimitAppliesTo(String model) => _providerKeyOf(model).isEmpty;
+
+  /// The usage limit is hit, to reset [at]; null, it no longer holds.
+  void _limitHit(DateTime? at) {
+    // A provider's limits are its own, and so is what it says of them.
+    if (at != null && _launchedProvider.isNotEmpty) return;
+    if (at == _limitResetsAt) return;
+    _limitResetsAt = at;
+    emitInfoChanged();
+  }
+
+  /// When the limit hit resets, as [said] (an error's text, or the
+  /// message it is in) says it; nothing where it does not.
+  void _limitSaid(Object? said) {
+    final text = switch (said) {
+      final String text => text,
+      {'content': final List<Object?> content} => [
+        for (final block in content)
+          if (block case {'type': 'text', 'text': final String text}) text,
+      ].join('\n'),
+      _ => '',
+    };
+    if (_limitResetsAt != null || text.isEmpty) return;
+    // A remote project's agent says the time in its host's zone.
+    final at = parseUsageLimitReset(
+      text,
+      now: DateTime.now(),
+      localZone: _remoteHost == null ? localTimeZone() : null,
+    );
+    if (at != null && (_remoteHost == null || _zoneSaid(text) == null)) {
+      _limitHit(at);
+    }
+  }
+
+  /// The zone a reset time is said in, if it says one.
+  static String? _zoneSaid(String text) =>
+      RegExp(r'resets [^(\n]*\(([^)]+)\)').firstMatch(text)?[1];
+
   /// From a `rate_limit_event`, sent as a reply changes the usage: the
-  /// windows, or near a limit just that one.
+  /// windows, or near a limit just that one. Rejected, the limit is hit:
+  /// it says when it resets.
   void _rateLimits(Object? info) {
     if (info is! Map) return;
+    if (info['status'] == 'rejected') {
+      final resets = [
+        if (info['resetsAt'] case final int at) at,
+        if (info['unifiedWindows'] case final Map<Object?, Object?> windows)
+          for (final window in windows.values)
+            // The windows used up: those that hold it back.
+            if (window case {'resetsAt': final int at} && final Map used
+                when used['status'] == 'rejected' ||
+                    switch (used['utilization']) {
+                      final num utilization => utilization >= 1,
+                      _ => false,
+                    })
+              at,
+      ];
+      if (resets.isNotEmpty) {
+        _limitResetsAt = null;
+        _limitHit(
+          DateTime.fromMillisecondsSinceEpoch(resets.reduce(math.max) * 1000),
+        );
+      }
+    }
     RateLimitWindow window(Object? type, Object? utilization, Object? resets) =>
         RateLimitWindow(
           _limitLabel(type),
@@ -2168,6 +2351,26 @@ class ClaudeCodeKernel
 
   void _exited(int code, String stderr, {String? executable}) {
     final wasReady = _health.status == KernelHealthStatus.ready;
+    // A process that died with a turn under way mends itself, once. That
+    // it readied and ran, and says nothing of the account or the CLI's
+    // age, makes an exit a fluke (a proxy refusing the upstream, a
+    // killed worker) rather than a setup that cannot work; and the
+    // conversation lives in the CLI's own session file, not in the
+    // process. So the turn ends stopped and goes again at once on a
+    // fresh process resumed over it — the path a provider switch takes
+    // (see [_send]) — and the user never has to send the message twice.
+    // Once per clean turn: a process that dies again at once is failed
+    // plainly, not restarted for ever.
+    final turn = _turn;
+    final resumable =
+        turn != null &&
+        wasReady &&
+        _sessionId != null &&
+        !_stoppedTurns.contains(turn) &&
+        _resumeAttempts == 0 &&
+        _sent.containsKey(turn) &&
+        !_notLoggedIn(stderr) &&
+        !_tooOld(stderr);
     _teardown();
     if (!wasReady &&
         _starting != null &&
@@ -2179,18 +2382,57 @@ class ClaudeCodeKernel
       _tooOldExit = (executable, stderr);
       return;
     }
-    if (_turn != null) {
+    if (turn != null) {
       emit(
         ItemUpserted(
           nextSeq,
-          'exit:${_turn!}',
-          const NoticeItem(
-            NoticeKind.error,
-            'Claude Code stopped unexpectedly',
-          ),
+          resumable ? 'retry:$turn' : 'exit:$turn',
+          resumable
+              ? NoticeItem(
+                  NoticeKind.retry,
+                  '${_failureMessage(stderr, remote: _remoteHost)}\n'
+                  'The turn is taken up again.',
+                )
+              : const NoticeItem(
+                  NoticeKind.error,
+                  'Claude Code stopped unexpectedly',
+                ),
         ),
       );
-      _endTurn(interrupted: true);
+      // A turn taken up again is not over: only its process died, and it
+      // ends (or does not) by what the next one says. Stopping it here
+      // would mark the message failed in the transcript, which cannot
+      // open again under the id it was sent with.
+      if (!resumable) _endTurn(interrupted: true);
+    }
+    if (resumable) {
+      _resumeAttempts++;
+      // The questions the dead process was asking die with it; the CLI
+      // on the session asks again only if the model asks again.
+      for (final id in _permissions.keys) {
+        emit(InteractionResolved(nextSeq, id));
+      }
+      _permissions.clear();
+      // What waited behind the turn was given to the process that died,
+      // or waits for none: it all goes again after the turn, in order,
+      // kept visible as queued the while.
+      final waiting = [for (final id in _queued) ?_sent[id]];
+      _queued.clear();
+      _held.clear();
+      // Whatever was mid-stream settles where it got to; what comes from
+      // the new process is whole again from the resumed conversation.
+      _translator.settle();
+      _translator.begin();
+      _setHealth(KernelHealth.idle);
+      // The message goes again whole: the resumed process reads the
+      // conversation from its own session file, where a turn that died
+      // mid-way left nothing. `_whenReady` starts the new process; the
+      // waiting ones queue behind it as under a running turn.
+      _write(_sent[turn]!, ask: _work == 'ask');
+      for (final message in waiting) {
+        _submit(message);
+      }
+      return;
     }
     for (final id in _queued) {
       emit(ItemRemoved(nextSeq, id));
@@ -2273,10 +2515,15 @@ class ClaudeCodeKernel
     // Read in the constructor, before anyone listens: seen when asked.
     _loadingHistory = true;
     try {
+      // Read alongside; never fails.
+      final keptTurns = _keptTurns(session);
       final page = await read(session, turns: _firstTurns);
+      final kept = await keptTurns;
       _earlier = page.earlier;
       _readInTurn = _beginsInTurn(page);
-      _translator.replaying = true;
+      _translator
+        ..replaying = true
+        ..keptTurns = kept;
       var counted = false;
       for (final line in page.entries) {
         if (line['type'] == 'assistant') counted |= _countRequest(line);
@@ -2293,7 +2540,9 @@ class ClaudeCodeKernel
         ),
       );
     } finally {
-      _translator.replaying = false;
+      _translator
+        ..replaying = false
+        ..keptTurns = const {};
       _loadingHistory = false;
       if (!_disposed) emitInfoChanged();
     }
@@ -2311,20 +2560,22 @@ class ClaudeCodeKernel
   Future<void> _readEarlier() async {
     emitInfoChanged();
     try {
+      final keptTurns = _keptTurns(_context.resume!);
       final page = await _pager!(
         _context.resume!,
         turns: _earlierTurns,
         before: _earlier,
       );
+      final kept = await keptTurns;
       if (_disposed) return;
       // Told apart from the live one: it only gathers the items, and its
       // events never reach the stream.
       var seq = 0;
       final items = Transcript();
-      final translator = ClaudeTranslator(
-        emit: items.apply,
-        nextSeq: () => ++seq,
-      )..replaying = true;
+      final translator =
+          ClaudeTranslator(emit: items.apply, nextSeq: () => ++seq)
+            ..replaying = true
+            ..keptTurns = kept;
       var counted = false;
       for (final line in page.entries) {
         if (line['type'] == 'assistant') counted |= _countRequest(line);
@@ -2497,6 +2748,14 @@ class ClaudeCodeKernel
 
   String get _providerKey => _providerKeyOf(_model);
 
+  /// What the conversation is on now: the process's provider while one
+  /// runs, whatever is picked since (a model of one removed, say), else
+  /// the one picked. A model of another is not told that process: one on
+  /// a provider takes Claude Code's names ("opus") for the provider's
+  /// model (`ANTHROPIC_DEFAULT_OPUS_MODEL`).
+  String get _onProvider =>
+      _transport != null ? _launchedProvider : _providerKey;
+
   /// Whether the conversation has begun: going on with it on another
   /// provider is a restart.
   bool get _conversationStarted => _sent.isNotEmpty || _context.resume != null;
@@ -2504,6 +2763,16 @@ class ClaudeCodeKernel
   void _providersChanged() {
     if (_disposed) return;
     emitInfoChanged();
+    // Failed for want of a model, it starts on the first one added.
+    if (_health.noModel && _model != null) restart();
+    // Started on a model removed since: let go (once idle), for the next
+    // message to start one on the model now picked.
+    if (_transport != null &&
+        _launchedModel != null &&
+        _providers.resolve(_launchedModel) == null) {
+      _launchedModel = null;
+      release();
+    }
   }
 
   /// The heading Claude Code's own models are listed under.
@@ -2527,7 +2796,7 @@ class ClaudeCodeKernel
 
   @override
   bool switchRestarts(String model) =>
-      _conversationStarted && _providerKeyOf(model) != _providerKey;
+      _conversationStarted && _providerKeyOf(model) != _onProvider;
 
   /// Switches to [id], an option of [model], on the effort and context it
   /// was last on (those of the model in use noted first, unless [keep] is
@@ -2538,15 +2807,17 @@ class ClaudeCodeKernel
   void _selectModel(String id, {bool keep = true}) {
     if (keep) _keepModelSettings();
     final target = _providers.resolve(id);
-    final sameProvider = _providerKeyOf(id) == _providerKey;
+    final sameProvider = _providerKeyOf(id) == _onProvider;
     // Its own effort and context, if it had them: not the one before's.
     if (_pickedWindows[id] case final window?) _window = window;
     final recalled = _pickedEfforts[id];
     if (recalled != null) _effort = recalled;
+    final variant = target != null
+        ? null
+        : _pickedWindows[id] == null
+        ? _variantOf(id)
+        : _variantFor(id, long: _window! > _windows['200k']!);
     if (sameProvider && target == null) {
-      final variant = _pickedWindows[id] == null
-          ? _variantOf(id)
-          : _variantFor(id, long: _window! > _windows['200k']!);
       final effort =
           recalled != null &&
               recalled != _appliedEffort &&
@@ -2586,7 +2857,7 @@ class ClaudeCodeKernel
       ]);
       return;
     }
-    _model = target == null ? _variantOf(id)?.value ?? id : id;
+    _model = variant?.value ?? id;
     if (_running && !_busy && !_conversationStarted) {
       restart();
       return;
@@ -2617,19 +2888,18 @@ class ClaudeCodeKernel
   /// Each name [provider]'s models are asked for by, with each effort
   /// through the proxy.
   static List<String> _requestedModels(ModelProvider provider) => {
-    for (final info in provider.models)
-      if (info.enabled) ...[
-        requestedModel(provider, info),
-        if (provider.protocol.proxied)
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort),
-        if (provider.protocol == ProviderProtocol.openaiResponses ||
-            provider.protocol == ProviderProtocol.codex) ...[
-          requestedModel(provider, info, fast: true),
-          for (final effort in info.effortLevels)
-            requestedModel(provider, info, effort: effort, fast: true),
-        ],
+    for (final info in provider.enabledModels) ...[
+      requestedModel(provider, info),
+      if (provider.protocol.proxied)
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort),
+      if (provider.protocol == ProviderProtocol.openaiResponses ||
+          provider.protocol == ProviderProtocol.codex) ...[
+        requestedModel(provider, info, fast: true),
+        for (final effort in info.effortLevels)
+          requestedModel(provider, info, effort: effort, fast: true),
       ],
+    ],
   }.toList();
 
   /// The efforts Claude Code itself takes (`--effort`, `effortLevel`).
@@ -2679,8 +2949,9 @@ class ClaudeCodeKernel
     options: () {
       final providers = _providers.enabled;
       return [
-        // Shown unless turned off in Settings → Models.
-        if (!_providers.builtinHidden)
+        // Shown unless turned off in Settings → Models; never on BaoCode's
+        // own core, which runs on the upstreams alone.
+        if (_providers.builtinOffered)
           if (_models.isEmpty)
             // Its models not known (it is not logged in, or no session has
             // started on it yet): picking this starts one, which lists them.
@@ -2729,6 +3000,8 @@ class ClaudeCodeKernel
     },
     selected: () {
       if (_custom != null) return _model;
+      // BaoCode's own core with no upstream: none to run on.
+      if (!_providers.builtinAvailable) return null;
       return switch (_currentModel?.value) {
         final value? => _baseOf(value),
         null => _models.isEmpty ? 'default' : null,
@@ -2827,6 +3100,12 @@ class ClaudeCodeKernel
           ? variants.where((v) => v.long == long).firstOrNull
           : _variantOf(model);
       _window = _pickedWindows[model] = window;
+      // Claude Code's model, picked on another provider's: switched to as
+      // that is (see _selectModel).
+      if (_providerKeyOf(model) != _onProvider) {
+        _selectModel(model, keep: false);
+        return;
+      }
       // Taken up with the next message (see _applyWindow); the model,
       // now.
       _change([?_modelChange(variant?.value)]);
@@ -3070,6 +3349,13 @@ class ClaudeCodeKernel
           else
             ?_thinkingSettings(id),
         ]);
+        return;
+      }
+      // Claude Code's model, picked on another provider's: switched to as
+      // that is (see _selectModel).
+      if (_providerKeyOf(model) != _onProvider) {
+        _effort = _appliedEffort = id;
+        _selectModel(model, keep: false);
         return;
       }
       final switched = _modelChange(_variantOf(model)?.value);

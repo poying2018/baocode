@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../base/smooth_scroll.dart';
 import '../chat/composer/composer_files.dart';
 import '../chat/composer/file_drag.dart';
 import '../chat/composer/file_drop.dart';
@@ -608,7 +609,7 @@ class _ExplorerEdit {
 
 class IdeExplorerState extends State<IdeExplorer>
     with IdeKeyboardList<IdeExplorer> {
-  final ScrollController _scroll = ScrollController();
+  final ScrollController _scroll = SmoothScrollController();
   FocusNode? _ownFocusNode;
   FocusNode get _focusNode =>
       widget.focusNode ?? (_ownFocusNode ??= FocusNode(debugLabel: 'explorer'));

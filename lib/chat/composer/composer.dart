@@ -13,12 +13,14 @@ import '../../kernel/agent_kernel.dart';
 import '../../kernel/kernel_types.dart';
 import '../../keybindings/chat_keybindings.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/quill_focus.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/workbench_theme.dart' show WorkbenchColors, themeColors;
 import '../chat_keys.dart';
 import '../chat_models.dart';
 import '../chat_session.dart';
 import '../open_editor.dart';
+import '../stop_confirmation.dart';
 import '../floating/floating_layer.dart';
 import '../floating/floating_placement.dart';
 import '../floating/floating_registry.dart';
@@ -32,18 +34,21 @@ import 'composer_files.dart';
 import 'composer_images.dart';
 import 'composer_mock_data.dart';
 import 'composer_picker.dart';
+import 'composer_polish.dart';
 import 'pickers_row.dart';
 import 'session_model_picker.dart';
 import 'kernel_option_text.dart';
 import 'file_drop.dart';
 import 'suggestion_menu.dart';
 import '../../ide/ide_hover.dart';
+import '../../ide/ide_spinning.dart';
+import '../../theme/codicons.dart';
 import '../../ide/file_service.dart' show IdeFileService;
 import '../../ide/ide_notifications.dart';
 import 'remote_drops.dart';
 
-/// An open query: a /command's, the slash starting the message, or a
-/// mention's (an @ starting a word: a file, a folder or a conversation);
+/// An open query: a /command's (a slash starting a word), or a mention's
+/// (an @ starting a word: a file, a folder or a conversation);
 /// [query] is the text between it and the caret.
 class _Trigger {
   const _Trigger(this.kind, this.start, this.query);
@@ -157,6 +162,9 @@ class ChatComposerState extends State<ChatComposer>
   final GlobalKey<ComposerPickerState> _modelPickerKey = GlobalKey();
 
   bool _hasContent = false;
+
+  /// Polish asked, its answer awaited (see [_polish]).
+  bool _polishing = false;
 
   /// Every image put in, by number, kept until sent: the text's references
   /// pick which go (see [_images]), so one taken out and brought back by
@@ -277,7 +285,7 @@ class ChatComposerState extends State<ChatComposer>
       await insertFiles(files, here: true);
       return true;
     }
-    final text = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+    final text = await WindowControls.readPasteboardText();
     if (!mounted) return false;
     if (text != null && !raw) {
       if (CopiedCode.matching(text) case final code?) {
@@ -368,6 +376,7 @@ class ChatComposerState extends State<ChatComposer>
     _controller.addListener(_handleEditorChanged);
     _focusNode.addListener(_handleFocusChanged);
     widget.draft?.addListener(_handleDraftChanged);
+    ComposerPolishSetting.changes?.addListener(_handleSettingsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _focusNode.requestFocus();
@@ -385,9 +394,15 @@ class ChatComposerState extends State<ChatComposer>
     }
   }
 
+  /// Settings → General's Polish button, turned on or off.
+  void _handleSettingsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     widget.draft?.removeListener(_handleDraftChanged);
+    ComposerPolishSetting.changes?.removeListener(_handleSettingsChanged);
     FloatingRegistry.closePopover(_menuOwner);
     _clickWindow?.cancel();
     _controller.dispose();
@@ -693,6 +708,7 @@ class ChatComposerState extends State<ChatComposer>
 
   void _handleFocusChanged() {
     if (!_focusNode.hasFocus) _closeMenu();
+    releaseQuillFocus(_editorKey);
     setState(() {});
   }
 
@@ -828,6 +844,16 @@ class ChatComposerState extends State<ChatComposer>
           _sessions.isNotEmpty ||
           _stashes.isNotEmpty;
     }
+    // A / within the message that starts no command's name (e.g. a path's)
+    // stays text.
+    List<SuggestionMatch>? commands;
+    if (visible &&
+        trigger != null &&
+        trigger.kind == SuggestionKind.command &&
+        trigger.start > 0) {
+      commands = rankSuggestions(vocabulary.commands, trigger.query);
+      visible = commands.isNotEmpty;
+    }
 
     if (visible) {
       final queryChanged =
@@ -839,7 +865,8 @@ class ChatComposerState extends State<ChatComposer>
             unawaited(_lookUpFiles(trigger, suggest));
           }
         } else {
-          _matches = rankSuggestions(vocabulary.commands, trigger.query);
+          _matches =
+              commands ?? rankSuggestions(vocabulary.commands, trigger.query);
         }
         _highlighted = 0;
       }
@@ -916,25 +943,21 @@ class ChatComposerState extends State<ChatComposer>
     // Only at the end of a query: a caret moved into existing text (e.g.
     // `/re|view`) is not typing one.
     if (caret < plain.length && !isBoundary(plain[caret])) return null;
-    if (plain.startsWith('/')) {
-      final query = plain.substring(1, caret);
-      if (!query.split('').any(isBoundary)) {
-        return _Trigger(SuggestionKind.command, 0, query);
-      }
-    }
-    // An @ starting the word the caret ends: a file or a conversation to
-    // refer to.
+    // A / or an @ starting the word the caret ends: a command, or a file or
+    // a conversation to refer to.
     final vocabulary = ComposerVocabulary.read(context);
-    if (vocabulary.sessions == null &&
-        vocabulary.suggestFiles == null &&
-        vocabulary.stashes == null) {
-      return null;
-    }
+    final mentions =
+        vocabulary.sessions != null ||
+        vocabulary.suggestFiles != null ||
+        vocabulary.stashes != null;
     for (var i = caret - 1; i >= 0; i--) {
       final char = plain[i];
       if (isBoundary(char)) return null;
-      if (char == '@' && (i == 0 || isBoundary(plain[i - 1]))) {
-        return _Trigger(SuggestionKind.file, i, plain.substring(i + 1, caret));
+      if (i > 0 && !isBoundary(plain[i - 1])) continue;
+      final query = plain.substring(i + 1, caret);
+      if (char == '/') return _Trigger(SuggestionKind.command, i, query);
+      if (char == '@' && mentions) {
+        return _Trigger(SuggestionKind.file, i, query);
       }
     }
     return null;
@@ -1365,6 +1388,62 @@ class ChatComposerState extends State<ChatComposer>
     }
   }
 
+  // --- Polish --------------------------------------------------------------
+
+  /// The text as the model is given it to polish (see [composerPolishText]).
+  ComposerPolishText _polishText() {
+    final document = _controller.document;
+    return composerPolishText(
+      document.toDelta().slice(0, math.max(0, document.length - 1)),
+    );
+  }
+
+  /// Has the auxiliary model polish the text, its tags, images, code and
+  /// links kept as they are; put in its place as one change (⌘Z takes it
+  /// back), unless the text changed meanwhile. Why not, in a notification.
+  Future<void> _polish() async {
+    if (_polishing) return;
+    final asked = _polishText();
+    if (!asked.hasWords) return;
+    final before = _controller.document.toDelta();
+    final notifications = IdeNotificationsScope.maybeOf(context);
+    final l10n = context.l10n;
+    setState(() => _polishing = true);
+    try {
+      final Delta polished;
+      try {
+        polished = await polishComposerText(
+          asked,
+          model: widget.session.selected(KernelChoiceKind.model),
+          location: widget.session.kernelContext.cwd,
+        );
+      } on ComposerPolishException catch (error) {
+        notifications?.notify(
+          IdeSeverity.error,
+          l10n.composerPolishFailed(error.message ?? l10n.stashAiNoAnswer),
+        );
+        return;
+      }
+      if (!mounted || _controller.document.toDelta() != before) return;
+      final length = polished.toList().fold(
+        0,
+        (sum, op) => sum + (op.length ?? 0),
+      );
+      // One change of its own to undo: not merged with what was typed just
+      // before it, nor with what is typed next.
+      final history = _controller.document.history..lastRecorded = 0;
+      _controller.compose(
+        (Delta()..delete(_controller.document.length - 1)).concat(polished),
+        TextSelection.collapsed(offset: length),
+        ChangeSource.local,
+      );
+      history.lastRecorded = 0;
+      _focusNode.requestFocus();
+    } finally {
+      if (mounted) setState(() => _polishing = false);
+    }
+  }
+
   // --- Submit --------------------------------------------------------------
 
   ComposerMessage _buildMessage() {
@@ -1769,6 +1848,26 @@ class ChatComposerState extends State<ChatComposer>
   }
 
   Widget _buildQuill(BuildContext context) {
+    // Quill's own caret is hidden (ComposerCaret paints this one), but on
+    // Apple platforms Quill fades it in and out all the same once anything
+    // is typed: an animation on every frame for as long as the input has
+    // the focus, the app never at rest. Its theme's platform is what makes
+    // it fade (`ThemeData.isCupertino`), and besides that only picks the
+    // hidden caret's shape, fallback selection colors (the app's theme
+    // sets them) and touch long presses: not an Apple one, the caret
+    // blinks without fading, twice a second.
+    final theme = Theme.of(context);
+    return Theme(
+      data: switch (theme.platform) {
+        TargetPlatform.iOS ||
+        TargetPlatform.macOS => theme.copyWith(platform: TargetPlatform.linux),
+        _ => theme,
+      },
+      child: _buildQuillEditor(),
+    );
+  }
+
+  Widget _buildQuillEditor() {
     return QuillEditor(
       controller: _controller,
       focusNode: _focusNode,
@@ -1941,7 +2040,8 @@ class ChatComposerState extends State<ChatComposer>
                       ),
                       const SizedBox(width: 2),
                     ],
-                    if (model != null)
+                    // With none to pick, one to set up.
+                    if (model != null || session.health.noModel)
                       SessionModelPicker(
                         session: session,
                         pickerKey: _modelPickerKey,
@@ -1959,6 +2059,14 @@ class ChatComposerState extends State<ChatComposer>
             ),
           ),
           const SizedBox(width: 8),
+          if (ComposerPolishSetting.current()) ...[
+            _PolishButton(
+              busy: _polishing,
+              enabled: _polishing || _polishText().hasWords,
+              onTap: () => unawaited(_polish()),
+            ),
+            const SizedBox(width: 2),
+          ],
           if ((widget.onToggleContextPanel, context) case (
             final onToggle?,
             final usage?,
@@ -1981,9 +2089,59 @@ class ChatComposerState extends State<ChatComposer>
             streaming: _showsStop,
             enabled: _canSend,
             onSend: _submit,
-            onStop: session.stop,
+            onStop: () => stopTurn(this.context, session),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Polish (see [ChatComposerState._polish]): a sparkle, spinning while the
+/// model answers; faint with no words to polish.
+class _PolishButton extends StatelessWidget {
+  const _PolishButton({
+    required this.busy,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final bool busy;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final colors = themeColors;
+    final active = enabled && !busy;
+    final icon = Icon(
+      busy ? Codicons.loading : Codicons.sparkle,
+      size: 14,
+      color: enabled ? colors['icon.foreground'] : AppColors.textFaint,
+    );
+    return IdeHover(
+      message: busy ? l10n.composerPolishing : l10n.composerPolishHint,
+      child: HoverBuilder(
+        cursor: active ? SystemMouseCursors.click : SystemMouseCursors.basic,
+        builder: (context, hovered) => GestureDetector(
+          // Keeps the editor's focus.
+          onTapDown: (_) {},
+          onTap: active ? onTap : null,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            width: 23,
+            height: 22,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active && hovered
+                  ? colors['toolbar.hoverBackground']
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: busy ? IdeSpinning(icon) : icon,
+          ),
+        ),
       ),
     );
   }

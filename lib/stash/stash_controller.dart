@@ -365,6 +365,19 @@ class StashController extends ChangeNotifier {
     if (edited != null) _suggestSoon(edited);
   }
 
+  /// A new stash to write in on the Stash page, beside the cards: the
+  /// draft there is, else one made; of [project], if given. Its id.
+  Future<int> draft({String? project}) async {
+    await store.load();
+    final id =
+        _draft()?.id ?? (await store.create(source: StashSource.none)).id;
+    if (project != null) {
+      // Not written in for this: still the draft, if left blank.
+      await store.update(id, (note) => note.project = project, touch: false);
+    }
+    return id;
+  }
+
   /// The stash the panel shows, made (with [body]) if it was not yet.
   Future<int> ensureNote({String body = ''}) async {
     if (_editing case final id? when store.byId(id) != null) return id;

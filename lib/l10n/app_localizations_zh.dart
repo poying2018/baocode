@@ -1384,6 +1384,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cmdToggleSidePanel => '切换侧栏';
 
   @override
+  String get cmdToggleSidePanelPosition => '切换侧栏位置';
+
+  @override
   String get cmdSidePanelChanges => '显示智能体变更';
 
   @override
@@ -1472,7 +1475,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get browserTraceReveal => '在访达中显示 trace 文件（拖进 DevTools 的性能面板可以细看）';
+  String browserTraceReveal(String app) {
+    return '在$app中显示 trace 文件（拖进 DevTools 的性能面板可以细看）';
+  }
 
   @override
   String browserStepDone(String action) {
@@ -1582,6 +1587,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidePanelHide => '隐藏侧栏';
+
+  @override
+  String get sidePanelMoveLeft => '移到对话左侧';
+
+  @override
+  String get sidePanelMoveRight => '移到对话右侧';
 
   @override
   String get sidePanelChanges => '变更';
@@ -2059,6 +2070,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get workspaceFileExplorer => '文件资源管理器';
 
   @override
+  String get workspaceFileManager => '文件管理器';
+
+  @override
   String get workspaceTerminalApp => '终端';
 
   @override
@@ -2227,6 +2241,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get toolUsed => '已使用';
+
+  @override
+  String get toolGeneratingImage => '正在生成图片';
+
+  @override
+  String get toolGeneratedImage => '已生成图片';
+
+  @override
+  String get toolImageFailed => '图片未生成';
+
+  @override
+  String get toolImageWaiting => '生成图片';
+
+  @override
+  String get imagePickTitle => '选择用来生成的模型';
+
+  @override
+  String get imagePickGenerate => '生成';
+
+  @override
+  String get imagePickDecline => '不生成';
+
+  @override
+  String get imageSetDefault => '设为默认';
+
+  @override
+  String get imageDefaultSet => '已设为默认图片模型';
 
   @override
   String get toolProposingGoal => '正在提议目标';
@@ -2422,7 +2463,13 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get turnSpeedHint => '输出速度';
+  String get turnSpeedHint => '平均输出速度';
+
+  @override
+  String get turnOutputTokensHint => '本轮已输出';
+
+  @override
+  String get turnSpeedLiveHint => '输出速度（最近 2 秒采样）';
 
   @override
   String get turnDurationHint => '本轮耗时';
@@ -2511,7 +2558,61 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get activityMusings =>
-      '冥思苦想\n琢磨一下\n慢慢酝酿\n深思熟虑\n文火慢炖\n入味中\n修修补补\n融会贯通\n反复掂量\n连点成线\n追一个直觉\n酝酿计划\n孵化方案\n权衡利弊\n理清头绪\n赶着一群 token\n召唤上下文\n网格化样条曲线\n请教小黄鸭\n看茶叶占卜\n在餐巾纸上打草稿\n在页边涂鸦\n眯眼看 diff\n数括号\n和编译器交朋友\n与类型系统谈判\n驯服边界情况\n追踪调用栈\n翻阅文档\n探索代码库\n把鸭子排成一排\n摇一摇魔法 8 号球\n预热神经元\n折叠思绪\n调整状态\n绑定 Monad\n提升进 Monad\n求问神谕\n搅一搅锅\n打磨计划';
+      '冥思苦想\n琢磨一下\n慢慢酝酿\n深思熟虑\n文火慢炖\n修修补补\n融会贯通\n反复掂量\n连点成线\n追一个直觉\n酝酿计划\n孵化方案\n权衡利弊\n理清头绪\n赶着一群 token\n召唤上下文\n请教小黄鸭\n在餐巾纸上打草稿\n眯眼看 diff\n数括号\n和编译器交朋友\n与类型系统谈判\n驯服边界情况\n追踪调用栈\n翻阅文档\n探索代码库\n摇一摇魔法 8 号球\n绑定 Monad\n求问神谕\n打磨计划\n打个腹稿\n掐指一算\n抽丝剥茧\n顺藤摸瓜\n在脑子里跑一遍\n把思路捋直\n拆解问题';
+
+  @override
+  String activityMusingsCommand(String name) {
+    return '对着 $name 的输出点点头\n品一品 $name 的输出\n给 $name 的输出划重点\n看 $name 跑出了什么名堂\n把 $name 的结果过一遍';
+  }
+
+  @override
+  String activityMusingsCommandFailed(String name) {
+    return '和 $name 的报错大眼瞪小眼\n盯着 $name 的报错挠头\n给 $name 的报错号号脉\n琢磨 $name 为什么不高兴\n顺着 $name 的报错往回找';
+  }
+
+  @override
+  String activityMusingsRead(String name) {
+    return '把 $name 翻来覆去地看\n在 $name 里找线头\n跟 $name 混个脸熟\n在 $name 的字里行间找答案\n把 $name 记在心里';
+  }
+
+  @override
+  String activityMusingsEdit(String name) {
+    return '欣赏刚改好的 $name\n替 $name 捏把汗\n回头再瞄一眼 $name\n想想 $name 还缺点啥\n给 $name 收个尾';
+  }
+
+  @override
+  String activityMusingsSearch(String name) {
+    return '在 $name 处结果里淘金\n从 $name 处结果里挑出真身\n顺着 $name 条线索摸过去';
+  }
+
+  @override
+  String activityMusingsFolder(String name) {
+    return '在 $name 里东张西望\n给 $name 点个名\n摸清 $name 的家底';
+  }
+
+  @override
+  String activityMusingsWeb(String name) {
+    return '从 $name 抄点笔记\n消化 $name 上看来的东西';
+  }
+
+  @override
+  String activityMusingsAgent(String name) {
+    return '听 $name 汇报\n批改 $name 交上来的作业\n消化 $name 带回来的情报';
+  }
+
+  @override
+  String activityMusingsMcp(String name) {
+    return '拆 $name 寄回来的包裹\n看 $name 回了些什么';
+  }
+
+  @override
+  String get activityMusingsBrowser => '端详页面截图\n看看浏览器里发生了什么';
+
+  @override
+  String get activityMusingsImage => '端详刚画好的图\n给新图挑挑刺';
+
+  @override
+  String get activityMusingsDenied => '收到，换条路走\n另想办法';
 
   @override
   String get composerCommands => '命令';
@@ -2908,6 +3009,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queuedRemove => '移出队列';
 
   @override
+  String get stopConfirmMessage => '要停止 Agent 吗？';
+
+  @override
+  String stopConfirmDetail(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '后台运行中的 $count 个任务也会一并停止。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stopConfirmStop => '停止';
+
+  @override
   String get tabClose => '关闭';
 
   @override
@@ -3272,6 +3389,19 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get generalSettingsCommitAttributionDescription =>
       'Agent 在它写的提交和 Pull Request 中添加的署名。更改对之后启动的 Agent 生效；目前仅支持 Claude Code。';
+
+  @override
+  String get generalSettingsClaudeCore => '内核';
+
+  @override
+  String get generalSettingsClaudeCoreDescription =>
+      'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。本机装了 Claude Code 时默认用 CLI，否则用内置。改动对新开的会话生效。';
+
+  @override
+  String get generalSettingsClaudeCoreBuiltin => '内置';
+
+  @override
+  String get generalSettingsClaudeCoreCli => 'Claude Code CLI';
 
   @override
   String get generalSettingsQueuedMessages => '工作中发送的消息';
@@ -4886,6 +5016,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dataDirRevealInFileExplorer => '在文件资源管理器中显示';
 
   @override
+  String get dataDirRevealInFileManager => '在文件管理器中显示';
+
+  @override
   String get dataDirChecking => '正在检查文件夹…';
 
   @override
@@ -5338,7 +5471,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get claudePathSettingDescription =>
-      '留空：自动使用本机已安装的和 BaoCode 下载的 Claude Code 中版本最高的一份（一份都没有时会自动下载）。填入路径：始终使用这一份，例如你自己编译的版本。（claudeCode.path）';
+      '留空则自动用本机最新版本的 Claude Code，没有时自动下载。填入路径则固定用那一份，比如你自己编译的版本。（claudeCode.path）';
 
   @override
   String get claudePathSettingHint => '自动';
@@ -6206,7 +6339,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。';
+      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
+
+  @override
+  String get modelsRoleMissing => '这个模型已不在它的上游里，子 Agent 的请求会失败。';
 
   @override
   String get modelsAdvanced => '高级';
@@ -6382,6 +6518,38 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsNoImages => '不支持图片';
+
+  @override
+  String get modelsKind => '用途';
+
+  @override
+  String get modelsKindChat => '对话';
+
+  @override
+  String get modelsKindImage => '图片生成（Images API）';
+
+  @override
+  String get modelsKindImageChat => '图片生成（对话接口）';
+
+  @override
+  String get modelsKindDescription =>
+      '图片模型不出现在模型选择器里：agent 通过 generate_image 工具用它们生成图片。';
+
+  @override
+  String get modelsImageBadge => '图片';
+
+  @override
+  String get modelsImage => '图片生成模型';
+
+  @override
+  String get modelsImageDescription =>
+      'agent 生成图片（generate_image 工具）时用的模型，除非你让它换一个；选「每次询问」时在对话里选。图片模型在上游的模型列表里启用。';
+
+  @override
+  String get modelsImageFirst => '每次询问';
+
+  @override
+  String get modelsImageNone => '未启用图片模型';
 
   @override
   String get modelsSave => '保存';
@@ -6772,6 +6940,24 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get appearanceSettingsReplyScroll => '回复时滚动';
+
+  @override
+  String get appearanceSettingsReplyScrollDescription =>
+      'Agent 回复时对话停在哪里：自动跟随最新输出；或者锚定开头，你的消息到顶部后就不再自动滚动，从回复开头往下读。手动滚到底部后恢复跟随。';
+
+  @override
+  String get appearanceSettingsReplyScrollFollow => '自动';
+
+  @override
+  String get appearanceSettingsReplyScrollStart => '锚定开头';
+
+  @override
+  String appearanceSettingsReplyScrollLabel(String choice) {
+    return '回复时滚动：$choice';
+  }
+
+  @override
   String get appearanceSettingsMinimap => '对话缩略图';
 
   @override
@@ -6895,7 +7081,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalSettingsContextMenuFinder => '访达右键菜单';
 
   @override
-  String get generalSettingsContextMenuExplorer => '资源管理器右键菜单';
+  String get generalSettingsContextMenuExplorer => '文件资源管理器右键菜单';
 
   @override
   String get generalSettingsContextMenuDescription =>
@@ -6940,8 +7126,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cmdOpenRemoteFile => '打开远程文件...';
 
   @override
-  String get remoteHostPlaceholder =>
-      '选择 ~/.ssh/config 中的主机，或输入 user@host[:port]';
+  String get remoteHostPlaceholder => '选择主机、新增一个，或直接输入 user@host[:port]';
 
   @override
   String remoteConnectTo(String host) {
@@ -6949,7 +7134,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get remoteNoHosts => '~/.ssh/config 中没有主机，请直接输入';
+  String get remoteNoHosts => '还没有主机：新增一个，或直接输入 user@host';
 
   @override
   String get remoteInvalidHost => '不是有效的主机：不能含空格，也不能以 \'-\' 开头';
@@ -7751,6 +7936,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidebarRenameHost => '重命名主机';
 
   @override
+  String get sidebarEditHost => '编辑连接…';
+
+  @override
   String get explorerNoPermission => '没有权限读取此文件夹';
 
   @override
@@ -8044,6 +8232,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashPolishHint => '让 AI 把选中的文字理顺，保持你的原意，不加结构';
 
   @override
+  String get composerPolish => '润色';
+
+  @override
+  String get composerPolishing => '润色中…';
+
+  @override
+  String get composerPolishHint =>
+      '润色：用辅助模型把消息改得更清楚，保留你的意思和口吻；图片、文件、代码和链接原样不动，可撤销';
+
+  @override
+  String composerPolishFailed(String error) {
+    return '润色失败：$error';
+  }
+
+  @override
+  String get generalSettingsComposerPolish => '润色按钮';
+
+  @override
+  String get generalSettingsComposerPolishDescription =>
+      '在输入框里显示润色按钮，发送前用辅助模型把写的内容改得更清楚';
+
+  @override
+  String get generalSettingsLiveTurnStats => '运行时实时显示详细速率和时间';
+
+  @override
+  String get generalSettingsLiveTurnStatsDescription =>
+      '运行中在回复下方实时显示本轮耗时、输出速度和已输出的 token。一轮结束后的统计始终显示';
+
+  @override
+  String usageLimitScheduled(String time) {
+    return '已达到用量上限，将在 $time 重置后自动继续';
+  }
+
+  @override
+  String usageLimitTomorrow(String time) {
+    return '明天 $time';
+  }
+
+  @override
+  String get resumeAfterResetPrompt => '用量已重置，请从中断的地方继续。';
+
+  @override
+  String get resumeAfterLimitToggle => '限额重置后自动继续';
+
+  @override
   String stashPolishFailed(String error) {
     return '没能润色：$error';
   }
@@ -8216,9 +8449,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get stashDismiss => '忽略';
-
-  @override
-  String get stashReveal => '在访达中显示';
 
   @override
   String get stashDelete => '删除';
@@ -8482,7 +8712,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get branchBarWorkspace => '各文件夹的分支';
 
   @override
-  String get settingsSectionAccounts => '账号';
+  String get settingsSectionAccounts => 'Git 账号';
 
   @override
   String get settingsAccountsKeywords =>
@@ -8833,7 +9063,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '让 agent 用你自己的浏览器，沿用你的登录状态：在你共享给它的标签页里打开网页、读取内容、点击和输入。它的每一步操作都能在侧边栏里看到。';
 
   @override
-  String get browserSettingsMacOSOnly => '浏览器功能目前只支持 macOS。';
+  String get browserSettingsUnsupported => '浏览器功能只支持 macOS、Windows 和 Linux。';
 
   @override
   String get browserSettingsEnabled => '允许 agent 使用浏览器';
@@ -8858,6 +9088,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get browserSettingsNotRunningDescription =>
       '打开装有 BaoCode 扩展的浏览器，会自动连接。';
+
+  @override
+  String get browserSettingsSandboxed => 'Snap 和 Flatpak 装的浏览器连不上';
+
+  @override
+  String get browserSettingsSandboxedDescription =>
+      '它们的沙箱不让 BaoCode 的辅助程序运行。请改用浏览器官方的 .deb 或 .rpm 安装包，例如从 google.com/chrome 下载 Google Chrome。';
 
   @override
   String browserSettingsConnected(String browser) {
@@ -9000,4 +9237,488 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get cmdStashWelcome => '认识 Stash...';
+
+  @override
+  String get cmdModelWelcome => '设置模型...';
+
+  @override
+  String get modelWelcomeTitle => '选一个模型开始';
+
+  @override
+  String get modelWelcomeLead =>
+      'BaoCode 用你选的模型来运行 agent。添加一个上游（提供 API Key 的服务），它的模型就能直接用了。';
+
+  @override
+  String get modelWelcomeAnyTitle => '任意上游';
+
+  @override
+  String get modelWelcomeAny =>
+      '支持 Anthropic API、OpenAI Chat Completions 和 Responses，以及兼容它们的服务，比如 OpenRouter、DeepSeek。';
+
+  @override
+  String get modelWelcomeKeysTitle => 'Key 只在你手里';
+
+  @override
+  String get modelWelcomeKeys => 'Key 存在系统钥匙串里，请求从这台电脑直接发往上游。';
+
+  @override
+  String get modelWelcomeSwitchTitle => '随时切换';
+
+  @override
+  String get modelWelcomeSwitch => '之后随时可以再添加上游，每个对话都能在输入框下方选模型。';
+
+  @override
+  String get modelWelcomeStepTitle => '添加第一个上游';
+
+  @override
+  String get modelWelcomeStep => '填上地址和 Key，再勾选要用的模型。部分服务也能在 设置 → 模型 里一键导入。';
+
+  @override
+  String get modelWelcomeReadyTitle => '准备好了';
+
+  @override
+  String modelWelcomeReady(String model) {
+    return '新对话会使用 $model，随时可以在输入框下方换成别的。';
+  }
+
+  @override
+  String get modelWelcomeLater => '也可以之后在 设置 → 模型 中添加。';
+
+  @override
+  String get modelWelcomeSkip => '稍后';
+
+  @override
+  String get modelWelcomeStart => '开始对话';
+
+  @override
+  String get healthNoModel => '选一个模型就能开始：添加一个上游，它的模型就能直接用了。';
+
+  @override
+  String get modelSetUp => '设置模型';
+
+  @override
+  String get remoteAddServer => '新增 SSH 服务器…';
+
+  @override
+  String get remoteEditServer => '编辑';
+
+  @override
+  String get settingsSectionSsh => 'SSH 服务器';
+
+  @override
+  String get settingsSshKeywords =>
+      'ssh 远程 服务器 主机 跳板机 私钥 密码 内核 remote server host';
+
+  @override
+  String get sshSettingsDescription => '远程项目连接的服务器：地址、登录方式、跳板机，以及每台用的内核。';
+
+  @override
+  String get sshSettingsServers => '服务器';
+
+  @override
+  String get sshSettingsServersDescription => '在应用里添加的，以及侧栏里用过的主机。';
+
+  @override
+  String get sshSettingsNone => '还没有服务器';
+
+  @override
+  String get sshSettingsAdd => '添加服务器…';
+
+  @override
+  String get sshSettingsEdit => '编辑…';
+
+  @override
+  String get sshSettingsConnect => '连接';
+
+  @override
+  String get sshSettingsDisconnect => '断开';
+
+  @override
+  String sshSettingsDisconnectTitle(String host) {
+    return '断开 $host？';
+  }
+
+  @override
+  String get sshSettingsDisconnectDetail => '这台主机上正在运行的对话和终端会结束。';
+
+  @override
+  String sshSettingsCore(String core) {
+    return '内核：$core';
+  }
+
+  @override
+  String sshSettingsVia(String host) {
+    return '经 $host';
+  }
+
+  @override
+  String get sshSettingsTyped => '按输入的地址';
+
+  @override
+  String get sshSettingsConfigHosts => '~/.ssh/config 里的主机';
+
+  @override
+  String get sshSettingsConfigHostsDescription => '在这个文件里修改；内核按“自动”。';
+
+  @override
+  String get sshSettingsOpenConfig => '打开文件';
+
+  @override
+  String get sshServerAddTitle => '新增 SSH 服务器';
+
+  @override
+  String get sshServerAddSubtitle => '保存后会出现在远程列表里，点一下就能连接。';
+
+  @override
+  String sshServerEditTitle(String name) {
+    return '编辑 $name';
+  }
+
+  @override
+  String get sshServerHost => '主机';
+
+  @override
+  String get sshServerHostPlaceholder => '域名或 IP，粘贴 user@host:port 会自动拆开';
+
+  @override
+  String get sshServerPort => '端口';
+
+  @override
+  String get sshServerUser => '用户名';
+
+  @override
+  String get sshServerName => '名称（可选）';
+
+  @override
+  String get sshServerNamePlaceholder => '如“生产环境”';
+
+  @override
+  String get sshServerAuth => '登录方式';
+
+  @override
+  String get sshServerAuthPassword => '密码';
+
+  @override
+  String get sshServerAuthKey => '私钥';
+
+  @override
+  String get sshServerAuthAuto => '自动';
+
+  @override
+  String get sshServerAuthAutoHint =>
+      '和终端里的 ssh 一样：用 ssh-agent、~/.ssh 里的密钥和 ~/.ssh/config 的设置；服务器要密码时会再问。';
+
+  @override
+  String get sshServerPasswordHint => '保存在系统钥匙串中。留空则连接时再问。';
+
+  @override
+  String get sshServerPasswordKept => '已保存，不修改请留空';
+
+  @override
+  String get sshServerKeyPlaceholder => '私钥文件路径，如 ~/.ssh/id_ed25519';
+
+  @override
+  String get sshServerKeyBrowse => '浏览…';
+
+  @override
+  String get sshServerKeysFound => '~/.ssh 中的密钥';
+
+  @override
+  String get sshServerKeyHint => '如果私钥有口令，连接时会问。';
+
+  @override
+  String get sshServerCore => '内核';
+
+  @override
+  String get sshServerCoreAuto => '自动';
+
+  @override
+  String get sshServerCoreAutoHint => '服务器上装了 Claude Code CLI 就用它，没装就用内置内核。';
+
+  @override
+  String get sshServerCoreBuiltinHint => 'BaoCode 自带的内核，使用“设置 → 模型”里的上游。';
+
+  @override
+  String get sshServerCoreCliHint => '服务器上的 Claude Code CLI，没装会自动装上。';
+
+  @override
+  String get sshServerJump => '跳板机（可选）';
+
+  @override
+  String get sshServerNoJump => '不使用，直接连接';
+
+  @override
+  String get sshServerSaveConnect => '保存并连接';
+
+  @override
+  String get sshServerSave => '保存';
+
+  @override
+  String get sshServerHostRequired => '请填写服务器的域名或 IP';
+
+  @override
+  String get sshServerHostInvalid => '不能含空格，也不能以 - 开头';
+
+  @override
+  String get sshServerPortInvalid => '端口应为 1 到 65535';
+
+  @override
+  String get sshServerKeyRequired => '请选择私钥文件';
+
+  @override
+  String get sshServerKeyMissing => '找不到这个文件';
+
+  @override
+  String get remoteForgetHostKey => '移除旧指纹并重新连接';
+
+  @override
+  String remoteForgetHostKeyTitle(String host) {
+    return '移除 $host 的旧指纹？';
+  }
+
+  @override
+  String get remoteForgetHostKeyDetail =>
+      '只有在确认服务器重装过或更换过密钥时才这样做，否则可能有人在中间截获连接。移除后，下次连接会接受服务器现在的指纹。';
+
+  @override
+  String get remoteForgetHostKeyButton => '移除并连接';
+
+  @override
+  String get remoteFailNoSsh => '本机没有 ssh：请安装 OpenSSH 客户端。';
+
+  @override
+  String get remoteFailAuth => '服务器拒绝登录：请检查用户名、密码或密钥。';
+
+  @override
+  String get remoteFailCancelled => '已取消登录。';
+
+  @override
+  String get remoteFailHostKey =>
+      '服务器的指纹未知，而你的 ssh 配置要求不自动接受新指纹（StrictHostKeyChecking）。';
+
+  @override
+  String get remoteFailHostKeyChanged =>
+      '服务器的指纹和上次连接时不同：可能是服务器重装过，也可能有人在中间截获连接。';
+
+  @override
+  String get remoteFailUnreachable => '连不上服务器：请检查地址、端口和网络。';
+
+  @override
+  String get channelSetupTitle => '欢迎使用 BaoCode';
+
+  @override
+  String get channelSetupLead => '打开官网完成首次设置，大约 10 秒。';
+
+  @override
+  String get channelSetupStepTitle => '在浏览器中完成设置';
+
+  @override
+  String get channelSetupStep =>
+      'BaoCode 会在浏览器里打开 baocode.dev，网页显示完成后，这里会自动继续。';
+
+  @override
+  String get channelSetupWaitingTitle => '正在等待浏览器完成…';
+
+  @override
+  String get channelSetupWaiting => '网页显示完成后，这里会自动继续。不小心关掉了网页，可以重新打开。';
+
+  @override
+  String get channelSetupOpenFailedTitle => '浏览器没有打开';
+
+  @override
+  String get channelSetupOpenFailed => '复制下面的网址，粘贴到浏览器里打开。网页显示完成后，这里会自动继续。';
+
+  @override
+  String get channelSetupAddressCopied => '已复制';
+
+  @override
+  String get channelSetupOffline => '连不上 baocode.dev，需要联网才能完成设置。';
+
+  @override
+  String get channelSetupRetry => '重试';
+
+  @override
+  String get channelSetupDoneTitle => '设置完成';
+
+  @override
+  String get channelSetupOpen => '在浏览器中完成设置';
+
+  @override
+  String get channelSetupOpenAgain => '重新打开网页';
+
+  @override
+  String get channelSetupNoResponse => '浏览器没反应？';
+
+  @override
+  String get channelSetupPasteLead => '网页上如果有一段链接，复制后粘贴到这里：';
+
+  @override
+  String get channelSetupPasteConfirm => '确定';
+
+  @override
+  String get channelSetupLinkInvalid => '这不是网页上的链接，请复制网页上显示的完整链接。';
+
+  @override
+  String get channelSetupLinkOther => '这个链接属于另一个 BaoCode（别的电脑或重装前的），请用这里打开的网页。';
+
+  @override
+  String get channelSetupTrouble => '遇到问题？';
+
+  @override
+  String get channelSetupOnceTitle => '只需一次';
+
+  @override
+  String get channelSetupOnce => '完成后不会再出现，更新后也不会。';
+
+  @override
+  String get channelSetupPrivateTitle => '不涉及个人信息';
+
+  @override
+  String get channelSetupPrivate => '网页只告诉 BaoCode 你是从哪里知道它的，比如某个视频或网站。';
+
+  @override
+  String get channelSetupFindingTitle => '正在读取渠道信息…';
+
+  @override
+  String get channelSetupFinding => '马上就好。';
+
+  @override
+  String get channelSetupSiteOfflineTitle => '连不上 baocode.dev';
+
+  @override
+  String get channelSetupSiteOffline => '需要联网读取渠道信息，请检查网络后重试。';
+
+  @override
+  String get channelSetupUnavailableTitle => '这个渠道暂时用不了';
+
+  @override
+  String get channelSetupUnavailable =>
+      '这份安装包对应的渠道还没有开通账号服务。如果你是从别的渠道下载的，去浏览器确认一下来源；否则请联系提供安装包的一方，或到 baocode.dev 下载普通版。';
+
+  @override
+  String get channelSetupConfirmAgain => '去浏览器确认';
+
+  @override
+  String channelWelcomeTitle(String channel) {
+    return '欢迎使用 $channel';
+  }
+
+  @override
+  String channelWelcomeText(String channel) {
+    return '登录你的 $channel 账号，就可以开始使用了。';
+  }
+
+  @override
+  String get channelWelcomeSignIn => '登录';
+
+  @override
+  String get channelWelcomeSigningIn => '请在弹出的窗口中登录…';
+
+  @override
+  String get channelWelcomePreparing => '正在准备…';
+
+  @override
+  String channelWelcomeFailed(String error) {
+    return '没能完成登录：$error';
+  }
+
+  @override
+  String get channelAccountTitle => '账号管理';
+
+  @override
+  String get channelAccountBalance => '余额';
+
+  @override
+  String get channelAccountRefresh => '刷新账户';
+
+  @override
+  String get channelAccountSignOut => '退出登录';
+
+  @override
+  String get channelAccountSignOutTitle => '退出登录？';
+
+  @override
+  String channelAccountSignOutDetail(String channel) {
+    return '退出后，需要重新登录 $channel 才能继续使用 BaoCode。';
+  }
+
+  @override
+  String get channelAccountOpenSite => '打开网站';
+
+  @override
+  String get channelAccountDefaultModel => '新对话默认模型';
+
+  @override
+  String get channelAccountNoModels => '正在使用的 Key 没有可用的模型。';
+
+  @override
+  String get channelAccountKeys => '我的 API Key';
+
+  @override
+  String get channelAccountCreateKey => '创建 Key';
+
+  @override
+  String get channelAccountKeyName => '名称';
+
+  @override
+  String get channelAccountKeyGroup => '分组';
+
+  @override
+  String get channelAccountUseKey => '使用此 Key';
+
+  @override
+  String get channelAccountInUse => '使用中';
+
+  @override
+  String get channelAccountNoKeys => '还没有 API Key。';
+
+  @override
+  String get channelAccountSignedOut => '还没有登录。';
+
+  @override
+  String get channelAccountUnavailable => '这个渠道暂时用不了，请联系提供安装包的一方。';
+
+  @override
+  String channelAccountFailed(String error) {
+    return '出错了：$error';
+  }
+
+  @override
+  String channelAccountBlocked(String site, String request) {
+    return '$site 拒绝了这台电脑的连接（$request），可能是当前网络或代理的 IP 被它的防火墙拦截了。换个网络，或让 $site 不走代理后再试。';
+  }
+
+  @override
+  String get settingsSectionAbout => '关于';
+
+  @override
+  String get aboutTagline => '好看又好用的 Claude Code 桌面应用，内置毫秒级响应的 IDE。';
+
+  @override
+  String aboutVersion(String version, int build) {
+    return '版本 $version（$build）';
+  }
+
+  @override
+  String aboutRepository(String repository) {
+    return '$repository · 免费开源，GPL-3.0 许可证';
+  }
+
+  @override
+  String get aboutWebsite => '官网';
+
+  @override
+  String get aboutChangelog => '更新日志';
+
+  @override
+  String get aboutChangelogDetail => '每个版本改了什么';
+
+  @override
+  String get aboutFeedback => '反馈问题';
+
+  @override
+  String get aboutFeedbackDetail => '在 GitHub 上提 issue，或者看看别人提过的';
+
+  @override
+  String get aboutOpen => '打开';
 }

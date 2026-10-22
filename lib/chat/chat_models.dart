@@ -70,6 +70,16 @@ class TurnUsage {
       : (inputTokens ?? 0) + (outputTokens ?? 0);
 }
 
+/// What the model has written so far in the turn under way, and how fast it
+/// writes (now while it does, else on average so far; null before it has
+/// written long enough to say).
+class TurnOutput {
+  const TurnOutput({required this.tokens, this.tokensPerSecond});
+
+  final int tokens;
+  final double? tokensPerSecond;
+}
+
 /// A picture sent with a message.
 class ImageAttachment {
   const ImageAttachment({
@@ -171,6 +181,9 @@ enum ToolKind {
   /// Something done in the user's browser (see lib/browser): its [tool]
   /// says what.
   browser,
+
+  /// Pictures an image model made (see lib/images): shown as they come.
+  image,
   other,
 }
 
@@ -187,6 +200,7 @@ class ToolCallItem extends ChatItem {
     this.status = ToolStatus.succeeded,
     this.output,
     this.tool,
+    this.callId,
     this.input = const {},
     this.images = const [],
     this.imageFiles = const [],
@@ -212,6 +226,11 @@ class ToolCallItem extends ChatItem {
   /// The tool's own name (an MCP tool's, without its server's), for a
   /// kind each of whose tools shows its own way.
   final String? tool;
+
+  /// Its tool use's id, for one of the app's own tools (see
+  /// claude_sdk_tools.dart): what the call under way is known by, to answer
+  /// what it asks of the user.
+  final String? callId;
 
   /// What it was called with, for those.
   final Map<String, Object?> input;
@@ -487,6 +506,9 @@ class LiveStatusItem extends ChatItem {
     this.label, {
     this.whimsical = false,
     this.visible = true,
+    this.output,
+    this.startedAt,
+    this.cue,
   });
 
   final String label;
@@ -497,6 +519,140 @@ class LiveStatusItem extends ChatItem {
 
   /// Whether it shows now: it stays through the turn, and comes and goes.
   final bool visible;
+
+  /// What the model has written so far, shown where the turn's footer
+  /// will be; null before it has written anything.
+  final TurnOutput? output;
+
+  /// When the turn began, for the time it has taken so far.
+  final DateTime? startedAt;
+
+  /// What the agent did last, for a [whimsical] row to muse on as well.
+  final MusingCue? cue;
+}
+
+/// The kinds of step done that a status row muses on (see [MusingCue]).
+enum MusingTopic {
+  command,
+  commandFailed,
+  read,
+  edit,
+  search,
+  folder,
+  web,
+  agent,
+  mcp,
+  browser,
+  image,
+  denied,
+}
+
+/// A step the agent has done, as a status row muses on it: what kind, and
+/// what it was done to ("flutter test", "chat_session.dart", "12"), short.
+class MusingCue {
+  const MusingCue(this.topic, [this.name = '']);
+
+  final MusingTopic topic;
+  final String name;
+
+  /// The cue of [item], when a step done: none for one under way, which
+  /// the model is not yet mulling over, nor for others.
+  static MusingCue? after(ChatItem? item) => switch (item) {
+    TerminalItem(:final command, :final status, background: false)
+        when status != CommandStatus.running =>
+      switch (commandName(command)) {
+        '' => null,
+        final name => MusingCue(
+          status == CommandStatus.failed
+              ? MusingTopic.commandFailed
+              : MusingTopic.command,
+          name,
+        ),
+      },
+    CodeDiffItem(:final fileName) => MusingCue(
+      MusingTopic.edit,
+      _short(fileName),
+    ),
+    AgentItem(:final agentType?, :final status, background: false)
+        when status != CommandStatus.running =>
+      MusingCue(MusingTopic.agent, _short(agentType)),
+    ToolCallItem(status: ToolStatus.denied) => const MusingCue(
+      MusingTopic.denied,
+    ),
+    ToolCallItem(
+      :final kind,
+      :final target,
+      :final label,
+      :final status,
+      :final results,
+    )
+        when status == ToolStatus.succeeded =>
+      switch (kind) {
+        ToolKind.read when target.isNotEmpty => MusingCue(
+          MusingTopic.read,
+          _short(target),
+        ),
+        ToolKind.edit when target.isNotEmpty => MusingCue(
+          MusingTopic.edit,
+          _short(target),
+        ),
+        ToolKind.grep || ToolKind.search when results.isNotEmpty => MusingCue(
+          MusingTopic.search,
+          '${results.length}',
+        ),
+        ToolKind.listDir when target.isNotEmpty => MusingCue(
+          MusingTopic.folder,
+          _short(target),
+        ),
+        ToolKind.web => switch (Uri.tryParse(target)?.host) {
+          final host? when host.isNotEmpty => MusingCue(
+            MusingTopic.web,
+            _short(host.startsWith('www.') ? host.substring(4) : host),
+          ),
+          _ => null,
+        },
+        ToolKind.mcp => switch (label) {
+          final label? => MusingCue(
+            MusingTopic.mcp,
+            _short(label.split(' · ').last),
+          ),
+          null => null,
+        },
+        ToolKind.browser => const MusingCue(MusingTopic.browser),
+        ToolKind.image => const MusingCue(MusingTopic.image),
+        _ => null,
+      },
+    _ => null,
+  };
+
+  /// What [command] runs, in a word or two: the last of its chained
+  /// commands but a `cd`, before any pipe, its program's name and a
+  /// subcommand if it has one ("flutter test", "git commit").
+  static String commandName(String command) {
+    final line = command.trimLeft().split('\n').first;
+    final chained = [
+      for (final part in line.split(RegExp(r'&&|\|\||;')))
+        if (part.trim().isNotEmpty && !part.trim().startsWith('cd ')) part,
+    ];
+    if (chained.isEmpty) return '';
+    final words = [
+      for (final word
+          in chained.last.split('|').first.trim().split(RegExp(r'\s+')))
+        if (word.isNotEmpty) word,
+    ].skipWhile((word) => word.contains('=') || word == 'sudo').toList();
+    if (words.isEmpty) return '';
+    final program = words.first.split('/').last;
+    final sub = words.length > 1 ? words[1] : null;
+    return _short(
+      sub != null && RegExp(r'^[a-z][a-z-]{1,11}$').hasMatch(sub)
+          ? '$program $sub'
+          : program,
+    );
+  }
+
+  /// [name], cut to fit in the row's line.
+  static String _short(String name) =>
+      name.length <= 24 ? name : '${name.substring(0, 23)}…';
 }
 
 enum FileChangeKind { added, modified, deleted }
@@ -549,9 +705,20 @@ class FileChange {
   /// that over.
   final bool conflict;
 
-  String get fileName => path.split('/').last;
-  String get directory {
-    final index = path.lastIndexOf('/');
-    return index < 0 ? '' : path.substring(0, index);
-  }
+  String get fileName => fileNameOf(path);
+  String get directory => directoryOf(path);
 }
+
+/// The name of the file [path] names, whichever separator it is written
+/// with: an agent on Windows says `C:\project\a.dart`, on macOS
+/// `/project/a.dart`, and either may be about another machine's files.
+String fileNameOf(String path) => path.split(_pathSeparators).last;
+
+/// [path] without its file name, its separators as they were written;
+/// empty for a bare name.
+String directoryOf(String path) {
+  final index = path.lastIndexOf(_pathSeparators);
+  return index < 0 ? '' : path.substring(0, index);
+}
+
+final _pathSeparators = RegExp(r'[\\/]');

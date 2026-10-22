@@ -222,7 +222,8 @@ class StepFolds {
     final work = workAt(index);
     final workLine = work?.start == index ? work : null;
     if (work != null && !isOpen(work)) {
-      return (work: workLine, steps: null, item: false);
+      // Pictures made stand out of it, as the answer would show them.
+      return (work: workLine, steps: null, item: standsOutOfWork(item));
     }
     final own = !_mergedAway(index);
     final steps = stepsAt(index);
@@ -242,8 +243,8 @@ class StepFolds {
 /// Whether [item] is a quick step, folded with others like it: a thought,
 /// or a tool call that only looks around or runs something. Not an edit
 /// (shown on its own), a subagent, a message to another agent, a goal
-/// proposed, a refused call, nor a command left running in the
-/// background.
+/// proposed, pictures made, a refused call, nor a command left running in
+/// the background.
 bool isQuickStep(ChatItem item) => switch (item) {
   ThinkingItem() => true,
   ToolCallItem(:final kind, :final status) =>
@@ -252,10 +253,19 @@ bool isQuickStep(ChatItem item) => switch (item) {
           ToolKind.edit ||
           ToolKind.agent ||
           ToolKind.message ||
-          ToolKind.goal => false,
+          ToolKind.goal ||
+          ToolKind.image => false,
           _ => true,
         },
   TerminalItem(:final background) => !background,
+  _ => false,
+};
+
+/// Whether [item] shows though its turn's work is folded: pictures an
+/// image model made, which are what the user asked for.
+bool standsOutOfWork(ChatItem item) => switch (item) {
+  ToolCallItem(kind: ToolKind.image, :final status, :final images) =>
+    status == ToolStatus.succeeded && images.isNotEmpty,
   _ => false,
 };
 

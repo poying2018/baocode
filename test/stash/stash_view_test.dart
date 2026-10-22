@@ -272,6 +272,58 @@ void main() {
     await unmount(tester);
   });
 
+  testWidgets('New writes a stash here, its text with the keyboard; a '
+      'draft left blank gone on with (#147)', (tester) async {
+    final newButton = find.byWidgetPredicate(
+      (widget) =>
+          widget is SidebarIconButton &&
+          widget.tooltip == englishLocalizations.stashNewTooltip,
+    );
+    Future<void> tapNew() async {
+      await tester.tap(newButton);
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)),
+        );
+        await tester.pump();
+      }
+      await tester.pumpAndSettle();
+    }
+
+    await pumpView(tester);
+    await tapNew();
+    final draft = store.notes.single;
+    expect(draft.isDraft, isTrue);
+    expect(tester.widget<StashDetail>(find.byType(StashDetail)).id, draft.id);
+    // Typed in at once: the keyboard in its text.
+    final focused = FocusManager.instance.primaryFocus?.context;
+    expect(
+      find.descendant(
+        of: find.byType(StashNoteEditor),
+        matching: find.byElementPredicate((element) => element == focused),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    await unmount(tester);
+
+    // Left blank, the next New goes on with it, made no other.
+    final blank = (await tester.runAsync(() => store.create()))!;
+    await pumpView(tester);
+    await tapNew();
+    expect(store.notes, hasLength(2));
+    expect(tester.widget<StashDetail>(find.byType(StashDetail)).id, blank.id);
+    await unmount(tester);
+
+    // Of the project the page shows alone, still a draft.
+    final id = (await tester.runAsync(
+      () => controller.draft(project: '/p/app'),
+    ))!;
+    expect(id, blank.id);
+    expect(store.byId(id)!.project, '/p/app');
+    expect(store.byId(id)!.isDraft, isTrue);
+  });
+
   testWidgets('the line between the cards and the stash drags, the width '
       'kept; a double click puts it back', (tester) async {
     final note = await tester.runAsync(() => store.create(body: 'something'));

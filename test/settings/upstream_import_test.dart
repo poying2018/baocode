@@ -393,11 +393,11 @@ void main() {
   ) async {
     FeaturedUpstream.known.value = [
       FeaturedUpstream(
-        id: 'ymeng',
-        name: 'YMeng CC',
-        url: Uri.https('ymeng.cc'),
-        logo: 'site/featured/ymeng.png',
-        hosts: const ['api.ymeng.cc'],
+        id: 'listed',
+        name: 'Listed Site',
+        url: Uri.https('listed.example.com'),
+        logo: 'site/featured/listed.png',
+        hosts: const ['api.listed.example.com'],
       ),
     ];
     await tester.pumpWidget(
@@ -406,7 +406,7 @@ void main() {
           children: [
             ProviderIconView(
               icon: null,
-              site: Uri.https('api.ymeng.cc'),
+              site: Uri.https('api.listed.example.com'),
               size: 16,
             ),
             ProviderIconView(
@@ -424,7 +424,7 @@ void main() {
         for (final logo in logos)
           if (logo.image case FileImage(:final file)) file.path,
       ],
-      ['site/featured/ymeng.png'],
+      ['site/featured/listed.png'],
     );
     expect(find.byIcon(Codicons.globe), findsOneWidget);
   });

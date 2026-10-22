@@ -64,7 +64,34 @@ class _IoLspProcess implements LspProcess {
   void kill({bool force = false}) {
     _stopRequested = true;
     unawaited(closeStdin());
+    if (Platform.isWindows) {
+      // Killing a `.cmd` kills cmd.exe alone: the node it started goes on
+      // serving. The tree goes with it, as taskkill's /T does.
+      unawaited(_killTree(force: force));
+      return;
+    }
     _process.kill(force ? ProcessSignal.sigkill : ProcessSignal.sigterm);
+  }
+
+  /// Windows ends a killed process alone: a server started by its `.cmd`
+  /// (npm's) would go on running node under the `cmd.exe` killed. Given
+  /// time, it ends on its own; only a tree that holds on is taken hard.
+  Future<void> _killTree({required bool force}) async {
+    if (!force) {
+      // Polite first, as on Unix: the server's own stdin close, then its
+      // own exit; only its tree is killed hard, when it holds on.
+      try {
+        await _process.exitCode.timeout(const Duration(milliseconds: 500));
+        return;
+      } on TimeoutException {
+        // Still running: take the tree.
+      }
+    }
+    try {
+      await Process.run('taskkill', ['/pid', '${_process.pid}', '/T', '/F']);
+    } on ProcessException {
+      _process.kill();
+    }
   }
 
   Future<void> _stop(Duration timeout) async {
@@ -72,7 +99,7 @@ class _IoLspProcess implements LspProcess {
     try {
       await _process.exitCode.timeout(timeout);
     } on TimeoutException {
-      _process.kill(ProcessSignal.sigkill);
+      kill(force: true);
       await _process.exitCode.timeout(timeout, onTimeout: () => 0);
     }
   }
