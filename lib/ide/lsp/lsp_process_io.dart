@@ -73,6 +73,9 @@ class _IoLspProcess implements LspProcess {
     _process.kill(force ? ProcessSignal.sigkill : ProcessSignal.sigterm);
   }
 
+  /// Windows ends a killed process alone: a server started by its `.cmd`
+  /// (npm's) would go on running node under the `cmd.exe` killed. Given
+  /// time, it ends on its own; only a tree that holds on is taken hard.
   Future<void> _killTree({required bool force}) async {
     if (!force) {
       // Polite first, as on Unix: the server's own stdin close, then its

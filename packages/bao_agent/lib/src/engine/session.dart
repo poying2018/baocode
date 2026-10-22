@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
@@ -376,6 +377,9 @@ class AgentSession {
         milliseconds: asInt(env['API_TIMEOUT_MS']) ?? 300000,
       ),
       userAgent: 'baocode-agent/1.0 (dart)',
+      // As the CLI gives it (JSON with a `session_id`): what our model
+      // proxy and the gateways read the session from.
+      userId: jsonEncode({'session_id': sessionId}),
     );
   }
 

@@ -424,6 +424,7 @@ void main() {
         id: 'gw',
         name: 'Gateway',
         baseUrl: 'https://gw.example.com',
+        // Listed by name: down first.
         models: [
           ProviderModel(id: 'up'),
           ProviderModel(id: 'down'),
@@ -469,9 +470,9 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.pump();
-    expect(asked, ['gw/up']);
+    expect(asked, ['gw/down']);
     expect(find.byType(PixelLoader), findsOneWidget);
-    replies['up']!.complete(answer);
+    replies['down']!.complete(answer);
     await tester.pump();
     expect(find.byType(PixelLoader), findsNothing);
     expect(timed, findsOneWidget);
@@ -485,10 +486,10 @@ void main() {
     // All of them; one fails, and says why.
     await tester.tap(find.text('Test All'));
     await tester.pump();
-    expect(asked, ['gw/up', 'gw/up', 'gw/down']);
+    expect(asked, ['gw/down', 'gw/down', 'gw/up']);
     expect(find.byType(PixelLoader), findsNWidgets(2));
-    replies['up']!.complete(answer);
-    replies['down']!.completeError(Exception('401 Unauthorized'));
+    replies['down']!.complete(answer);
+    replies['up']!.completeError(Exception('401 Unauthorized'));
     await tester.pump();
     expect(timed, findsOneWidget);
     expect(find.text('Failed'), findsOneWidget);
@@ -506,6 +507,54 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
     expect(cancelled, isTrue);
+  });
+
+  testWidgets('subagents may run on another upstream\'s model, and are '
+      'warned once it is gone', (tester) async {
+    await providers.save(
+      const ModelProvider(
+        id: 'an',
+        name: 'Claude',
+        baseUrl: 'https://api.anthropic.com',
+        models: [ProviderModel(id: 'claude-opus-4-5')],
+      ),
+    );
+    await providers.save(
+      const ModelProvider(
+        id: 'ds',
+        name: 'DeepSeek',
+        protocol: ProviderProtocol.openaiChat,
+        baseUrl: 'https://api.deepseek.com',
+        models: [ProviderModel(id: 'deepseek-chat')],
+      ),
+    );
+    await pump(tester);
+    await tester.tap(find.text('Claude').last);
+    await tester.pumpAndSettle();
+
+    Finder subagents() => find
+        .ancestor(of: find.text('Subagents'), matching: find.byType(Row))
+        .first;
+    await tester.ensureVisible(subagents());
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(of: subagents(), matching: find.text('Unset')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('DeepSeek').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('deepseek-chat').last);
+    await tester.pumpAndSettle();
+    expect(providers.provider('an')!.roles.subagent, '@ds/deepseek-chat');
+    expect(providers.provider('an')!.throughProxy, isTrue);
+    expect(find.text('DeepSeek · deepseek-chat'), findsOneWidget);
+    expect(find.textContaining('no longer one of'), findsNothing);
+
+    // The model gone from its upstream: warned, kept as it was picked.
+    await providers.save(providers.provider('ds')!.copyWith(models: const []));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('no longer one of'), findsOneWidget);
+    expect(providers.provider('an')!.roles.subagent, '@ds/deepseek-chat');
   });
 
   testWidgets('Fast is not a provider-wide setting', (tester) async {

@@ -42,7 +42,7 @@ BaoCode es una aplicación nativa que dibuja directamente su interfaz en la GPU.
 
 ## Requisitos
 
-- macOS 12 o posterior (una descarga para Apple silicon y otra para Intel), o Windows 10 o posterior (x64).
+- macOS 12 o posterior (una descarga para Apple silicon y otra para Intel), Windows 10 o posterior (x64), o Linux: Ubuntu 22.04 o posterior y otras distribuciones basadas en Debian (un .deb para x64 y otro para arm64).
 - [Claude Code](https://github.com/anthropics/claude-code) instalado.
 
 ## Compilar desde el código fuente
@@ -75,14 +75,14 @@ La CI compila y publica las versiones cuando se envía un tag `v*`. Consulta [do
 | [packages/bao_xterm](packages/bao_xterm) | Adaptación de xterm.js a Dart |
 | [packages/bao_pty](packages/bao_pty) | Pseudoterminales para Dart: forkpty en macOS y Linux, ConPTY en Windows |
 | [packages/bao_remote](packages/bao_remote) | Componente del host remoto servido por SSH |
-| [macos/](macos), [windows/](windows) | Ejecutores nativos |
+| [macos/](macos), [windows/](windows), [linux/](linux) | Ejecutores nativos |
 | [tool/](tool) | Scripts de compilación, empaquetado y publicación |
 | [site/](site) | Código del sitio [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Notas de diseño |
 
 ## Comentarios
 
-Se agradecen las issues. El proyecto original no acepta Pull Requests.
+Se agradecen las issues y las Pull Requests. Comente primero el cambio en una issue; no se aceptan Pull Requests demasiado grandes ni las que no se hayan discutido antes. Consulte [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licencia
 

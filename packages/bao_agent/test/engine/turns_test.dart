@@ -158,6 +158,11 @@ void main() {
     expect(jsonEncode(messages.last), contains('cache_control'));
     expect(request.body['stream'], isNull, reason: 'the client sets it');
     expect(request.body['max_tokens'], greaterThan(1000));
+    // The session, for a proxy to keep the conversation where it is cached.
+    final session = h.engine.session;
+    expect(jsonDecode(session.apiConfig().userId!), {
+      'session_id': session.sessionId,
+    });
   });
 
   test('images and @-mentioned files go to the model', () async {

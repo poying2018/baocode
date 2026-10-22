@@ -11,9 +11,9 @@ import '../platform/data_dir.dart';
 
 /// The user's own browsers, reached through BaoCode's extension in them
 /// (browser_extension/): each runs the app's native messaging host
-/// (macos/BrowserBridge/host.c, windows/BrowserBridge/host.cpp), which
-/// connects to this socket and passes the extension's messages. Agents use
-/// the tabs shared there through the tools of browser_tools.dart.
+/// (macos/BrowserBridge/host.c, Linux's too; windows/BrowserBridge/host.cpp),
+/// which connects to this socket and passes the extension's messages.
+/// Agents use the tabs shared there through the tools of browser_tools.dart.
 ///
 /// A message is the browser's way: its length (4 bytes, little-endian),
 /// then that much JSON. The app asks `{id, method, params}` (see
@@ -59,7 +59,17 @@ class BrowserBridge extends ChangeNotifier {
   /// that cannot have it leaves them to it.
   static String get _lockPath => p.join(_folder, 'baocode-browser.lock');
 
-  static String get _folder => socketFolder ?? Directory.systemTemp.path;
+  /// The user's own temporary folder. On Linux, `$XDG_RUNTIME_DIR` (the
+  /// user's alone) before `$TMPDIR` or /tmp (shared with every user): as
+  /// host.c finds it.
+  static String get _folder {
+    if (socketFolder case final folder?) return folder;
+    if (Platform.isLinux) {
+      final runtime = Platform.environment['XDG_RUNTIME_DIR'];
+      if (runtime != null && runtime.isNotEmpty) return runtime;
+    }
+    return Directory.systemTemp.path;
+  }
 
   /// A test's own folder for the socket: given as TMPDIR to a browser it
   /// launches, whose host alone finds it there (not the user's browsers').
@@ -80,7 +90,8 @@ class BrowserBridge extends ChangeNotifier {
 
   static String? get _home => home ?? Platform.environment['HOME'];
 
-  bool get supported => !kIsWeb && (Platform.isMacOS || Platform.isWindows);
+  bool get supported =>
+      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
 
   /// Whether the user lets the agents use the browsers: off, nothing
   /// listens for them, and the browsers find no host to start (it is
@@ -300,7 +311,8 @@ class BrowserBridge extends ChangeNotifier {
   }
 
   // --- The host, as the browsers find it: a manifest of its in each
-  // browser's folder for them (those the user has), naming the app's. On
+  // browser's folder for them (those the user has), naming the app's: on
+  // macOS and Linux, written again each run, the app moved or not. On
   // Windows, the installer's: the browsers' registry keys point to the
   // manifest beside baocode.exe (windows/BrowserBridge, tool/baocode.iss),
   // and stay while BaoCode is installed; turned off, the host finds no
@@ -308,7 +320,10 @@ class BrowserBridge extends ChangeNotifier {
 
   /// The browsers' folders for native messaging hosts' manifests, by the
   /// folder each browser keeps its profile in.
-  static List<String> _hostFolders(String home) => [
+  static List<String> _hostFolders(String home) =>
+      Platform.isLinux ? _linuxHostFolders(home) : _macHostFolders(home);
+
+  static List<String> _macHostFolders(String home) => [
     for (final browser in [
       'Google/Chrome',
       'Google/Chrome Beta',
@@ -326,6 +341,57 @@ class BrowserBridge extends ChangeNotifier {
     ])
       p.join(home, 'Library', 'Application Support', browser),
   ];
+
+  /// On Linux, under `$XDG_CONFIG_HOME` (~/.config unset, or in a test's
+  /// [home]). Snap's Chromium and Flatpak's browsers keep theirs in their
+  /// sandbox, and cannot start a host outside it: [sandboxedBrowsers].
+  static List<String> _linuxHostFolders(String home) {
+    final xdg = BrowserBridge.home == null
+        ? Platform.environment['XDG_CONFIG_HOME']
+        : null;
+    final config = xdg != null && xdg.isNotEmpty
+        ? xdg
+        : p.join(home, '.config');
+    return [
+      for (final browser in [
+        'google-chrome',
+        'google-chrome-beta',
+        'google-chrome-unstable',
+        'google-chrome-canary',
+        'chromium',
+        'microsoft-edge',
+        'microsoft-edge-beta',
+        'microsoft-edge-dev',
+        'BraveSoftware/Brave-Browser',
+        'BraveSoftware/Brave-Browser-Beta',
+        'BraveSoftware/Brave-Browser-Nightly',
+        'vivaldi',
+        'vivaldi-snapshot',
+      ])
+        p.join(config, browser),
+    ];
+  }
+
+  /// Whether the user has, on Linux, a browser from Snap or Flatpak, whose
+  /// sandbox keeps BaoCode's host out: said in Settings → Browser while
+  /// none is connected.
+  bool get sandboxedBrowsers {
+    final home = _home;
+    if (!Platform.isLinux || home == null) return false;
+    return [
+      p.join(home, 'snap', 'chromium'),
+      for (final app in [
+        'com.google.Chrome',
+        'com.google.ChromeDev',
+        'org.chromium.Chromium',
+        'io.github.ungoogled_software.ungoogled_chromium',
+        'com.microsoft.Edge',
+        'com.brave.Browser',
+        'com.vivaldi.Vivaldi',
+      ])
+        p.join(home, '.var', 'app', app),
+    ].any((folder) => Directory(folder).existsSync());
+  }
 
   static File _hostManifest(String folder) =>
       File(p.join(folder, 'NativeMessagingHosts', '$hostName.json'));

@@ -608,6 +608,10 @@ printf '%s\n' "$line"
       home = Directory.systemTemp.createTempSync('baocode-remote-core-');
       api = await FakeApi.start(errands: (_) => Reply.text('A title'));
       ClaudeCore.current = () => ClaudeCore.builtin;
+      // On the host, as its server saved in the app says.
+      hosts.savedServers = () => {
+        'dev': const SshServer(hostName: 'dev', core: SshCore.builtin),
+      };
       // The server, from its source, run as the core.
       ServerClaude.selfCommand = () => [
         p.join(p.dirname(Platform.resolvedExecutable), 'dart'),
@@ -829,6 +833,87 @@ printf '%s\n' "$line"
       expect(connected, 'dev');
     });
 
+    test('a server added, what was typed given; those added edited, '
+        "not ~/.ssh/config's", () async {
+      final shown = <IdeQuickPick>[];
+      final adding = <String?>[];
+      final editing = <String>[];
+      final flow = OpenRemoteFlow(
+        show: shown.add,
+        l10n: englishLocalizations,
+        onOpen: (_) {},
+        added: ['me@box:2222', 'dev'],
+        addressOf: (host) => host == 'me@box:2222' ? 'me@10.0.0.9' : host,
+        labelOf: (host) => host == 'me@box:2222' ? 'Ubuntu' : host,
+        onAdd: adding.add,
+        onEdit: editing.add,
+        hosts: hosts,
+        configHosts: () async => ['dev', 'prod'],
+      );
+      await flow.start();
+      final pick = shown.single;
+      final items = pick.itemsFor!('').whereType<IdeQuickPickItem>().toList();
+      expect(items.first.label, 'Add SSH Server...');
+      // Where it is now, as saved.
+      final ubuntu = items.firstWhere((item) => item.label == 'Ubuntu');
+      expect(ubuntu.description, 'me@10.0.0.9');
+      expect(ubuntu.buttons.single.tooltip, 'Edit');
+      ubuntu.buttons.single.onPressed();
+      expect(editing, ['me@box:2222']);
+      for (final label in ['dev', 'prod']) {
+        expect(
+          items.firstWhere((item) => item.label == label).buttons,
+          isEmpty,
+        );
+      }
+      pick.itemsFor!('').whereType<IdeQuickPickItem>().first.onAccept!();
+      final typed = pick.itemsFor!('me@new').whereType<IdeQuickPickItem>();
+      typed.firstWhere((item) => item.label == 'Add SSH Server...').onAccept!();
+      expect(adding, [null, 'me@new']);
+    });
+
+    test('a changed host key: forgotten when asked, then connected again; '
+        "a server refusing to sign in, edited", () async {
+      connector.failure = const SshConnectException(
+        SshFailure.hostKeyChanged,
+        'The host key changed.',
+      );
+      final shown = <IdeQuickPick>[];
+      final forgotten = <String>[];
+      final editing = <String>[];
+      final flow = OpenRemoteFlow(
+        show: shown.add,
+        l10n: englishLocalizations,
+        onOpen: (_) {},
+        onEdit: editing.add,
+        onForgetHostKey: (host) async {
+          forgotten.add(host);
+          connector.failure = const SshConnectException(
+            SshFailure.authentication,
+            'The host refused to sign in.',
+          );
+          return true;
+        },
+        hosts: hosts,
+        configHosts: () async => const [],
+      );
+      flow.startAt('me@moved');
+      await until(() => shown.length > 1);
+      final failed = shown.last.items.whereType<IdeQuickPickItem>().toList();
+      expect(failed.first.label, startsWith("The server's key changed"));
+      expect(failed.map((item) => item.label), isNot(contains('Retry')));
+      expect(failed.map((item) => item.label), isNot(contains('Edit')));
+      failed
+          .firstWhere((item) => item.label == 'Remove the Old Key and Connect')
+          .onAccept!();
+      await until(() => shown.length > 3);
+      expect(forgotten, ['me@moved']);
+      final refused = shown.last.items.whereType<IdeQuickPickItem>().toList();
+      expect(refused.first.label, startsWith('The server refused to sign in'));
+      refused.firstWhere((item) => item.label == 'Edit').onAccept!();
+      expect(editing, ['me@moved']);
+    });
+
     test('a host that cannot be reached: why, and Retry', () async {
       connector.failure = const SshConnectException(
         SshFailure.unreachable,
@@ -848,7 +933,10 @@ printf '%s\n' "$line"
       (items.first as IdeQuickPickItem).onAccept!();
       await until(() => shown.length >= 3);
       final failed = shown.last.items.whereType<IdeQuickPickItem>().toList();
-      expect(failed.first.label, 'The host could not be reached.');
+      expect(
+        failed.first.label,
+        'The server could not be reached: check the address, port and network.',
+      );
       expect(failed.first.detail, contains('nowhere'));
       expect(failed.last.label, englishLocalizations.remoteRetry);
     });
@@ -943,11 +1031,14 @@ printf '%s\n' "$line"
       (items.first as IdeQuickPickItem).onAccept!();
       await until(
         () => shown.last.items.whereType<IdeQuickPickItem>().any(
-          (i) => i.label == 'The host could not be reached.',
+          (i) => i.label == 'The server could not be reached: check the address, port and network.',
         ),
       );
       final failed = shown.last.items.whereType<IdeQuickPickItem>().toList();
-      expect(failed.first.label, 'The host could not be reached.');
+      expect(
+        failed.first.label,
+        'The server could not be reached: check the address, port and network.',
+      );
       expect(failed.first.detail, contains('nowhere'));
       expect(failed.last.label, englishLocalizations.remoteRetry);
     });

@@ -13,6 +13,7 @@ import '../../kernel/claude_code/claude_path_setting.dart';
 import '../../kernel/commit_attribution.dart';
 import '../../kernel/prompt_suggestions.dart';
 import '../../chat/composer/composer_polish.dart' show ComposerPolishSetting;
+import '../../chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import '../../kernel/queued_messages.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_platform.dart';
@@ -35,7 +36,9 @@ import 'settings_widgets.dart';
 /// message sent while the agent works is taken up (`chat.queuedMessages`),
 /// whether the next prompt is suggested after each turn
 /// (`chat.promptSuggestions`), whether the composer has its Polish button
-/// (`chat.composer.polish`), the Claude Code to run (`claudeCode.path`),
+/// (`chat.composer.polish`), whether the turn under way shows its time,
+/// speed and tokens (`chat.liveTurnStats`), the Claude Code to run
+/// (`claudeCode.path`),
 /// the `code` shell command, and Open with BaoCode in Finder's or
 /// Explorer's context menu. A choice is written at once; the default is not
 /// written.
@@ -180,8 +183,12 @@ class GeneralSettingsPage extends StatelessWidget {
     required String label,
     required String description,
     required Map<String, String> values,
+    String? fallback,
   }) {
-    final fallback = values.keys.first;
+    // A fallback given may change (e.g. as an install is found): the
+    // choice is then kept as made, whichever it is.
+    final keep = fallback != null;
+    fallback ??= values.keys.first;
     final setting = settings?[key];
     final current = values.containsKey(setting) ? setting as String : fallback;
     final shown = values[current]!;
@@ -196,7 +203,8 @@ class GeneralSettingsPage extends StatelessWidget {
             IdeMenuAction(
               name,
               checked: value == current,
-              onSelected: () => _write(key, value == fallback ? null : value),
+              onSelected: () =>
+                  _write(key, !keep && value == fallback ? null : value),
             ),
         ],
       ),
@@ -367,6 +375,17 @@ class GeneralSettingsPage extends StatelessWidget {
                     on ? null : ComposerPolishSetting.off,
                   ),
                 ),
+                SettingsSwitchRow(
+                  label: l10n.generalSettingsLiveTurnStats,
+                  description: l10n.generalSettingsLiveTurnStatsDescription,
+                  value: LiveTurnStatsSetting.enabled(
+                    settings?[LiveTurnStatsSetting.settingKey],
+                  ),
+                  onChanged: (on) => _write(
+                    LiveTurnStatsSetting.settingKey,
+                    on ? null : LiveTurnStatsSetting.off,
+                  ),
+                ),
               ],
             ),
             if (claudeStatus case final claudeStatus? when !kIsWeb)
@@ -381,10 +400,12 @@ class GeneralSettingsPage extends StatelessWidget {
                         label: l10n.generalSettingsClaudeCore,
                         description: l10n.generalSettingsClaudeCoreDescription,
                         values: {
+                          ClaudeCore.cli.name:
+                              l10n.generalSettingsClaudeCoreCli,
                           ClaudeCore.builtin.name:
                               l10n.generalSettingsClaudeCoreBuiltin,
-                          ClaudeCore.cli.name: l10n.generalSettingsClaudeCoreCli,
                         },
+                        fallback: ClaudeCore.fallback.name,
                       ),
                       _ClaudePathSetting(
                         path: ClaudePathSetting.parse(

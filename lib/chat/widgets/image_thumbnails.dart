@@ -383,29 +383,24 @@ class _ImagePreviewState extends State<_ImagePreview> {
                           color: Colors.white54,
                         ),
                       )
-                    // The viewer fills the padded window so zooming can grow
-                    // the picture across it; the frame inside keeps the
-                    // picture centred at its natural size and the viewer
-                    // zooming about it, which its own box alone would not
-                    // (a 1x1 pixel would give a 1x1 viewport).
-                    : Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: several ? 72 : 40,
-                          vertical: 40,
-                        ),
-                        child: InteractiveViewer(
-                          // Each anew: not zoomed as the one before.
-                          key: ValueKey(_index),
-                          maxScale: 6,
-                          child: SizedBox.expand(
-                            child: Center(
-                              child: GestureDetector(
-                                onSecondaryTapUp: (details) =>
-                                    _showMenu(context, details.globalPosition),
-                                child: Image.memory(
-                                  image.bytes,
-                                  fit: BoxFit.contain,
-                                ),
+                    // The whole window, not the picture's own size: zoomed,
+                    // it fills the window, not clipped to where it was.
+                    : InteractiveViewer(
+                        // Each anew: not zoomed as the one before.
+                        key: ValueKey(_index),
+                        maxScale: 6,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: several ? 72 : 40,
+                            vertical: 40,
+                          ),
+                          child: Center(
+                            child: GestureDetector(
+                              onSecondaryTapUp: (details) =>
+                                  _showMenu(context, details.globalPosition),
+                              child: Image.memory(
+                                image.bytes,
+                                fit: BoxFit.contain,
                               ),
                             ),
                           ),

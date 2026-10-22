@@ -41,7 +41,7 @@ VS Code and Cursor are built on Electron: each window is a web page, and every c
 
 ## Requirements
 
-- macOS 12 or later (Apple silicon or Intel, one download each), or Windows 10 or later (x64).
+- macOS 12 or later (Apple silicon or Intel, one download each), Windows 10 or later (x64), or Linux: Ubuntu 22.04 or later and other Debian-based distributions (x64 or arm64, a .deb each).
 - [Claude Code](https://github.com/anthropics/claude-code), installed.
 
 ## Building from source
@@ -58,6 +58,7 @@ To build what is released, into `build/installers/`:
 ```sh
 dart run tool/build_macos.dart            # BaoCode-<version>-{arm64,x64}.dmg and BaoCode-<version>-mac-{arm64,x64}.zip
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe (needs Inno Setup)
+flutter build linux --release && sh tool/package_linux_deb.sh   # BaoCode-<version>-linux-{amd64,arm64}.deb and .tar.gz, on Ubuntu
 dart run tool/build_remote_server.dart    # the SSH remote server, for Linux x64 and arm64
 ```
 
@@ -74,14 +75,14 @@ Releases are built and published by CI when a `v*` tag is pushed; versions, sign
 | [packages/bao_xterm](packages/bao_xterm) | A Dart port of xterm.js |
 | [packages/bao_pty](packages/bao_pty) | Pseudo terminals for Dart: forkpty on macOS and Linux, ConPTY on Windows |
 | [packages/bao_remote](packages/bao_remote) | The remote host served over SSH |
-| [macos/](macos), [windows/](windows) | The native runners |
+| [macos/](macos), [windows/](windows), [linux/](linux) | The native runners |
 | [tool/](tool) | Build, packaging and release scripts |
 | [site/](site) | The website, [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Design notes |
 
 ## Feedback
 
-Issues are welcome. Pull requests are not accepted.
+Issues and pull requests are welcome. Discuss a change in an issue before you write it; large pull requests, and pull requests for changes not discussed first, are not accepted. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 

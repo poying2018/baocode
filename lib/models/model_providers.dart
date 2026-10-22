@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../channel/channel_setup.dart' show ChannelSetup;
 import '../kernel/claude_code/claude_core_setting.dart';
 import '../settings/user_settings.dart';
 import 'model_provider.dart';
@@ -130,8 +131,10 @@ class ModelProviders extends ChangeNotifier {
 
   /// Whether there is Claude Code as set up on this machine (its login,
   /// its models, its settings') to run on: only for the CLI. BaoCode's own
-  /// core runs on the upstreams here alone.
-  bool get builtinAvailable => ClaudeCore.current() == ClaudeCore.cli;
+  /// core runs on the upstreams here alone, and the channel build on its
+  /// account's (lib/channel/): never on this machine's.
+  bool get builtinAvailable =>
+      !ChannelSetup.channelBuild && ClaudeCore.current() == ClaudeCore.cli;
 
   /// Whether Claude Code as set up on this machine is in the picker.
   bool get builtinOffered => builtinAvailable && !builtinHidden;

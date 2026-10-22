@@ -24,7 +24,9 @@ void main() {
     manifest = File(
       p.join(
         home.path,
-        'Library/Application Support/Google/Chrome/NativeMessagingHosts',
+        Platform.isLinux
+            ? '.config/google-chrome/NativeMessagingHosts'
+            : 'Library/Application Support/Google/Chrome/NativeMessagingHosts',
         '${BrowserBridge.hostName}.json',
       ),
     )..createSync(recursive: true);
@@ -121,7 +123,25 @@ void main() {
         l10n.browserSettingsAppOld,
       ),
     ]);
-  }, skip: !Platform.isMacOS);
+  }, skip: Platform.isWindows);
+
+  test('on Linux, a browser from Snap or Flatpak is said to be kept out', () {
+    final l10n = AppLocalizationsEn();
+    final sandboxed = (
+      l10n.browserSettingsSandboxed,
+      l10n.browserSettingsSandboxedDescription,
+    );
+    expect(bridge.sandboxedBrowsers, isFalse);
+    expect(
+      BrowserSettingsPage.status(l10n, bridge),
+      isNot(contains(sandboxed)),
+    );
+
+    Directory(p.join(home.path, 'snap', 'chromium'))
+        .createSync(recursive: true);
+    expect(bridge.sandboxedBrowsers, isTrue);
+    expect(BrowserSettingsPage.status(l10n, bridge), contains(sandboxed));
+  }, skip: !Platform.isLinux);
 
   test('turned off, it lets the browsers go and takes the host away; on, it '
       'listens again', () async {
@@ -154,7 +174,7 @@ void main() {
     addTearDown(again.destroy);
     await until(() => bridge.browsers.isNotEmpty);
     expect(bridge.used, isTrue);
-  }, skip: !Platform.isMacOS);
+  }, skip: Platform.isWindows);
 
   group('over loopback (Windows)', () {
     setUp(() {

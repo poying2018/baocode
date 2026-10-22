@@ -372,8 +372,8 @@ void main() {
   });
 
   test('no upstream: not started on the machine\'s own setup; says where '
-      'to add one', () async {
-    ModelProviders.current = ModelProviders.memory();
+      'to add one; started on the first one added', () async {
+    final store = ModelProviders.current = ModelProviders.memory();
     final (:kernel, :transcript, asked: _) = open(KernelContext(cwd: cwd));
     expect(kernel.model.options, isEmpty);
     kernel.send(
@@ -381,7 +381,39 @@ void main() {
     );
     await until(() => kernel.health.status == KernelHealthStatus.failed);
     expect(kernel.health.message, ClaudeCore.noModel);
+    expect(kernel.health.noModel, isTrue);
     expect(api.headers, isEmpty);
+
+    // One without models yet changes nothing.
+    await store.save(
+      ModelProvider(id: 'up', name: 'Upstream', baseUrl: api.baseUrl),
+    );
+    expect(kernel.health.noModel, isTrue);
+
+    // Its models in, the core starts on them, with no retry asked.
+    await store.setKey('up', 'sk-e2e');
+    await store.save(
+      ModelProvider(
+        id: 'up',
+        name: 'Upstream',
+        baseUrl: api.baseUrl,
+        auth: ProviderAuth.apiKey,
+        models: const [ProviderModel(id: _model)],
+      ),
+    );
+    await until(
+      () => kernel.health.status == KernelHealthStatus.ready,
+      what: 'the core to start',
+    );
+    api.model.script.add(Reply.text('hello'));
+    kernel.send(
+      const KernelTurn(id: '77777777-7777-4777-8777-777777777777', text: 'hi'),
+    );
+    await until(
+      () => shown(transcript).last == 'text: hello',
+      what: 'the reply',
+    );
+    onTheUpstream();
     kernel.dispose();
     await kernel.stopped;
   });

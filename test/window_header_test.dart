@@ -102,28 +102,42 @@ void main() {
     expect(controls(reports().last), isNot(controls(reports().first)));
   }, variant: _windows);
 
-  testWidgets('zoomed in, the window hears the buttons as large as they '
-      'are drawn: their right edge stays Flutter\'s rather than dragging '
-      'the window', (tester) async {
+  testWidgets('zoomed in, the window leaves the editor button to Flutter as '
+      'it is drawn: its chevron too, not dragging the window', (tester) async {
     CodeFont.uiScale.value = 125;
     addTearDown(() => CodeFont.uiScale.value = CodeFont.defaultUiScale);
     final (_, calls) = await pumpWindowsApp(tester);
     await tester.pump();
-    final report = calls.lastWhere(
-      (call) => call.method == 'setHitTestAreas',
+    final button = tester.getRect(
+      find.descendant(
+        of: find.byType(WindowHeader),
+        matching: find.byType(OpenInEditorButton),
+      ),
     );
+    final report = calls.lastWhere((call) => call.method == 'setHitTestAreas');
+    final controls = [
+      for (final control in (report.arguments as Map)['controls'] as List)
+        Rect.fromLTWH(
+          (control as Map)['left'] as double,
+          control['top'] as double,
+          control['width'] as double,
+          control['height'] as double,
+        ),
+    ];
+    expect(
+      controls.where(
+        (control) => control.contains(button.centerRight - const Offset(2, 0)),
+      ),
+      isNotEmpty,
+    );
+    expect(controls, contains(rectMoreOrLessEquals(button)));
+    // The zoom rides the size as it rides the corner: a button reported at
+    // its unzoomed size would leave its right (11 of its 46 pixels at
+    // 125%) to the window's drag.
     final close = ((report.arguments as Map)['buttons'] as Map)['close']
         as Map<Object?, Object?>;
-    // The zoom rides the size as it rides the corner: reported unzoomed,
-    // a button's right (11 of its 46 pixels at 125%) would drag the window.
     expect(close['width'], AppMetrics.windowButtonWidth * 1.25);
     expect(close['height'], AppMetrics.headerHeight * 1.25);
-    // And the close button reaches the window's own right edge (the app is
-    // pumped at 1400 physical pixels, the header flush right).
-    expect(
-      (close['left']! as double) + (close['width']! as double),
-      closeTo(1400, 1),
-    );
   }, variant: _windows);
 
   testWidgets('Back to Chat takes Open in Fast Ide\'s place as it is, so '

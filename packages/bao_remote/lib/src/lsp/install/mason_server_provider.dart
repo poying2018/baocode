@@ -314,10 +314,17 @@ class MasonServerProvider implements LspServerProvider {
             'private': true,
           }),
         );
-        final (npm, npmArguments) = await npmInvocation(
+        // npm runs as node with npm's own script on Windows (see
+        // [npmCommand]); the arguments are the same either way.
+        final (npm, npmArguments) = await npmCommand(
           tools['npm']!,
           tools['node'],
+        );
+        await _command(
+          'npm install',
+          npm,
           [
+            ...npmArguments,
             'install',
             '--prefix',
             directory,
@@ -327,11 +334,6 @@ class MasonServerProvider implements LspServerProvider {
             '${purl.fullName}@${plan.version}',
             ...plan.extraPackages,
           ],
-        );
-        await _command(
-          'npm install',
-          npm,
-          npmArguments,
           directory,
           environment,
         );
@@ -531,19 +533,36 @@ class MasonServerProvider implements LspServerProvider {
     ].join('\n');
   }
 
-  /// [command] on [environment]'s PATH, as `cmd.exe` resolves it on Windows
-  /// and the shell does elsewhere. On Windows only the `PATHEXT` extensions
-  /// answer for a bare name: the extensionless file beside `npm.cmd` in a
-  /// Node folder (nvm-windows', the installer's) is npm's Bash script, and
-  /// starting it as a Win32 program is what says "not a valid Win32
-  /// application".
+  /// How to run npm: on Windows its `npm-cli.js` with [node] when it is
+  /// beside `npm.cmd`, as that is all `npm.cmd` does, and `cmd.exe` drops
+  /// the quotes of a command line where both npm's path (`C:\Program
+  /// Files\nodejs`) and an argument (a user name with a space) have them.
+  Future<(String, List<String>)> npmCommand(String npm, String? node) async {
+    if (platform.isWindows && node != null) {
+      final script = p.join(
+        p.dirname(npm),
+        'node_modules',
+        'npm',
+        'bin',
+        'npm-cli.js',
+      );
+      if (await File(script).exists()) return (node, [script]);
+    }
+    return (npm, const <String>[]);
+  }
+
+  /// [command] on [environment]'s PATH (with `PATHEXT` on Windows).
+  ///
+  /// On Windows a bare name only matches with a `PATHEXT` extension, as in
+  /// `cmd.exe`: Node installs (nvm-windows among them) put a Bash script
+  /// `npm` beside `npm.cmd`, and Windows cannot start that script.
   Future<String?> which(String command, Map<String, String> environment) async {
     final path = environment['PATH'] ?? environment['Path'] ?? '';
-    final extensions = platform.isWindows
+    final extensions = platform.isWindows && p.extension(command).isEmpty
         ? (environment['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
-            .split(';')
-            .where((extension) => extension.isNotEmpty)
-            .toList()
+              .split(';')
+              .where((extension) => extension.isNotEmpty)
+              .toList()
         : const [''];
     for (final directory in path.split(platform.isWindows ? ';' : ':')) {
       if (directory.isEmpty) continue;
@@ -553,31 +572,6 @@ class MasonServerProvider implements LspServerProvider {
       }
     }
     return null;
-  }
-
-  /// How to run npm on this platform: [executable] with [arguments]. On
-  /// Windows, when `npm.cmd`'s own `npm-cli.js` sits beside it, run that
-  /// with node directly — which is all `npm.cmd` does, and it keeps both
-  /// the quotes a `Program Files` path needs and the quotes a user name
-  /// with a space needs, which `cmd.exe` drops when the command line has
-  /// both; the script path is the one `npm.cmd` itself resolves to.
-  Future<(String, List<String>)> npmInvocation(
-    String npm,
-    String? node,
-    List<String> arguments,
-  ) async {
-    if (!platform.isWindows) return (npm, arguments);
-    final script = p.join(
-      p.dirname(npm),
-      'node_modules',
-      'npm',
-      'bin',
-      'npm-cli.js',
-    );
-    if (node != null && await File(script).exists()) {
-      return (node, [script, ...arguments]);
-    }
-    return (npm, arguments);
   }
 
   Future<bool> _isExecutable(String path) async {

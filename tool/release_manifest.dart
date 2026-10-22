@@ -8,9 +8,18 @@
 //     --macos-x64 build/installers/BaoCode-1.2.0-mac-x64.zip \
 //     [--dmg-arm64 build/installers/BaoCode-1.2.0-arm64.dmg] \
 //     [--dmg-x64 build/installers/BaoCode-1.2.0-x64.dmg] \
+//     [--linux-x64 build/installers/BaoCode-1.2.0-linux-amd64.deb] \
+//     [--linux-arm64 build/installers/BaoCode-1.2.0-linux-arm64.deb] \
 //     [--notes-en <text or file>] [--notes-zh <text or file>] \
 //     [--minimum-version 1.0.0] [--version 1.2.0+12] \
 //     [--manifest build/installers/latest.json]
+//
+// The channel build's (lib/channel/) beside them, each option with
+// -channel after it (--windows-channel, --macos-arm64-channel,
+// --dmg-arm64-channel, --linux-x64-channel…): signed for its own platform
+// keys (`windows-x64-channel`…), which the channel build alone updates from
+// (each edition updates to itself), and given to the download page as
+// `downloads.<os>.channel`, for whoever came through the site.
 //
 //   dart run tool/release_manifest.dart --generate-key <file>
 //   dart run tool/release_manifest.dart --public-key
@@ -23,13 +32,15 @@
 // the same version keeps the other platforms' entries, so the Windows and the
 // macOS installers can be signed on their own machines one after the other.
 //
-// Each link is the release asset of the version's GitHub release:
-// https://github.com/poying2018/baocode/releases/download/v<version>/<file>.
-// The app names a download by the path alone.
+// Each link ends in `?sha256=<the file's first 16 hex digits>`: a file
+// published again under the same name (a release redone) is another address
+// to the CDN, which keeps downloads for a year, so no one is served the old
+// one. The app names a download by the path alone.
 //
 // Besides what the app reads, `downloads` gives the download page
 // (site/site.js) what it offers: the disk images (--dmg-arm64, --dmg-x64),
-// which the app does not update from, and the Windows installer.
+// which the app does not update from, the Windows installer, and the Linux
+// packages (which the app updates from too).
 import 'dart:convert';
 import 'dart:io';
 
@@ -38,39 +49,47 @@ import 'package:baocode/update/update_signature.dart';
 import 'package:baocode/update/version.dart';
 import 'package:crypto/crypto.dart' as crypto;
 
-/// Where the downloads go: a release asset of this fork's GitHub releases.
-const _releasesBase = 'https://github.com/poying2018/baocode/releases/download';
+/// Where the downloads go: `<base>/v<version>/<file>`. This fork's own
+/// GitHub releases, where the app checks for updates too (see
+/// lib/update/update_service.dart); upstream's dl.baocode.dev serves the
+/// same manifests for the official builds.
+const _releasesBase =
+    'https://github.com/poying2018/baocode/releases/download';
 
-/// [name]'s link: the release of [version] carries it.
-Uri _link(AppVersion version, String name) =>
-    Uri.parse('$_releasesBase/v$version/$name');
+/// [name]'s link, for the file whose SHA-256 is [sha256].
+Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
+  '$_releasesBase/v$version/$name',
+);
 
 /// The Macs built for, each its own download (tool/build_macos.dart), and
 /// the app takes its processor's (lib/update/installer_io.dart).
 const _macArchitectures = ['arm64', 'x64'];
 
+/// The Linux packages built (tool/package_linux_deb.sh), the same.
+const _linuxArchitectures = ['x64', 'arm64'];
+
+/// The editions built: the standard one, and the channel build, whose
+/// options and platform keys end in this.
+const _channel = '-channel';
+const _editions = ['', _channel];
+
 /// Where the private key's path is given.
 const _keyVariable = 'BAOCODE_UPDATE_SIGNING_KEY';
-
-/// What an encrypted key file starts with: DPAPI (CurrentUser) over the
-/// seed, base64.
-const _dpapiPrefix = 'dpapi:';
 
 const _usage = '''
 Usage:
   dart run tool/release_manifest.dart [--windows <setup.exe>]
       [--macos-arm64 <mac-arm64.zip>] [--macos-x64 <mac-x64.zip>]
       [--dmg-arm64 <arm64.dmg>] [--dmg-x64 <x64.dmg>]
+      [--linux-x64 <amd64.deb>] [--linux-arm64 <arm64.deb>]
+      [each of those with -channel after it: the channel build's]
       [--notes-en <text|file>] [--notes-zh <text|file>]
       [--minimum-version <version>] [--version <version>]
       [--manifest <latest.json>]
   dart run tool/release_manifest.dart --generate-key <file>
-  dart run tool/release_manifest.dart --encrypt-key <file> --out <file>
-  dart run tool/release_manifest.dart --decrypt-key <file> --out <file>
   dart run tool/release_manifest.dart --public-key
 
-The private key's path is read from \$$_keyVariable. An encrypted key
-(DPAPI, CurrentUser) works too: signing decrypts it in memory.''';
+The private key's path is read from \$$_keyVariable.''';
 
 Future<void> main(List<String> arguments) async {
   final options = _parse(arguments);
@@ -79,12 +98,6 @@ Future<void> main(List<String> arguments) async {
     return;
   }
   if (options['generate-key'] case final path?) return _generateKey(path);
-  if (options['encrypt-key'] case final path?) {
-    return _encryptKey(path, options['out']);
-  }
-  if (options['decrypt-key'] case final path?) {
-    return _decryptKey(path, options['out']);
-  }
   final seed = _readKey();
   final publicKey = UpdateSignature.publicKeyOf(seed);
   if (options.containsKey('public-key')) {
@@ -105,13 +118,21 @@ Future<void> main(List<String> arguments) async {
     options['version'] ?? _pubspecVersion(File('${root.path}/pubspec.yaml')),
   );
   final files = {
-    if (options['windows'] case final path?) 'windows-x64': File(path),
-    for (final arch in _macArchitectures)
-      if (options['macos-$arch'] case final path?) 'macos-$arch': File(path),
+    for (final edition in _editions) ...{
+      if (options['windows$edition'] case final path?)
+        'windows-x64$edition': File(path),
+      for (final arch in _macArchitectures)
+        if (options['macos-$arch$edition'] case final path?)
+          'macos-$arch$edition': File(path),
+      for (final arch in _linuxArchitectures)
+        if (options['linux-$arch$edition'] case final path?)
+          'linux-$arch$edition': File(path),
+    },
   };
   if (files.isEmpty) {
     _fail(
-      'Nothing to sign: give --windows, --macos-arm64 or --macos-x64.\n\n'
+      'Nothing to sign: give --windows, --macos-arm64, --macos-x64, '
+      '--linux-x64 or --linux-arm64.\n\n'
       '$_usage',
     );
   }
@@ -165,31 +186,59 @@ Future<void> main(List<String> arguments) async {
     }
     final name = file.uri.pathSegments.last;
     assets[platform] = UpdateAsset(
-      url: _link(version, name),
+      url: _link(version, name, sha256),
       size: size,
       sha256: sha256,
       signature: signature,
     );
   }
-  if (assets['windows-x64'] case final installer?) {
-    downloads['windows'] = {
-      'url': '${installer.url}',
-      'size': installer.size,
-      'sha256': installer.sha256,
+  // [os]'s download for [edition]: the entry itself, the channel build's
+  // in it as `channel`.
+  void offer(String os, String edition, Map<String, Object?> file) {
+    final entry = {
+      if (downloads[os] case final Map<String, Object?> before) ...before,
     };
+    if (edition == _channel) {
+      entry['channel'] = file;
+    } else {
+      entry.addAll(file);
+    }
+    downloads[os] = entry;
+  }
+
+  for (final edition in _editions) {
+    if (assets['windows-x64$edition'] case final installer?) {
+      offer('windows', edition, {
+        'url': '${installer.url}',
+        'size': installer.size,
+        'sha256': installer.sha256,
+      });
+    }
+    // The packages as they are: the page's links, and the app's updates.
+    for (final arch in _linuxArchitectures) {
+      if (assets['linux-$arch$edition'] case final package?) {
+        offer('linux-$arch', edition, {
+          'url': '${package.url}',
+          'size': package.size,
+          'sha256': package.sha256,
+        });
+      }
+    }
   }
   final dmgs = {
-    for (final arch in _macArchitectures)
-      if (options['dmg-$arch'] case final path?) 'macos-$arch': File(path),
+    for (final edition in _editions)
+      for (final arch in _macArchitectures)
+        if (options['dmg-$arch$edition'] case final path?)
+          (os: 'macos-$arch', edition: edition): File(path),
   };
-  for (final MapEntry(key: platform, value: dmg) in dmgs.entries) {
+  for (final MapEntry(key: (:os, :edition), value: dmg) in dmgs.entries) {
     if (!dmg.existsSync()) _fail('No such file: ${dmg.path}');
     final sha256 = '${await crypto.sha256.bind(dmg.openRead()).first}';
-    downloads[platform] = {
-      'url': '${_link(version, dmg.uri.pathSegments.last)}',
+    offer(os, edition, {
+      'url': '${_link(version, dmg.uri.pathSegments.last, sha256)}',
       'size': dmg.lengthSync(),
       'sha256': sha256,
-    };
+    });
   }
 
   final manifest = UpdateManifest(
@@ -217,15 +266,21 @@ Future<void> main(List<String> arguments) async {
   for (final MapEntry(key: platform, value: file) in files.entries) {
     stdout.writeln('  ${file.path}\n    -> ${assets[platform]!.url}');
   }
-  for (final MapEntry(key: platform, value: dmg) in dmgs.entries) {
-    stdout.writeln(
-      '  ${dmg.path}\n    -> ${(downloads[platform] as Map)['url']}',
-    );
+  for (final MapEntry(key: (:os, :edition), value: dmg) in dmgs.entries) {
+    final entry = downloads[os] as Map;
+    final file = edition == _channel ? entry['channel'] as Map : entry;
+    stdout.writeln('  ${dmg.path}\n    -> ${file['url']}');
   }
   stdout.writeln('  ${manifestFile.path}\n    -> $defaultManifestUrl');
+  // The channel build's too, once there is one.
   final missing = {
-    'windows-x64',
-    for (final arch in _macArchitectures) 'macos-$arch',
+    for (final edition in _editions)
+      if (edition.isEmpty ||
+          assets.keys.any((key) => key.endsWith(edition))) ...{
+        'windows-x64$edition',
+        for (final arch in _macArchitectures) 'macos-$arch$edition',
+        for (final arch in _linuxArchitectures) 'linux-$arch$edition',
+      },
   }.difference(assets.keys.toSet());
   if (missing.isNotEmpty) {
     stdout.writeln(
@@ -254,70 +309,6 @@ void _generateKey(String path) {
     ..writeln('  ${UpdateSignature.publicKeyOf(seed)}');
 }
 
-/// Wraps the plain key at [path] with Windows DPAPI, for the current user
-/// and this machine only, and writes it to [out] (required).
-void _encryptKey(String path, String? out) {
-  if (out == null) _fail('--encrypt-key needs --out <file>.');
-  if (!Platform.isWindows) {
-    _fail('DPAPI encryption is Windows-only.');
-  }
-  final seed = _seedOf(File(path).readAsStringSync().trim(), path);
-  final file = File(out);
-  file.parent.createSync(recursive: true);
-  file.writeAsStringSync('$_dpapiPrefix${_dpapi(seed, protect: true)}\n');
-  stdout
-    ..writeln('Wrote the encrypted key to $out.')
-    ..writeln('Point \$$_keyVariable at it to sign releases; it reads only')
-    ..writeln('under this Windows account, on this machine.');
-}
-
-/// Writes the plain key [path] holds (an encrypted one included) to [out].
-void _decryptKey(String path, String? out) {
-  if (out == null) _fail('--decrypt-key needs --out <file>.');
-  final text = File(path).readAsStringSync().trim();
-  final seed = text.startsWith(_dpapiPrefix)
-      ? _dpapi(text.substring(_dpapiPrefix.length), protect: false)
-      : text;
-  final file = File(out);
-  file.parent.createSync(recursive: true);
-  file.writeAsStringSync('$seed\n');
-  stdout.writeln('Wrote the plain key to $out. Keep it safe.');
-}
-
-/// [text] as a key seed: 32 bytes, base64. [path] names it in errors.
-String _seedOf(String text, String path) {
-  try {
-    if (base64.decode(text).length == 32) return text;
-  } on FormatException {
-    // Below.
-  }
-  _fail('$path does not hold a key (32 bytes, base64).');
-}
-
-/// Windows DPAPI (CurrentUser) over [seed], base64; or back.
-String _dpapi(String seed, {required bool protect}) {
-  final call = protect ? 'Protect' : 'Unprotect';
-  final script = [
-    'Add-Type -AssemblyName System.Security',
-    "\$in = [Convert]::FromBase64String('$seed')",
-    "\$out = [Security.Cryptography.ProtectedData]::$call(\$in, \$null, 'CurrentUser')",
-    '[Convert]::ToBase64String(\$out)',
-  ].join('; ');
-  final result = Process.runSync('powershell', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    script,
-  ]);
-  if (result.exitCode != 0) {
-    _fail(
-      'PowerShell could not ${protect ? 'protect' : 'unprotect'} the key:\n'
-      '${result.stderr}',
-    );
-  }
-  return '${result.stdout}'.trim();
-}
-
 String _readKey() {
   final path = Platform.environment[_keyVariable];
   if (path == null || path.isEmpty) {
@@ -325,18 +316,13 @@ String _readKey() {
   }
   final file = File(path);
   if (!file.existsSync()) _fail('No key at $path (\$$_keyVariable).');
-  final text = file.readAsStringSync().trim();
-  if (!text.startsWith(_dpapiPrefix)) return _seedOf(text, path);
-  if (!Platform.isWindows) {
-    _fail(
-      '$path is DPAPI-encrypted: only the Windows account that wrote it '
-      'can read it.',
-    );
+  final seed = file.readAsStringSync().trim();
+  try {
+    if (base64.decode(seed).length == 32) return seed;
+  } on FormatException {
+    // Below.
   }
-  return _seedOf(
-    _dpapi(text.substring(_dpapiPrefix.length), protect: false),
-    path,
-  );
+  _fail('$path does not hold a key (32 bytes, base64).');
 }
 
 String _pubspecVersion(File pubspec) {
@@ -357,21 +343,24 @@ String _textOrFile(String value) {
 /// `--name value` pairs; `--flag` alone for those without one.
 Map<String, String?> _parse(List<String> arguments) {
   const flags = {'public-key', 'help'};
-  const valued = {
+  const files = {
     'windows',
     'macos-arm64',
     'macos-x64',
     'dmg-arm64',
     'dmg-x64',
+    'linux-x64',
+    'linux-arm64',
+  };
+  final valued = {
+    for (final edition in _editions)
+      for (final file in files) '$file$edition',
     'notes-en',
     'notes-zh',
     'minimum-version',
     'version',
     'manifest',
     'generate-key',
-    'encrypt-key',
-    'decrypt-key',
-    'out',
   };
   final options = <String, String?>{};
   for (var i = 0; i < arguments.length; i++) {

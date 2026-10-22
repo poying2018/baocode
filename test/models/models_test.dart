@@ -516,6 +516,48 @@ void main() {
       expect(customUpstreamHeaders(at('https://x.example')), isEmpty);
     });
 
+    test('OpenCode is told the conversation, the same id every request, '
+        'unless the user names it', () {
+      final zen = at(
+        'https://opencode.ai/zen/go/v1',
+        ProviderProtocol.openaiChat,
+      );
+      final first = customUpstreamHeaders(zen, session: 's-1');
+      expect(first.keys, [openCodeSessionHeader]);
+      expect(
+        first[openCodeSessionHeader],
+        matches(RegExp(r'^ses_[0-9a-f]{32}$')),
+      );
+      expect(customUpstreamHeaders(zen, session: 's-1'), first);
+      expect(
+        customUpstreamHeaders(zen, session: 's-2')[openCodeSessionHeader],
+        isNot(first[openCodeSessionHeader]),
+      );
+      // No session (a model list): one of its own all the same.
+      expect(
+        customUpstreamHeaders(zen)[openCodeSessionHeader],
+        matches(RegExp(r'^ses_[0-9a-f]{32}$')),
+      );
+      // The user's own, in any case, is kept and not doubled.
+      expect(
+        customUpstreamHeaders(
+          zen.copyWith(
+            headers: {'X-OpenCode-Session': '{{CLAUDE_SESSION_ID}}'},
+          ),
+          session: 's-1',
+        ),
+        {'X-OpenCode-Session': 's-1'},
+      );
+      // Another upstream: none.
+      expect(
+        customUpstreamHeaders(
+          at('https://opencode.example', ProviderProtocol.openaiChat),
+          session: 's-1',
+        ),
+        isEmpty,
+      );
+    });
+
     test('model lists of each kind are read, with their windows', () {
       final openai = parseModelList({
         'object': 'list',
@@ -684,6 +726,51 @@ void main() {
         () => launchEnvironment(provider: _gateway, model: 'm'),
         throwsStateError,
       );
+    });
+
+    test('subagents on another upstream take an Anthropic session through '
+        'the proxy, their model as its ref', () {
+      const provider = ModelProvider(
+        id: 'a',
+        name: 'A',
+        baseUrl: 'https://api.anthropic.com',
+        headers: {'x-tenant': 'acme'},
+        roles: ProviderRoles(subagent: '@ds/deepseek-chat'),
+      );
+      expect(provider.subagentUpstream, 'ds');
+      expect(provider.throughProxy, isTrue);
+      final env = launchEnvironment(
+        provider: provider,
+        model: 'claude-opus-4-5',
+        key: 'sk-ant',
+        proxy: (baseUrl: 'http://127.0.0.1:5000/p/a', token: 'tok'),
+      );
+      expect(env['ANTHROPIC_BASE_URL'], 'http://127.0.0.1:5000/p/a');
+      expect(env['ANTHROPIC_AUTH_TOKEN'], 'tok');
+      expect(env['ANTHROPIC_API_KEY'], '');
+      expect(env.values, isNot(contains('sk-ant')));
+      expect(env['CLAUDE_CODE_SUBAGENT_MODEL'], '@ds/deepseek-chat');
+      expect(env['CLAUDE_CODE_SUBAGENT_MODEL_FORCE'], '1');
+      expect(env['NO_PROXY'], '127.0.0.1,localhost');
+      // The proxy sets its headers; Anthropic's effort stays the CLI's.
+      expect(env['ANTHROPIC_CUSTOM_HEADERS'], '');
+      expect(env['CLAUDE_CODE_ALWAYS_ENABLE_EFFORT'], '1');
+      expect(
+        () => launchEnvironment(provider: provider, model: 'm'),
+        throwsStateError,
+      );
+
+      // One of its own models, picked as a ref, by its id: no proxy.
+      const own = ModelProvider(
+        id: 'a',
+        name: 'A',
+        baseUrl: 'https://api.anthropic.com',
+        roles: ProviderRoles(subagent: '@a/claude-haiku-4-5'),
+      );
+      expect(own.throughProxy, isFalse);
+      final direct = launchEnvironment(provider: own, model: 'm', key: 'k');
+      expect(direct['ANTHROPIC_BASE_URL'], 'https://api.anthropic.com');
+      expect(direct['CLAUDE_CODE_SUBAGENT_MODEL'], 'claude-haiku-4-5');
     });
 
     test('a directly-spoken upstream carries its own headers in Claude '

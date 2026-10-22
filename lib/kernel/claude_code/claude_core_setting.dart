@@ -12,8 +12,13 @@ enum ClaudeCore {
 
   static const settingKey = 'claudeCode.core';
 
-  /// When the setting is unset, or not one of these.
-  static const fallback = builtin;
+  /// When the setting is unset, or not one of these: the CLI where Claude
+  /// Code is installed on this machine, else the built-in core.
+  static ClaudeCore get fallback => cliInstalled() ? cli : builtin;
+
+  /// Whether Claude Code is installed on this machine, as last looked;
+  /// main() points it at `LocalClaude.installed`.
+  static bool Function() cliInstalled = () => false;
 
   static ClaudeCore parse(Object? setting) =>
       values.where((value) => value.name == setting).firstOrNull ?? fallback;
