@@ -424,7 +424,15 @@ String _textOrFile(String value) {
 }
 
 /// `--name value` pairs; `--flag` alone for those without one.
-Map<String, String?> _parse(List<String> arguments) {
+Map<String, String?> _parse(List<String> arguments) =>
+    parseReleaseManifestArguments(arguments);
+
+/// The options [arguments] names, or null for those without a value.
+///
+/// Every option the usage above tells of is here: a merge that takes the
+/// upstream's parser would leave the DPAPI ones unknown, and the key
+/// could not be encrypted or read back.
+Map<String, String?> parseReleaseManifestArguments(List<String> arguments) {
   const flags = {'public-key', 'help'};
   const files = {
     'windows',
@@ -444,6 +452,13 @@ Map<String, String?> _parse(List<String> arguments) {
     'version',
     'manifest',
     'generate-key',
+    // The DPAPI ones: the private key may be kept encrypted, and read
+    // in memory (see _readKey). The upstream's version of this tool
+    // knows no such option, and a merge that takes its _parse would
+    // leave these unreachable: the usage below still tells of them.
+    'encrypt-key',
+    'decrypt-key',
+    'out',
   };
   final options = <String, String?>{};
   for (var i = 0; i < arguments.length; i++) {
