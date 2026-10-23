@@ -73,6 +73,12 @@ class ProcessCodexTransport implements CodexTransport {
   /// Where the Codex CLI may be, best first.
   static Future<List<CodexExecutable>> _candidates() async {
     final found = <CodexExecutable>[];
+    // The binary behind the npm shim: the one to actually run, and the
+    // one the user installed for their terminal.
+    for (final root in await _npmRoots()) {
+      final binary = _vendorBinary(root);
+      if (binary != null) found.add(CodexExecutable(binary));
+    }
     // The one the user has, on the PATH.
     for (final directory in _pathDirectories()) {
       for (final name in const ['codex.exe', 'codex']) {
@@ -82,16 +88,14 @@ class ProcessCodexTransport implements CodexTransport {
         }
       }
     }
-    // The binary behind the npm shim: the one to actually run.
-    for (final root in await _npmRoots()) {
-      final binary = _vendorBinary(root);
-      if (binary != null) found.add(CodexExecutable(binary));
-    }
     return found;
   }
 
   /// The `codex.exe` under a npm `@openai/codex` install, if there is one.
   static String? _vendorBinary(String root) {
+    // The Desktop app's own copy: `<root>/codex.exe`.
+    final direct = File(p.join(root, 'codex.exe'));
+    if (direct.existsSync()) return direct.path;
     final package = Directory(p.join(root, '@openai', 'codex'));
     if (!package.existsSync()) return null;
     final vendor = Directory(p.join(package.path, 'node_modules', '@openai'));
@@ -122,15 +126,23 @@ class ProcessCodexTransport implements CodexTransport {
   static Future<List<String>> _npmRoots() async {
     final roots = <String>{};
     for (final directory in _pathDirectories()) {
-      // `<root>/@openai/codex` is where npm puts a global install.
+      // `<root>/node_modules/@openai/codex` is where npm puts a global
+      // install; the shim beside it is `<root>/codex.cmd`.
+      if (Directory(
+        p.join(directory, 'node_modules', '@openai'),
+      ).existsSync()) {
+        roots.add(p.join(directory, 'node_modules'));
+      }
+      // A local install, as a project has it.
       if (Directory(p.join(directory, '@openai')).existsSync()) {
         roots.add(directory);
       }
     }
     for (final home in _homeDirectories()) {
       final roaming = p.join(home, 'AppData', 'Roaming');
-      if (Directory(p.join(roaming, '@openai')).existsSync()) {
-        roots.add(roaming);
+      final npm = p.join(roaming, 'npm', 'node_modules');
+      if (Directory(p.join(npm, '@openai')).existsSync()) {
+        roots.add(npm);
       }
       final local = p.join(home, '.npm-global', 'lib', 'node_modules');
       if (Directory(p.join(local, '@openai')).existsSync()) {
@@ -139,6 +151,23 @@ class ProcessCodexTransport implements CodexTransport {
       final usr = p.join(home, '.local', 'share');
       if (Directory(p.join(usr, '@openai')).existsSync()) {
         roots.add(usr);
+      }
+      // The Desktop app's own copy, under its own folder.
+      final desktop = p.join(
+        home,
+        'AppData',
+        'Local',
+        'OpenAI',
+        'Codex',
+        'bin',
+      );
+      if (Directory(desktop).existsSync()) {
+        for (final entry in Directory(desktop).listSync()) {
+          if (entry is! Directory) continue;
+          if (File(p.join(entry.path, 'codex.exe')).existsSync()) {
+            roots.add(entry.path);
+          }
+        }
       }
     }
     return roots.toList();
