@@ -110,12 +110,43 @@ abstract final class CodexTransportFactory {
       final from = File(p.join(source, name));
       if (!from.existsSync()) continue;
       final to = File(p.join(home, name));
-      if (name == 'auth.json' && to.existsSync()) continue;
+      if (name == 'auth.json' &&
+          to.existsSync() &&
+          !from.lastModifiedSync().isAfter(to.lastModifiedSync())) {
+        // Keep the copy's refreshed token until the user signs in again.
+        continue;
+      }
       try {
         from.copySync(to.path);
       } on FileSystemException {
         // A file another Codex has open is not a reason to refuse to
         // start: the copy already there, if any, is used.
+      }
+    }
+    for (final name in const ['skills', 'plugins']) {
+      final from = Directory(p.join(source, name));
+      if (!from.existsSync()) continue;
+      final to = Directory(p.join(home, name))..createSync(recursive: true);
+      List<FileSystemEntity> entries;
+      try {
+        entries = from.listSync(recursive: true);
+      } on FileSystemException {
+        continue;
+      }
+      for (final entity in entries) {
+        if (entity is! File) continue;
+        final relative = p.relative(entity.path, from: from.path);
+        final destination = File(p.join(to.path, relative));
+        try {
+          if (destination.existsSync() &&
+              destination.lengthSync() == entity.lengthSync()) {
+            continue;
+          }
+          destination.parent.createSync(recursive: true);
+          entity.copySync(destination.path);
+        } on FileSystemException {
+          // One locked file does not keep the rest of the skills away.
+        }
       }
     }
   }
