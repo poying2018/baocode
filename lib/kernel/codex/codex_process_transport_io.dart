@@ -21,6 +21,12 @@ class ProcessCodexTransport implements CodexTransport {
     unawaited(
       _process.exitCode.then((code) {
         _exitCode = code;
+        for (final waiting in _waiting.values) {
+          if (!waiting.isCompleted) {
+            waiting.completeError(const CodexRequestError('Codex stopped'));
+          }
+        }
+        _waiting.clear();
         // It ended before it was up: the one waiting to talk to it is
         // told, rather than waiting for nothing.
         if (!_started.isCompleted) {
@@ -49,6 +55,9 @@ class ProcessCodexTransport implements CodexTransport {
       'method': 'initialize',
       'params': {
         'clientInfo': {'name': 'baocode', 'version': '1.0.0'},
+        // Some of the methods the adapter uses (collaboration modes,
+        // permission profiles) are behind this switch.
+        'capabilities': {'experimentalApi': true},
       },
     });
     // The server may not come up: another app may hold its home (the
@@ -177,9 +186,8 @@ class ProcessCodexTransport implements CodexTransport {
     for (final directory in _pathDirectories()) {
       // `<root>/node_modules/@openai/codex` is where npm puts a global
       // install; the shim beside it is `<root>/codex.cmd`.
-      if (Directory(
-        p.join(directory, 'node_modules', '@openai'),
-      ).existsSync()) {
+      if (Directory(p.join(directory, 'node_modules', '@openai'))
+          .existsSync()) {
         roots.add(p.join(directory, 'node_modules'));
       }
       // A local install, as a project has it.
@@ -232,7 +240,9 @@ class ProcessCodexTransport implements CodexTransport {
 
   static List<String> _homeDirectories() {
     final home =
-        Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '';
+        Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'] ??
+        '';
     return home.isEmpty ? const [] : [home];
   }
 
@@ -307,12 +317,21 @@ class ProcessCodexTransport implements CodexTransport {
           }
         }
       }
-      // The server is up when it answers the initialize request.
-      if (decoded is Map &&
-          decoded['id'] == 0 &&
-          decoded.containsKey('result') &&
-          !_started.isCompleted) {
-        _started.complete();
+      // The server is up when it answers the initialize request. The
+      // notification is sent before anyone else can write: the server
+      // refuses every other method until it has it.
+      if (decoded is Map && decoded['id'] == 0 && !_started.isCompleted) {
+        if (decoded['error'] case final error?) {
+          final message = error is Map
+              ? '${error['message'] ?? 'initialization failed'}'
+              : '$error';
+          _started.completeError(
+            CodexUnavailable('Codex could not be initialized', detail: message),
+          );
+        } else if (decoded.containsKey('result')) {
+          write({'method': 'initialized'});
+          _started.complete();
+        }
       }
     } on FormatException {
       // Not protocol (e.g. a warning printed on stdout): kept for the
@@ -401,4 +420,3 @@ class CodexExecutable {
   final String executable;
   final Map<String, String>? environment;
 }
-

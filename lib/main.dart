@@ -44,6 +44,7 @@ import 'kernel/claude_code/claude_core_setting.dart';
 import 'kernel/claude_code/claude_onboarding.dart';
 import 'kernel/claude_code/claude_path_setting.dart';
 import 'kernel/claude_code/process_transport.dart';
+import 'kernel/codex/codex_transport_factory.dart';
 import 'kernel/claude_code/turn_stats_stub.dart'
     if (dart.library.io) 'kernel/claude_code/turn_stats_io.dart'
     show turnStatsIn;
@@ -701,7 +702,7 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
             lookupAppLocalizations(_locale.locale ?? AppLocale.systemLocale()),
       );
 
-  /// Quitting ends the Claude Code processes too: left alone, one would
+  /// Quitting ends the agent processes too: left alone, one would
   /// finish its turn (subagents and all) unseen, and a resumed session would
   /// then run beside it. Language servers end with the app as well, and the
   /// terminals' shells are hung up, as closing their window would.
@@ -721,6 +722,7 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
       }
       await Future.wait([
         stopClaudeProcesses(),
+        CodexTransportFactory.stopAll(),
         RemoteClaudeTransport.stopAll(),
         stopModelProxy(),
         stopLspProcesses(),

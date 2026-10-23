@@ -306,11 +306,11 @@ void main() {
     expect(picker('Codex'), findsOneWidget);
     expect(picker('GPT-5.5 Codex'), findsOneWidget);
 
-    // Codex has no Plan mode.
+    // Codex has Plan as its own collaboration mode.
     await tester.tap(picker('Agent'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Read-only: answer questions'), findsOneWidget);
-    expect(find.text('Plan'), findsNothing);
+    expect(find.text('Plan'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -1322,10 +1322,8 @@ void main() {
     expect(find.text('Conversation'), findsOneWidget);
 
     // Away to another conversation and back: still open, as it was.
-    Widget screen(Widget home) => MaterialApp(
-      theme: buildAppTheme(),
-      home: home,
-    );
+    Widget screen(Widget home) =>
+        MaterialApp(theme: buildAppTheme(), home: home);
     await tester.pumpWidget(screen(const SizedBox()));
     await tester.pumpWidget(screen(ChatScreen(session: session)));
     await tester.pump();

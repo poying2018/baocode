@@ -21,6 +21,7 @@ import 'package:baocode/kernel/claude_code/cli_locator.dart';
 import 'package:baocode/kernel/claude_code/control_channel.dart';
 import 'package:baocode/kernel/claude_code/turn_stats.dart';
 import 'package:baocode/kernel/codex/codex_kernel.dart';
+import 'package:baocode/kernel/codex/codex_catalog.dart';
 import 'package:baocode/kernel/codex/codex_transport.dart';
 import 'package:baocode/kernel/commit_attribution.dart';
 import 'package:baocode/kernel/kernel_event.dart';
@@ -5285,26 +5286,28 @@ exec /usr/bin/env "\$@"
       expect(channel.receive({'type': 'user'}), isFalse);
     });
 
-    test('a request that times out is refused, so the CLI lets it go',
-        () async {
-      final written = <Map<String, Object?>>[];
-      final channel = ControlChannel(written.add);
-      await expectLater(
-        channel.request(
-          'mcp_status',
-          const {},
-          const Duration(milliseconds: 20),
-        ),
-        throwsA(isA<ControlError>()),
-      );
-      // The CLI is still waiting for an answer: told, so it does not
-      // hold the turn open for ever.
-      final refusal = written.last;
-      expect(refusal['type'], 'control_response');
-      final response = refusal['response'] as Map;
-      expect(response['subtype'], 'error');
-      expect(response['request_id'], written.first['request_id']);
-    });
+    test(
+      'a request that times out is refused, so the CLI lets it go',
+      () async {
+        final written = <Map<String, Object?>>[];
+        final channel = ControlChannel(written.add);
+        await expectLater(
+          channel.request(
+            'mcp_status',
+            const {},
+            const Duration(milliseconds: 20),
+          ),
+          throwsA(isA<ControlError>()),
+        );
+        // The CLI is still waiting for an answer: told, so it does not
+        // hold the turn open for ever.
+        final refusal = written.last;
+        expect(refusal['type'], 'control_response');
+        final response = refusal['response'] as Map;
+        expect(response['subtype'], 'error');
+        expect(response['request_id'], written.first['request_id']);
+      },
+    );
   });
 
   group('Codex adapter', () {
@@ -5328,15 +5331,18 @@ exec /usr/bin/env "\$@"
       kernel.send(const KernelTurn(id: 't1', text: 'hi'));
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
-        'initialized',
         'model/list',
+        'collaborationMode/list',
         'thread/start',
         'turn/start',
       ]);
       // The models the server has are what the picker offers.
       expect(kernel.model.options.map((o) => o.id), ['gpt-5.5-codex']);
       final turnStart = server.written.last['params'] as Map;
-      expect(turnStart['sandboxPolicy'], {'type': 'readOnly'});
+      expect(turnStart['sandboxPolicy'], {
+        'type': 'readOnly',
+        'networkAccess': false,
+      });
       expect(turnStart['model'], 'gpt-5.5-codex');
 
       notify('item/completed', {
@@ -5446,10 +5452,438 @@ exec /usr/bin/env "\$@"
       expect(events.last, isA<TurnEnded>());
     });
 
+    test('effort is read from the model and sent with the turn', () async {
+      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
+      await pumpEventQueue();
+
+      final model = kernel.model.selected!;
+      expect(kernel.effort.optionsFor(model).map((option) => option.id), [
+        'low',
+        'medium',
+        'high',
+      ]);
+      expect(kernel.effort.selected, 'medium');
+
+      kernel.effort.select(model, 'high');
+      notify('turn/completed', {
+        'turn': {'id': 'st1', 'status': 'completed'},
+      });
+      await pumpEventQueue();
+      kernel.send(const KernelTurn(id: 't2', text: 'again'));
+      await pumpEventQueue();
+
+      final turnStart = server.written.lastWhere(
+        (message) =>
+            message['method'] == 'turn/start' &&
+            (message['params'] as Map)['clientUserMessageId'] == 't2',
+      );
+      final params = turnStart['params'] as Map;
+      expect(params['effort'], 'high');
+      expect((params['collaborationMode'] as Map)['settings'], {
+        'model': model,
+        'reasoning_effort': 'high',
+      });
+    });
+
+    test('Plan is a collaboration mode, and its plan starts', () async {
+      kernel.mode.select('plan');
+      kernel.send(const KernelTurn(id: 't1', text: 'plan it'));
+      await pumpEventQueue();
+
+      final turnStart = server.written.lastWhere(
+        (message) => message['method'] == 'turn/start',
+      );
+      final params = turnStart['params'] as Map;
+      expect((params['collaborationMode'] as Map)['mode'], 'plan');
+      expect(params['sandboxPolicy'], {
+        'type': 'readOnly',
+        'networkAccess': false,
+      });
+
+      notify('item/completed', {
+        'item': {
+          'type': 'agentMessage',
+          'id': 'plan1',
+          'text':
+              '<proposed_plan>\n# Ship it\n\nDo the work.\n'
+              '</proposed_plan>',
+        },
+      });
+      final plan =
+          events
+                  .whereType<ItemCompleted>()
+                  .lastWhere((event) => event.id == 'plan1')
+                  .item
+              as PlanItem;
+      expect((plan.title, plan.status), ('Ship it', PlanStatus.awaiting));
+
+      kernel.startBuilding();
+      expect(kernel.mode.selected, 'agent');
+      final approved =
+          events
+                  .whereType<ItemCompleted>()
+                  .lastWhere((event) => event.id == 'plan1')
+                  .item
+              as PlanItem;
+      expect(approved.status, PlanStatus.approved);
+      expect(
+        server.written.map((message) => message['method']),
+        contains('thread/settings/update'),
+      );
+    });
+
+    test('messages sent while busy wait their turn', () async {
+      kernel.send(const KernelTurn(id: 't1', text: 'first'));
+      await pumpEventQueue();
+      kernel.send(const KernelTurn(id: 't2', text: 'second'));
+
+      var user =
+          events
+                  .whereType<ItemUpserted>()
+                  .lastWhere((event) => event.id == 't2')
+                  .item
+              as UserMessageItem;
+      expect(user.queued, isTrue);
+      expect(
+        server.written.where((message) => message['method'] == 'turn/start'),
+        hasLength(1),
+      );
+
+      notify('turn/completed', {
+        'turn': {'id': 'st1', 'status': 'completed'},
+      });
+      await pumpEventQueue();
+
+      user =
+          events
+                  .whereType<ItemUpserted>()
+                  .lastWhere((event) => event.id == 't2')
+                  .item
+              as UserMessageItem;
+      expect(user.queued, isFalse);
+      expect(
+        server.written.where((message) => message['method'] == 'turn/start'),
+        hasLength(2),
+      );
+
+      kernel.send(const KernelTurn(id: 't3', text: 'third'));
+      expect(await kernel.cancelQueued('t3'), isTrue);
+      expect(events.whereType<ItemRemoved>().last.id, 't3');
+      expect(await kernel.cancelQueued('t3'), isFalse);
+    });
+
+    test('history is read by page, and earlier turns go before it', () async {
+      final historyServer = _FakeServer()
+        ..turnsPages.addAll([
+          {
+            'data': [
+              {
+                'id': 'turn-new',
+                'items': [
+                  {
+                    'type': 'userMessage',
+                    'id': 'user-new',
+                    'content': [
+                      {'type': 'text', 'text': 'new'},
+                    ],
+                  },
+                  {
+                    'type': 'agentMessage',
+                    'id': 'answer-new',
+                    'text': 'new answer',
+                  },
+                ],
+                'status': 'completed',
+                'durationMs': 1200,
+              },
+            ],
+            'nextCursor': 'older',
+          },
+          {
+            'data': [
+              {
+                'id': 'turn-old',
+                'items': [
+                  {
+                    'type': 'userMessage',
+                    'id': 'user-old',
+                    'content': [
+                      {'type': 'text', 'text': 'old'},
+                    ],
+                  },
+                  {
+                    'type': 'agentMessage',
+                    'id': 'answer-old',
+                    'text': 'old answer',
+                  },
+                ],
+                'status': 'completed',
+              },
+            ],
+            'nextCursor': null,
+          },
+        ]);
+      final historyEvents = <KernelEvent>[];
+      final history = CodexKernel(
+        MockKernels.codex,
+        historyServer,
+        context: KernelContext(
+          resume: SessionRecord(
+            id: 'th',
+            title: 'kept',
+            updatedAt: DateTime(2026),
+            cwd: r'F:\Projects\baocode',
+          ),
+        ),
+      )..events.listen(historyEvents.add);
+      await pumpEventQueue();
+
+      final first = historyEvents.whereType<HistoryPrepended>().single.items;
+      expect(
+        [
+          for (final (_, item) in first)
+            if (item is UserMessageItem) item.text,
+        ],
+        ['new'],
+      );
+      expect(history.hasEarlierHistory, isTrue);
+
+      await history.loadEarlier();
+      final pages = historyEvents.whereType<HistoryPrepended>().toList();
+      final earlier = pages.last.items;
+      expect(
+        [
+          for (final (_, item) in earlier)
+            if (item is UserMessageItem) item.text,
+        ],
+        ['old'],
+      );
+      expect(history.hasEarlierHistory, isFalse);
+      history.dispose();
+    });
+
+    test('rename, fork and file search use the server', () async {
+      server.answers['thread/fork'] = {
+        'thread': {'id': 'forked', 'path': r'F:\tmp\fork.jsonl'},
+      };
+      server.answers['fuzzyFileSearch'] = {
+        'files': [
+          {'path': r'F:\Projects\baocode\lib\main.dart', 'match_type': 'file'},
+        ],
+      };
+      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
+      await pumpEventQueue();
+
+      kernel.rename('A title');
+      final forked = await kernel.fork(title: 'A fork');
+      final files = await kernel.suggestFiles('main');
+
+      expect(forked?.id, 'forked');
+      expect(files.single.path, 'lib/main.dart');
+      expect(
+        server.written.map((message) => message['method']),
+        containsAll(['thread/name/set', 'thread/fork', 'fuzzyFileSearch']),
+      );
+    });
+
+    test('MCP servers and account limits are the server\'s', () async {
+      server.answers['mcpServerStatus/list'] = {
+        'data': [
+          {
+            'name': 'docs',
+            'runtimeStatus': 'connected',
+            'authStatus': 'unsupported',
+            'tools': {
+              'search': {'name': 'search'},
+            },
+            'serverInfo': {'name': 'docs', 'version': '1.2.3'},
+          },
+        ],
+      };
+      server.answers['account/rateLimits/read'] = {
+        'rateLimits': {
+          'primary': {
+            'usedPercent': 42,
+            'windowDurationMins': 300,
+            'resetsAt': 1800000000,
+          },
+        },
+      };
+      kernel.refreshMcpServers();
+      await kernel.refreshUsage();
+      await pumpEventQueue();
+
+      final mcp = kernel.mcpServers!.single;
+      expect(mcp.name, 'docs');
+      expect(mcp.version, '1.2.3');
+      expect(mcp.tools, ['search']);
+      expect(kernel.accountLimits.single.utilization, 0.42);
+      expect(kernel.accountLimits.single.label, 'Codex 5h');
+    });
+
+    test(
+      'questions and extra permissions are answered in their shape',
+      () async {
+        kernel.send(const KernelTurn(id: 't1', text: 'ask me'));
+        await pumpEventQueue();
+        server.push({
+          'id': 21,
+          'method': 'item/tool/requestUserInput',
+          'params': {
+            'threadId': 'th',
+            'turnId': 'st1',
+            'itemId': 'q1',
+            'isBlocking': true,
+            'questions': [
+              {
+                'id': 'choice',
+                'header': 'Pick',
+                'question': 'Which?',
+                'isOther': false,
+                'options': [
+                  {'label': 'One', 'description': ''},
+                  {'label': 'Two', 'description': ''},
+                ],
+              },
+            ],
+          },
+        });
+        expect(
+          events.whereType<InteractionRequested>().last.request,
+          isA<QuestionRequest>(),
+        );
+        kernel.answer(
+          'question:21',
+          const QuestionAnswer([
+            ['Two'],
+          ]),
+        );
+        final question = server.written.lastWhere(
+          (message) => message['id'] == 21,
+        );
+        expect(question['result'], {
+          'answers': {
+            'choice': {
+              'answers': ['Two'],
+            },
+          },
+        });
+
+        server.push({
+          'id': 22,
+          'method': 'item/permissions/requestApproval',
+          'params': {
+            'threadId': 'th',
+            'turnId': 'st1',
+            'itemId': 'p1',
+            'cwd': r'F:\Projects\baocode',
+            'startedAtMs': 1,
+            'permissions': {
+              'network': {'enabled': true},
+            },
+          },
+        });
+        kernel.answer(
+          'permissions:22',
+          const ApprovalAnswer(ApprovalDecision.allowAlways),
+        );
+        final permission = server.written.lastWhere(
+          (message) => message['id'] == 22,
+        );
+        expect(permission['result'], {
+          'permissions': {
+            'network': {'enabled': true},
+          },
+          'scope': 'session',
+        });
+
+        server.push({
+          'id': 23,
+          'method': 'mcpServer/elicitation/request',
+          'params': {
+            'threadId': 'th',
+            'serverName': 'docs',
+            'message': 'Choose how to continue',
+            'mode': 'form',
+            'requestedSchema': {
+              'type': 'object',
+              'properties': {
+                'colour': {
+                  'type': 'string',
+                  'title': 'Colour',
+                  'enum': ['blue', 'green'],
+                },
+                'remember': {'type': 'boolean', 'title': 'Remember'},
+              },
+            },
+          },
+        });
+        kernel.answer(
+          'elicitation:23',
+          const QuestionAnswer([
+            ['blue'],
+            ['Yes'],
+          ]),
+        );
+        final elicitation = server.written.lastWhere(
+          (message) => message['id'] == 23,
+        );
+        expect(elicitation['result'], {
+          'action': 'accept',
+          'content': {'colour': 'blue', 'remember': true},
+        });
+      },
+    );
+
+    test('catalog lists the server\'s threads by project', () async {
+      server.answers['thread/list'] = {
+        'data': [
+          {
+            'id': 'one',
+            'name': 'Named',
+            'preview': 'ignored',
+            'cwd': r'F:\Projects\one',
+            'updatedAt': 1800000000,
+          },
+          {
+            'id': 'two',
+            'name': null,
+            'preview': 'First line',
+            'cwd': r'F:\Projects\one',
+            'updatedAt': 1700000000,
+          },
+        ],
+      };
+      final catalog = CodexCatalog(transport: server);
+      final projects = await catalog.projects();
+
+      expect(projects.single.path, r'F:\Projects\one');
+      expect(
+        projects.single.sessions.map((session) => (session.id, session.title)),
+        [('one', 'Named'), ('two', 'First line')],
+      );
+      final list = server.written.lastWhere(
+        (message) => message['method'] == 'thread/list',
+      );
+      expect((list['params'] as Map)['sortKey'], 'updated_at');
+
+      await catalog.delete('one');
+      expect(
+        server.written.lastWhere(
+          (message) => message['method'] == 'thread/delete',
+        )['params'],
+        {'threadId': 'one'},
+      );
+    });
+
     test('declares no background tasks and no undo', () {
       expect(kernel, isNot(isA<RunsBackgroundTasks>()));
       expect(kernel, isNot(isA<RevertsChanges>()));
       expect(kernel, isA<SelectsMode>());
+      expect(kernel, isA<StartsPlans>());
+      expect(kernel, isA<SelectsPermission>());
+      expect(kernel, isA<SelectsEffort>());
+      expect(kernel, isA<LoadsHistory>());
     });
   });
 }
@@ -5459,6 +5893,8 @@ class _FakeServer implements CodexTransport {
   final StreamController<Map<String, Object?>> _out =
       StreamController.broadcast(sync: true);
   final List<Map<String, Object?>> written = [];
+  final Map<String, Map<String, Object?>> answers = {};
+  final List<Map<String, Object?>> turnsPages = [];
 
   @override
   Stream<Map<String, Object?>> get messages => _out.stream;
@@ -5503,25 +5939,42 @@ class _FakeServer implements CodexTransport {
   @override
   void write(Map<String, Object?> message) {
     written.add(message);
-    final result = switch (message['method']) {
-      'thread/start' => {
-        'thread': {'id': 'th'},
-      },
-      'turn/start' => {
-        'turn': {'id': 'st1'},
-      },
-      'model/list' => {
-        'models': [
-          {
-            'id': 'gpt-5.5-codex',
-            'displayName': 'GPT-5.5 Codex',
-            'supportedReasoningEfforts': ['low', 'medium', 'high'],
-          },
-        ],
-      },
-      null => null,
-      _ => <String, Object?>{},
-    };
+    final method = message['method'];
+    final result = method == 'thread/turns/list' && turnsPages.isNotEmpty
+        ? turnsPages.removeAt(0)
+        : answers[method] ??
+              switch (method) {
+                'thread/start' => {
+                  'thread': {'id': 'th'},
+                },
+                'collaborationMode/list' => {
+                  'data': [
+                    {'name': 'Plan', 'mode': 'plan'},
+                    {'name': 'Default', 'mode': 'default'},
+                  ],
+                },
+                'turn/start' => {
+                  'turn': {'id': 'st1'},
+                },
+                'model/list' => {
+                  'data': [
+                    {
+                      'id': 'gpt-5.5-codex',
+                      'displayName': 'GPT-5.5 Codex',
+                      'description': 'Coding model',
+                      'defaultReasoningEffort': 'medium',
+                      'isDefault': true,
+                      'supportedReasoningEfforts': [
+                        {'reasoningEffort': 'low', 'description': ''},
+                        {'reasoningEffort': 'medium', 'description': ''},
+                        {'reasoningEffort': 'high', 'description': ''},
+                      ],
+                    },
+                  ],
+                },
+                null => null,
+                _ => <String, Object?>{},
+              };
     if (result != null) push({'id': message['id'], 'result': result});
   }
 

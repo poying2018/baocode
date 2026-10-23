@@ -88,6 +88,51 @@ class MockCodexTransport implements CodexTransport {
         _respond(id, {
           'thread': {'id': _threadId},
         });
+      case 'thread/resume':
+        _respond(id, {
+          'thread': {'id': _threadId},
+        });
+      case 'thread/name/set':
+      case 'thread/settings/update':
+        _respond(id, {});
+      case 'thread/fork':
+        _respond(id, {
+          'thread': {'id': 'thr_fork'},
+        });
+      case 'thread/turns/list':
+        _respond(id, {'data': <Object?>[], 'nextCursor': null});
+      case 'model/list':
+        _respond(id, {
+          'data': [
+            {
+              'id': 'gpt-5.5-codex',
+              'displayName': 'GPT-5.5 Codex',
+              'description': 'Tuned for coding',
+              'defaultReasoningEffort': 'medium',
+              'isDefault': true,
+              'inputModalities': ['text', 'image'],
+              'supportedReasoningEfforts': [
+                {'reasoningEffort': 'low', 'description': ''},
+                {'reasoningEffort': 'medium', 'description': ''},
+                {'reasoningEffort': 'high', 'description': ''},
+              ],
+              'serviceTiers': <Object?>[],
+            },
+          ],
+        });
+      case 'collaborationMode/list':
+        _respond(id, {
+          'data': [
+            {'name': 'Plan', 'mode': 'plan'},
+            {'name': 'Default', 'mode': 'default'},
+          ],
+        });
+      case 'mcpServerStatus/list':
+        _respond(id, {'data': <Object?>[]});
+      case 'account/rateLimits/read':
+        _respond(id, {'rateLimits': <String, Object?>{}});
+      case 'fuzzyFileSearch':
+        _respond(id, {'files': <Object?>[]});
       case 'thread/revert':
         // The real method: the turn to go on from, not a number of
         // turns to drop.

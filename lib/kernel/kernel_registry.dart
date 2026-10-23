@@ -38,10 +38,12 @@ abstract final class KernelRegistry {
       final transport = CodexTransportFactory.of(context);
       return CodexKernel(codex, transport, context: context);
     },
-    catalog: CodexCatalog(transport: CodexTransportFactory.of(const KernelContext())),
+    catalog: CodexCatalog(
+      transport: CodexTransportFactory.of(const KernelContext()),
+    ),
   );
 
-  static List<KernelDescriptor> _all = [claudeCode, codex];
+  static List<KernelDescriptor> _all = [codex, claudeCode];
 
   static List<KernelDescriptor> get all => _all;
 
