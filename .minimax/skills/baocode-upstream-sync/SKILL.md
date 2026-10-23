@@ -205,7 +205,69 @@ curl.exe -sIL --max-time 60 'https://github.com/poying2018/baocode/releases/down
   [System.IO.File]::WriteAllText($f, [System.IO.File]::ReadAllText($f).Replace("`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
   ```
 
-## Examples
+## 备用路线：Actions 不可用时，本地发布
+
+2026-10-23 实测：GitHub 账户级的 Actions 被禁用（所有 workflow 都触发不了，报
+`Actions has been disabled for this repository`，连 `workflow_dispatch` 也一样；仓库级的
+`actions/permissions` 却仍是 `enabled: true`）。此时**本地发版完全可行**，不必等 GitHub。
+
+### 本地发布的顺序
+
+1. **用独立 worktree**，别动主工作树（可能有别的会话在开发）：
+   ```powershell
+   git worktree add F:\Projects\release-<版本> <发布commit> --detach
+   ```
+2. **远程服务端**（macOS 版只有 Mac 能建，不带 `--all` 就只建 Linux 的两个，servers.json
+   只列建成的 —— 这正是本 fork 要的）：
+   ```powershell
+   dart run tool/build_remote_server.dart     # → build/remote/，含 VERSION 与 servers.json
+   ```
+3. **Windows 安装包**（先构建，再打包）：
+   ```powershell
+   dart run tool/build_windows.dart --remote-built          # 构建 + 打包
+   dart run tool/build_windows.dart --skip-build --remote-built   # 只打包
+   ```
+4. **生成并签名 manifest**（私钥是 DPAPI 加密的，先解开）：
+   ```powershell
+   dart run tool/release_manifest.dart --decrypt-key F:\Projects\baocode-release-key\update-signing.key.enc --out <私钥路径>
+   $env:BAOCODE_UPDATE_SIGNING_KEY = '<私钥路径>'
+   dart run tool/release_manifest.dart --windows build\installers\BaoCode-<版本>-setup.exe `
+       --notes-zh release-notes\<版本>.zh.md --notes-en release-notes\<版本>.en.md `
+       --version <营销版本> --manifest build\installers\latest.json
+   ```
+5. **建两个 release**（应用读的是 `releases/latest/download/latest.json`，所以每个版本
+   的 release 里都要有一份 latest.json，且最新的那个要设为 latest）：
+   ```powershell
+   gh release create v<版本> --repo poying2018/baocode --title v<版本> --notes "<中文说明>" --latest=false `
+       build\installers\BaoCode-<版本>-setup.exe build\installers\latest.json
+   gh release create <VERSION> --repo poying2018/baocode --title <VERSION> --notes '' --latest=false `
+       build\remote\baocode-server-linux-x64.gz build\remote\baocode-server-linux-arm64.gz `
+       build\remote\servers.json build\remote\VERSION
+   gh release edit v<版本> --repo poying2018/baocode --latest
+   ```
+   （`<VERSION>` 形如 `1.5.3.18-3743d73ee642`，来自 `build/remote/VERSION`，应用按它回溯下载）
+
+### 本地发布时的坑
+
+- **Windows 上 Flutter 构建会报 "Building with plugins requires symlink support"**：
+  Dart 的 `Link.createSync` 调 `CreateSymbolicLink` 时**不带** `ALLOW_UNPRIVILEGED_CREATE`
+  标志，所以即使开了开发者模式也会返回 1314。解法是给 Flutter 打个补丁：改
+  `packages/flutter_tools/lib/src/flutter_plugins.dart`，在 `link.createSync` 抛 1314 时用
+  `mklink /J`（junction，不需要特权）兜底，然后删掉 `bin/cache/flutter_tools.snapshot`
+  让它重编译。junction 对构建足够。
+- **`dart run` 报 `PathAccessException ... dartdev\sdk_cache`**：dartdev 的缓存被别的进程锁住。
+  把 `APPDATA` 指向别处即可；**但别改 `LOCALAPPDATA`**（Inno Setup 的 `ISCC.exe` 在那儿，
+  `tool/build_windows.dart` 靠 `LOCALAPPDATA` 找它）。
+- **Inno Setup**：`C:\Users\<用户>\AppData\Local\Programs\Inno Setup 6\ISCC.exe`，
+  `winget install --id JRSoftware.InnoSetup`。
+- **macOS 版的远程服务端**（`darwin-x64` / `darwin-arm64`）本地建不了，CI 的 `remote.yml`
+  在 macos-15 runner 上建。只发 Windows 版时可以只带 Linux 的两个。
+- **release 资产刚传完，`releases/latest/download/...` 可能还取不到**：GitHub 有延迟，
+  等 20 秒左右再取。
+- **tag 要指向发布提交**：如果期间别的会话在同一个仓库提交了，别人的 commit 会混进来，
+  用 `git tag -f v<版本> <发布commit>` 精确指向，再 `--force` 推。
+
+
 
 **输入**："看看上游更新日志，修一下我们这边对应的问题，然后发版"
 
