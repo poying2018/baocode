@@ -22,6 +22,9 @@ class MockCodexTransport implements CodexTransport {
   @override
   List<String> get stderr => const [];
 
+  @override
+  void restart() {}
+
   static const _threadId = 'thr_mock';
   static const _contextWindow = 272000;
 

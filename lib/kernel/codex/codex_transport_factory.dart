@@ -38,6 +38,14 @@ class _StartingCodexTransport implements CodexTransport {
   List<String> get stderr => _transport?.stderr ?? const [];
 
   @override
+  void restart() {
+    // The process it had is gone: the next write starts a new one.
+    _transport?.close();
+    _transport = null;
+    _starting = null;
+  }
+
+  @override
   void write(Map<String, Object?> message) {
     // The process starts on the first write: the initialize request.
     unawaited(

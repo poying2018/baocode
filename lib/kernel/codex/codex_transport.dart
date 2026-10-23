@@ -15,6 +15,10 @@ abstract interface class CodexTransport {
   /// could not start, or why it ended.
   List<String> get stderr;
 
+  /// Starts it afresh: the process it had is gone, and a new one is
+  /// started for the next write.
+  void restart();
+
   void close();
 }
 

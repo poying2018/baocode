@@ -5324,19 +5324,21 @@ exec /usr/bin/env "\$@"
         server.push({'method': method, 'params': params});
 
     test('translates items, and asks leave to run a command', () async {
-      kernel.model.select('gpt-5.5');
       kernel.mode.select('ask');
       kernel.send(const KernelTurn(id: 't1', text: 'hi'));
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
         'initialize',
         'initialized',
+        'model/list',
         'thread/start',
         'turn/start',
       ]);
+      // The models the server has are what the picker offers.
+      expect(kernel.model.options.map((o) => o.id), ['gpt-5.5-codex']);
       final turnStart = server.written.last['params'] as Map;
       expect(turnStart['sandboxPolicy'], {'type': 'readOnly'});
-      expect(turnStart['model'], 'gpt-5.5');
+      expect(turnStart['model'], 'gpt-5.5-codex');
 
       notify('item/completed', {
         'item': {
@@ -5470,6 +5472,9 @@ class _FakeServer implements CodexTransport {
   @override
   List<String> get stderr => const [];
 
+  @override
+  void restart() {}
+
   void push(Map<String, Object?> message) => _out.add(message);
 
   @override
@@ -5481,6 +5486,15 @@ class _FakeServer implements CodexTransport {
       },
       'turn/start' => {
         'turn': {'id': 'st1'},
+      },
+      'model/list' => {
+        'models': [
+          {
+            'id': 'gpt-5.5-codex',
+            'displayName': 'GPT-5.5 Codex',
+            'supportedReasoningEfforts': ['low', 'medium', 'high'],
+          },
+        ],
       },
       null => null,
       _ => <String, Object?>{},

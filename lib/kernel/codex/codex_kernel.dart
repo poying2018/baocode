@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -38,7 +39,7 @@ class CodexKernel
 
   @override
   late final KernelChoiceSource model = LocalChoice(
-    _models,
+    _fallbackModels,
     onChanged: (_) => emitInfoChanged(),
   );
 
@@ -80,9 +81,20 @@ class CodexKernel
   void release() {}
 
   @override
-  void restart() {}
+  void restart() {
+    // What it was doing is over: the server is gone, and a new one
+    // starts with the next message.
+    _transport.restart();
+    _initialized = false;
+    _threadId = null;
+    _serverTurn = null;
+    _serverTurns.clear();
+    _health = KernelHealth.ready;
+    emitInfoChanged();
+  }
 
-  static const _models = [
+  /// What the model picker offers until the server says what it has.
+  static const _fallbackModels = [
     KernelOption(
       'gpt-5.5-codex',
       'GPT-5.5 Codex',
@@ -208,6 +220,9 @@ class CodexKernel
       // The server expects it, and only it, of the client's
       // notifications.
       _transport.write({'method': 'initialized'});
+      // The models it has: the picker shows what it can run on, not
+      // what was guessed.
+      unawaited(_loadModels());
     }
     if (_threadId == null) {
       final started = await _request('thread/start', {
@@ -224,6 +239,13 @@ class CodexKernel
       'input': [
         {'type': 'text', 'text': turn.text},
         for (final note in turn.notes) {'type': 'text', 'text': note},
+        // The pictures the user attached: the model must see them.
+        for (final image in turn.images) {
+          {
+            'type': 'image',
+            'url': 'data:${image.mediaType};base64,${base64Encode(image.bytes)}',
+          },
+        },
       ],
       'model': model.selected,
       'approvalPolicy': readOnly ? 'never' : 'on-request',
@@ -246,6 +268,47 @@ class CodexKernel
     unawaited(
       _request('turn/interrupt', {'threadId': _threadId, 'turnId': serverTurn}),
     );
+  }
+
+  /// The models the server has: what the picker offers. A server that
+  /// does not say (no catalog, or an error) keeps what it had.
+  Future<void> _loadModels() async {
+    Map<String, Object?>? answer;
+    try {
+      answer = await _request('model/list', {});
+    } on Object {
+      return;
+    }
+    final listed = answer['models'];
+    if (listed is! List) return;
+    final options = <KernelOption>[];
+    for (final raw in listed) {
+      if (raw is! Map) continue;
+      final id = raw['id'];
+      if (id is! String || id.isEmpty) continue;
+      final label = raw['displayName'];
+      final efforts = raw['supportedReasoningEfforts'];
+      options.add(
+        KernelOption(
+          id,
+          label is String && label.isNotEmpty ? label : id,
+          Icons.bolt_rounded,
+          efforts is List && efforts.isNotEmpty
+              ? 'Effort: ${efforts.join(', ')}'
+              : 'Coding model',
+        ),
+      );
+    }
+    if (options.isEmpty) return;
+    final choice = model;
+    if (choice is LocalChoice) {
+      final was = choice.selected;
+      choice.options = options;
+      // The one in effect stays, when the server still has it.
+      choice.reported =
+          options.any((option) => option.id == was) ? was : options.first.id;
+    }
+    emitInfoChanged();
   }
 
   @override
@@ -353,8 +416,22 @@ class CodexKernel
         if (turn['id'] != _serverTurn) return;
         _serverTurn = null;
         if (_turn case final ours?) {
+          final failed = turn['status'] == 'failed';
+          if (failed) {
+            final error = turn['error'];
+            _failed(
+              'The turn failed',
+              error is Map ? '${error['message'] ?? error}' : null,
+            );
+          }
           _endTurn(ours, interrupted: turn['status'] == 'interrupted');
         }
+      case 'error':
+        final error = params!['error'];
+        _failed(
+          'Codex reported an error',
+          error is Map ? '${error['message'] ?? error}' : '$error',
+        );
       case 'item/started':
         _itemStarted((params!['item'] as Map).cast<String, Object?>());
       case 'item/completed':
@@ -407,9 +484,18 @@ class CodexKernel
         CommandPreview('${params['command']}') as ApprovalPreview?,
       ),
       'item/fileChange/requestApproval' => ('Apply changes', null),
+      'item/permissions/requestApproval' => ('Allow permissions', null),
       _ => (null, null),
     };
-    if (title == null) return;
+    if (title == null) {
+      // One it does not know: told, so the server is not left waiting
+      // for an answer that will not come.
+      _transport.write({
+        'id': rpcId,
+        'error': {'code': -32601, 'message': 'Not supported by this client'},
+      });
+      return;
+    }
     final id = 'approval:$rpcId';
     _approvals[id] = rpcId;
     emit(

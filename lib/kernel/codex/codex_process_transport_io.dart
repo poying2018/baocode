@@ -318,6 +318,12 @@ class ProcessCodexTransport implements CodexTransport {
     }
   }
 
+  @override
+  void restart() {
+    // The process is gone: a new one is started for the next write.
+    close();
+  }
+
   /// Windows ends a killed process alone: a server started by it (an MCP
   /// server) would go on running. Given a moment to end them itself, its
   /// input closed, then ended with all it started.
