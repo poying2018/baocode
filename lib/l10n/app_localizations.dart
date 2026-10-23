@@ -11400,7 +11400,7 @@ abstract class AppLocalizations {
   /// No description provided for @updatesSettingsDescription.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode looks for new versions on baocode.dev.'**
+  /// **'BaoCode looks for new versions in this repository\'s releases.'**
   String get updatesSettingsDescription;
 
   /// No description provided for @updateCurrentVersion.
@@ -11520,7 +11520,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateManual.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode can\'t update itself here ({reason}). Download the new version from baocode.dev.'**
+  /// **'BaoCode can\'t update itself here ({reason}). Download the new version from this repository\'s releases.'**
   String updateManual(String reason);
 
   /// No description provided for @updateOpenDownloadPage.
@@ -11532,7 +11532,7 @@ abstract class AppLocalizations {
   /// No description provided for @updateUnfinished.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode {version} wasn\'t installed: this is still {current}. Try again from Settings > Updates, or download it from baocode.dev.'**
+  /// **'BaoCode {version} wasn\'t installed: this is still {current}. Try again from Settings > Updates, or download it from this repository\'s releases.'**
   String updateUnfinished(String version, String current);
 
   /// No description provided for @updateShowLog.
@@ -11720,6 +11720,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The server could not take the logs ({status}). Try again later.'**
   String diagnosticsServerError(String status);
+
+  /// No description provided for @diagnosticsNoServer.
+  ///
+  /// In en, this message translates to:
+  /// **'This build has no server to upload the logs to; they are still in this machine\'s logs folder.'**
+  String get diagnosticsNoServer;
 
   /// No description provided for @diagnosticsFailed.
   ///
@@ -16020,7 +16026,7 @@ abstract class AppLocalizations {
   /// No description provided for @browserWelcomeTry.
   ///
   /// In en, this message translates to:
-  /// **'Try telling an agent: “Open baocode.dev and look at the download page.”'**
+  /// **'Try telling an agent: “Open this repository\'s releases and look for the download.”'**
   String get browserWelcomeTry;
 
   /// No description provided for @browserWelcomeUnpacked.
@@ -16905,11 +16911,17 @@ abstract class AppLocalizations {
   /// **'{repository} · free and open source, under the GPL-3.0'**
   String aboutRepository(String repository);
 
-  /// No description provided for @aboutWebsite.
+  /// No description provided for @aboutDownloads.
   ///
   /// In en, this message translates to:
-  /// **'Website'**
-  String get aboutWebsite;
+  /// **'Downloads'**
+  String get aboutDownloads;
+
+  /// No description provided for @aboutDownloadsDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'This repository\'s releases, where each build is'**
+  String get aboutDownloadsDetail;
 
   /// No description provided for @aboutChangelog.
   ///

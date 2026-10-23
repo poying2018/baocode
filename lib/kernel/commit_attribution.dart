@@ -18,9 +18,10 @@ enum CommitAttribution {
   /// When the setting is unset, or not one of these.
   static const fallback = baocode;
 
-  static const baoCodeCommit = 'Co-Authored-By: BaoCode <noreply@baocode.dev>';
+  static const baoCodeCommit =
+      'Co-Authored-By: BaoCode <noreply@poying2018.com>';
   static const baoCodePullRequest =
-      '🤖 Generated with [BaoCode](https://baocode.dev)';
+      '🤖 Generated with [BaoCode](https://github.com/poying2018/baocode)';
 
   static CommitAttribution parse(Object? setting) =>
       values.where((value) => value.name == setting).firstOrNull ?? fallback;

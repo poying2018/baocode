@@ -3,13 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../platform/app_links.dart';
 import 'featured_upstreams_stub.dart'
     if (dart.library.io) 'featured_upstreams_io.dart';
 
 /// An upstream Settings → Models shows a card of, free of charge, for
 /// adding the one-click import (see docs/upstream-import.md): listed in
 /// site/featured/upstreams.json, by a pull request after its issue, and
-/// read from baocode.dev ([feed]): shown as soon as the site is deployed,
+/// read from the site ([feed]): shown as soon as the site is deployed,
 /// with no release of the app.
 @immutable
 class FeaturedUpstream {
@@ -80,8 +81,8 @@ class FeaturedUpstream {
       description['en'] ??
       description.values.firstOrNull;
 
-  /// The list, its logos beside it.
-  static final feed = Uri.parse('https://baocode.dev/featured/upstreams.json');
+  /// The list, its logos beside it: this repository's own site files.
+  static final feed = AppLinks.siteBase.resolve('featured/upstreams.json');
 
   /// A logo's name: a file beside the list, never a path.
   static bool isLogoName(String name) =>
@@ -128,7 +129,7 @@ class FeaturedUpstream {
   );
 
   /// [known], from the list kept last time, while there are none: at the
-  /// app's start, with no asking baocode.dev.
+  /// app's start, with no asking the site.
   static Future<void> readKept() async {
     if (known.value.isNotEmpty) return;
     try {

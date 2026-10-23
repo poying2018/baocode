@@ -15,7 +15,7 @@ const defaultManifestUrl =
 const manifestUrlVariable = 'BAOCODE_UPDATE_URL';
 
 /// A manifest that cannot be used: not JSON, a field missing or wrong, a
-/// download not on baocode.dev.
+/// download not on this build's repository.
 class UpdateManifestException implements Exception {
   const UpdateManifestException(this.message);
 
@@ -25,10 +25,9 @@ class UpdateManifestException implements Exception {
   String toString() => 'Invalid update manifest: $message';
 }
 
-/// Which download links a manifest may give: https on baocode.dev (or a
-/// subdomain of it), on github.com (a release asset, and the
-/// githubusercontent.com hosts GitHub redirects it to), and
-/// [extraOrigins] besides — the origin of a manifest
+/// Which download links a manifest may give: https on github.com (a
+/// release asset, and the githubusercontent.com hosts GitHub redirects
+/// it to), and [extraOrigins] besides — the origin of a manifest
 /// [manifestUrlVariable] points at, so a release can be tried from where
 /// it is served before it is published.
 class UpdateUrlPolicy {
@@ -43,7 +42,6 @@ class UpdateUrlPolicy {
       : UpdateUrlPolicy(extraOrigins: {manifest.origin});
 
   static const domains = [
-    'baocode.dev',
     'github.com',
     'githubusercontent.com',
   ];
@@ -85,9 +83,18 @@ class UpdateAsset {
   /// Ed25519 over [UpdateSignature.payload], base64.
   final String signature;
 
-  /// The file's name, from [url].
-  String get fileName =>
-      url.pathSegments.lastWhere((s) => s.isNotEmpty, orElse: () => 'update');
+  /// The file's name, from [url]: its last segment, and nothing else.
+  /// A name that walks out of the folder it is put in (`..`, a separator
+  /// in it) is not a name: the file is called `update` instead.
+  String get fileName {
+    final segment = url.pathSegments.lastWhere(
+      (s) => s.isNotEmpty,
+      orElse: () => 'update',
+    );
+    if (segment == '.' || segment == '..') return 'update';
+    if (segment.contains('/') || segment.contains(r'\')) return 'update';
+    return segment;
+  }
 
   Map<String, Object?> toJson() => {
     'url': '$url',

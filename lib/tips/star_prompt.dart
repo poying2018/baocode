@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 
 import '../ide/ide_dialog.dart';
 import '../l10n/l10n.dart';
+import '../platform/app_links.dart';
 import '../workspace/workspace.dart';
 import 'feature_tip.dart';
 
@@ -37,7 +38,7 @@ class StarPrompt {
   static const conversations = 3;
 
   /// Where the ask takes the user.
-  static final repository = Uri.parse('https://github.com/baocode-dev/baocode');
+  static final repository = AppLinks.repository;
 
   final Workspace workspace;
   final TipStorage storage;

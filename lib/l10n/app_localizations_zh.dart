@@ -6586,7 +6586,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get updatesSettingsTitle => '更新';
 
   @override
-  String get updatesSettingsDescription => 'BaoCode 会在 baocode.dev 上检查新版本。';
+  String get updatesSettingsDescription => 'BaoCode 会在本仓库的发布页上检查新版本。';
 
   @override
   String get updateCurrentVersion => '当前版本';
@@ -6663,7 +6663,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String updateManual(String reason) {
-    return 'BaoCode 无法在当前位置自动更新（$reason），请从 baocode.dev 下载新版本。';
+    return 'BaoCode 无法在当前位置自动更新（$reason），请从本仓库的发布页下载新版本。';
   }
 
   @override
@@ -6671,7 +6671,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String updateUnfinished(String version, String current) {
-    return 'BaoCode $version 没有装上，当前仍是 $current。可以在“设置 → 更新”里重试，或者从 baocode.dev 下载安装。';
+    return 'BaoCode $version 没有装上，当前仍是 $current。可以在“设置 → 更新”里重试，或者从本仓库的发布页下载安装。';
   }
 
   @override
@@ -6782,6 +6782,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String diagnosticsServerError(String status) {
     return '服务器暂时无法接收日志（$status），请稍后再试。';
   }
+
+  @override
+  String get diagnosticsNoServer => '这个版本没有日志上传的服务器，日志还留在本机的日志文件夹里。';
 
   @override
   String diagnosticsFailed(String error) {
@@ -9284,7 +9287,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get browserWelcomeTry => '试试对 agent 说：「打开 baocode.dev 看看下载页」。';
+  String get browserWelcomeTry => '试试对 agent 说：「打开本仓库的发布页看看下载」。';
 
   @override
   String get browserWelcomeUnpacked => '开发者模式 zip';
@@ -9765,7 +9768,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get aboutWebsite => '官网';
+  String get aboutDownloads => '下载';
+
+  @override
+  String get aboutDownloadsDetail => '本仓库的发布页，各个版本的安装包都在这里';
 
   @override
   String get aboutChangelog => '更新日志';

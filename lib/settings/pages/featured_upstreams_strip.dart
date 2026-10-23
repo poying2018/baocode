@@ -12,6 +12,7 @@ import '../../ide/ide_button.dart';
 import '../../ide/ide_hover.dart';
 import '../../l10n/l10n.dart';
 import '../../models/featured_upstreams.dart';
+import '../../platform/app_links.dart';
 import '../../theme/codicons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
 import '../../workspace/editor_launcher.dart' show openExternal;
@@ -30,7 +31,7 @@ import 'settings_widgets.dart';
 ///
 /// Nothing at all, not the space above it either, until the list is got,
 /// nor where none could be. What shows at once is the list kept last time;
-/// the new one, as baocode.dev answers (see [FeaturedUpstream.load]).
+/// the new one, as the site answers (see [FeaturedUpstream.load]).
 class FeaturedUpstreamsStrip extends StatefulWidget {
   const FeaturedUpstreamsStrip({
     super.key,
@@ -64,11 +65,10 @@ class FeaturedUpstreamsStrip extends StatefulWidget {
   static const cardHeight = 52.0;
   static const cardWidth = 196.0;
 
-  /// The page for a site to be listed (site/upstreams.html).
-  static Uri joinUrl(String languageCode) => Uri.https(
-    'baocode.dev',
-    languageCode == 'zh' ? '/zh/upstreams' : '/upstreams',
-  );
+  /// The page for a site to be listed: this build's repository's issues
+  /// (the site is this repository's own, so a request is an issue here).
+  static Uri joinUrl(String languageCode) =>
+      AppLinks.issues.replace(path: '${AppLinks.issues.path}/new');
 
   @override
   State<FeaturedUpstreamsStrip> createState() => _FeaturedUpstreamsStripState();

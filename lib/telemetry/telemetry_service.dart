@@ -43,7 +43,7 @@ class MemoryTelemetryStore implements TelemetryStore {
 /// back, and on which versions: once a UTC day the app is in front, the
 /// day is reported with a random install id, the app's version, the
 /// system and processor it runs on, and its edition: the channel build's
-/// or not, and where its user came to baocode.dev from, as its setup was
+/// or not, and where its user came from, as its setup was
 /// told (lib/channel/). Nothing about the user, their machine, their
 /// projects or what they do in the app.
 ///
@@ -65,13 +65,17 @@ class TelemetryService {
     this.attribution,
     this.firstDelay = const Duration(seconds: 10),
     this.interval = const Duration(hours: 1),
-  }) : url = url ?? Uri.parse(defaultUrl),
+  }) : url = url ?? (defaultUrl.isEmpty ? null : Uri.parse(defaultUrl)),
        store = store ?? MemoryTelemetryStore(),
        _now = now ?? DateTime.now,
        _inFront = inFront ?? (() => true),
        _newId = newId ?? randomInstallId;
 
-  static const defaultUrl = 'https://stats.baocode.dev/v1/ping';
+  /// Where the reports go when no other address is named. This build has
+  /// no server of its own, and the upstream's server is not this build's
+  /// business — so a server has to be named (BAOCODE_TELEMETRY_URL) for
+  /// anything to be sent, and nothing is sent without one.
+  static const defaultUrl = '';
 
   /// The version of the report's body.
   static const schema = 1;
@@ -87,7 +91,7 @@ class TelemetryService {
   final String arch;
 
   final TelemetrySender sender;
-  final Uri url;
+  final Uri? url;
   final TelemetryStore store;
 
   /// `channel` or `standard` (ChannelSetup.editionOf); not sent without.
@@ -158,6 +162,13 @@ class TelemetryService {
   Future<void> _flush() async {
     final days = store.pendingDays;
     if (_disposed || days.isEmpty) return;
+    final url = this.url;
+    if (url == null) {
+      // Nowhere to send it: this build has no server of its own. The
+      // days waited for are let go of, so they are not kept for ever.
+      store.pendingDays = const [];
+      return;
+    }
     final id = store.installId ??= _newId();
     final int status;
     try {

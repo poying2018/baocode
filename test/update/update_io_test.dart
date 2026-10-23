@@ -11,7 +11,7 @@ import 'package:baocode/update/update_service.dart';
 import 'package:baocode/update/update_signature.dart';
 import 'package:baocode/update/version.dart';
 
-/// A local server, in place of baocode.dev: what it serves by path, what it
+/// A local server, in place of the site: what it serves by path, what it
 /// was asked.
 class _Server {
   _Server._(this._server) {

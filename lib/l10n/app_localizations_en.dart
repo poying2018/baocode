@@ -7012,7 +7012,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get updatesSettingsDescription =>
-      'BaoCode looks for new versions on baocode.dev.';
+      'BaoCode looks for new versions in this repository\'s releases.';
 
   @override
   String get updateCurrentVersion => 'Current Version';
@@ -7092,7 +7092,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String updateManual(String reason) {
-    return 'BaoCode can\'t update itself here ($reason). Download the new version from baocode.dev.';
+    return 'BaoCode can\'t update itself here ($reason). Download the new version from this repository\'s releases.';
   }
 
   @override
@@ -7100,7 +7100,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String updateUnfinished(String version, String current) {
-    return 'BaoCode $version wasn\'t installed: this is still $current. Try again from Settings > Updates, or download it from baocode.dev.';
+    return 'BaoCode $version wasn\'t installed: this is still $current. Try again from Settings > Updates, or download it from this repository\'s releases.';
   }
 
   @override
@@ -7230,6 +7230,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String diagnosticsServerError(String status) {
     return 'The server could not take the logs ($status). Try again later.';
   }
+
+  @override
+  String get diagnosticsNoServer =>
+      'This build has no server to upload the logs to; they are still in this machine\'s logs folder.';
 
   @override
   String diagnosticsFailed(String error) {
@@ -9812,7 +9816,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get browserWelcomeTry =>
-      'Try telling an agent: “Open baocode.dev and look at the download page.”';
+      'Try telling an agent: “Open this repository\'s releases and look for the download.”';
 
   @override
   String get browserWelcomeUnpacked => 'Developer Mode Zip';
@@ -10326,7 +10330,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get aboutWebsite => 'Website';
+  String get aboutDownloads => 'Downloads';
+
+  @override
+  String get aboutDownloadsDetail =>
+      'This repository\'s releases, where each build is';
 
   @override
   String get aboutChangelog => 'Changelog';

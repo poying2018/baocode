@@ -188,7 +188,7 @@ void main() {
       expect(list.single.logo, isNull);
     });
 
-    test('the list baocode.dev serves is whole: each entry shown, its logo '
+    test('the list the site serves is whole: each entry shown, its logo '
         'there, its id its own', () {
       final text = File('site/featured/upstreams.json').readAsStringSync();
       final raw = (jsonDecode(text) as Map)['upstreams'] as List;

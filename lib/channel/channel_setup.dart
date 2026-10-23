@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../platform/event_log.dart';
 import '../settings/user_settings.dart';
 
-/// Where the user came to baocode.dev from, as the site kept it in their
+/// Where the user came from, as the site kept it in their
 /// browser: a channel's id from the address (`channel`), the site linking
 /// there (`referrer`), neither (`direct`); `none` when the browser the
 /// setup opened had nothing kept.
@@ -286,10 +286,15 @@ enum ChannelLinkResult {
 
 /// The channel build's first start: one build for every channel, which
 /// asks where its user came from of the browser they downloaded it in. It
-/// opens baocode.dev/activate with the install's id; the page sends the
+/// opens the activate page with the install's id; the page sends the
 /// stats server what the site kept in that browser, and the app, asking
 /// there, is set up. Should the app not hear of it, the page hands it a
 /// `baocode://activate?…` link, opened or pasted.
+///
+/// The page and the server behind it are the upstream's: this fork has
+/// neither of its own, so a channel build of it cannot be set up here.
+/// The addresses are kept as they are, so the build at least says where
+/// it came from.
 ///
 /// It cannot be put off: the welcome stays till it is done. Pending is
 /// kept, so that a quit, or an update to another build, does not skip it;
@@ -313,6 +318,11 @@ class ChannelSetup extends ChangeNotifier {
   static const pendingState = 'pending';
   static const doneState = 'done';
 
+  /// The activate page and the server that keeps what the browser told
+  /// it. This build has neither of its own: the site that would serve
+  /// the page and the server behind it are the upstream's, and a channel
+  /// build of this fork cannot be set up. The pages are left as the
+  /// upstream's, so a channel build at least says where it came from.
   static const pageUrl = 'https://baocode.dev/activate';
   static const zhPageUrl = 'https://baocode.dev/zh/activate';
   static const lookUpBase = 'https://stats.baocode.dev/v1/attribution/';

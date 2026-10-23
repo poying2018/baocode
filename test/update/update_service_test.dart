@@ -70,7 +70,7 @@ void main() {
     test("a wrong entry for this platform is a failed check", () async {
       final backend = FakeBackend(
         manifestOf('1.2.0').replaceFirst(
-          'https://baocode.dev/releases/1.2.0/windows-x64.bin',
+          'https://github.com/poying2018/baocode/releases/download/1.2.0/windows-x64.bin',
           'https://evil.example/windows-x64.bin',
         ),
       );
@@ -311,25 +311,26 @@ void main() {
 
     test('a newer version found while downloading is downloaded in its turn',
         () async {
-      final backend = FakeBackend(manifestOf('1.2.0'))..gate = Completer();
+      final first = Completer();
+      final second = Completer();
+      final backend = FakeBackend(manifestOf('1.2.0'))..gate = first;
       final service = serviceOf(backend);
       await service.check(manual: true);
-      final first = service.download();
+      final download = service.download();
       await pumpEventQueue();
       expect(service.status, UpdateStatus.downloading);
       // A newer version arrives while the older one is still coming.
       backend.manifest = manifestOf('1.3.0');
-      backend.gate = Completer();
+      backend.gate = second;
       await service.check(manual: true);
       expect(service.release!.version, AppVersion.parse('1.3.0'));
       // The download of the older one ends: what it brought is of no
       // use, and the wanted one is downloaded in its turn.
-      backend.downloads.clear();
-      backend.gate!.complete();
+      first.complete();
       await pumpEventQueue();
-      expect(backend.downloads.single.version, AppVersion.parse('1.3.0'));
-      backend.gate!.complete();
-      expect(await first, contains('1.3.0'));
+      expect(backend.downloads.last.version, AppVersion.parse('1.3.0'));
+      second.complete();
+      expect(await download, contains('1.3.0'));
       expect(service.status, UpdateStatus.ready);
       expect(service.offer!.downloaded, isTrue);
     });

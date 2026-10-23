@@ -31,6 +31,10 @@ enum DiagnosticsFailure {
 
   /// It did not get there: offline, a timeout.
   network,
+
+  /// There is nowhere to send it: this build has no server of its own,
+  /// and none was named.
+  noServer,
 }
 
 /// What an upload came to.
@@ -57,7 +61,7 @@ final class DiagnosticsFailed extends DiagnosticsResult {
   final Object? error;
 }
 
-/// Uploads the logs folder's files ([packDiagnostics]) to stats.baocode.dev
+/// Uploads the logs folder's files ([packDiagnostics]) to the server named
 /// when the user asks to (Settings → Updates → Diagnostic Logs): with
 /// the note they typed, the app's version, the system's and the display
 /// language; nothing that tells who sent it, not the usage statistics'
@@ -75,13 +79,12 @@ class DiagnosticsUploader {
     this.timeout = const Duration(seconds: 15),
     this.uploadTimeout = const Duration(minutes: 3),
     HttpClient Function()? client,
-  }) : url = url ?? Uri.parse(defaultUrl),
+  }) : url = url ?? (defaultUrl.isEmpty ? null : Uri.parse(defaultUrl)),
        version = version ?? '$currentAppVersion',
        os = os ?? Platform.operatingSystem,
        osVersion = osVersion ?? Platform.operatingSystemVersion,
        arch = arch ?? abiArch(Abi.current()),
        _client = client ?? HttpClient.new;
-
   /// The app's: the data folder's `logs`, [url] the one
   /// [diagnosticsUrlVariable] names, if any.
   factory DiagnosticsUploader.platform() {
@@ -97,7 +100,11 @@ class DiagnosticsUploader {
     );
   }
 
-  static const defaultUrl = 'https://stats.baocode.dev/v1/diagnostics';
+  /// Where the report goes when nothing else is named: this build has no
+  /// server of its own, and the upstream's server is not this build's
+  /// business — so a report is only sent where a server is named
+  /// ([diagnosticsUrlVariable]), and the button says so.
+  static const defaultUrl = '';
 
   /// The version of the report's `meta`.
   static const schema = 1;
@@ -107,7 +114,7 @@ class DiagnosticsUploader {
 
   /// The logs folder.
   final String folder;
-  final Uri url;
+  final Uri? url;
   final String version;
   final String os;
   final String osVersion;
@@ -141,6 +148,11 @@ class DiagnosticsUploader {
     required bool dumps,
     String? locale,
   }) async {
+    final url = this.url;
+    if (url == null) {
+      // Nowhere to send it: this build has no server of its own.
+      return const DiagnosticsFailed(DiagnosticsFailure.noServer);
+    }
     final bundle = await packDiagnostics(
       folder,
       dumps: dumps,

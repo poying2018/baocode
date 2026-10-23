@@ -19,7 +19,9 @@ String manifestOf(
   'platforms': {
     for (final platform in platforms)
       platform: {
-        'url': 'https://baocode.dev/releases/$version/$platform.bin',
+        'url':
+            'https://github.com/poying2018/baocode/releases/download/'
+            '$version/$platform.bin',
         'size': 100,
         'sha256': 'a' * 64,
         'signature': base64.encode(List.filled(64, 1)),

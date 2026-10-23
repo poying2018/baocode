@@ -31,7 +31,7 @@ class DiagnosticsBundle {
   final int omittedDumps;
 }
 
-/// The most the server takes of a bundle (stats.baocode.dev's
+/// The most the server takes of a bundle (the server's
 /// `/v1/diagnostics`).
 const maxDiagnosticsBytes = 10 * 1024 * 1024;
 

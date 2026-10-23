@@ -1,4 +1,5 @@
 import 'package:baocode/l10n/app_localizations.dart';
+import 'package:baocode/platform/app_links.dart';
 import 'package:baocode/settings/pages/about_page.dart';
 import 'package:baocode/update/version.dart';
 import 'package:flutter/material.dart';
@@ -36,11 +37,11 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('github.com/baocode-dev/baocode · 免费开源，GPL-3.0 许可证'),
+      find.text('github.com/poying2018/baocode · 免费开源，GPL-3.0 许可证'),
       findsOneWidget,
     );
     expect(find.text('去 GitHub 点 Star'), findsOneWidget);
-    expect(find.text('baocode.dev'), findsOneWidget);
+    expect(find.text('下载'), findsOneWidget);
     expect(find.text('更新日志'), findsOneWidget);
     expect(find.text('反馈问题'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -48,8 +49,12 @@ void main() {
 
   test('its links', () {
     expect(
-      AboutSettingsPage.issues,
-      Uri.parse('https://github.com/baocode-dev/baocode/issues'),
+      AppLinks.issues,
+      Uri.parse('https://github.com/poying2018/baocode/issues'),
+    );
+    expect(
+      AppLinks.releases,
+      Uri.parse('https://github.com/poying2018/baocode/releases'),
     );
   });
 }

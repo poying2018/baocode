@@ -112,6 +112,7 @@ class _DiagnosticsDialogState extends State<DiagnosticsDialog> {
         DiagnosticsFailure.network => l10n.diagnosticsFailed(
           '${failed.error ?? '-'}',
         ),
+        DiagnosticsFailure.noServer => l10n.diagnosticsNoServer,
       };
 
   @override

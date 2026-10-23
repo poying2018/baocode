@@ -9,13 +9,14 @@ import 'featured_upstreams.dart';
 
 /// See [FeaturedUpstream.loader]: the list at [FeaturedUpstream.feed],
 /// through the app's proxy, as every [HttpClient], kept in the cache with
-/// its logos, which are got again when the list changes. Where baocode.dev
+/// its logos, which are got again when the list changes. Where the site
 /// does not answer, the list kept last time; none before the first.
 Future<List<FeaturedUpstream>> fetchFeaturedUpstreams({
   Uri? feed,
   String? cacheDir,
 }) async {
   feed ??= FeaturedUpstream.feed;
+  final source = feed;
   final dir = Directory(
     cacheDir ?? p.join(DataDirectory.current.cacheDir, 'featured'),
   );
@@ -25,7 +26,7 @@ Future<List<FeaturedUpstream>> fetchFeaturedUpstreams({
 
   final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
   try {
-    final bytes = await _get(client, feed, _maxList);
+    final bytes = await _get(client, source, _maxList);
     if (bytes == null) return await _read(kept, parse);
     final text = utf8.decode(bytes, allowMalformed: true);
     final list = parse(text);
@@ -34,7 +35,7 @@ Future<List<FeaturedUpstream>> fetchFeaturedUpstreams({
       await Future.wait([
         for (final upstream in list)
           if (upstream.logo case final logo?)
-            _download(client, feed.resolve(p.basename(logo)), logo),
+            _download(client, source.resolve(p.basename(logo)), logo),
       ]);
       await writeFileAtomically(kept, text);
     }

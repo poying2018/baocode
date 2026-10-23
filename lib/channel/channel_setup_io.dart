@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../platform/app_links.dart';
 import '../update/version.dart';
 import 'channel_setup.dart';
 
@@ -22,16 +23,21 @@ Future<ChannelAttribution?> lookUpChannel(Uri url) async {
 /// `site/` served locally, say.
 const channelsUrlVariable = 'BAOCODE_CHANNELS_URL';
 
-/// The site's.
-const channelsBase = 'https://baocode.dev';
+/// The site's: this repository's own, as the files in it are in the
+/// repository (site/).
+final channelsBase = AppLinks.siteBase;
 
 /// The channel [id]'s entry as the site lists it (site/channels.json),
 /// its logo with it; null for one not listed. Throws when the site could
 /// not be read.
 Future<ChannelEntry?> channelEntry(String id) async {
   final override = Platform.environment[channelsUrlVariable]?.trim() ?? '';
-  final base = Uri.parse(override.isEmpty ? channelsBase : override);
-  final body = await _get(base.resolve('/channels.json'));
+  final base = override.isEmpty ? channelsBase : Uri.parse(override);
+  // The site's own base carries the folder the files are in, so the list
+  // is beside it; one named in the environment is a server's root.
+  final body = await _get(
+    base.resolve(override.isEmpty ? 'channels.json' : '/channels.json'),
+  );
   if (body == null) return null;
   final json = switch (jsonDecode(utf8.decode(body))) {
     final Map<String, Object?> channels => channels[id],

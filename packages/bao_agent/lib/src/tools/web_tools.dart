@@ -230,7 +230,7 @@ class WebFetchTool extends Tool {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 30)
       ..userAgent =
-          'Mozilla/5.0 (compatible; BaoCode-Agent/1.0; +https://baocode.dev)'
+          'Mozilla/5.0 (compatible; BaoCode-Agent/1.0; +https://github.com/poying2018/baocode)'
       ..findProxy = (url) => HttpClient.findProxyFromEnvironment(
         url,
         environment: context.session.environment,

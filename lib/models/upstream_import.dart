@@ -1,5 +1,5 @@
 /// An upstream as a site hands it over to be added in one click: the link
-/// on its key's page goes to baocode.dev/import (site/import.js), which
+/// on its key's page goes to the site's import (site/import.js), which
 /// opens `baocode://provider/import?…` (see docs/upstream-import.md).
 ///
 /// Only where it is, how it is spoken to, its name and the key come in

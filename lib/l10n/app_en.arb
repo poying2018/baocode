@@ -4921,7 +4921,7 @@
   "modelsAuxiliaryBuiltin": "Claude Code Haiku (this machine's setup)",
   "settingsSectionUpdates": "Updates",
   "updatesSettingsTitle": "Updates",
-  "updatesSettingsDescription": "BaoCode looks for new versions on baocode.dev.",
+  "updatesSettingsDescription": "BaoCode looks for new versions in this repository's releases.",
   "updateCurrentVersion": "Current Version",
   "updateLastChecked": "Last checked {time}",
   "@updateLastChecked": {
@@ -5003,7 +5003,7 @@
   },
   "updateDisabled": "Updates are turned off (update.mode is \"none\").",
   "updateUnsupported": "This build of BaoCode doesn't update itself.",
-  "updateManual": "BaoCode can't update itself here ({reason}). Download the new version from baocode.dev.",
+  "updateManual": "BaoCode can't update itself here ({reason}). Download the new version from this repository's releases.",
   "@updateManual": {
     "placeholders": {
       "reason": {
@@ -5012,7 +5012,7 @@
     }
   },
   "updateOpenDownloadPage": "Open Download Page",
-  "updateUnfinished": "BaoCode {version} wasn't installed: this is still {current}. Try again from Settings > Updates, or download it from baocode.dev.",
+  "updateUnfinished": "BaoCode {version} wasn't installed: this is still {current}. Try again from Settings > Updates, or download it from this repository's releases.",
   "@updateUnfinished": {
     "placeholders": {
       "version": {
@@ -5120,6 +5120,7 @@
       }
     }
   },
+  "diagnosticsNoServer": "This build has no server to upload the logs to; they are still in this machine's logs folder.",
   "diagnosticsFailed": "Could not upload: {error}",
   "@diagnosticsFailed": {
     "placeholders": {
@@ -6953,7 +6954,7 @@
   "browserWelcomeTurnedOff": "The browser is turned off in Settings → Browser.",
   "browserWelcomeConnected": "{browser} is connected",
   "@browserWelcomeConnected": {"description": "The welcome's step once a browser connected, by its name.", "placeholders": {"browser": {"type": "String"}}},
-  "browserWelcomeTry": "Try telling an agent: “Open baocode.dev and look at the download page.”",
+  "browserWelcomeTry": "Try telling an agent: “Open this repository's releases and look for the download.”",
   "browserWelcomeUnpacked": "Developer Mode Zip",
   "browserWelcomeDone": "Got It",
   "cmdBrowserWelcome": "Connect Your Browser...",
@@ -7133,7 +7134,8 @@
   "@aboutVersion": {"placeholders": {"version": {"type": "String"}, "build": {"type": "int"}}},
   "aboutRepository": "{repository} · free and open source, under the GPL-3.0",
   "@aboutRepository": {"placeholders": {"repository": {"type": "String"}}},
-  "aboutWebsite": "Website",
+  "aboutDownloads": "Downloads",
+  "aboutDownloadsDetail": "This repository's releases, where each build is",
   "aboutChangelog": "Changelog",
   "aboutChangelogDetail": "What each version changed",
   "aboutFeedback": "Report an Issue",

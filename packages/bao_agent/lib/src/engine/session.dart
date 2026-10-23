@@ -507,7 +507,7 @@ class AgentSession {
       commit: set.commit ?? 'Co-Authored-By: Claude <noreply@anthropic.com>',
       pr:
           set.pr ??
-          '🤖 Generated with [${options.productName}](https://baocode.dev)',
+          '🤖 Generated with [${options.productName}](https://github.com/poying2018/baocode)',
     );
   }
 

@@ -4588,8 +4588,8 @@ void main() {
           ClaudeLaunch(cwd: '/p', attribution: attribution);
       expect(flagSettings(launch(CommitAttribution.baocode)), {
         'attribution': {
-          'commit': 'Co-Authored-By: BaoCode <noreply@baocode.dev>',
-          'pr': '🤖 Generated with [BaoCode](https://baocode.dev)',
+          'commit': 'Co-Authored-By: BaoCode <noreply@poying2018.com>',
+          'pr': '🤖 Generated with [BaoCode](https://github.com/poying2018/baocode)',
         },
       });
       expect(flagSettings(launch(CommitAttribution.none)), {

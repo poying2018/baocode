@@ -72,7 +72,7 @@ void main() {
               existence: existence,
               child: const MarkdownView(
                 'See [a.dart](lib/a.dart#L3), `lib/b.dart`, `lib/c.dart` '
-                'and [the site](https://baocode.dev).',
+                'and [the site](https://github.com/poying2018/baocode).',
               ),
             ),
           ),

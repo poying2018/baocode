@@ -7,7 +7,7 @@ import 'package:baocode/update/version.dart';
 final _signature = base64.encode(List.filled(64, 7));
 
 Map<String, Object?> _asset({
-  String url = 'https://baocode.dev/releases/1.2.0/BaoCode-1.2.0-setup.exe',
+  String url = 'https://github.com/poying2018/baocode/releases/download/v1.2.0/BaoCode-1.2.0-setup.exe',
   Object? size = 1000,
   Object? sha256,
   Object? signature,
@@ -33,7 +33,7 @@ String _manifest({
       {
         'windows-x64': _asset(),
         'macos-arm64': _asset(
-          url: 'https://baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac.zip',
+          url: 'https://github.com/poying2018/baocode/releases/download/v1.2.0/BaoCode-1.2.0-mac.zip',
         ),
       },
 });
@@ -74,14 +74,14 @@ void main() {
             platforms: {
               'windows-x64': _asset(
                 url:
-                    'https://dl.baocode.dev/releases/1.2.0/'
+                    'https://github.com/poying2018/baocode/releases/download/v1.2.0/'
                     'BaoCode-1.2.0-setup.exe?sha256=0123456789abcdef',
               ),
             },
           ),
         ),
         'downloads': {
-          'macos': {'url': 'https://dl.baocode.dev/x.dmg', 'size': 1},
+          'macos': {'url': 'https://github.com/poying2018/baocode/releases/download/v1.2.0/x.dmg', 'size': 1},
         },
       });
       final asset = UpdateManifest.parse(text).assetFor('windows-x64')!;
@@ -94,6 +94,34 @@ void main() {
         _manifest(platforms: {'windows-x64': _asset()}),
       );
       expect(manifest.assetFor('macos-arm64'), isNull);
+    });
+
+    test('a download that walks out of the folder is not a file name', () {
+      // The link is decoded before it is named: a name with a path in
+      // it would put the file outside the folder it belongs in.
+      for (final url in [
+        'https://github.com/poying2018/baocode/releases/download/v1.2.0/%2E%2E%2F%2E%2E%2Fevil.exe',
+        'https://github.com/poying2018/baocode/releases/download/v1.2.0/%2E%2E%5C%2E%2E%5Cevil.exe',
+      ]) {
+        final manifest = UpdateManifest.parse(
+          _manifest(platforms: {'windows-x64': _asset(url: url)}),
+        );
+        final name = manifest.assetFor('windows-x64')!.fileName;
+        expect(name, 'update', reason: url);
+        expect(name.contains('/'), isFalse, reason: url);
+        expect(name.contains(r'\'), isFalse, reason: url);
+      }
+      // A link that ends in a `..` has no file of its own.
+      final manifest = UpdateManifest.parse(
+        _manifest(
+          platforms: {
+            'windows-x64': _asset(
+              url: 'https://github.com/poying2018/baocode/releases/download/v1.2.0/..',
+            ),
+          },
+        ),
+      );
+      expect(manifest.assetFor('windows-x64')!.fileName, isNot(contains('/')));
     });
 
     test('notes may be one text, or none', () {
@@ -131,7 +159,7 @@ void main() {
           platforms: {
             'windows-x64': _asset(size: null),
             'macos-arm64': _asset(
-              url: 'https://baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac.zip',
+              url: 'https://github.com/poying2018/baocode/releases/download/v1.2.0/BaoCode-1.2.0-mac.zip',
             ),
           },
         ),
@@ -160,18 +188,18 @@ void main() {
       }
     });
 
-    test('downloads have to be https links on baocode.dev or GitHub', () {
+    test('downloads have to be https links on GitHub', () {
       UpdateManifest at(String url) => UpdateManifest.parse(
         _manifest(platforms: {'windows-x64': _asset(url: url)}),
       );
       for (final url in [
-        'http://baocode.dev/releases/x.exe',
+        'http://github.com/releases/x.exe',
         'https://evil.example/x.exe',
-        'https://baocode.dev.evil.example/x.exe',
-        'https://notbaocode.dev/x.exe',
-        'https://baocode.dev:8443/x.exe',
-        'https://user@baocode.dev/x.exe',
-        'ftp://baocode.dev/x.exe',
+        'https://github.com.evil.example/x.exe',
+        'https://notgithub.com/x.exe',
+        'https://github.com:8443/x.exe',
+        'https://user@github.com/x.exe',
+        'ftp://github.com/x.exe',
         'file:///tmp/x.exe',
         '/releases/x.exe',
       ]) {
@@ -182,10 +210,8 @@ void main() {
         );
       }
       for (final url in [
-        'https://baocode.dev/releases/x.exe',
-        'https://BAOCODE.dev/releases/x.exe',
-        'https://cdn.baocode.dev/x.exe',
         'https://github.com/poying2018/baocode/releases/download/v1.2.0+14/BaoCode-1.2.0-setup.exe',
+        'https://GITHUB.com/x.exe',
         'https://objects.githubusercontent.com/x.exe',
       ]) {
         expect(at(url).assetFor('windows-x64'), isNotNull, reason: url);
@@ -205,7 +231,7 @@ void main() {
         isNotNull,
       );
       expect(
-        at('https://baocode.dev/x.exe').assetFor('windows-x64'),
+        at('https://github.com/poying2018/baocode/releases/download/v1.2.0/x.exe').assetFor('windows-x64'),
         isNotNull,
       );
       expect(

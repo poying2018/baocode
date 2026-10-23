@@ -12,14 +12,16 @@ import 'telemetry_service.dart';
 const telemetryUrlVariable = 'BAOCODE_TELEMETRY_URL';
 
 /// What the app reports with where it runs; null where it reports nothing:
-/// a debug build (unless [telemetryUrlVariable] is set).
+/// a debug build (unless [telemetryUrlVariable] is set), and a release
+/// build with no server of this build's own to report to.
 PlatformTelemetry? platformTelemetry() {
   final environment = Platform.environment;
   final override = environment[telemetryUrlVariable]?.trim() ?? '';
   if (!kReleaseMode && override.isEmpty) return null;
-  final url = Uri.tryParse(
-    override.isEmpty ? TelemetryService.defaultUrl : override,
-  );
+  // This build has no server of its own to report to: the reports would
+  // go to the upstream's, which is not this build's business. A server of
+  // this build's own can be named in the environment.
+  final url = Uri.tryParse(override);
   if (url == null) return null;
   final os = Platform.operatingSystem;
   final arch = abiArch(Abi.current());

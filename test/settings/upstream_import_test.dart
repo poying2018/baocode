@@ -127,7 +127,7 @@ void main() {
       expect(find.text(why), findsNothing);
       await click(find.text('Why am I seeing this?'));
       await click(find.text('List My Site Too'));
-      expect(opened.last, Uri.parse('https://baocode.dev/upstreams'));
+      expect(opened.last, Uri.parse('https://github.com/poying2018/baocode/issues/new'));
       expect(find.text(why), findsNothing);
     });
 
