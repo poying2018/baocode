@@ -5678,7 +5678,10 @@ exec /usr/bin/env "\$@"
       );
       expect(history.hasEarlierHistory, isTrue);
 
-      await history.loadEarlier();
+      final firstRead = history.loadEarlier();
+      final secondRead = history.loadEarlier();
+      expect(identical(firstRead, secondRead), isTrue);
+      await firstRead;
       final pages = historyEvents.whereType<HistoryPrepended>().toList();
       final earlier = pages.last.items;
       expect(

@@ -309,7 +309,7 @@ class CodexKernel
 
   Future<void> _history = Future.value();
   bool _loadingHistory = false;
-  bool _loadingEarlier = false;
+  Future<void>? _earlierLoad;
   String? _earlierCursor;
   static const _historyTurns = 10;
   static const _earlierHistoryTurns = 20;
@@ -532,9 +532,12 @@ class CodexKernel
       // notification names, but known before it.
       final serverTurn = (started['turn'] as Map)['id'] as String;
       _registerServerTurn(serverTurn);
-      _serverTurn ??= serverTurn;
       // Stopped before the server knew the turn: stop it there too.
-      if (_turn != turn.id) _interrupt();
+      if (_turn == turn.id) {
+        _serverTurn ??= serverTurn;
+      } else {
+        _interrupt(serverTurn: serverTurn);
+      }
     } on Object catch (error) {
       if (error is CodexUnavailable) {
         _failed(error.message, error.detail);
@@ -656,11 +659,11 @@ class CodexKernel
     _serverTurns.add(id);
   }
 
-  void _interrupt() {
-    final serverTurn = _serverTurn;
-    if (serverTurn == null || _threadId == null) return;
+  void _interrupt({String? serverTurn}) {
+    final turn = serverTurn ?? _serverTurn;
+    if (turn == null || _threadId == null) return;
     unawaited(
-      _request('turn/interrupt', {'threadId': _threadId, 'turnId': serverTurn}),
+      _request('turn/interrupt', {'threadId': _threadId, 'turnId': turn}),
     );
   }
 
@@ -838,16 +841,21 @@ class CodexKernel
 
   @override
   bool get hasEarlierHistory =>
-      _earlierCursor != null && !_loadingHistory && !_loadingEarlier;
+      _earlierCursor != null && !_loadingHistory && _earlierLoad == null;
 
   @override
-  bool get loadingEarlier => _loadingEarlier;
+  bool get loadingEarlier => _earlierLoad != null;
 
   @override
-  Future<void> loadEarlier() async {
+  Future<void> loadEarlier() {
     final cursor = _earlierCursor;
-    if (cursor == null || _loadingHistory || _loadingEarlier) return;
-    _loadingEarlier = true;
+    if (cursor == null || _loadingHistory) return Future.value();
+    return _earlierLoad ??= _loadEarlier(cursor).whenComplete(() {
+      _earlierLoad = null;
+    });
+  }
+
+  Future<void> _loadEarlier(String cursor) async {
     emitInfoChanged();
     try {
       final answer = await _request('thread/turns/list', {
@@ -866,7 +874,6 @@ class CodexKernel
         kind: NoticeKind.warning,
       );
     } finally {
-      _loadingEarlier = false;
       emitInfoChanged();
     }
   }
@@ -1008,6 +1015,11 @@ class CodexKernel
         );
       case 'collabAgentToolCall':
         return _collabAgentItem(item);
+      case 'imageGeneration':
+        return _imageGenerationItem(item);
+      case 'dynamicToolCall':
+      case 'functionCallOutput':
+        return _otherToolItem(item, completed: true);
       case 'plan':
         return AssistantTextItem(item['text'] as String? ?? '');
       case 'contextCompaction':
@@ -1204,6 +1216,7 @@ class CodexKernel
         ),
       );
     }
+    _planText.remove(id);
     _awaitingPlanId = null;
   }
 
@@ -1228,6 +1241,7 @@ class CodexKernel
         ),
       );
     }
+    _planText.remove(id);
     _awaitingPlanId = null;
   }
 
@@ -2140,6 +2154,8 @@ class CodexKernel
         _startedAt[id] = DateTime.now();
         _commands[id] = item;
         emit(ItemUpserted(nextSeq, id, _commandItem(item)));
+      case 'fileChange':
+        _fileItems[id] = item;
       case 'mcpToolCall':
         emit(ItemUpserted(nextSeq, id, _mcpToolItem(item)));
       case 'webSearch':
@@ -2156,6 +2172,11 @@ class CodexKernel
         );
       case 'collabAgentToolCall':
         emit(ItemUpserted(nextSeq, id, _collabAgentItem(item)));
+      case 'imageGeneration':
+        emit(ItemUpserted(nextSeq, id, _imageGenerationItem(item)));
+      case 'dynamicToolCall':
+      case 'functionCallOutput':
+        emit(ItemUpserted(nextSeq, id, _otherToolItem(item)));
     }
   }
 
@@ -2230,6 +2251,17 @@ class CodexKernel
         );
       case 'collabAgentToolCall':
         emit(ItemCompleted(nextSeq, id, item: _collabAgentItem(item)));
+      case 'imageGeneration':
+        emit(ItemCompleted(nextSeq, id, item: _imageGenerationItem(item)));
+      case 'dynamicToolCall':
+      case 'functionCallOutput':
+        emit(
+          ItemCompleted(
+            nextSeq,
+            id,
+            item: _otherToolItem(item, completed: true),
+          ),
+        );
       case 'contextCompaction':
         emit(
           ItemCompleted(
@@ -2305,6 +2337,43 @@ class CodexKernel
       lastTool: item['tool'] as String?,
       model: item['model'] as String?,
       result: messages.isEmpty ? null : messages.join('\n\n'),
+    );
+  }
+
+  static ToolCallItem _imageGenerationItem(Map<String, Object?> item) {
+    final saved = item['savedPath'];
+    return ToolCallItem(
+      kind: ToolKind.image,
+      target: switch (item['revisedPrompt']) {
+        final String prompt when prompt.isNotEmpty => oneLineExcerpt(prompt),
+        _ => 'Generated image',
+      },
+      status: switch (item['status']) {
+        'completed' => ToolStatus.succeeded,
+        'failed' => ToolStatus.failed,
+        _ => ToolStatus.running,
+      },
+      output: saved is String ? saved : null,
+      imageFiles: [if (saved is String) saved],
+    );
+  }
+
+  static ToolCallItem _otherToolItem(
+    Map<String, Object?> item, {
+    bool completed = false,
+  }) {
+    final status = '${item['status'] ?? ''}';
+    return ToolCallItem(
+      kind: ToolKind.other,
+      target: '${item['name'] ?? item['tool'] ?? item['type'] ?? 'Tool'}',
+      label: item['name'] as String? ?? item['tool'] as String?,
+      status: switch (status) {
+        'completed' || 'succeeded' => ToolStatus.succeeded,
+        'failed' => ToolStatus.failed,
+        'interrupted' || 'cancelled' => ToolStatus.denied,
+        _ => completed ? ToolStatus.succeeded : ToolStatus.running,
+      },
+      output: _jsonText(item['output'] ?? item['result']),
     );
   }
 
@@ -2386,7 +2455,8 @@ class CodexKernel
     var oldLine = 1;
     var newLine = 1;
     final hunk = RegExp(r'^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@');
-    for (final line in diff.split('\n')) {
+    for (final raw in diff.split('\n')) {
+      final line = raw.endsWith('\r') ? raw.substring(0, raw.length - 1) : raw;
       if (hunk.firstMatch(line) case final match?) {
         oldLine = int.parse(match.group(1)!);
         newLine = int.parse(match.group(2)!);
@@ -2424,6 +2494,7 @@ class CodexKernel
     for (final item in [..._commands.values]) {
       _itemCompleted({...item, 'status': 'failed'});
     }
+    _fileItems.clear();
     _rejectInteractions(cancel: interrupted);
     final worked = switch (_turnStarted) {
       final started? => DateTime.now().difference(started),
@@ -2434,6 +2505,7 @@ class CodexKernel
     if (!interrupted && cache != null) {
       _cacheConversation = _cacheAtTurnStart + cache;
     }
+    if (!interrupted) _usageLimitResetsAt = null;
     _reportStats();
     emit(
       TurnEnded(
