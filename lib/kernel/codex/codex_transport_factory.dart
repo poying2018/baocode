@@ -11,14 +11,20 @@ import 'codex_process_transport.dart';
 /// The transport a Codex kernel talks over: the app-server as a local
 /// process.
 abstract final class CodexTransportFactory {
+  /// The transports in use, by the folder their server keeps its state
+  /// in: one server for the app, not one for every question.
+  static final Map<String, CodexTransport> _shared = {};
+
   /// The transport for a kernel that works in [context]'s directory.
-  static CodexTransport of(KernelContext context) =>
-      _StartingCodexTransport(
-        CodexLaunch(
-          cwd: context.cwd ?? Directory.current.path,
-          home: _home(),
-        ),
-      );
+  static CodexTransport of(KernelContext context) {
+    final home = _home();
+    return _shared.putIfAbsent(
+      home,
+      () => _StartingCodexTransport(
+        CodexLaunch(cwd: context.cwd ?? Directory.current.path, home: home),
+      ),
+    );
+  }
 
   /// Where the server keeps its state: the app's own folder, not the
   /// user's `~/.codex`. The Codex Desktop app holds that one while it
@@ -69,6 +75,15 @@ class _StartingCodexTransport implements CodexTransport {
         },
       ),
     );
+  }
+
+  @override
+  Future<Map<String, Object?>> request(
+    String method, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    final transport = await _started();
+    return transport.request(method, params);
   }
 
   @override

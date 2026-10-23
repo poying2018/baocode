@@ -145,8 +145,6 @@ class CodexKernel
   @override
   int get contextWindow => 272000;
 
-  int _requests = 0;
-  final Map<Object, Completer<Map<String, Object?>>> _responses = {};
   bool _initialized = false;
   String? _threadId;
 
@@ -186,13 +184,7 @@ class CodexKernel
   Future<Map<String, Object?>> _request(
     String method,
     Map<String, Object?> params,
-  ) {
-    final id = ++_requests;
-    final response = Completer<Map<String, Object?>>();
-    _responses[id] = response;
-    _transport.write({'id': id, 'method': method, 'params': params});
-    return response.future;
-  }
+  ) => _transport.request(method, params);
 
   @override
   void send(KernelTurn turn) {
@@ -222,15 +214,7 @@ class CodexKernel
       // what was guessed.
       unawaited(_loadModels());
     }
-    if (_threadId == null) {
-      final started = await _request('thread/start', {
-        'model': model.selected,
-        // The project it works in: without it, the agent would work in
-        // the app's own directory.
-        'cwd': ?_context?.cwd,
-      });
-      _threadId = (started['thread'] as Map)['id'] as String;
-    }
+    _threadId ??= await _startThread();
     final readOnly = mode.selected == 'ask';
     final started = await _request('turn/start', {
       'threadId': _threadId,
@@ -258,6 +242,30 @@ class CodexKernel
     }
     // Stopped before the server knew the turn: stop it there too.
     if (_turn != turn.id) _interrupt();
+  }
+
+  /// The thread this conversation is on: the one it goes on from, when
+  /// it is a conversation the user had before, or a new one.
+  Future<String> _startThread() async {
+    final resumed = _context?.resume;
+    if (resumed != null && resumed.id.isNotEmpty) {
+      try {
+        final answer = await _request('thread/resume', {'threadId': resumed.id});
+        final thread = answer['thread'];
+        if (thread is Map && thread['id'] is String) {
+          return thread['id'] as String;
+        }
+      } on CodexRequestError {
+        // It is gone: a new one is started instead.
+      }
+    }
+    final started = await _request('thread/start', {
+      'model': model.selected,
+      // The project it works in: without it, the agent would work in
+      // the app's own directory.
+      'cwd': ?_context?.cwd,
+    });
+    return (started['thread'] as Map)['id'] as String;
   }
 
   void _interrupt() {
@@ -386,19 +394,7 @@ class CodexKernel
     final method = message['method'] as String?;
     final params = (message['params'] as Map?)?.cast<String, Object?>();
     if (method == null) {
-      // An error answer: the request is not answered, and the reason
-      // said. A failed answer is not an empty one.
-      if (message['error'] case final Map error) {
-        final id = message['id'];
-        _responses.remove(id)?.completeError(
-          CodexRequestError(
-            '${error['code'] ?? ''} ${error['message'] ?? 'failed'}'.trim(),
-          ),
-        );
-        return;
-      }
-      final result = (message['result'] as Map?)?.cast<String, Object?>();
-      _responses.remove(message['id'])?.complete(result ?? const {});
+      // An answer to a request: the transport has it already.
       return;
     }
     if (message.containsKey('id')) {

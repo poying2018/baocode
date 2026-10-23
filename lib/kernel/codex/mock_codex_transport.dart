@@ -25,9 +25,32 @@ class MockCodexTransport implements CodexTransport {
   @override
   void restart() {}
 
+  @override
+  Future<Map<String, Object?>> request(
+    String method, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    final id = ++_requests;
+    final answer = Completer<Map<String, Object?>>();
+    final sub = _out.stream.listen((message) {
+      if (message['id'] == id && !answer.isCompleted) {
+        answer.complete(
+          (message['result'] as Map?)?.cast<String, Object?>() ?? const {},
+        );
+      }
+    });
+    write({'id': id, 'method': method, 'params': params});
+    try {
+      return await answer.future.timeout(const Duration(seconds: 5));
+    } finally {
+      sub.cancel();
+    }
+  }
+
   static const _threadId = 'thr_mock';
   static const _contextWindow = 272000;
 
+  int _requests = 0;
   int _items = 0;
   int _turns = 0;
   int _serverRequests = 0;

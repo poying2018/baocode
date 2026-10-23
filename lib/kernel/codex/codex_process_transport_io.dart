@@ -258,6 +258,10 @@ class ProcessCodexTransport implements CodexTransport {
 
   final Completer<void> _finished = Completer<void>();
   final Completer<void> _started = Completer<void>();
+
+  /// The requests under way, by their id: their answers.
+  final Map<int, Completer<Map<String, Object?>>> _waiting = {};
+  int _requests = 0;
   final StreamController<Map<String, Object?>> _messages =
       StreamController.broadcast();
 
@@ -286,6 +290,22 @@ class ProcessCodexTransport implements CodexTransport {
       final decoded = jsonDecode(line);
       if (decoded is Map<String, Object?> && !_messages.isClosed) {
         _messages.add(decoded);
+      }
+      // An answer to a request of ours.
+      if (decoded is Map && decoded['id'] is int) {
+        final waiting = _waiting.remove(decoded['id'] as int);
+        if (waiting != null && !waiting.isCompleted) {
+          final error = decoded['error'];
+          if (error is Map) {
+            waiting.completeError(
+              CodexRequestError('${error['message'] ?? 'failed'}'),
+            );
+          } else {
+            waiting.complete(
+              (decoded['result'] as Map?)?.cast<String, Object?>() ?? const {},
+            );
+          }
+        }
       }
       // The server is up when it answers the initialize request.
       if (decoded is Map &&
@@ -320,6 +340,24 @@ class ProcessCodexTransport implements CodexTransport {
     } on SocketException {
       // The process is gone: the exit follows.
     }
+  }
+
+  @override
+  Future<Map<String, Object?>> request(
+    String method, [
+    Map<String, Object?> params = const {},
+  ]) {
+    final id = ++_requests;
+    final answer = Completer<Map<String, Object?>>();
+    _waiting[id] = answer;
+    write({'id': id, 'method': method, 'params': params});
+    return answer.future.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () {
+        _waiting.remove(id);
+        throw CodexRequestError('$method timed out');
+      },
+    );
   }
 
   @override

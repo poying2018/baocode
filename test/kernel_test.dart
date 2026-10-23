@@ -5474,6 +5474,30 @@ class _FakeServer implements CodexTransport {
   @override
   void restart() {}
 
+  @override
+  Future<Map<String, Object?>> request(
+    String method, [
+    Map<String, Object?> params = const {},
+  ]) async {
+    final id = ++_requests;
+    final answer = Completer<Map<String, Object?>>();
+    final sub = _out.stream.listen((message) {
+      if (message['id'] == id && !answer.isCompleted) {
+        answer.complete(
+          (message['result'] as Map?)?.cast<String, Object?>() ?? const {},
+        );
+      }
+    });
+    write({'id': id, 'method': method, 'params': params});
+    try {
+      return await answer.future.timeout(const Duration(seconds: 5));
+    } finally {
+      sub.cancel();
+    }
+  }
+
+  int _requests = 0;
+
   void push(Map<String, Object?> message) => _out.add(message);
 
   @override

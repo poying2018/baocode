@@ -8,6 +8,12 @@ abstract interface class CodexTransport {
   /// Writes a request, or the response to a server request.
   void write(Map<String, Object?> message);
 
+  /// Sends a request and waits for its answer.
+  Future<Map<String, Object?>> request(
+    String method, [
+    Map<String, Object?> params = const {},
+  ]);
+
   /// Completes once the app-server is gone: it cannot answer any more.
   Future<void> get exited;
 

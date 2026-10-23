@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'agent_kernel.dart';
 import 'claude_code/claude_code_kernel.dart';
+import 'codex/codex_catalog.dart';
 import 'codex/codex_kernel.dart';
 import 'codex/codex_transport_factory.dart';
 import '../remote/remote_claude.dart';
@@ -33,11 +34,11 @@ abstract final class KernelRegistry {
     label: 'Codex',
     icon: Icons.data_object_rounded,
     description: 'OpenAI’s coding agent',
-    create: (context) => CodexKernel(
-      codex,
-      CodexTransportFactory.of(context),
-      context: context,
-    ),
+    create: (context) {
+      final transport = CodexTransportFactory.of(context);
+      return CodexKernel(codex, transport, context: context);
+    },
+    catalog: CodexCatalog(transport: CodexTransportFactory.of(const KernelContext())),
   );
 
   static List<KernelDescriptor> _all = [claudeCode, codex];
