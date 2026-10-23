@@ -136,6 +136,7 @@ class CodexKernel
   final Map<String, String> _tiersByModel = {};
   final Map<String, _ModelInfo> _models = {};
   bool _modelsLoaded = false;
+  bool _collaborationModes = false;
 
   @override
   KernelHealth get health => _health;
@@ -499,14 +500,15 @@ class CodexKernel
         ],
         'model': model.selected,
         'effort': ?_effortFor(model.selected ?? ''),
-        'serviceTierForTurn': _tierFor(model.selected ?? '') ?? 'default',
-        'collaborationMode': {
-          'mode': _work == 'plan' ? 'plan' : 'default',
-          'settings': {
-            'model': model.selected,
-            'reasoning_effort': ?_effortFor(model.selected ?? ''),
+        'serviceTierForTurn': ?_tierFor(model.selected ?? ''),
+        if (_collaborationModes || _work == 'plan')
+          'collaborationMode': {
+            'mode': _work == 'plan' ? 'plan' : 'default',
+            'settings': {
+              'model': model.selected,
+              'reasoning_effort': ?_effortFor(model.selected ?? ''),
+            },
           },
-        },
         'approvalPolicy': readOnly
             ? 'never'
             : switch (_permission) {
@@ -584,7 +586,7 @@ class CodexKernel
     'model': model.selected,
     'serviceTier': ?_tierFor(model.selected ?? ''),
     'developerInstructions': ?_developerInstructions,
-    if (_protocolWorkspaceFolders case final folders when folders.isNotEmpty)
+    if (_extraProtocolFolders case final folders when folders.isNotEmpty)
       'runtimeWorkspaceRoots': folders,
   };
 
@@ -596,7 +598,12 @@ class CodexKernel
   List<String> get _protocolWorkspaceFolders =>
       _workspaceFolders.map(RemoteLocation.pathOf).toList();
 
-  List<String> get _writableRoots => _protocolWorkspaceFolders;
+  List<String> get _extraProtocolFolders => [
+    for (final folder in _protocolWorkspaceFolders)
+      if (folder != _protocolCwd) folder,
+  ];
+
+  List<String> get _writableRoots => _extraProtocolFolders;
 
   String? get _developerInstructions {
     final workspace = _workspace;
@@ -754,8 +761,10 @@ class CodexKernel
   }
 
   Future<void> _loadCollaborationModes() async {
+    _collaborationModes = false;
     try {
       await _request('collaborationMode/list', {});
+      _collaborationModes = true;
     } on Object {
       // It is an experimental catalog: the fixed Plan and Default modes
       // still work when an older server does not answer it.
@@ -1150,7 +1159,7 @@ class CodexKernel
     mode.reported = 'agent';
     _approveAwaitingPlan();
     final threadId = _threadId;
-    if (threadId != null) {
+    if (threadId != null && _collaborationModes) {
       unawaited(
         _request('thread/settings/update', {
           'threadId': threadId,
