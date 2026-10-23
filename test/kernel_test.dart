@@ -5597,6 +5597,20 @@ exec /usr/bin/env "\$@"
       );
     });
 
+    test('a predicted next prompt comes from the server', () async {
+      kernel.send(const KernelTurn(id: 'p1', text: 'hello'));
+      await pumpEventQueue();
+      notify('thread/prediction/updated', {
+        'threadId': 'th',
+        'sourceTurnId': 'st1',
+        'result': {'type': 'completed', 'text': 'Show me the diff'},
+      });
+      expect(kernel.promptSuggestion, 'Show me the diff');
+
+      kernel.send(const KernelTurn(id: 'p2', text: 'next'));
+      expect(kernel.promptSuggestion, isNull);
+    });
+
     test('messages sent while busy wait their turn', () async {
       kernel.send(const KernelTurn(id: 't1', text: 'first'));
       await pumpEventQueue();
@@ -5953,6 +5967,7 @@ exec /usr/bin/env "\$@"
       expect(kernel, isA<SelectsEffort>());
       expect(kernel, isA<SelectsFast>());
       expect(kernel, isA<LoadsHistory>());
+      expect(kernel, isA<SuggestsPrompts>());
     });
   });
 }

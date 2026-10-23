@@ -37,6 +37,7 @@ class CodexKernel
         ForksConversation,
         RenamesSession,
         ManagesMcpServers,
+        SuggestsPrompts,
         LoadsHistory,
         RewindsConversation,
         AcceptsImages {
@@ -377,6 +378,7 @@ class CodexKernel
   DateTime? _usageLimitResetsAt;
 
   List<McpServer>? _servers;
+  String? _suggestion;
 
   // --- Commands -------------------------------------------------------------
 
@@ -424,6 +426,10 @@ class CodexKernel
   @override
   void send(KernelTurn turn) {
     if (!_sentTurns.add(turn.id)) return;
+    if (_suggestion != null) {
+      _suggestion = null;
+      emitInfoChanged();
+    }
     if (_awaitingPlanId != null) _markPlanSentBack(turn.text);
     if (_turn != null || _cancelPending) {
       if (turn.now) {
@@ -1409,6 +1415,9 @@ class CodexKernel
   List<McpServer>? get mcpServers => _servers;
 
   @override
+  String? get promptSuggestion => _suggestion;
+
+  @override
   void refreshMcpServers() {
     unawaited(_loadMcpServers());
   }
@@ -1765,6 +1774,15 @@ class CodexKernel
         }
       case 'thread/goal/cleared':
         emit(GoalReported(nextSeq, null));
+      case 'thread/prediction/updated':
+        final result = params!['result'];
+        _suggestion = switch (result) {
+          {'type': 'completed', 'text': final String text}
+              when text.trim().isNotEmpty =>
+            text,
+          _ => null,
+        };
+        emitInfoChanged();
       case 'item/started':
         _itemStarted((params!['item'] as Map).cast<String, Object?>());
       case 'item/completed':
