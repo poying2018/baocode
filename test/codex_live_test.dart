@@ -11,10 +11,12 @@ import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/codex/codex_kernel.dart';
 import 'package:baocode/kernel/codex/codex_process_transport_io.dart';
 import 'package:baocode/kernel/codex/codex_transport.dart';
+import 'package:baocode/kernel/codex/codex_transport_factory.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/platform/data_dir.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -125,4 +127,44 @@ void main() {
     transport.close();
     await transport.exited.timeout(const Duration(seconds: 5));
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('the app launches its own Codex and lists the user\'s models', () async {
+    if (Platform.environment['CODEX_LIVE'] != '1') {
+      markTestSkipped('needs CODEX_LIVE=1 and a Codex that runs');
+      return;
+    }
+    final previous = DataDirectory.current;
+    final home = Directory(
+      '${Directory.systemTemp.path}${Platform.pathSeparator}'
+      'baocode-codex-app-$pid',
+    )..createSync(recursive: true);
+    DataDirectory.current = DataDirectory(home.path);
+    final kernel = KernelRegistry.codex.create(
+      const KernelContext(cwd: r'F:\Projects\baocode'),
+    ) as CodexKernel;
+    addTearDown(() async {
+      kernel.dispose();
+      await CodexTransportFactory.stopAll();
+      DataDirectory.current = previous;
+    });
+
+    kernel.prepare();
+    for (
+      var i = 0;
+      i < 200 && kernel.health.status != KernelHealthStatus.ready;
+      i++
+    ) {
+      if (kernel.health.status == KernelHealthStatus.failed) break;
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(kernel.health.status, KernelHealthStatus.ready);
+    expect(kernel.model.options, isNotEmpty);
+    expect(
+      File(
+        '${home.path}${Platform.pathSeparator}codex'
+        '${Platform.pathSeparator}config.toml',
+      ).existsSync(),
+      isTrue,
+    );
+  }, timeout: const Timeout(Duration(minutes: 1)));
 }
