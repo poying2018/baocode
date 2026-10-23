@@ -187,6 +187,7 @@ void main() {
       await pumpEventQueue();
       expect(notes, [1], reason: 'the banner ended with $ending');
       await input.close();
+      await connection.done;
     }
   });
 

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:baocode/stash/stash_disk_io.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -48,6 +49,37 @@ void main() {
     Directory(p.join(root.path, '5.md')).deleteSync();
     await disk.write(5, 'second');
     expect(await disk.read(5), 'second');
+  });
+
+  test('a path that walks out of the folder stays in it', () async {
+    final disk = FileStashDisk(root.path);
+    // A file outside the folder, that a path in a stash's text may
+    // name.
+    final outside = File(p.join(root.parent.path, 'outside.txt'));
+    outside.writeAsStringSync('secret');
+    addTearDown(() {
+      if (outside.existsSync()) outside.deleteSync();
+    });
+    for (final path in [
+      '../outside.txt',
+      '../../outside.txt',
+      'a/../../outside.txt',
+    ]) {
+      expect(await disk.readAsset(path), isNull, reason: path);
+      expect(await disk.sizeOf(path), isNull, reason: path);
+    }
+  });
+
+  test('a file name with a path in it is a name of its own', () async {
+    final disk = FileStashDisk(root.path);
+    final written = await disk.writeAsset(
+      1,
+      '../../evil.png',
+      Uint8List.fromList('bytes'.codeUnits),
+    );
+    expect(written, '1/evil.png');
+    final folder = Directory(p.join(root.path, '1'));
+    expect(folder.listSync().map((e) => p.basename(e.path)), ['evil.png']);
   });
 
   group('changes', () {

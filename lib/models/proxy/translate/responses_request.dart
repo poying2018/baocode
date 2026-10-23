@@ -202,6 +202,14 @@ Map<String, Object?> convertClaudeRequestToResponses(
               } else {
                 output['output'] = result.string;
               }
+              // A call that failed: said so, so the model knows it is
+              // to be tried again (this protocol has no flag of its own).
+              if (content.get('is_error').boolean) {
+                final text = output['output'];
+                output['output'] = text is String
+                    ? 'Error: $text'
+                    : 'Error: ${jsonEncode(text)}';
+              }
               inputItems.add(output);
           }
         }

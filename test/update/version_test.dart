@@ -43,6 +43,12 @@ void main() {
       expect(() => AppVersion.parse('nope'), throwsFormatException);
     });
 
+    test('a number too big to be one is not a version, not a crash', () {
+      expect(AppVersion.tryParse('99999999999999999999.0.0'), isNull);
+      expect(AppVersion.tryParse('9223372036854775808'), isNull);
+      expect(AppVersion.tryParse('1.2.3+99999999999999999999'), isNull);
+    });
+
     test('orders by semver, then by build number', () {
       final ordered = [
         '0.9.9',

@@ -377,6 +377,17 @@ void main() {
       );
       expect(UpstreamUrls.anthropicBase('ftp://x'), isNull);
       expect(UpstreamUrls.anthropicBase('not a url'), isNull);
+      // The key goes as `x-api-key` on Anthropic's own only: a host
+      // that merely ends with the domain is another party's.
+      ModelProvider ofHost(String host) => ModelProvider(
+        id: 'p',
+        name: 'p',
+        baseUrl: 'https://$host',
+      );
+      expect(sendsApiKeyHeader(ofHost('api.anthropic.com')), isTrue);
+      expect(sendsApiKeyHeader(ofHost('anthropic.com')), isTrue);
+      expect(sendsApiKeyHeader(ofHost('notanthropic.com')), isFalse);
+      expect(sendsApiKeyHeader(ofHost('evil-anthropic.com')), isFalse);
       expect(
         UpstreamUrls.openaiBase('https://api.openai.com'),
         'https://api.openai.com/v1',

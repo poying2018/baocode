@@ -254,6 +254,22 @@ void main() {
     expect(messages[5].get('content.0.text').string, 'Now summarize');
   });
 
+  test('a tool call that failed is said so', () {
+    final out = convert('''{"model":"gpt-5","messages":[
+      {"role":"user","content":[{"type":"text","text":"Run it"}]},
+      {"role":"assistant","content":[
+        {"type":"tool_use","id":"call_1","name":"tool_one","input":{}}]},
+      {"role":"user","content":[
+        {"type":"tool_result","tool_use_id":"call_1","content":"it failed",
+         "is_error":true}]}]}''', model: 'gpt-5');
+    final messages = out.get('messages').array;
+    final result = messages.firstWhere(
+      (message) => message.get('role').string == 'tool',
+    );
+    expect(result.get('content').string, contains('it failed'));
+    expect(result.get('content').string, contains('Error'));
+  });
+
   group('system message scenarios', () {
     final cases = [
       (

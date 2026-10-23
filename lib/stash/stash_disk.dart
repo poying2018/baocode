@@ -63,8 +63,16 @@ abstract interface class StashDisk {
 }
 
 /// [path] as the text gives it resolved against the stash folder [root].
-String stashAbsolute(String root, String path) =>
-    p.isAbsolute(path) ? path : p.normalize(p.join(root, path));
+/// A path that walks out of the folder (`..`) stays inside it: the text
+/// of a stash is not to be trusted to name a file anywhere on the disk.
+String stashAbsolute(String root, String path) {
+  if (p.isAbsolute(path)) return path;
+  final joined = p.normalize(p.join(root, path));
+  // Inside the folder it is to be: the root itself, or under it.
+  if (joined == p.normalize(root)) return joined;
+  if (p.isWithin(p.normalize(root), joined)) return joined;
+  return p.join(root, p.basename(path));
+}
 
 /// A free name for [name] among [taken]: `shot.png`, `shot-2.png`…
 String freeAssetName(String name, bool Function(String name) taken) {

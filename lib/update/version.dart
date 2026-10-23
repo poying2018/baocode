@@ -35,13 +35,26 @@ class AppVersion implements Comparable<AppVersion> {
     if (match == null) return null;
     final preRelease = match.group(4)?.split('.') ?? const <String>[];
     if (preRelease.any((part) => part.isEmpty)) return null;
-    int part(int group) => int.parse(match.group(group) ?? '0');
+    // A number too big to be one is not a version, not a crash: the
+    // text may be anything a manifest says.
+    int? part(int group) {
+      final text = match.group(group);
+      if (text == null) return 0;
+      return int.tryParse(text);
+    }
+    final major = part(1);
+    final minor = part(2);
+    final patch = part(3);
+    final build = part(5);
+    if (major == null || minor == null || patch == null || build == null) {
+      return null;
+    }
     return AppVersion(
-      part(1),
-      part(2),
-      part(3),
+      major,
+      minor,
+      patch,
       preRelease: preRelease,
-      build: part(5),
+      build: build,
     );
   }
 

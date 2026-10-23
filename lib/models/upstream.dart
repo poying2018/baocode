@@ -148,8 +148,16 @@ bool sendsApiKeyHeader(ModelProvider provider) => switch (provider.auth) {
   ProviderAuth.bearer => false,
   ProviderAuth.auto =>
     provider.protocol == ProviderProtocol.anthropic &&
-        provider.host.endsWith('anthropic.com'),
+        _isAnthropic(provider.host),
 };
+
+/// Whether [host] is Anthropic's own: the domain itself or one of its
+/// subdomains. A host that only ends with it (`notanthropic.com`) is
+/// another party's, and gets no key of ours.
+bool _isAnthropic(String host) {
+  final name = host.toLowerCase();
+  return name == 'anthropic.com' || name.endsWith('.anthropic.com');
+}
 
 /// Claude Code's user agent. Some relays serve only clients that look
 /// like it, to every protocol: without this (any [HttpClient] default

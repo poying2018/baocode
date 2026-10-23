@@ -217,7 +217,13 @@ class FileStashDisk implements StashDisk {
 
   /// A file name that needs no quoting in markdown: no spaces or brackets.
   static String _safe(String name) {
-    final cleaned = name.replaceAll(RegExp(r'[\s()<>\[\]"#?%]+'), '-');
+    // A name of its own: no path in it, so it stays in the folder it is
+    // put in. A path of its own (a leading `/`) keeps that.
+    final absolute = name.startsWith('/');
+    final cleaned = p
+        .basename(name)
+        .replaceAll(RegExp(r'[\s()<>\[\]"#?%]+'), '-');
+    if (absolute && cleaned.isNotEmpty) return '/$cleaned';
     return cleaned.isEmpty ? 'file' : cleaned;
   }
 

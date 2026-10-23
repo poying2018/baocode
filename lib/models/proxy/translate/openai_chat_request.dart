@@ -194,6 +194,11 @@ Map<String, Object?> convertClaudeRequestToOpenAI(
                 part.get('content'),
               );
               result['content'] = text;
+              // A call that failed: said so, so the model knows it is
+              // to be tried again (this protocol has no flag of its own).
+              if (part.get('is_error').boolean) {
+                result['content'] = 'Error: ${result['content']}';
+              }
               relayedToolImages.addAll(images);
               toolResults.add(result);
           }
