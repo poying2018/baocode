@@ -81,13 +81,23 @@ class CodexCatalog implements SessionCatalog {
     final threads = <Map<String, Object?>>[];
     String? cursor;
     for (var page = 0; page < 20; page++) {
-      final answer = await source.request('thread/list', {
+      final params = <String, Object?>{
         'cwd': ?cwd,
         'limit': 200,
         'cursor': ?cursor,
         'sortKey': 'updated_at',
         'sortDirection': 'desc',
-      });
+      };
+      late Map<String, Object?> answer;
+      try {
+        answer = await source.request('thread/list', params);
+      } on CodexRequestError {
+        // Servers before the camel-to-snake key change called it updatedAt.
+        answer = await source.request('thread/list', {
+          ...params,
+          'sortKey': 'updatedAt',
+        });
+      }
       final data = answer['data'];
       if (data is! List) break;
       threads.addAll([
