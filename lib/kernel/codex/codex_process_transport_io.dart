@@ -93,10 +93,10 @@ class ProcessCodexTransport implements CodexTransport {
           // folder may be held by another Codex.
           'CODEX_HOME': ?launch.home,
         },
-        // The app's own environment on Windows: the child needs the
-        // parent's beside it for what `cmd.exe` itself runs on (COMSPEC,
-        // PATHEXT, ...).
-        includeParentEnvironment: Platform.isWindows,
+        // The app's own environment: the child needs HOME and PATH for
+        // its login, MCP servers and tools, and on Windows also COMSPEC
+        // and PATHEXT for the commands it runs.
+        includeParentEnvironment: true,
         // Never through the shell: the npm shim is a `.cmd`, and the
         // shell concatenates its arguments rather than escaping them, so
         // a path with a space in it is split and the server never starts.
@@ -193,6 +193,17 @@ class ProcessCodexTransport implements CodexTransport {
       // A local install, as a project has it.
       if (Directory(p.join(directory, '@openai')).existsSync()) {
         roots.add(directory);
+      }
+      // A Unix global install: `<prefix>/bin` is on the PATH while the
+      // package lives in `<prefix>/lib/node_modules` or `<prefix>/node_modules`.
+      final prefix = Directory(directory).parent.path;
+      for (final modules in [
+        p.join(prefix, 'lib', 'node_modules'),
+        p.join(prefix, 'node_modules'),
+      ]) {
+        if (Directory(p.join(modules, '@openai')).existsSync()) {
+          roots.add(modules);
+        }
       }
     }
     for (final home in _homeDirectories()) {
