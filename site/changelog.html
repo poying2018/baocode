@@ -30,6 +30,66 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.5.3">
+    <h2 class="plain"><a href="#v1.5.3">1.5.3</a></h2>
+    <p>Every address is this build's own, and typing works on Windows again</p>
+    <p>This release brings the upstream's 27 commits since 1.5.2 (Windows input, Skia
+    drawing, the side panel by the traffic lights, a long conversation's speed),
+    and points every address the app gives out at this repository instead: the
+    repository, the releases and the issues on the About page, the repository the
+    star prompt opens, the address in a commit's credit, the site's own files
+    (the channels' list, the featured upstreams), and the list of hosts a
+    download may come from.</p>
+    <p>Two of the upstream's services are not used any more: the usage statistics
+    are not reported (nor are the logs uploaded), as this build has no server of
+    its own; a channel build's activate page still points at the upstream, as
+    there is no counterpart here.</p>
+    <p>New</p>
+    <ul>
+    <li>The side panel's preview takes dropped files; a right click reveals one.</li>
+    <li>A /command in the composer shows its whole description, and the file it is
+    in opens.</li>
+    <li>A changed file's menu opens it as a file: in the browser, with its default
+    app, or in an editor.</li>
+    <li>Enter in the empty composer while the agent works sends the queued message
+    now.</li>
+    <li>An upstream or a model is duplicated in a click.</li>
+    <li>The Claude Code CLI is the core by default; the built-in one suggests it.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>The paths in a long conversation's text are looked up by index, not from
+    the start each time; a hang report is readable.</li>
+    <li>The editors share one tokenizer, Skia's and the image cache are kept
+    small, and large blocks are handed back sooner.</li>
+    <li>The focused input no longer draws on every frame.</li>
+    <li>The side panel's edge follows the pointer; a trackpad flings the editors
+    as it does lists, and nothing bounces at their ends.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Stashes and the chat's input take typing on Windows again.</li>
+    <li>At the window's top left, the sidebar's toggle and its tabs are clear of
+    the traffic lights.</li>
+    <li>A conversation shown again is where it was left.</li>
+    <li>@ finds folders too, by their names, among the files.</li>
+    <li>Drawn by Skia, as on macOS, not Impeller.</li>
+    <li>A conversation renamed in Claude Code (/rename) is named so in the list.</li>
+    <li>In plan mode the cache ends before the reminder, so the next turn reads
+    it.</li>
+    <li>A quick question's answer is read from verbose output's array, not taken
+    from stderr.</li>
+    <li>An SSH connection lost is made again to the same session; nothing there
+    ended or was lost.</li>
+    <li>A host that only ends with anthropic.com (notanthropic.com) is another
+    party's, and gets no key of ours.</li>
+    <li>A stash's file name is a name, not a path: the path in it is dropped, and
+    <code>..</code> stays in the folder too.</li>
+    <li>A version number too big to be one is not a version, not a crash.</li>
+    <li>A tool call that failed is said so in the text the model reads.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.5.2">
     <h2 class="plain"><a href="#v1.5.2">1.5.2</a></h2>
     <p>Markdown, edited where it shows</p>
