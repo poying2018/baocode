@@ -30,7 +30,7 @@ release、只发 Windows、签名私钥可 DPAPI 加密），所以"合上游"�
 | 仓库 | `F:\Projects\baocode`（origin=`poying2018/baocode`，upstream=`baocode-dev/baocode`）|
 | 分支 | `main` = `dev`（发版前合流，发版后回灌 dev）|
 | 工具 | Flutter 3.47.5 / Dart 3.13.4 在 `F:\Projects\tools\flutter` |
-| 代理 | GitHub 直连会超时，`git`/`gh` 需 `HTTP_PROXY=127.0.0.1:7897` |
+| 代理 | GitHub 访问优先直连（`HTTP_PROXY=''` + `NO_PROXY='*'`）；直连不通再找 Clash（`127.0.0.1:7897`），先 `Get-NetTCPConnection -LocalPort 7897 -State Listen` 确认它在跑 |
 | 推送通道 | `ssh://git@ssh.github.com:443/poying2018/baocode.git`（HTTPS 的 schannel 握手会失败）|
 | 签名私钥 | `F:\Projects\baocode-release-key\update-signing.key.enc`（DPAPI，本机账户绑定）|
 | Secret | `BAOCODE_UPDATE_SIGNING_KEY`（本 fork 的名字；上游用 `UPDATE_SIGNING_KEY`）|
@@ -88,6 +88,18 @@ git merge upstream/main --no-edit --no-verify
 冲突解决的原则：两边**同题**时取实现更完整的一方（本例里上游独立修好了标题栏 zoom，
 修法与我的完全一致，直接取上游版）；只有一方有实现时保留自己那方。
 
+**合并后必查 `tool/release_manifest.dart` 的选项解析**：上游的 `_parse` 不认
+`--encrypt-key` / `--decrypt-key`，合并时若取了上游的解析器，这两个选项就**静默消失** ——
+`_dpapiPrefix` 常量、`_readKey`、usage 文本都还在，看起来一切正常，但真去加密私钥时
+"unknown option"。所以合并后要确认 `main()` 里还有：
+
+```dart
+if (options['encrypt-key'] case final path?) return _encryptKey(path, options['out']);
+if (options['decrypt-key'] case final path?) return _decryptKey(path, options['out']);
+```
+
+（`test/tool/release_manifest_test.dart` 覆盖这两个选项，别删。）
+
 ### 4. 修好发布链（本 fork 不能直接用上游的）
 
 上游的 `release.yml` 把成品发到官方 CDN `dl.baocode.dev`（Cloudflare R2），用上游的 Secret。
@@ -104,6 +116,15 @@ git merge upstream/main --no-edit --no-verify
 `remote.yml`（reusable workflow）的 publish job 用 `environment: release` 拿写权限，
 **不要**换成 `permissions:` —— 那样 GitHub 在解析期就报 `startup_failure`（tag push 一个
 job 都不创建，而手动 dispatch 正常，因为那条路不跑 publish job）。
+
+合并上游后要复查这两个 workflow 有没有被改回 CDN（上游的版本会）：
+
+```powershell
+Select-String -LiteralPath '.github/workflows/release.yml' -Pattern 'dl\.baocode\.dev|R2_|aws s3'
+Select-String -LiteralPath '.github/workflows/remote.yml'   -Pattern 'dl\.baocode\.dev|R2_|aws s3'
+```
+
+有输出就是被改回去了（注释里的除外）。
 
 改完用 actionlint 校验（比 YAML 解析严格，能查出 needs 悬空引用）：
 
@@ -143,6 +164,8 @@ gh api repos/poying2018/baocode/releases/tags/v1.5.1 --jq '.assets[].name'
 Invoke-RestMethod 'https://github.com/poying2018/baocode/releases/latest/download/latest.json'
 # 每个链接可下载且大小一致
 curl.exe -sIL --max-time 60 <url>   # 取最后一个 content-length
+# 远程服务端的资产也要在（老版本应用按 VERSION 回溯下载）
+curl.exe -sIL --max-time 60 'https://github.com/poying2018/baocode/releases/download/v1.5.1/baocode-server-linux-x64.gz'
 ```
 
 再用仓库自己的代码做三件事（比肉眼看 JSON 可靠）：
@@ -174,6 +197,13 @@ curl.exe -sIL --max-time 60 <url>   # 取最后一个 content-length
 - **改了 `.github/workflows/*.yml` 后 `git diff` 出现整文件变化**：多半是行尾变了
   （`core.autocrlf=true`，index 里是 LF、工作区是 CRLF），检查文件末尾换行与 mode
   （`git update-index --chmod=+x`）
+- **改 `.minimax/skills/*/SKILL.md` 后 lint 报 "frontmatter.name is missing"**：文件被写成
+  CRLF 了，lint 的 YAML 解析器按 `\n` 切行会认不出 `---`。改成 LF：
+
+  ```powershell
+  $f = '<skill 路径>/SKILL.md'
+  [System.IO.File]::WriteAllText($f, [System.IO.File]::ReadAllText($f).Replace("`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+  ```
 
 ## Examples
 
