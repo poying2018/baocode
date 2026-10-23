@@ -4,7 +4,6 @@
 //   flutter test test/codex_live_test.dart --plain-name "a turn"
 //
 // It is skipped unless CODEX_LIVE=1, for the server it needs.
-import 'dart:async';
 import 'dart:io';
 
 import 'package:baocode/kernel/agent_kernel.dart';
