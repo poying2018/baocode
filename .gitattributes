@@ -1,0 +1,4 @@
+# The skill files are read by a linter that splits on \n: a CRLF line
+# leaves a \r at the end of every line, and the frontmatter is not
+# recognised. Keep them as they are written.
+.minimax/** text eol=lf
