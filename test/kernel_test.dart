@@ -5562,6 +5562,27 @@ exec /usr/bin/env "\$@"
       expect(events.whereType<GoalReported>().last.goal, isNull);
     });
 
+    test(
+      'the review command is the server\'s review, not a model prompt',
+      () async {
+        kernel.send(const KernelTurn(id: 'r1', text: '/review'));
+        await pumpEventQueue();
+
+        final review = server.written.lastWhere(
+          (message) => message['method'] == 'review/start',
+        );
+        expect(review['params'], {
+          'threadId': 'th',
+          'delivery': 'inline',
+          'target': {'type': 'uncommittedChanges'},
+        });
+        expect(
+          server.written.where((message) => message['method'] == 'turn/start'),
+          isEmpty,
+        );
+      },
+    );
+
     test('messages sent while busy wait their turn', () async {
       kernel.send(const KernelTurn(id: 't1', text: 'first'));
       await pumpEventQueue();
@@ -5989,6 +6010,10 @@ class _FakeServer implements CodexTransport {
                 },
                 'turn/start' => {
                   'turn': {'id': 'st1'},
+                },
+                'review/start' => {
+                  'turn': {'id': 'st1'},
+                  'reviewThreadId': 'th',
                 },
                 'model/list' => {
                   'data': [

@@ -483,7 +483,52 @@ class CodexKernel
       await _initialize();
       await _ensureThread();
       final readOnly = _work == 'ask' || _work == 'plan';
-      final started = await _request('turn/start', {
+      final (method, params) = _turnRequest(turn, readOnly: readOnly);
+      final started = await _request(method, params);
+      // The turn the server gave us: the same one its `turn/started`
+      // notification names, but known before it.
+      final serverTurn = (started['turn'] as Map)['id'] as String;
+      _registerServerTurn(serverTurn);
+      // Stopped before the server knew the turn: stop it there too.
+      if (_turn == turn.id) {
+        _serverTurn ??= serverTurn;
+      } else {
+        _interrupt(serverTurn: serverTurn);
+      }
+    } on Object catch (error) {
+      if (error is CodexUnavailable) {
+        _failed(error.message, error.detail);
+      } else if (error is! CodexRequestError) {
+        _failed('Codex could not start the turn', '$error');
+      }
+      _failTurn(turn.id, '$error');
+    }
+  }
+
+  (String, Map<String, Object?>) _turnRequest(
+    KernelTurn turn, {
+    required bool readOnly,
+  }) {
+    final command = RegExp(
+      r'^/review(?:\s+([\s\S]+))?$',
+      caseSensitive: false,
+    ).firstMatch(turn.text.trim());
+    if (command != null) {
+      final instructions = command.group(1)?.trim();
+      return (
+        'review/start',
+        {
+          'threadId': _threadId,
+          'delivery': 'inline',
+          'target': instructions == null || instructions.isEmpty
+              ? {'type': 'uncommittedChanges'}
+              : {'type': 'custom', 'instructions': instructions},
+        },
+      );
+    }
+    return (
+      'turn/start',
+      {
         'threadId': _threadId,
         'clientUserMessageId': turn.id,
         'input': [
@@ -527,25 +572,8 @@ class CodexKernel
                   'writableRoots': _writableRoots,
                 },
               },
-      });
-      // The turn the server gave us: the same one its `turn/started`
-      // notification names, but known before it.
-      final serverTurn = (started['turn'] as Map)['id'] as String;
-      _registerServerTurn(serverTurn);
-      // Stopped before the server knew the turn: stop it there too.
-      if (_turn == turn.id) {
-        _serverTurn ??= serverTurn;
-      } else {
-        _interrupt(serverTurn: serverTurn);
-      }
-    } on Object catch (error) {
-      if (error is CodexUnavailable) {
-        _failed(error.message, error.detail);
-      } else if (error is! CodexRequestError) {
-        _failed('Codex could not start the turn', '$error');
-      }
-      _failTurn(turn.id, '$error');
-    }
+      },
+    );
   }
 
   Future<void> _ensureThread() async {
@@ -1148,6 +1176,10 @@ class CodexKernel
     final index = _queuedTurns.indexWhere((turn) => turn.id == turnId);
     if (index < 0) return false;
     _queuedTurns.removeAt(index);
+    if (_queuedTurns.isEmpty) {
+      _drainTimer?.cancel();
+      _drainTimer = null;
+    }
     emit(ItemRemoved(nextSeq, turnId));
     return true;
   }
@@ -1685,6 +1717,7 @@ class CodexKernel
         } else if (_cancelPending) {
           _cancelPending = false;
           _drainTimer?.cancel();
+          _drainTimer = null;
           _startNextQueued();
         }
       case 'error':
@@ -2558,6 +2591,7 @@ class CodexKernel
     if (_queuedTurns.isEmpty) return;
     _drainTimer?.cancel();
     _drainTimer = Timer(const Duration(seconds: 2), () {
+      _drainTimer = null;
       if (!_cancelPending) return;
       _cancelPending = false;
       _startNextQueued();

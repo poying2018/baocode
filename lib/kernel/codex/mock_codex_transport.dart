@@ -151,6 +151,16 @@ class MockCodexTransport implements CodexTransport {
         _run = run;
         _turnId = turnId;
         unawaited(_script(run, turnId, input['text'] as String, readOnly));
+      case 'review/start':
+        final turnId = 'turn_${++_turns}';
+        _respond(id, {
+          'turn': {'id': turnId, 'status': 'inProgress'},
+          'reviewThreadId': _threadId,
+        });
+        final run = Object();
+        _run = run;
+        _turnId = turnId;
+        unawaited(_script(run, turnId, '/review', true));
       case 'turn/interrupt':
         _respond(id, {});
         if (_turnId case final turnId? when _run != null) {
