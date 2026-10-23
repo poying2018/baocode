@@ -136,9 +136,10 @@ abstract final class LspProcesses {
         // As for Claude Code: the login shell's environment is the whole of
         // it, except on Windows.
         includeParentEnvironment: Platform.isWindows,
-        runInShell:
-            Platform.isWindows &&
-            RegExp(r'\.(cmd|bat)$', caseSensitive: false).hasMatch(executable),
+        // Not through the shell, even for a `.cmd`: Windows runs a batch
+        // file itself, and the shell would split a path or an argument
+        // that has a space in it (a folder under Program Files, a user
+        // name with a space) — the server would not start at all.
       );
       return _IoLspProcess(process);
     } on ProcessException catch (error) {

@@ -256,6 +256,21 @@ class JsonRpcConnection {
     while (!_isClosed && _readMessage()) {}
   }
 
+  /// The end of the header block that starts at [_start]: past the blank
+  /// line that ends it, or -1 when it is not whole yet. The blank line
+  /// may end with a `\r\n` or with a bare `\n`: a server that prints a
+  /// line of its own on stdout may end it either way.
+  int _endOfHeaderBlock() {
+    for (var i = _start; i < _end; i++) {
+      if (_buffer[i] != 10) continue;
+      // The line that ends here is empty: it holds nothing but the
+      // line ending (a `\r\n` or a bare `\n`).
+      final start = i - 1 >= _start && _buffer[i - 1] == 13 ? i - 1 : i;
+      if (start == _start || _buffer[start - 1] == 10) return i + 1;
+    }
+    return -1;
+  }
+
   /// Reads one framed message from the buffer; false when it is incomplete.
   bool _readMessage() {
     if (_bodyLength case final length?) {
@@ -263,29 +278,20 @@ class JsonRpcConnection {
       _bodyLength = null;
       return _readBody(length);
     }
-    var headerEnd = -1;
-    for (var i = _start; i + 3 < _end; i++) {
-      if (_buffer[i] == 13 &&
-          _buffer[i + 1] == 10 &&
-          _buffer[i + 2] == 13 &&
-          _buffer[i + 3] == 10) {
-        headerEnd = i;
-        break;
-      }
-    }
+    final headerEnd = _endOfHeaderBlock();
     if (headerEnd < 0) return false;
     final headers = latin1.decode(
       Uint8List.sublistView(_buffer, _start, headerEnd),
     );
     int? length;
-    for (final line in headers.split('\r\n')) {
+    for (final line in headers.split('\n')) {
       final colon = line.indexOf(':');
       if (colon < 0) continue;
       if (line.substring(0, colon).trim().toLowerCase() == 'content-length') {
         length = int.tryParse(line.substring(colon + 1).trim());
       }
     }
-    final bodyStart = headerEnd + 4;
+    final bodyStart = headerEnd;
     if (length == null || length < 0) {
       // Not a header (e.g. a line a server printed on stdout): skip it.
       onProtocolError?.call('missing Content-Length in "$headers"');

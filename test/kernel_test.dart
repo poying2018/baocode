@@ -5249,6 +5249,27 @@ exec /usr/bin/env "\$@"
       await expectLater(orphan, throwsA(isA<ControlError>()));
       expect(channel.receive({'type': 'user'}), isFalse);
     });
+
+    test('a request that times out is refused, so the CLI lets it go',
+        () async {
+      final written = <Map<String, Object?>>[];
+      final channel = ControlChannel(written.add);
+      await expectLater(
+        channel.request(
+          'mcp_status',
+          const {},
+          const Duration(milliseconds: 20),
+        ),
+        throwsA(isA<ControlError>()),
+      );
+      // The CLI is still waiting for an answer: told, so it does not
+      // hold the turn open for ever.
+      final refusal = written.last;
+      expect(refusal['type'], 'control_response');
+      final response = refusal['response'] as Map;
+      expect(response['subtype'], 'error');
+      expect(response['request_id'], written.first['request_id']);
+    });
   });
 
   group('Codex adapter', () {

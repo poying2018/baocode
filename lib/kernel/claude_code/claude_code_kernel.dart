@@ -678,6 +678,10 @@ class ClaudeCodeKernel
   void _teardown() {
     unawaited(_subscription?.cancel());
     _subscription = null;
+    // The CLI is waiting for an answer to each of the questions it
+    // asked: told, so it does not hold the turn open for ever.
+    _refusePermissions();
+    _permissions.clear();
     _control?.failAll('Claude Code stopped');
     _control = null;
     if (_transport case final transport?) {
@@ -1016,6 +1020,10 @@ class ClaudeCodeKernel
     for (final id in _permissions.keys) {
       emit(InteractionResolved(nextSeq, id));
     }
+    // The CLI is still waiting for an answer to each of these: told,
+    // so it lets the tool call go instead of holding the turn open for
+    // ever. The turn is over either way.
+    _refusePermissions();
     _permissions.clear();
     if (!interrupted && worked != null) {
       if ((_turnStats, _sessionId) case (final stats?, final session?)) {
@@ -1536,6 +1544,17 @@ class ClaudeCodeKernel
     }
     _permissions[requestId] = _Permission(input, suggestions, questions);
     emit(InteractionRequested(nextSeq, interaction));
+  }
+
+  /// Tells the CLI that the questions it asked are not answered: the
+  /// tool call goes, and the CLI does not wait for an answer that will
+  /// not come.
+  void _refusePermissions() {
+    final control = _control;
+    if (control == null) return;
+    for (final id in _permissions.keys) {
+      control.refuse(id, 'The turn ended before this was answered.');
+    }
   }
 
   static String _approvalTitle(String tool, Map<String, Object?> request) {

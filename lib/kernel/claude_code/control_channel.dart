@@ -40,6 +40,11 @@ class ControlChannel {
       timeout,
       onTimeout: () {
         _pending.remove(id);
+        // The other side is still waiting for an answer to this one:
+        // told, so it lets the request go instead of holding the turn
+        // open for ever. A late answer of its own is dropped: the
+        // request is no longer pending.
+        refuse(id, 'The client did not answer in time.');
         throw ControlError(subtype, 'no response');
       },
     );

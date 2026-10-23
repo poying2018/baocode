@@ -463,45 +463,84 @@ class UpdateService extends ChangeNotifier {
     _offers.add(offer!);
   }
 
+  /// The download under way, and the version it is for: a manifest that
+  /// brings a newer version does not take the one under way for it.
   Future<String>? _downloading;
+  AppVersion? _downloadingVersion;
 
   /// Downloads the release found (once, however often asked), and gives
   /// the checked file's path. Throws when it fails.
-  Future<String> download() {
-    final release = _release;
-    if (release == null) {
-      return Future.error(StateError('No update to download'));
-    }
-    if (_file case final file?) return Future.value(file);
-    return _downloading ??= () async {
-      _error = null;
-      _progress = 0;
-      _setStatus(UpdateStatus.downloading);
-      try {
-        final file = await backend.download(
-          release,
-          onProgress: (received, total) {
-            final progress = total <= 0 ? null : received / total;
-            if (progress == _progress) return;
-            _progress = progress;
-            if (!_disposed) notifyListeners();
-          },
-        );
-        if (_release case final found? when _same(found, release)) {
-          _file = file;
+  Future<String> download() async {
+    while (true) {
+      final release = _release;
+      if (release == null) {
+        throw StateError('No update to download');
+      }
+      if (_file case final file?) return file;
+      final under = _downloading;
+      if (under == null) {
+        _downloadingVersion = release.version;
+        final future = _downloadRelease(release);
+        _downloading = future;
+        try {
+          await future;
+        } finally {
+          if (identical(_downloading, future)) {
+            _downloading = null;
+            _downloadingVersion = null;
+          }
         }
+        // Whether what was downloaded is the file wanted now, the loop
+        // above says.
+        continue;
+      }
+      if (_downloadingVersion == release.version) {
+        return await under;
+      }
+      // A download under way is for another version: it ends first, then
+      // the wanted one is downloaded in its turn.
+      try {
+        await under;
+      } on Object {
+        // That other version's failure is not this one's.
+      }
+    }
+  }
+
+  /// Downloads [release]: the file is the one wanted only while it is
+  /// still the version wanted.
+  Future<String> _downloadRelease(UpdateRelease release) async {
+    _error = null;
+    _progress = 0;
+    _setStatus(UpdateStatus.downloading);
+    try {
+      final file = await backend.download(
+        release,
+        onProgress: (received, total) {
+          final progress = total <= 0 ? null : received / total;
+          if (progress == _progress) return;
+          _progress = progress;
+          if (!_disposed) notifyListeners();
+        },
+      );
+      if (_release case final found? when _same(found, release)) {
+        _file = file;
         _progress = null;
         _setStatus(UpdateStatus.ready);
         return file;
-      } on Object catch (error) {
-        _error = error;
-        _progress = null;
-        _setStatus(UpdateStatus.failed);
-        rethrow;
-      } finally {
-        _downloading = null;
       }
-    }();
+      // The version it was for is not the one wanted now: what was
+      // downloaded is of no use, and the wanted one is downloaded in
+      // its turn.
+      _progress = null;
+      _setStatus(_foundStatus);
+      return file;
+    } on Object catch (error) {
+      _error = error;
+      _progress = null;
+      _setStatus(UpdateStatus.failed);
+      rethrow;
+    }
   }
 
   /// Not offered again by the checks the service makes itself.

@@ -309,6 +309,31 @@ void main() {
       expect(backend.downloads, hasLength(2));
     });
 
+    test('a newer version found while downloading is downloaded in its turn',
+        () async {
+      final backend = FakeBackend(manifestOf('1.2.0'))..gate = Completer();
+      final service = serviceOf(backend);
+      await service.check(manual: true);
+      final first = service.download();
+      await pumpEventQueue();
+      expect(service.status, UpdateStatus.downloading);
+      // A newer version arrives while the older one is still coming.
+      backend.manifest = manifestOf('1.3.0');
+      backend.gate = Completer();
+      await service.check(manual: true);
+      expect(service.release!.version, AppVersion.parse('1.3.0'));
+      // The download of the older one ends: what it brought is of no
+      // use, and the wanted one is downloaded in its turn.
+      backend.downloads.clear();
+      backend.gate!.complete();
+      await pumpEventQueue();
+      expect(backend.downloads.single.version, AppVersion.parse('1.3.0'));
+      backend.gate!.complete();
+      expect(await first, contains('1.3.0'));
+      expect(service.status, UpdateStatus.ready);
+      expect(service.offer!.downloaded, isTrue);
+    });
+
     test('prepares, arms and launches the install as the app quits', () async {
       final installer = FakeInstaller();
       final service = serviceOf(

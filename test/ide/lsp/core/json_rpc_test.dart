@@ -168,6 +168,28 @@ void main() {
     expect(errors, hasLength(2));
   });
 
+  test('a line of its own on stdout does not take the messages after it',
+      () async {
+    // A server may print a banner on stdout, ended with a bare `\n`:
+    // it must not swallow the header of the message after it.
+    for (final ending in ['\n', '\r\n']) {
+      final notes = <Object?>[];
+      final errors = <String>[];
+      final input = StreamController<List<int>>();
+      final connection = JsonRpcConnection(
+        input.stream,
+        (_) {},
+        onProtocolError: errors.add,
+      )..onNotification('note', notes.add);
+      input
+        ..add(ascii.encode('Using TypeScript version: 5.9.3$ending'))
+        ..add(frame({'jsonrpc': '2.0', 'method': 'note', 'params': 1}));
+      await pumpEventQueue();
+      expect(notes, [1], reason: 'the banner ended with $ending');
+      await input.close();
+    }
+  });
+
   test('a large body arriving in pieces', () async {
     final notes = <Object?>[];
     connection.onNotification('big', notes.add);
