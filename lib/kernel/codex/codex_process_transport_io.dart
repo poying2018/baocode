@@ -40,6 +40,17 @@ class ProcessCodexTransport implements CodexTransport {
   static Future<ProcessCodexTransport> start(CodexLaunch launch) async {
     final cli = await locateCodex();
     final transport = await _start(cli, launch);
+    // The server waits for the client to speak first: the initialize
+    // request. It is said here, so that the server being up is known
+    // and the kernel's own initialize is the second one (the server
+    // answers it too).
+    transport.write({
+      'id': 0,
+      'method': 'initialize',
+      'params': {
+        'clientInfo': {'name': 'baocode', 'version': '1.0.0'},
+      },
+    });
     // The server may not come up: another app may hold its home (the
     // Codex Desktop app does), and it says so and ends. The user would
     // wait for nothing, so it is said now.
@@ -67,7 +78,12 @@ class ProcessCodexTransport implements CodexTransport {
         cli.executable,
         launch.arguments,
         workingDirectory: launch.cwd,
-        environment: cli.environment,
+        environment: {
+          ...?cli.environment,
+          // Its own state, when it was given one: the user's own
+          // folder may be held by another Codex.
+          'CODEX_HOME': ?launch.home,
+        },
         // The app's own environment on Windows: the child needs the
         // parent's beside it for what `cmd.exe` itself runs on (COMSPEC,
         // PATHEXT, ...).
@@ -273,7 +289,7 @@ class ProcessCodexTransport implements CodexTransport {
       }
       // The server is up when it answers the initialize request.
       if (decoded is Map &&
-          decoded.containsKey('id') &&
+          decoded['id'] == 0 &&
           decoded.containsKey('result') &&
           !_started.isCompleted) {
         _started.complete();

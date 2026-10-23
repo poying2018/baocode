@@ -5328,7 +5328,6 @@ exec /usr/bin/env "\$@"
       kernel.send(const KernelTurn(id: 't1', text: 'hi'));
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
-        'initialize',
         'initialized',
         'model/list',
         'thread/start',

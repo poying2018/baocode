@@ -214,11 +214,9 @@ class CodexKernel
   Future<void> _start(KernelTurn turn) async {
     if (!_initialized) {
       _initialized = true;
-      await _request('initialize', {
-        'clientInfo': {'name': 'baocode', 'version': '1.0.0'},
-      });
-      // The server expects it, and only it, of the client's
-      // notifications.
+      // The transport has said hello already (the server waits for the
+      // client to speak first); what is left is the notification the
+      // server expects, and the models it has.
       _transport.write({'method': 'initialized'});
       // The models it has: the picker shows what it can run on, not
       // what was guessed.

@@ -29,6 +29,7 @@ class CodexLaunch {
     required this.cwd,
     this.model,
     this.environment,
+    this.home,
   });
 
   /// The project directory it works in.
@@ -39,6 +40,11 @@ class CodexLaunch {
 
   /// What it runs with, over the app's own.
   final Map<String, String>? environment;
+
+  /// The folder its state is kept in, when it is not the user's own:
+  /// the Codex Desktop app holds `~/.codex` while it runs, and a second
+  /// server cannot start at all while it does.
+  final String? home;
 
   /// The arguments `codex app-server` is started with.
   List<String> get arguments => const ['app-server', '--stdio'];

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:path/path.dart' as p;
+
 import '../agent_kernel.dart';
+import '../../platform/data_dir.dart';
 import 'codex_transport.dart';
 import 'codex_process_transport.dart';
 
@@ -11,8 +14,16 @@ abstract final class CodexTransportFactory {
   /// The transport for a kernel that works in [context]'s directory.
   static CodexTransport of(KernelContext context) =>
       _StartingCodexTransport(
-        CodexLaunch(cwd: context.cwd ?? Directory.current.path),
+        CodexLaunch(
+          cwd: context.cwd ?? Directory.current.path,
+          home: _home(),
+        ),
       );
+
+  /// Where the server keeps its state: the app's own folder, not the
+  /// user's `~/.codex`. The Codex Desktop app holds that one while it
+  /// runs, and a second server cannot start at all while it does.
+  static String _home() => p.join(DataDirectory.current.path, 'codex');
 }
 
 /// A transport that starts the app-server when the first message is
