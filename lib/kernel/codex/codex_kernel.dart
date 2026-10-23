@@ -485,6 +485,10 @@ class CodexKernel
       final readOnly = _work == 'ask' || _work == 'plan';
       final (method, params) = _turnRequest(turn, readOnly: readOnly);
       final started = await _request(method, params);
+      if (!started.containsKey('turn')) {
+        if (method == 'thread/compact/start') return;
+        throw const CodexRequestError('Codex did not start a turn');
+      }
       // The turn the server gave us: the same one its `turn/started`
       // notification names, but known before it.
       final serverTurn = (started['turn'] as Map)['id'] as String;
@@ -509,6 +513,9 @@ class CodexKernel
     KernelTurn turn, {
     required bool readOnly,
   }) {
+    if (turn.text.trim().toLowerCase() == '/compact') {
+      return ('thread/compact/start', {'threadId': _threadId});
+    }
     final command = RegExp(
       r'^/review(?:\s+([\s\S]+))?$',
       caseSensitive: false,

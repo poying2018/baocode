@@ -161,6 +161,20 @@ class MockCodexTransport implements CodexTransport {
         _run = run;
         _turnId = turnId;
         unawaited(_script(run, turnId, '/review', true));
+      case 'thread/compact/start':
+        final turnId = 'turn_${++_turns}';
+        _respond(id, {});
+        _notify('turn/started', {
+          'threadId': _threadId,
+          'turn': {'id': turnId, 'status': 'inProgress'},
+        });
+        final itemId = _itemId();
+        _notify('item/completed', {
+          'threadId': _threadId,
+          'turnId': turnId,
+          'item': {'type': 'contextCompaction', 'id': itemId},
+        });
+        _completeTurn(turnId, 'completed');
       case 'turn/interrupt':
         _respond(id, {});
         if (_turnId case final turnId? when _run != null) {

@@ -5583,6 +5583,20 @@ exec /usr/bin/env "\$@"
       },
     );
 
+    test('the compact command asks the server to compact the thread', () async {
+      kernel.send(const KernelTurn(id: 'c1', text: '/compact'));
+      await pumpEventQueue();
+
+      final compact = server.written.lastWhere(
+        (message) => message['method'] == 'thread/compact/start',
+      );
+      expect(compact['params'], {'threadId': 'th'});
+      expect(
+        server.written.where((message) => message['method'] == 'turn/start'),
+        isEmpty,
+      );
+    });
+
     test('messages sent while busy wait their turn', () async {
       kernel.send(const KernelTurn(id: 't1', text: 'first'));
       await pumpEventQueue();
@@ -6015,6 +6029,7 @@ class _FakeServer implements CodexTransport {
                   'turn': {'id': 'st1'},
                   'reviewThreadId': 'th',
                 },
+                'thread/compact/start' => <String, Object?>{},
                 'model/list' => {
                   'data': [
                     {
