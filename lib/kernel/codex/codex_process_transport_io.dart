@@ -21,6 +21,16 @@ class ProcessCodexTransport implements CodexTransport {
     unawaited(
       _process.exitCode.then((code) {
         _exitCode = code;
+        // It ended before it was up: the one waiting to talk to it is
+        // told, rather than waiting for nothing.
+        if (!_started.isCompleted) {
+          _started.completeError(
+            const CodexUnavailable(
+              'Codex ended before it was ready',
+              detail: 'Another Codex may be running and holding its folder.',
+            ),
+          );
+        }
         if (!_finished.isCompleted) _finished.complete();
       }),
     );
@@ -29,6 +39,29 @@ class ProcessCodexTransport implements CodexTransport {
   /// Starts `codex app-server` for [launch].
   static Future<ProcessCodexTransport> start(CodexLaunch launch) async {
     final cli = await locateCodex();
+    final transport = await _start(cli, launch);
+    // The server may not come up: another app may hold its home (the
+    // Codex Desktop app does), and it says so and ends. The user would
+    // wait for nothing, so it is said now.
+    await transport._started.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () {
+        transport.close();
+        throw const CodexUnavailable(
+          'Codex did not start',
+          detail:
+              'Another Codex may be running and holding its folder. Close '
+              'it and try again.',
+        );
+      },
+    );
+    return transport;
+  }
+
+  static Future<ProcessCodexTransport> _start(
+    CodexExecutable cli,
+    CodexLaunch launch,
+  ) async {
     try {
       final process = await Process.start(
         cli.executable,
@@ -208,6 +241,7 @@ class ProcessCodexTransport implements CodexTransport {
   final String executable;
 
   final Completer<void> _finished = Completer<void>();
+  final Completer<void> _started = Completer<void>();
   final StreamController<Map<String, Object?>> _messages =
       StreamController.broadcast();
 
@@ -236,6 +270,13 @@ class ProcessCodexTransport implements CodexTransport {
       final decoded = jsonDecode(line);
       if (decoded is Map<String, Object?> && !_messages.isClosed) {
         _messages.add(decoded);
+      }
+      // The server is up when it answers the initialize request.
+      if (decoded is Map &&
+          decoded.containsKey('id') &&
+          decoded.containsKey('result') &&
+          !_started.isCompleted) {
+        _started.complete();
       }
     } on FormatException {
       // Not protocol (e.g. a warning printed on stdout): kept for the
