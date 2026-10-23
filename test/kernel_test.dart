@@ -5330,6 +5330,7 @@ exec /usr/bin/env "\$@"
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
         'initialize',
+        'initialized',
         'thread/start',
         'turn/start',
       ]);
@@ -5461,6 +5462,14 @@ class _FakeServer implements CodexTransport {
   @override
   Stream<Map<String, Object?>> get messages => _out.stream;
 
+  @override
+  Future<void> get exited => _exited.future;
+
+  final Completer<void> _exited = Completer<void>();
+
+  @override
+  List<String> get stderr => const [];
+
   void push(Map<String, Object?> message) => _out.add(message);
 
   @override
@@ -5480,7 +5489,10 @@ class _FakeServer implements CodexTransport {
   }
 
   @override
-  void close() => _out.close();
+  void close() {
+    _out.close();
+    if (!_exited.isCompleted) _exited.complete();
+  }
 }
 
 /// Turns kept in memory, by session and prompt.

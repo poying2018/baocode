@@ -23,7 +23,8 @@ class CodexKernel
         ReportsContext,
         RewindsConversation,
         AcceptsImages {
-  CodexKernel(this.descriptor, this._transport) {
+  CodexKernel(this.descriptor, this._transport, {KernelContext? context}) {
+    _context = context;
     _subscription = _transport.messages.listen(_receive);
   }
 
@@ -31,6 +32,9 @@ class CodexKernel
   final KernelDescriptor descriptor;
   final CodexTransport _transport;
   late final StreamSubscription<Map<String, Object?>> _subscription;
+
+  /// Where it works: the project directory it is to run in.
+  KernelContext? _context;
 
   @override
   late final KernelChoiceSource model = LocalChoice(
@@ -45,13 +49,29 @@ class CodexKernel
   );
 
   @override
-  KernelHealth get health => KernelHealth.ready;
+  KernelHealth get health => _health;
+
+  KernelHealth _health = KernelHealth.ready;
+
+  /// What went wrong, for the user; the last lines it printed, with it.
+  void _failed(String message, [String? detail]) {
+    _health = KernelHealth(
+      KernelHealthStatus.failed,
+      message: message,
+      detail: detail ??
+          (() {
+            final lines = _transport.stderr;
+            return lines.isEmpty ? null : lines.join('\n');
+          })(),
+    );
+    emitInfoChanged();
+  }
 
   @override
   String? get sessionId => null;
 
   @override
-  Future<void> get stopped => Future.value();
+  Future<void> get stopped => _transport.exited;
 
   @override
   void prepare() {}
@@ -122,6 +142,15 @@ class CodexKernel
   String? _turn;
   String? _serverTurn;
 
+  /// The server's turns, ours, in the order they came: the one before a
+  /// message of ours, for the rewind (`thread/revert` wants the turn to
+  /// go on from).
+  final List<String> _serverTurns = [];
+
+  /// Our turns, in the order they were sent: the nth is the nth turn
+  /// of the conversation, for the rewind.
+  final List<String> _ourTurns = [];
+
   /// When [_turn] began, to time it.
   DateTime? _turnStarted;
   final Set<String> _sentTurns = {};
@@ -157,6 +186,7 @@ class CodexKernel
   void send(KernelTurn turn) {
     if (!_sentTurns.add(turn.id)) return;
     _turn = turn.id;
+    _ourTurns.add(turn.id);
     _turnStarted = DateTime.now();
     emit(TurnStarted(nextSeq, turn.id));
     emit(
@@ -175,9 +205,17 @@ class CodexKernel
       await _request('initialize', {
         'clientInfo': {'name': 'baocode', 'version': '1.0.0'},
       });
+      // The server expects it, and only it, of the client's
+      // notifications.
+      _transport.write({'method': 'initialized'});
     }
     if (_threadId == null) {
-      final started = await _request('thread/start', {'model': model.selected});
+      final started = await _request('thread/start', {
+        'model': model.selected,
+        // The project it works in: without it, the agent would work in
+        // the app's own directory.
+        'cwd': ?_context?.cwd,
+      });
       _threadId = (started['thread'] as Map)['id'] as String;
     }
     final readOnly = mode.selected == 'ask';
@@ -191,7 +229,13 @@ class CodexKernel
       'approvalPolicy': readOnly ? 'never' : 'on-request',
       'sandboxPolicy': {'type': readOnly ? 'readOnly' : 'workspaceWrite'},
     });
-    _serverTurn ??= (started['turn'] as Map)['id'] as String;
+    // The turn the server gave us: the same one its `turn/started`
+    // notification names, but known before it.
+    final serverTurn = (started['turn'] as Map)['id'] as String;
+    if (_serverTurn == null) {
+      _serverTurn = serverTurn;
+      _serverTurns.add(serverTurn);
+    }
     // Stopped before the server knew the turn: stop it there too.
     if (_turn != turn.id) _interrupt();
   }
@@ -229,6 +273,17 @@ class CodexKernel
     _endTurn(turn, interrupted: true);
   }
 
+  /// The server's turn to go on from, for the message of ours at
+  /// [index]: the turn before it. Null when it is not known, or when
+  /// there is no turn before it.
+  String? _turnBefore(int index) {
+    if (index < 0 || index >= _ourTurns.length) return null;
+    // The turn before it: the server's own, one for each of ours. The
+    // turn of the message itself is the one to go on from; the one
+    // before it is where the conversation is cut.
+    return index == 0 ? null : _serverTurns[index - 1];
+  }
+
   @override
   Future<bool> rewind({
     required String itemId,
@@ -236,10 +291,22 @@ class CodexKernel
     required int turns,
     String? lastSeen,
   }) async {
-    if (_threadId case final threadId? when turns > 0) {
-      unawaited(
-        _request('thread/rollback', {'threadId': threadId, 'numTurns': turns}),
-      );
+    final threadId = _threadId;
+    if (threadId == null) return false;
+    // The turn to go on from: the one before the message of ours that is
+    // rewound to. The server's `thread/revert` wants the turn to start
+    // from, not a number of turns to drop.
+    final before = _turnBefore(index);
+    if (before == null) return false;
+    try {
+      await _request('thread/revert', {
+        'threadId': threadId,
+        'beforeTurnId': before,
+      });
+    } on CodexRequestError catch (error) {
+      // It did not: said, not swallowed.
+      _failed('The conversation could not be rewound', error.message);
+      return false;
     }
     emit(Rewound(nextSeq, itemId: itemId, index: index));
     return true;
@@ -258,6 +325,17 @@ class CodexKernel
     final method = message['method'] as String?;
     final params = (message['params'] as Map?)?.cast<String, Object?>();
     if (method == null) {
+      // An error answer: the request is not answered, and the reason
+      // said. A failed answer is not an empty one.
+      if (message['error'] case final Map error) {
+        final id = message['id'];
+        _responses.remove(id)?.completeError(
+          CodexRequestError(
+            '${error['code'] ?? ''} ${error['message'] ?? 'failed'}'.trim(),
+          ),
+        );
+        return;
+      }
       final result = (message['result'] as Map?)?.cast<String, Object?>();
       _responses.remove(message['id'])?.complete(result ?? const {});
       return;
@@ -269,6 +347,7 @@ class CodexKernel
     switch (method) {
       case 'turn/started':
         _serverTurn = (params!['turn'] as Map)['id'] as String;
+        _serverTurns.add(_serverTurn!);
       case 'turn/completed':
         final turn = params!['turn'] as Map;
         if (turn['id'] != _serverTurn) return;

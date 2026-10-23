@@ -14,6 +14,14 @@ class MockCodexTransport implements CodexTransport {
   @override
   Stream<Map<String, Object?>> get messages => _out.stream;
 
+  @override
+  Future<void> get exited => _exited.future;
+
+  final Completer<void> _exited = Completer<void>();
+
+  @override
+  List<String> get stderr => const [];
+
   static const _threadId = 'thr_mock';
   static const _contextWindow = 272000;
 
@@ -54,7 +62,9 @@ class MockCodexTransport implements CodexTransport {
         _respond(id, {
           'thread': {'id': _threadId},
         });
-      case 'thread/rollback':
+      case 'thread/revert':
+        // The real method: the turn to go on from, not a number of
+        // turns to drop.
         _respond(id, {
           'thread': {'id': _threadId},
         });
@@ -305,5 +315,6 @@ class MockCodexTransport implements CodexTransport {
     _run = null;
     _approvals.clear();
     _out.close();
+    if (!_exited.isCompleted) _exited.complete();
   }
 }
