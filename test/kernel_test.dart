@@ -5463,8 +5463,12 @@ exec /usr/bin/env "\$@"
         'high',
       ]);
       expect(kernel.effort.selected, 'medium');
+      expect(kernel.fast.optionsFor(model).map((option) => option.id), [
+        'priority',
+      ]);
 
       kernel.effort.select(model, 'high');
+      kernel.fast.select(model, 'priority');
       notify('turn/completed', {
         'turn': {'id': 'st1', 'status': 'completed'},
       });
@@ -5479,6 +5483,7 @@ exec /usr/bin/env "\$@"
       );
       final params = turnStart['params'] as Map;
       expect(params['effort'], 'high');
+      expect(params['serviceTierForTurn'], 'priority');
       expect((params['collaborationMode'] as Map)['settings'], {
         'model': model,
         'reasoning_effort': 'high',
@@ -5530,6 +5535,31 @@ exec /usr/bin/env "\$@"
         server.written.map((message) => message['method']),
         contains('thread/settings/update'),
       );
+    });
+
+    test('a goal the server reports is kept with its progress', () async {
+      kernel.send(const KernelTurn(id: 't1', text: 'go on'));
+      await pumpEventQueue();
+      notify('thread/goal/updated', {
+        'goal': {
+          'threadId': 'th',
+          'objective': 'Make the build pass',
+          'status': 'active',
+          'createdAt': 1800000000,
+          'updatedAt': 1800000010,
+          'timeUsedSeconds': 10,
+          'tokensUsed': 900,
+        },
+      });
+      final goal = events.whereType<GoalReported>().last.goal!;
+      expect(goal.condition, 'Make the build pass');
+      expect(
+        (goal.state, goal.duration, goal.tokens),
+        (GoalState.active, const Duration(seconds: 10), 900),
+      );
+
+      notify('thread/goal/cleared', {'threadId': 'th'});
+      expect(events.whereType<GoalReported>().last.goal, isNull);
     });
 
     test('messages sent while busy wait their turn', () async {
@@ -5883,6 +5913,7 @@ exec /usr/bin/env "\$@"
       expect(kernel, isA<StartsPlans>());
       expect(kernel, isA<SelectsPermission>());
       expect(kernel, isA<SelectsEffort>());
+      expect(kernel, isA<SelectsFast>());
       expect(kernel, isA<LoadsHistory>());
     });
   });
@@ -5968,6 +5999,13 @@ class _FakeServer implements CodexTransport {
                         {'reasoningEffort': 'low', 'description': ''},
                         {'reasoningEffort': 'medium', 'description': ''},
                         {'reasoningEffort': 'high', 'description': ''},
+                      ],
+                      'serviceTiers': [
+                        {
+                          'id': 'priority',
+                          'name': 'Fast',
+                          'description': 'Priority service tier',
+                        },
                       ],
                     },
                   ],

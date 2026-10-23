@@ -27,6 +27,7 @@ class CodexKernel
         StartsPlans,
         SelectsPermission,
         SelectsEffort,
+        SelectsFast,
         ProvidesCommands,
         SuggestsFiles,
         ReportsContext,
@@ -47,15 +48,20 @@ class CodexKernel
     _work = _modeId(settings[KernelChoiceKind.mode.name]);
     _permission = _permissionId(settings[KernelChoiceKind.permission.name]);
     _pickedEffort = settings[KernelChoiceKind.effort.name];
+    _pickedTier = settings[KernelChoiceKind.fast.name];
     for (final MapEntry(:key, :value) in settings.entries) {
-      const prefix = 'effort@';
-      if (key.startsWith(prefix)) {
-        _effortsByModel[key.substring(prefix.length)] = value;
+      const effortPrefix = 'effort@';
+      const fastPrefix = 'fast@';
+      if (key.startsWith(effortPrefix)) {
+        _effortsByModel[key.substring(effortPrefix.length)] = value;
+      } else if (key.startsWith(fastPrefix)) {
+        _tiersByModel[key.substring(fastPrefix.length)] = value;
       }
     }
     if (_pickedEffort == null) {
       if (settings[KernelChoiceKind.model.name] case final initialModel?) {
         _pickedEffort = _effortsByModel[initialModel];
+        _pickedTier ??= _tiersByModel[initialModel];
       }
     }
     _subscription = _transport.messages.listen(
@@ -93,6 +99,7 @@ class CodexKernel
     ],
     onChanged: (_) {
       _effortChanged();
+      _tierChanged();
       emitInfoChanged();
     },
   )..reported = _context.settings[KernelChoiceKind.model.name];
@@ -118,10 +125,15 @@ class CodexKernel
   @override
   late final ModelSetting effort = _CodexModelSetting(this);
 
+  @override
+  late final ModelSetting fast = _CodexServiceTierSetting(this);
+
   String _work = 'agent';
   String _permission = 'ask';
   String? _pickedEffort;
   final Map<String, String> _effortsByModel = {};
+  String? _pickedTier;
+  final Map<String, String> _tiersByModel = {};
   final Map<String, _ModelInfo> _models = {};
   bool _modelsLoaded = false;
 
@@ -487,6 +499,7 @@ class CodexKernel
         ],
         'model': model.selected,
         'effort': ?_effortFor(model.selected ?? ''),
+        'serviceTierForTurn': _tierFor(model.selected ?? '') ?? 'default',
         'collaborationMode': {
           'mode': _work == 'plan' ? 'plan' : 'default',
           'settings': {
@@ -569,6 +582,7 @@ class CodexKernel
   Map<String, Object?> _threadParameters() => {
     'cwd': _protocolCwd,
     'model': model.selected,
+    'serviceTier': ?_tierFor(model.selected ?? ''),
     'developerInstructions': ?_developerInstructions,
     if (_protocolWorkspaceFolders case final folders when folders.isNotEmpty)
       'runtimeWorkspaceRoots': folders,
@@ -614,6 +628,10 @@ class CodexKernel
     if (reportedEffort is String && reportedEffort.isNotEmpty) {
       _pickedEffort = reportedEffort;
       _effortsByModel[model.selected ?? ''] = reportedEffort;
+    }
+    if (result['serviceTier'] case final String tier when tier.isNotEmpty) {
+      _pickedTier = tier;
+      _tiersByModel[model.selected ?? ''] = tier;
     }
     final collaboration = result['collaborationMode'];
     if (collaboration is Map && collaboration['mode'] is String) {
@@ -689,8 +707,15 @@ class CodexKernel
         ],
         serviceTiers: [
           for (final tier in raw['serviceTiers'] as List? ?? const [])
-            if (tier is Map && tier['id'] is String) tier['id'] as String,
+            if (tier is Map && tier['id'] is String && tier['id'] != 'default')
+              KernelOption(
+                tier['id'] as String,
+                tier['name'] as String? ?? tier['id'] as String,
+                Icons.bolt_rounded,
+                tier['description'] as String? ?? '',
+              ),
         ],
+        defaultServiceTier: raw['defaultServiceTier'] as String?,
         isDefault: raw['isDefault'] == true,
       );
       _models[id] = info;
@@ -774,6 +799,29 @@ class CodexKernel
     } else {
       _pickedEffort = current;
     }
+  }
+
+  String? _tierFor(String modelId) {
+    final available = _tiersFor(modelId);
+    String? supported(String? value) =>
+        value != null && available.any((option) => option.id == value)
+        ? value
+        : null;
+    return supported(_tiersByModel[modelId]) ??
+        (model.selected == modelId ? supported(_pickedTier) : null) ??
+        supported(_models[modelId]?.defaultServiceTier);
+  }
+
+  List<KernelOption> _tiersFor(String modelId) =>
+      _models[modelId]?.serviceTiers ?? const [];
+
+  void _tierChanged() {
+    final selected = model.selected;
+    if (selected == null) return;
+    final available = _tiersFor(selected);
+    if (available.isEmpty) return;
+    final current = _tierFor(selected);
+    _pickedTier = current;
   }
 
   @override
@@ -1648,6 +1696,12 @@ class CodexKernel
                 }),
           ]),
         );
+      case 'thread/goal/updated':
+        if (params!['goal'] case final Map goal) {
+          emit(GoalReported(nextSeq, _goal(goal)));
+        }
+      case 'thread/goal/cleared':
+        emit(GoalReported(nextSeq, null));
       case 'item/started':
         _itemStarted((params!['item'] as Map).cast<String, Object?>());
       case 'item/completed':
@@ -1724,6 +1778,35 @@ class CodexKernel
     return ours != null && threadId == ours;
   }
 
+  static KernelGoal _goal(Map goal) {
+    final status = '${goal['status'] ?? 'active'}';
+    return KernelGoal(
+      '${goal['objective'] ?? ''}',
+      state: switch (status) {
+        'complete' => GoalState.met,
+        'blocked' => GoalState.failed,
+        _ => GoalState.active,
+      },
+      lastReason: switch (status) {
+        'paused' => 'Paused',
+        'usageLimited' => 'Paused by the usage limit',
+        'budgetLimited' => 'Paused by the token budget',
+        _ => null,
+      },
+      setAt: switch (goal['createdAt']) {
+        final int seconds => DateTime.fromMillisecondsSinceEpoch(
+          seconds * 1000,
+        ),
+        _ => null,
+      },
+      duration: switch (goal['timeUsedSeconds']) {
+        final int seconds => Duration(seconds: seconds),
+        _ => null,
+      },
+      tokens: goal['tokensUsed'] as int?,
+    );
+  }
+
   void _applyThreadSettings(Map<String, Object?> settings) {
     if (settings['model'] case final String value when value.isNotEmpty) {
       model.reported = value;
@@ -1734,6 +1817,10 @@ class CodexKernel
     if (settings['effort'] case final String value when value.isNotEmpty) {
       _pickedEffort = value;
       _effortsByModel[model.selected ?? ''] = value;
+    }
+    if (settings['serviceTier'] case final String value when value.isNotEmpty) {
+      _pickedTier = value;
+      _tiersByModel[model.selected ?? ''] = value;
     }
     if (settings['collaborationMode'] case final Map collaboration) {
       if (collaboration['mode'] case final String value) {
@@ -2476,6 +2563,7 @@ class _ModelInfo {
     required this.defaultEffort,
     required this.inputModalities,
     required this.serviceTiers,
+    required this.defaultServiceTier,
     required this.isDefault,
   });
 
@@ -2485,7 +2573,8 @@ class _ModelInfo {
   final List<KernelOption> efforts;
   final String? defaultEffort;
   final List<String> inputModalities;
-  final List<String> serviceTiers;
+  final List<KernelOption> serviceTiers;
+  final String? defaultServiceTier;
   final bool isDefault;
 }
 
@@ -2508,6 +2597,32 @@ class _CodexModelSetting implements ModelSetting {
     if (kernel.model.selected != model) kernel.model.reported = model;
     kernel._pickedEffort = id;
     kernel._effortsByModel[model] = id;
+    kernel.emitInfoChanged();
+  }
+
+  @override
+  bool get toggle => false;
+}
+
+class _CodexServiceTierSetting implements ModelSetting {
+  const _CodexServiceTierSetting(this.kernel);
+
+  final CodexKernel kernel;
+
+  @override
+  List<KernelOption> optionsFor(String model) => kernel._tiersFor(model);
+
+  @override
+  String? get selected => kernel._tierFor(kernel.model.selected ?? '');
+
+  @override
+  String? selectedFor(String model) => kernel._tierFor(model);
+
+  @override
+  void select(String model, String id) {
+    if (kernel.model.selected != model) kernel.model.reported = model;
+    kernel._pickedTier = id;
+    kernel._tiersByModel[model] = id;
     kernel.emitInfoChanged();
   }
 
