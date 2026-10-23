@@ -186,6 +186,14 @@ jobs:
           name: windows${{ env.SUFFIX }}
           if-no-files-found: error
           path: build/installers/BaoCode-*-setup${{ env.SUFFIX }}.exe
+      # The Dart code's symbols, for a hang report's app.so+0x… frames
+      # (tool/build_windows.dart). Not released: kept with the run.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symbols-windows${{ env.SUFFIX }}
+          if-no-files-found: error
+          retention-days: 90
+          path: build/symbols/app.windows-x64.symbols
 
   publish:
     name: Publish to this repository's release

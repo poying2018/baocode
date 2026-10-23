@@ -625,6 +625,73 @@ void main() {
     expect(find.text('Add Upstream'), findsWidgets);
   });
 
+  testWidgets('an upstream duplicated: its models, settings and key, '
+      'opened in its place (#177)', (tester) async {
+    await providers.save(
+      const ModelProvider(
+        id: 'gw',
+        name: 'Gateway',
+        baseUrl: 'https://gw',
+        headers: {'x-team': 'a'},
+        models: [ProviderModel(id: 'up', contextWindow: 400000)],
+      ),
+    );
+    await providers.setKey('gw', 'sk');
+    await pump(tester);
+    await tester.tap(find.text('Gateway'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Advanced'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Duplicate Upstream').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Duplicate Upstream').last);
+    await tester.pumpAndSettle();
+    final copy = providers.providers.last;
+    expect(copy.id, isNot('gw'));
+    expect(copy.name, 'Gateway Copy');
+    expect(copy.baseUrl, 'https://gw');
+    expect(copy.headers, {'x-team': 'a'});
+    expect(copy.models.single.contextWindow, 400000);
+    expect(await providers.key(copy.id), 'sk');
+    expect(find.text('Gateway Copy'), findsWidgets);
+    expect(providers.provider('gw'), isNotNull);
+  });
+
+  testWidgets('a model duplicated: added as it is, under another id (#177)', (
+    tester,
+  ) async {
+    await providers.save(
+      const ModelProvider(
+        id: 'gw',
+        name: 'Gateway',
+        baseUrl: 'https://gw',
+        models: [
+          ProviderModel(id: 'up', contextWindow: 400000, efforts: ['high']),
+        ],
+      ),
+    );
+    await pump(tester);
+    await tester.tap(find.text('Gateway'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IdeActionButton && widget.tooltip == 'More Actions',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Duplicate…'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add Model'), findsOneWidget);
+    await type(tester, 'Model ID', 'up-fast');
+    await tester.pumpAndSettle();
+    final models = providers.provider('gw')!.models;
+    expect(models.map((m) => m.id), ['up', 'up-fast']);
+    expect(models.last.contextWindow, 400000);
+    expect(models.last.efforts, ['high']);
+    expect(models.last.custom, isTrue);
+  });
+
   testWidgets('a ChatGPT upstream signs in to accounts, shows their quota, '
       'and balances them', (tester) async {
     await providers.save(

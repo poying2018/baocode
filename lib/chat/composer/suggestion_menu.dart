@@ -4,6 +4,7 @@ import '../../l10n/l10n.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/material_file_icons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
+import 'command_details.dart';
 import 'composer_mock_data.dart';
 
 /// A ranked suggestion with the indexes of the query characters it matched.
@@ -210,6 +211,19 @@ class _SuggestionMenuState extends State<SuggestionMenu> {
                       ),
               ),
             ),
+            // The highlighted command's whole description, which its row
+            // cuts short, and its file to open (#220).
+            if (widget.matches.elementAtOrNull(widget.highlighted)?.suggestion
+                case final suggestion?
+                when suggestion.kind == SuggestionKind.command)
+              CommandDetailsView(
+                key: ValueKey(suggestion.label),
+                name: suggestion.label,
+                description: suggestion.detail,
+                maxLines: 6,
+                padding: const EdgeInsets.fromLTRB(10, 7, 10, 8),
+                divided: true,
+              ),
           ],
         ),
       ),

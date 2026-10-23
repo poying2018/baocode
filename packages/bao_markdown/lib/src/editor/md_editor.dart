@@ -1347,6 +1347,8 @@ class MarkdownEditorState extends State<MarkdownEditor>
     final connection = _connection = TextInput.attach(
       this,
       TextInputConfiguration(
+        // Windows takes no client without the view it types into.
+        viewId: View.of(context).viewId,
         inputType: TextInputType.multiline,
         inputAction: TextInputAction.newline,
         enableDeltaModel: true,

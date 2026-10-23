@@ -46,6 +46,7 @@ class MarkdownFormatBar extends StatefulWidget {
     this.onPolish,
     this.forModel,
     this.linkShown,
+    this.contextMenu,
   });
 
   final MarkdownController controller;
@@ -69,6 +70,10 @@ class MarkdownFormatBar extends StatefulWidget {
   /// Whether the caret in [run], a link to [href], shows the bar over it
   /// (not a stash's card, say); every one by default.
   final bool Function(String href, MdInline run)? linkShown;
+
+  /// The host's own of the right click's menu, last: for where the text
+  /// was clicked ([offset]; none past it), its file's, say.
+  final List<IdeMenuEntry> Function(int? offset)? contextMenu;
 
   @override
   State<MarkdownFormatBar> createState() => MarkdownFormatBarState();
@@ -633,6 +638,7 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
                 submenu: _formatEntries(l10n, keys),
               ),
             ],
+          ?widget.contextMenu?.call(at),
         ]),
       );
     } finally {

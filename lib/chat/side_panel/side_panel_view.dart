@@ -400,10 +400,20 @@ class AgentSidePanelView extends StatelessWidget {
     this.repositories = const [],
     this.onAddFolder,
     this.onRemoveFolder,
+    this.titleBarInset = 0,
+    this.leading,
   });
 
   final AgentSidePanel panel;
   final ChatSession session;
+
+  /// Room kept at the left of its tabs: for the traffic lights, where it
+  /// is at the window's top left.
+  final double titleBarInset;
+
+  /// Before its tabs, after [titleBarInset]: the window's sidebar toggle,
+  /// by the traffic lights, where it is at the window's top left.
+  final Widget? leading;
 
   /// The name of the multi-folder workspace the conversation is in; null
   /// for a folder's.
@@ -518,6 +528,8 @@ class AgentSidePanelView extends StatelessWidget {
             session: session,
             tabs: tabs,
             changes: _gits.fold(0, (sum, git) => sum + (git.state?.count ?? 0)),
+            inset: titleBarInset,
+            leading: leading,
           ),
           Expanded(
             child: switch (tabs.shown) {
@@ -1414,10 +1426,22 @@ class _SectionBar extends StatelessWidget {
     required this.session,
     required this.tabs,
     required this.changes,
+    this.inset = 0,
+    this.leading,
   });
   final AgentSidePanel panel;
   final ChatSession session;
   final SidePanelTabs tabs;
+
+  /// Room kept at the left of the tabs (see
+  /// [AgentSidePanelView.titleBarInset]).
+  final double inset;
+
+  /// See [AgentSidePanelView.leading].
+  final Widget? leading;
+
+  /// What [leading] takes, with its gap.
+  static const _leadingWidth = 22.0 + 6;
 
   /// How many files Git has changed.
   final int changes;
@@ -1495,10 +1519,17 @@ class _SectionBar extends StatelessWidget {
                     SidePanelSection.changes: changes,
                     SidePanelSection.terminal: running,
                   }) +
-                  _actionsWidth;
+                  _actionsWidth +
+                  inset +
+                  (leading == null ? 0 : _leadingWidth);
           return Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              SizedBox(width: inset),
+              if (leading case final leading?) ...[
+                Center(child: leading),
+                const SizedBox(width: 6),
+              ],
               for (final section in sections)
                 _SectionTab(
                   section: section,

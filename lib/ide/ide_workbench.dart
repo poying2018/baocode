@@ -945,6 +945,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       onPaste: doc.readOnly ? null : () => _markdownPaste().paste(doc.path),
       onOpenFile: (path, fragment) => unawaited(_openLinked(path, fragment)),
       onOpenExternal: (uri) => unawaited(openExternal(uri.toString())),
+      onReveal: _local && WindowControls.canRevealInFileManager
+          ? (path) => unawaited(WindowControls.revealInFileManager(path))
+          : null,
     );
   }
 

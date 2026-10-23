@@ -1497,7 +1497,7 @@ final List<PerfScenario> interactionScenarios = [
           if (await PerfProcess.parts() case {'gpu': final bytes}) {
             gpu.add((bytes / 1048576).round());
           }
-          PerfContext.log('round $round: ${rounds.last}MB');
+          PerfContext.log('round $round: ${rounds.last}MB ${treeCounts()}');
         }
         r.extra['roundsMb'] = rounds;
         if (gpu.isNotEmpty) r.extra['roundsGpuMb'] = gpu;

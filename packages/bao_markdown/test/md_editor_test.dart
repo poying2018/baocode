@@ -364,6 +364,22 @@ void main() {
     expect(controller.text, 'ab');
   });
 
+  testWidgets('the input it opens names its view, which Windows asks for', (
+    tester,
+  ) async {
+    final controller = MarkdownController(text: 'ab');
+    final state = await _pump(tester, controller);
+    tester.testTextInput.log.clear();
+    state.requestFocus();
+    await tester.pump();
+    final setClient = tester.testTextInput.log.firstWhere(
+      (call) => call.method == 'TextInput.setClient',
+    );
+    final configuration =
+        (setClient.arguments as List<Object?>)[1]! as Map<String, Object?>;
+    expect(configuration['viewId'], tester.view.viewId);
+  });
+
   testWidgets('copied as it shows, pasted back as its markdown', (
     tester,
   ) async {

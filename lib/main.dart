@@ -23,6 +23,7 @@ import 'chat/resume_after_reset.dart';
 import 'chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import 'customize/customization_store.dart';
 import 'diagnostics/app_event_watch.dart';
+import 'diagnostics/frame_watch.dart';
 import 'diagnostics/diagnostics_upload.dart';
 import 'extensions/theme_extensions.dart';
 import 'ide/git/git_repository.dart';
@@ -145,7 +146,10 @@ Future<void> main(List<String> arguments) async {
   unawaited(reapPtyProcesses());
   WidgetsFlutterBinding.ensureInitialized();
   MemoryBudget.apply();
-  if (!kIsWeb) AppEventWatch.start();
+  if (!kIsWeb) {
+    AppEventWatch.start();
+    FrameWatch.start();
+  }
   // The Windows app's own logs go beside it.
   if (errors != null) unawaited(errors.shareWithHost());
   // The editor's language packs are the language servers' (README.md in
@@ -209,12 +213,12 @@ Future<void> main(List<String> arguments) async {
     ClaudePathSetting.current = () =>
         ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
     // Settings → General → Claude Code: the core sessions run on (BaoCode's
-    // own, or the CLI), read as each agent starts. Unset, the CLI where it
-    // is installed: looked for on the app's PATH, then the shell's.
-    ClaudeCore.cliInstalled = localClaudeInstalled;
-    unawaited(lookForLocalClaude());
+    // own, or the CLI), read as each agent starts. Unset, the CLI.
     ClaudeCore.current = () =>
         ClaudeCore.parse(files.settings[ClaudeCore.settingKey]);
+    ClaudeCore.changes = files.settings;
+    ClaudeCore.pick = (core) =>
+        files.settings.update(ClaudeCore.settingKey, core.name);
     // Settings → Models: the upstreams, kept in settings.json.
     ModelProviders.current = ModelProviders.settings(files.settings);
     // Claude Code's own models as it last listed them: in the picker

@@ -1662,6 +1662,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelSource => 'Source';
 
   @override
+  String get commandOpenDetails => 'Open details';
+
+  @override
   String get sidePanelNoOriginal =>
       'The file before the agent\'s changes is not known: showing it as it is.';
 
@@ -3530,7 +3533,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.';
+      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
 
   @override
   String get generalSettingsClaudeCoreBuiltin => 'Built-in';
@@ -3711,6 +3714,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get placeholderOpenAnyway => 'Open Anyway';
+
+  @override
+  String get changeOpenWith => 'Open With';
 
   @override
   String get openInDefaultApp => 'Open in Default App';
@@ -6678,6 +6684,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsEdit => 'Edit…';
 
   @override
+  String get modelsDuplicate => 'Duplicate…';
+
+  @override
   String get modelsRemove => 'Remove';
 
   @override
@@ -6817,6 +6826,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelsHeadersPlaceholder => 'x-session-id: my-session';
+
+  @override
+  String get modelsDuplicateProvider => 'Duplicate Upstream';
+
+  @override
+  String get modelsDuplicateProviderDescription =>
+      'A copy of this upstream, with its models, settings and key.';
+
+  @override
+  String modelsDuplicateName(String name) {
+    return '$name Copy';
+  }
 
   @override
   String get modelsDelete => 'Delete Upstream';
@@ -7726,6 +7747,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String remoteStatusTooltipLost(String host) {
     return 'The connection to $host is lost: click to reconnect now';
+  }
+
+  @override
+  String remoteStatusTooltipResuming(String host) {
+    return 'The connection to $host is lost, and being made again: its terminals and Claude Code keep running there meanwhile. Click to reconnect now';
   }
 
   @override
@@ -9892,6 +9918,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get modelSetUp => 'Set Up a Model';
+
+  @override
+  String get claudeCoreHint =>
+      'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.';
+
+  @override
+  String get claudeCoreHintSwitch => 'Switch to Claude Code';
+
+  @override
+  String get claudeCoreHintLater => 'Not Now';
 
   @override
   String get remoteAddServer => 'Add SSH Server...';

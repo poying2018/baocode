@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:baocode/chat/composer/composer_embeds.dart';
 import 'package:bao_markdown/bao_markdown.dart';
@@ -12,6 +13,7 @@ import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/composer/composer.dart';
 import 'package:baocode/chat/composer/composer_files.dart';
+import 'package:baocode/chat/composer/file_drop.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/side_panel/file_edit.dart';
 import 'package:baocode/chat/side_panel/file_link.dart';
@@ -93,6 +95,20 @@ class _Files implements IdeFileService {
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
 
+/// [_Files] that copies files in too (as a paste or a drop does).
+class _CopyingFiles extends _Files {
+  _CopyingFiles(super.texts);
+
+  final copied = <(String, String)>[];
+
+  @override
+  Future<void> copy(String from, String to) async {
+    if (texts.containsKey(to)) throw IdeFileExistsException(to);
+    copied.add((from, to));
+    texts[to] = '';
+  }
+}
+
 String _lines(int count, String prefix) =>
     [for (var i = 1; i <= count; i++) '$prefix $i'].join('\n');
 
@@ -117,6 +133,8 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
   TerminalService? terminals,
   IdeGitRepository? git,
   IdeCommitMessageModel? commitMessage,
+  double titleBarInset = 0,
+  Widget? leading,
 }) async {
   _bigWindow(tester);
   final session = ChatSession(
@@ -141,6 +159,8 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
           terminals: terminals,
           git: git,
           commitMessage: commitMessage,
+          titleBarInset: titleBarInset,
+          leading: leading,
         ),
         child: ChatScreen(
           session: session,
@@ -1398,6 +1418,30 @@ void main() {
     expect(panel.toJson(), isNot(contains('atLeft')));
   });
 
+  testWidgets('at the window\'s top left, its tabs clear of the traffic '
+      'lights, the sidebar\'s toggle by them (#227)', (tester) async {
+    final (:panel, :session, files: _) = await _pumpChat(tester);
+    panel
+      ..atLeft = true
+      ..open(session, const FileOpenRequest('/p/lib/main.dart'));
+    await tester.pumpAndSettle();
+    final files = tester.getTopLeft(find.text('Files')).dx;
+
+    // The sidebar's toggle by them, the tabs after it.
+    const toggle = ValueKey('sidebar-toggle');
+    final (panel: inset, session: insetSession, files: _) = await _pumpChat(
+      tester,
+      titleBarInset: 78,
+      leading: const SizedBox(key: toggle, width: 22, height: 22),
+    );
+    inset
+      ..atLeft = true
+      ..open(insetSession, const FileOpenRequest('/p/lib/main.dart'));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.byKey(toggle)).dx, 78);
+    expect(tester.getTopLeft(find.text('Files')).dx, files + 78 + 22 + 6);
+  });
+
   testWidgets('hidden at their left, its rail is at the conversations\' top '
       'left, their column clear of it', (tester) async {
     _bigWindow(tester);
@@ -2276,6 +2320,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<MarkdownEditor>(preview).readOnly, isTrue);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('files dropped on a markdown file\'s preview are copied '
+      'beside it and linked to, where they are let go', (tester) async {
+    _bigWindow(tester);
+    const text = '# Notes\n\nSome text here.\n';
+    final files = _CopyingFiles({'/p/docs/notes.md': text});
+    SidePanelFileEdit? edit;
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/docs/notes.md'),
+          files: files,
+          root: '/p',
+          onEdit: (made) => edit = made,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final shot = File(
+      p.join(Directory.systemTemp.createTempSync('drop').path, 'shot.png'),
+    )..writeAsBytesSync([1, 2, 3]);
+    final region = tester.renderObject<RenderFileDropRegion>(
+      find.byType(FileDropRegion).first,
+    );
+    final at = tester.getCenter(find.byType(MarkdownEditor));
+    // Its size read from the disk.
+    await tester.runAsync(() async {
+      region.delegate.fileDrop(at, [ComposerFile(shot.path)]);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pumpAndSettle();
+    expect(files.copied, [(shot.path, '/p/docs/shot.png')]);
+    expect(edit!.controller.document.text, contains('![](shot.png)'));
+  });
 
   testWidgets('a mark put on in the preview (at both ends) is one step '
       'Undo takes back whole', (tester) async {

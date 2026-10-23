@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../base/smooth_scroll.dart';
+import '../diagnostics/frame_watch.dart';
 import '../ide/ide_find_widget.dart';
 import '../ide/ide_hover.dart';
 import '../l10n/l10n.dart';
@@ -83,6 +84,23 @@ class ChatHistoryView extends StatefulWidget {
   static void find(GlobalKey key, {String? query}) =>
       (key.currentState as _ChatHistoryViewState?)?._find.show(query: query);
 }
+
+/// Where a history was left, read up from its end: the row shown first and
+/// how far its top was above the view's, the earlier history then read
+/// ([ChatSession.prependedCount]), and the steps and folds opened or
+/// closed. Its view is built anew when the conversation shows again
+/// (another one shown in its place meanwhile), and goes back there.
+typedef _LeftAt = ({
+  int index,
+  double above,
+  int prepended,
+  Map<int, bool> expanded,
+  Map<(StepFoldKind, int), bool> folds,
+  Set<int> unfolded,
+});
+
+/// Each conversation's, by its feed; none while at the end, followed.
+final Expando<_LeftAt> _leftAt = Expando('chat history left at');
 
 class _ChatHistoryViewState extends State<ChatHistoryView>
     with TickerProviderStateMixin, ChatKeyTarget {
@@ -518,11 +536,60 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _scrollController.addListener(_handleScroll);
     _feed.addListener(_handleSessionChanged);
     UserMessageStyle.current.addListener(_handleStyleChanged);
+    // Its size, for a slow frame's line in the event log.
+    FrameWatch.notes[this] = () =>
+        '${_feed.itemCount} items${_feed.isStreaming ? ', streaming' : ''}';
     _wasLive = _feed.isStreaming;
     _prependedSeen = _session?.prependedCount ?? 0;
     _refold();
     _seeItems();
     _resumeEditing();
+    _goBack();
+  }
+
+  /// The row shown first, as last scrolled to while not at the end (see
+  /// [_firstShown]): kept as where the history was left.
+  ({int index, double above})? _shownFirst;
+  bool _shownFirstScheduled = false;
+
+  /// Notes where [feed] is left: none at its end.
+  void _noteLeft(ChatFeed feed) {
+    final shown = _shownFirst;
+    _leftAt[feed] = _atBottom || shown == null
+        ? null
+        : (
+            index: shown.index,
+            above: shown.above,
+            prepended: _session?.prependedCount ?? 0,
+            expanded: {..._expanded},
+            folds: {..._foldOpen},
+            unfolded: {..._unfoldedTurns},
+          );
+  }
+
+  /// Back where [_feed] was left, if read up from its end (see [_leftAt]):
+  /// its rows moved on by the earlier history read since.
+  void _goBack() {
+    final left = _leftAt[_feed];
+    if (left == null) return;
+    final moved = math.max(0, (_session?.prependedCount ?? 0) - left.prepended);
+    _expanded.addAll({
+      for (final MapEntry(:key, :value) in left.expanded.entries)
+        key + moved: value,
+    });
+    _foldOpen.addAll({
+      for (final MapEntry(key: (kind, start), :value) in left.folds.entries)
+        (kind, start + moved): value,
+    });
+    _unfoldedTurns.addAll({for (final start in left.unfolded) start + moved});
+    final index = left.index + moved;
+    if (index >= _feed.itemCount) return;
+    _scrollController.anchored = false;
+    _shownAtBottom = false;
+    _shownFirst = (index: index, above: left.above);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _keepAt(index, left.above);
+    });
   }
 
   /// Opens the editor again on the message it was left open on, with what
@@ -545,6 +612,8 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   void didUpdateWidget(ChatHistoryView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.feed != widget.feed) {
+      _noteLeft(oldWidget.feed);
+      _shownFirst = null;
       oldWidget.feed.removeListener(_handleSessionChanged);
       widget.feed.addListener(_handleSessionChanged);
       _find.feed = widget.feed;
@@ -558,6 +627,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _refold();
       _seeItems();
       _resumeEditing();
+      _goBack();
     }
   }
 
@@ -617,6 +687,8 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   @override
   void dispose() {
+    FrameWatch.notes.remove(this);
+    _noteLeft(_feed);
     _steady.dispose();
     _feed.removeListener(_handleSessionChanged);
     _find
@@ -789,6 +861,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _endHandoff();
     _stickyKeys.clear();
     _stickyIndices = const {};
+    if (_shownFirst case (:final index, :final above)) {
+      _shownFirst = (index: index + count, above: above);
+    }
     if (_editingIndex case final index?) _editingIndex = index + count;
     if (_closingIndex case final index?) _closingIndex = index + count;
     if (_feed.editing case (:final index, :final draft)) {
@@ -1001,6 +1076,14 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     }
     if (_shownAtBottom != _atBottom) {
       setState(() => _shownAtBottom = _atBottom);
+    }
+    if (!_atBottom && !_shownFirstScheduled) {
+      // Once the rows are laid out where it scrolled to.
+      _shownFirstScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _shownFirstScheduled = false;
+        if (mounted && !_atBottom) _shownFirst = _firstShown() ?? _shownFirst;
+      });
     }
     // Back at the bottom: the turn read meanwhile folds.
     if (_atBottom && _unfoldedTurns.isNotEmpty) {

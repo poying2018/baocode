@@ -2255,6 +2255,41 @@ void main() {
       kernel.dispose();
     });
 
+    test(
+      'renamed in the CLI (/rename): told; the names sent, not (#171)',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, transcript: _, :events) = claude(cli);
+        Future<void> titled(String title) async {
+          cli.push({
+            'type': 'system',
+            'subtype': 'session_title_changed',
+            'title': title,
+          });
+          await pumpEventQueue();
+        }
+
+        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+        await pumpEventQueue();
+        kernel
+          ..rename('First')
+          ..rename('Second');
+        await pumpEventQueue();
+        expect(cli.requests('rename_session'), hasLength(2));
+        await titled('First');
+        await titled('Second');
+        await titled(' Mine ');
+        expect(
+          [
+            for (final event in events)
+              if (event is SessionRenamed) event.title,
+          ],
+          ['Mine'],
+        );
+        kernel.dispose();
+      },
+    );
+
     test('out of view while busy, the process is freed once the CLI says it '
         'is idle; back in view, it is kept', () async {
       final cli = FakeCli();

@@ -3068,6 +3068,12 @@ abstract class AppLocalizations {
   /// **'Source'**
   String get sidePanelSource;
 
+  /// Under a /command's description: opens its file (a skill's SKILL.md, a command's markdown) in the side panel.
+  ///
+  /// In en, this message translates to:
+  /// **'Open details'**
+  String get commandOpenDetails;
+
   /// Over a side panel preview asked for a diff it cannot show.
   ///
   /// In en, this message translates to:
@@ -5969,7 +5975,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalSettingsClaudeCoreDescription.
   ///
   /// In en, this message translates to:
-  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.'**
+  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.'**
   String get generalSettingsClaudeCoreDescription;
 
   /// Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app.
@@ -6283,6 +6289,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open Anyway'**
   String get placeholderOpenAnyway;
+
+  /// No description provided for @changeOpenWith.
+  ///
+  /// In en, this message translates to:
+  /// **'Open With'**
+  String get changeOpenWith;
 
   /// Hands a file the IDE does not show (a PDF, a video…) to the app the system opens it with.
   ///
@@ -10815,6 +10827,12 @@ abstract class AppLocalizations {
   /// **'Edit…'**
   String get modelsEdit;
 
+  /// No description provided for @modelsDuplicate.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate…'**
+  String get modelsDuplicate;
+
   /// No description provided for @modelsRemove.
   ///
   /// In en, this message translates to:
@@ -11054,6 +11072,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'x-session-id: my-session'**
   String get modelsHeadersPlaceholder;
+
+  /// No description provided for @modelsDuplicateProvider.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate Upstream'**
+  String get modelsDuplicateProvider;
+
+  /// No description provided for @modelsDuplicateProviderDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'A copy of this upstream, with its models, settings and key.'**
+  String get modelsDuplicateProviderDescription;
+
+  /// No description provided for @modelsDuplicateName.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} Copy'**
+  String modelsDuplicateName(String name);
 
   /// No description provided for @modelsDelete.
   ///
@@ -12512,6 +12548,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The connection to {host} is lost: click to reconnect now'**
   String remoteStatusTooltipLost(String host);
+
+  /// No description provided for @remoteStatusTooltipResuming.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection to {host} is lost, and being made again: its terminals and Claude Code keep running there meanwhile. Click to reconnect now'**
+  String remoteStatusTooltipResuming(String host);
 
   /// No description provided for @remoteReconnect.
   ///
@@ -16160,6 +16202,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set Up a Model'**
   String get modelSetUp;
+
+  /// No description provided for @claudeCoreHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.'**
+  String get claudeCoreHint;
+
+  /// No description provided for @claudeCoreHintSwitch.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to Claude Code'**
+  String get claudeCoreHintSwitch;
+
+  /// No description provided for @claudeCoreHintLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Not Now'**
+  String get claudeCoreHintLater;
 
   /// No description provided for @remoteAddServer.
   ///

@@ -201,6 +201,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
           codex: widget.codex ?? codexService,
           workspace: widget.workspace,
           onBack: () => setState(() => _open = null),
+          onOpen: (id) => setState(() => _open = id),
         );
       }
       return _list(context);
@@ -578,6 +579,7 @@ class ProviderSettingsPage extends StatefulWidget {
     required this.provider,
     required this.listModels,
     required this.onBack,
+    this.onOpen,
     this.testModel = testModelThroughClaudeCode,
     this.codex,
     this.workspace,
@@ -587,6 +589,9 @@ class ProviderSettingsPage extends StatefulWidget {
   final ModelProvider provider;
   final ModelLister listModels;
   final VoidCallback onBack;
+
+  /// Opens upstream [id]'s page in its place: a copy of it, made.
+  final ValueChanged<String>? onOpen;
   final ModelTester testModel;
 
   /// The ChatGPT (Codex) providers' accounts; the app's when null.
@@ -811,11 +816,16 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
   ModelProvider get _providerNow =>
       _providers.provider(_provider.id) ?? _provider;
 
-  Future<void> _editModel([ProviderModel? model]) async {
+  /// Edits [model], or adds one: filled in as [template], when a copy.
+  Future<void> _editModel([
+    ProviderModel? model,
+    ProviderModel? template,
+  ]) async {
     final edited = await showModelEditDialog(
       context,
       provider: _provider,
       model: model,
+      template: template,
     );
     if (edited != null) await _save(_providerNow.withModel(edited));
   }
@@ -835,6 +845,13 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         roles: roles,
       ),
     );
+  }
+
+  /// A copy of it, its key with it, opened in its place.
+  Future<void> _duplicate() async {
+    final name = context.l10n.modelsDuplicateName(_providerNow.name);
+    final id = await _providers.duplicate(_provider.id, name);
+    if (id != null) widget.onOpen?.call(id);
   }
 
   Future<void> _delete() async {
@@ -1266,6 +1283,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
               ),
               onTest: () => unawaited(_testModels([model])),
               onEdit: () => unawaited(_editModel(model)),
+              onDuplicate: () => unawaited(_editModel(null, model)),
               onRemove: () => unawaited(_removeModel(model)),
             ),
       ],
@@ -1508,6 +1526,16 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         ],
       ),
       SettingsRow(
+        label: l10n.modelsDuplicateProvider,
+        description: l10n.modelsDuplicateProviderDescription,
+        trailing: IdeButton(
+          label: l10n.modelsDuplicateProvider,
+          icon: Codicons.copy,
+          secondary: true,
+          onPressed: () => unawaited(_duplicate()),
+        ),
+      ),
+      SettingsRow(
         label: l10n.modelsDelete,
         description: l10n.modelsDeleteDescription,
         trailing: IdeButton(
@@ -1563,6 +1591,7 @@ class _ModelRow extends StatelessWidget {
     required this.onEnabled,
     required this.onTest,
     required this.onEdit,
+    required this.onDuplicate,
     required this.onRemove,
   });
 
@@ -1571,6 +1600,7 @@ class _ModelRow extends StatelessWidget {
   final ValueChanged<bool> onEnabled;
   final VoidCallback onTest;
   final VoidCallback onEdit;
+  final VoidCallback onDuplicate;
   final VoidCallback onRemove;
 
   @override
@@ -1673,6 +1703,10 @@ class _ModelRow extends StatelessWidget {
                     alignRight: true,
                     entries: [
                       IdeMenuAction(l10n.modelsEdit, onSelected: onEdit),
+                      IdeMenuAction(
+                        l10n.modelsDuplicate,
+                        onSelected: onDuplicate,
+                      ),
                       IdeMenuAction(l10n.modelsRemove, onSelected: onRemove),
                       IdeMenuAction(
                         l10n.modelsTestModel,

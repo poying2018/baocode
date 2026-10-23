@@ -584,12 +584,14 @@ class _LinkButton extends StatelessWidget {
 
 // --- A model ----------------------------------------------------------------
 
-/// Edits [model] of [provider], or adds one when null; completes with it,
-/// or null when dismissed.
+/// Edits [model] of [provider], or adds one when null, filled in as
+/// [template] (a copy of it) if given; completes with it, or null when
+/// dismissed.
 Future<ProviderModel?> showModelEditDialog(
   BuildContext context, {
   required ModelProvider provider,
   ProviderModel? model,
+  ProviderModel? template,
 }) => showGeneralDialog<ProviderModel>(
   context: context,
   barrierDismissible: true,
@@ -597,36 +599,47 @@ Future<ProviderModel?> showModelEditDialog(
   barrierColor: const Color(0x80000000),
   transitionDuration: Duration.zero,
   pageBuilder: (context, _, _) =>
-      ModelEditDialog(provider: provider, model: model),
+      ModelEditDialog(provider: provider, model: model, template: template),
 );
 
 class ModelEditDialog extends StatefulWidget {
-  const ModelEditDialog({super.key, required this.provider, this.model});
+  const ModelEditDialog({
+    super.key,
+    required this.provider,
+    this.model,
+    this.template,
+  });
 
   final ModelProvider provider;
   final ProviderModel? model;
+
+  /// What a model added is filled in as: one it is a copy of.
+  final ProviderModel? template;
 
   @override
   State<ModelEditDialog> createState() => _ModelEditDialogState();
 }
 
 class _ModelEditDialogState extends State<ModelEditDialog> {
+  /// What the fields start as.
+  late final ProviderModel? _start = widget.model ?? widget.template;
+
   late final TextEditingController _id = TextEditingController(
-    text: widget.model?.id,
+    text: _start?.id,
   );
   late final TextEditingController _label = TextEditingController(
-    text: widget.model?.label,
+    text: _start?.label,
   );
   late final TextEditingController _context = TextEditingController(
-    text: switch (widget.model?.contextWindow) {
+    text: switch (_start?.contextWindow) {
       final tokens? => formatTokens(tokens),
       null => '',
     },
   );
-  late bool _images = widget.model?.images ?? true;
+  late bool _images = _start?.images ?? true;
 
   /// What it is for, as picked; null to go by its name.
-  late ModelKind? _kind = widget.model?.kindSet;
+  late ModelKind? _kind = _start?.kindSet;
 
   /// What it is for: as picked, else as its name tells.
   ModelKind get _shownKind => _kind ?? guessModelKind(_id.text.trim());
@@ -638,8 +651,8 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
   }
 
   /// The model's own efforts and contexts; null for the defaults.
-  late List<String>? _efforts = widget.model?.efforts;
-  late List<int>? _contexts = widget.model?.contexts;
+  late List<String>? _efforts = _start?.efforts;
+  late List<int>? _contexts = _start?.contexts;
   bool _tried = false;
 
   @override

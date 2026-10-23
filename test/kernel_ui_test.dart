@@ -139,6 +139,26 @@ Map<String, Object?> result(
 };
 
 void main() {
+  testWidgets('Enter in the empty composer while the agent works sends the '
+      'queued message now; with none queued, does nothing (#160)', (
+    tester,
+  ) async {
+    final (:session, :cli) = await pumpScripted(tester, cli: FakeCli());
+    await tester.tap(find.byType(MarkdownEditor).last);
+    await tester.pump();
+    expect(session.isStreaming, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(cli.requests('interrupt'), isEmpty);
+
+    session.send(const ComposerMessage(text: 'and lint'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(session.queued, hasLength(1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(cli.requests('interrupt'), hasLength(1));
+  });
+
   testWidgets('messages sent while the agent works wait over the composer, '
       'to be taken back to edit, sent now or removed', (tester) async {
     final (:session, :cli) = await pumpScripted(

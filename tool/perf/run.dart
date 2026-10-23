@@ -396,6 +396,8 @@ String? _renderer(String log) {
       .firstMatch(text)) {
     final m? => '${m[1]} (${m[2]})',
     null when text.contains('Impeller') => 'Impeller',
+    // The Windows engine says which only of Impeller.
+    null when Platform.isWindows => 'Skia',
     null => null,
   };
 }

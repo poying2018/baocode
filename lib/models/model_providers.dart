@@ -238,6 +238,21 @@ class ModelProviders extends ChangeNotifier {
     await _writeProviders(list);
   }
 
+  /// Adds a copy of provider [id] named [name], its key with it; not its
+  /// accounts, signed in to anew. Its id; null without [id].
+  Future<String?> duplicate(String id, String name) async {
+    final source = provider(id);
+    if (source == null) return null;
+    final copy = newId(name);
+    final json = {...source.toJson(), 'id': copy, 'name': name}
+      ..remove('accounts');
+    await save(ModelProvider.fromJson(json)!);
+    if (await key(id) case final key? when key.isNotEmpty) {
+      await setKey(copy, key);
+    }
+    return copy;
+  }
+
   /// Removes provider [id], and its key (its accounts' tokens).
   Future<void> remove(String id) async {
     final accounts = provider(id)?.accounts ?? const [];

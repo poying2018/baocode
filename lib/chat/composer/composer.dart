@@ -1445,6 +1445,14 @@ class ChatComposerState extends State<ChatComposer>
       !(widget.session.canQueue && _canSend);
 
   void _submit() {
+    // Empty while a turn runs, messages queued behind it: the first of them
+    // taken up now, as its Send Now.
+    if (widget.onSubmit == null && widget.session.isStreaming && !_canSend) {
+      if (widget.session.queued.firstOrNull case (final id, _)) {
+        widget.session.sendQueuedNow(id);
+      }
+      return;
+    }
     if (_showsStop) return;
     final message = _buildMessage();
     if (message.text.isEmpty && message.images.isEmpty) return;

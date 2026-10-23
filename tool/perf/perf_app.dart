@@ -28,9 +28,13 @@ import 'dart:math';
 import 'dart:ui' show ViewFocusState;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:bao_editor/monaco/flutter/language_assets.dart';
+import 'package:baocode/diagnostics/app_event_watch.dart';
+import 'package:baocode/diagnostics/frame_watch.dart';
+import 'package:baocode/platform/event_log.dart';
 import 'package:baocode/ide/lsp/packs/language_packs.dart';
 import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
@@ -108,6 +112,11 @@ Future<void> _run() async {
   if (scenarios.isEmpty) throw ArgumentError('no scenario is named $wanted');
 
   _setUpApp(temp.path);
+  // The semantics tree on throughout, as an accessibility client reading
+  // the window would have it.
+  if (Platform.environment['BAOCODE_PERF_SEMANTICS'] != null) {
+    SemanticsBinding.instance.ensureSemantics();
+  }
   final project = _makeProject('${temp.path}/project');
   final size = _size();
   PerfProbe.instance.install();
@@ -306,6 +315,20 @@ void _setUpApp(String temp) {
   }
   MemoryBudget.apply();
   DataDirectory.current = DataDirectory('$temp/data');
+  // Its watchers too, their cost measured with the rest: the event log
+  // in BAOCODE_PERF_EVENTS, to read, and slow from BAOCODE_PERF_SLOW_MS.
+  EventLog.current = EventLog(
+    Platform.environment['BAOCODE_PERF_EVENTS'] ??
+        DataDirectory.current.logsDir,
+  );
+  AppEventWatch.start();
+  FrameWatch.start(
+    slow: Duration(
+      milliseconds:
+          int.tryParse(Platform.environment['BAOCODE_PERF_SLOW_MS'] ?? '') ??
+          250,
+    ),
+  );
   KernelRegistry.use([perfClaudeCode]);
   ClaudeCore.current = () => ClaudeCore.cli;
   MonacoLanguageAssets.defaultPacks = () => LanguagePackRegistry.instance;

@@ -1622,6 +1622,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidePanelSource => '源码';
 
   @override
+  String get commandOpenDetails => '查看详情';
+
+  @override
   String get sidePanelNoOriginal => '不知道智能体修改前的文件内容，显示当前内容。';
 
   @override
@@ -3392,7 +3395,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。本机装了 Claude Code 时默认用 CLI，否则用内置。改动对新开的会话生效。';
+      'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。';
 
   @override
   String get generalSettingsClaudeCoreBuiltin => '内置';
@@ -3567,6 +3570,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get placeholderOpenAnyway => '仍然打开';
+
+  @override
+  String get changeOpenWith => '打开方式';
 
   @override
   String get openInDefaultApp => '使用默认应用打开';
@@ -6263,6 +6269,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsEdit => '编辑…';
 
   @override
+  String get modelsDuplicate => '复制…';
+
+  @override
   String get modelsRemove => '移除';
 
   @override
@@ -6397,6 +6406,17 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsHeadersPlaceholder => 'x-session-id: my-session';
+
+  @override
+  String get modelsDuplicateProvider => '复制上游';
+
+  @override
+  String get modelsDuplicateProviderDescription => '复制一份此上游，连同模型、设置和 Key。';
+
+  @override
+  String modelsDuplicateName(String name) {
+    return '$name 副本';
+  }
 
   @override
   String get modelsDelete => '删除上游';
@@ -7271,6 +7291,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String remoteStatusTooltipLost(String host) {
     return '与 $host 的连接已断开：点击立即重连';
+  }
+
+  @override
+  String remoteStatusTooltipResuming(String host) {
+    return '与 $host 的连接已断开，正在重连；远端的终端和 Claude Code 仍在运行。点击立即重连';
   }
 
   @override
@@ -9358,6 +9383,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelSetUp => '设置模型';
+
+  @override
+  String get claudeCoreHint =>
+      '当前用的是 BaoCode 内置内核。推荐换成 Claude Code 内核，体验更完整；没安装的话会自动帮你下载。';
+
+  @override
+  String get claudeCoreHintSwitch => '切换到 Claude Code';
+
+  @override
+  String get claudeCoreHintLater => '暂不';
 
   @override
   String get remoteAddServer => '新增 SSH 服务器…';

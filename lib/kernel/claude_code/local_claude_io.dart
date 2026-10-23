@@ -1,18 +1,14 @@
-import 'dart:io';
-
 import 'package:bao_remote/claude.dart'
     show ClaudeDownloadFailed, ClaudeNotInstalled;
 import 'package:bao_remote/local.dart'
     show
         AppPaths,
         ClaudeCli,
-        ClaudeEnvironment,
         ClaudeRelease,
         ClaudeRuntime,
-        CliLocator,
         ManagedClaude,
         machinePlatform;
-import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import '../../network/network_proxy_io.dart';
@@ -50,43 +46,16 @@ abstract final class LocalClaude {
     );
   }
 
-  static bool? _installed;
-
-  /// Whether Claude Code is on this machine (the user's, the path set in
-  /// Settings, or the one BaoCode downloaded), as last looked: on the
-  /// app's own PATH at first, until [lookForInstall] asks the login shell.
-  static bool installed() =>
-      _installed ??= _installedIn(Map.of(Platform.environment));
-
-  /// Looks again, on the PATH of the user's shell.
-  static Future<void> lookForInstall() async {
-    try {
-      _installed = _installedIn(await ClaudeEnvironment.of());
-    } on Object catch (error) {
-      debugPrint('Claude Code not looked for: $error');
-    }
-  }
-
-  static bool _installedIn(Map<String, String> environment) {
-    if (_named(environment) case (:final path, undo: _)) {
-      return File(path).existsSync();
-    }
-    return runtime.managed.installed != null ||
-        CliLocator.installed(environment).isNotEmpty;
-  }
-
   /// The one that runs now, nothing downloaded for it.
   static Future<LocalClaudeStatus?> status() async {
     try {
       final cli = await runtime.locate();
-      _installed = true;
       return LocalClaudeFound(
         cli.executable,
         await runtime.versionOf(cli),
         downloaded: runtime.isInstalled(cli),
       );
     } on ClaudeNotInstalled {
-      _installed = false;
       return const LocalClaudeMissing();
     } on ClaudeUnavailable catch (error) {
       return LocalClaudeFailed(error.detail ?? error.message);
@@ -96,10 +65,7 @@ abstract final class LocalClaude {
   /// Another runtime, e.g. one over a fake release under test; null for
   /// the data folder's.
   @visibleForTesting
-  static set runtime(ClaudeRuntime? runtime) {
-    _runtime = runtime;
-    _installed = null;
-  }
+  static set runtime(ClaudeRuntime? runtime) => _runtime = runtime;
 
   /// The CLI to run; one is downloaded where there is none, unless not
   /// to [install].
@@ -115,6 +81,9 @@ abstract final class LocalClaude {
       LocalClaudeInstall.instance.progress = null;
     }
   }
+
+  /// Downloads one where there is none, ahead of the session that runs it.
+  static Future<void> install() => locate();
 
   /// [executable] refused an option BaoCode starts it with: whether
   /// another, newer, may be run instead (see [ClaudeRuntime.rejectTooOld]).

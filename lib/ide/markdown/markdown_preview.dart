@@ -25,7 +25,9 @@ import '../../stash/stash_ai.dart' show polishStashText;
 import '../../stash/stash_editor.dart' show StashEditor;
 import '../../theme/app_theme.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
+import '../../l10n/l10n.dart';
 import '../ide_hover.dart';
+import '../ide_menu.dart';
 import 'markdown_format_bar.dart';
 import 'markdown_links.dart';
 import 'markdown_model_source.dart';
@@ -56,6 +58,7 @@ class IdeMarkdownPreview extends StatefulWidget {
     this.onPaste,
     this.onOpenFile,
     this.onOpenExternal,
+    this.onReveal,
   });
 
   final String path;
@@ -90,6 +93,11 @@ class IdeMarkdownPreview extends StatefulWidget {
 
   /// Opens a web or mail link.
   final void Function(Uri uri)? onOpenExternal;
+
+  /// Shows a file (the document, one it links to) in the file manager
+  /// (Finder, Explorer), from the right click's menu; none for a remote
+  /// project's.
+  final void Function(String path)? onReveal;
 
   @override
   State<IdeMarkdownPreview> createState() => IdeMarkdownPreviewState();
@@ -328,6 +336,39 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
     return false;
   }
 
+  /// The right click's menu's own: the file there shown in the file
+  /// manager (a link's or a picture's, else the document's).
+  List<IdeMenuEntry> _contextMenu(int? offset) {
+    final reveal = widget.onReveal;
+    if (reveal == null) return const [];
+    final target = offset == null ? null : _fileAt(offset);
+    return [
+      IdeMenuAction(
+        context.l10n.revealInFileManager,
+        onSelected: () => reveal(target ?? widget.path),
+      ),
+    ];
+  }
+
+  /// The project's file a link or a picture at [offset] goes to.
+  String? _fileAt(int offset) {
+    final controller = _controller;
+    final line = controller.lineAt(offset);
+    final column = offset - controller.lineStart(line);
+    for (final run in inlinesAt(controller.inlinesOf(line), column).reversed) {
+      final href = switch (run.kind) {
+        MdInlineKind.link || MdInlineKind.image => run.href,
+        _ => null,
+      };
+      if (href == null) continue;
+      return switch (resolveMarkdownLink(href, widget.path, _context)) {
+        MarkdownFileLink(:final path) => path,
+        _ => null,
+      };
+    }
+    return null;
+  }
+
   /// Opens where [href], a link's address, goes.
   void _openHref(String href) {
     if (resolveMarkdownLink(href, widget.path, _context) case final target?) {
@@ -489,6 +530,7 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
               readOnly: widget.readOnly,
               onPolish: (text) => polishStashText(text, note: _controller.text),
               onOpenLink: _openHref,
+              contextMenu: _contextMenu,
               child: editor,
             ),
           );

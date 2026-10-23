@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 
 import '../channel/channel_setup.dart';
+import '../ide/ide_menu.dart';
 import '../kernel/kernel_types.dart';
+import '../kernel/claude_code/claude_path_setting.dart' show installLocalClaude;
 import '../keybindings/chat_keybindings.dart';
 import '../l10n/l10n.dart';
 import '../models/model_welcome.dart';
@@ -14,7 +18,9 @@ import '../remote/remote_status.dart' show ClaudeInstallBanner, SshHostBanner;
 import '../stash/stash_actions.dart';
 import '../stash/stash_store.dart';
 import '../theme/app_theme.dart';
+import '../workspace/editor_launcher.dart';
 import '../workspace/title_bar_double_click.dart';
+import '../workspace/window_controls.dart';
 import 'agent_view.dart';
 import 'chat_column.dart';
 import 'chat_feed.dart';
@@ -25,11 +31,13 @@ import 'chat_session.dart';
 import 'open_editor.dart';
 import 'resume_after_reset.dart';
 import 'chat_width.dart';
+import 'composer/command_details.dart';
 import 'composer/composer.dart';
 import 'composer/composer_embeds.dart';
 import 'composer/composer_mock_data.dart';
 import 'composer/file_mentions.dart';
 import 'panels/activity_strip.dart';
+import 'panels/claude_core_hint.dart';
 import 'panels/health_banner.dart';
 import 'panels/interaction_panel.dart';
 import 'panels/limit_reset_panel.dart';
@@ -76,6 +84,7 @@ class ChatScreen extends StatefulWidget {
     this.below,
     this.sessions,
     this.fileMentions,
+    this.commandFile,
     this.openEditor,
   });
 
@@ -156,6 +165,11 @@ class ChatScreen extends StatefulWidget {
 
   /// Where `@` looks files up, besides the kernel (see [FileMentions]).
   final FileMentions? fileMentions;
+
+  /// The file of a `/command` (no `/`): a skill's SKILL.md, a command's
+  /// markdown; null for one built in. Its menu and its tags open it, as
+  /// [fileLinks] opens a file (see [CommandDetails]).
+  final Future<String?> Function(String command)? commandFile;
 
   /// The file open in the editor beside it, where there is one: the agent
   /// is told of it with the messages sent (see [ChatSession.send]).
@@ -358,6 +372,33 @@ class _ChatScreenState extends State<ChatScreen>
     _composerKey.currentState?.focus();
   }
 
+  /// Whether the conversation is a Claude Code one on this machine, whose
+  /// core may be BaoCode's own ([ClaudeCoreHint]).
+  bool get _localClaudeCode =>
+      !kIsWeb &&
+      _session.kernel.id == 'claude-code' &&
+      switch (_session.kernelContext.cwd) {
+        final cwd? => RemoteLocation.hostOf(cwd) == null,
+        null => true,
+      };
+
+  /// The CLI picked from [ClaudeCoreHint]: the session moves to it now
+  /// when at rest, downloaded first where there is none (as
+  /// [ClaudeInstallBanner] shows); else it is downloaded meanwhile, for
+  /// the session to move to it as it starts again.
+  void _movedToCli() {
+    if (!_session.isStreaming && _session.pendingInteraction == null) {
+      _session.restart();
+      return;
+    }
+    unawaited(
+      installLocalClaude().catchError((Object error) {
+        // Said again by the session that starts on it.
+        debugPrint('Claude Code not downloaded: $error');
+      }),
+    );
+  }
+
   /// The sequence of the plan writing last shown.
   int? _planShown;
 
@@ -542,6 +583,7 @@ class _ChatScreenState extends State<ChatScreen>
       onOpenFile: open == null
           ? null
           : (change) => open(change, _session.originalOf(change)),
+      fileActions: _fileActions,
       onStopTask: _session.stopTask,
       canOpenTask: (task) => task.kind == KernelTaskKind.command
           ? widget.onOpenTerminalTask != null
@@ -585,6 +627,38 @@ class _ChatScreenState extends State<ChatScreen>
   List<KernelCommand>? _commandSource;
   List<Suggestion> _commands = const [];
 
+  /// [ChatScreen.commandFile]'s answers, asked once each while the
+  /// kernel's commands are the same.
+  final Map<String, Future<String?>> _commandFiles = {};
+  List<KernelCommand>? _commandFilesOf;
+
+  String? _describeCommand(String name) {
+    for (final command in _session.commands) {
+      if (command.name != name) continue;
+      if (command.argumentHint.isEmpty) return command.description;
+      return '${command.argumentHint}  ${command.description}';
+    }
+    return null;
+  }
+
+  Future<String?> _commandFile(String name) {
+    final find = widget.commandFile;
+    if (find == null || widget.fileLinks == null) return Future.value();
+    if (!identical(_session.commands, _commandFilesOf)) {
+      _commandFilesOf = _session.commands;
+      _commandFiles.clear();
+    }
+    return _commandFiles[name] ??= () async {
+      try {
+        return await find(name);
+      } on Object {
+        return null;
+      }
+    }();
+  }
+
+  void _openCommandFile(String path) => _openFile(FileOpenRequest(path));
+
   /// Which files the conversation's inline code names exist, asked once
   /// each (see [FileOpenScope]).
   FileExistence? _existence;
@@ -614,6 +688,71 @@ class _ChatScreenState extends State<ChatScreen>
 
   void _openCode(String path, int start, int end) =>
       _openFile(FileOpenRequest(path, range: FileLineRange(start, end)));
+
+  /// What else a changed file's menu offers: the file itself opened, not
+  /// its changes; on this machine, in the browser, its default app or an
+  /// editor, shown in the file manager; its path copied.
+  List<List<IdeMenuEntry>> _fileActions(FileChange change) {
+    final l10n = context.l10n;
+    final path = change.path;
+    final local = switch (_session.kernelContext.cwd) {
+      final cwd? => !RemoteLocation.isRemote(cwd),
+      null => true,
+    };
+    final deleted = change.kind == FileChangeKind.deleted;
+    final extension = _session.paths.extension(path).toLowerCase();
+    final editors = [
+      for (final editor in Editor.availableEditors)
+        if (!editor.builtIn &&
+            editor != Editor.folder &&
+            editor != Editor.terminal)
+          editor,
+    ];
+    return [
+      [
+        if (widget.fileLinks != null && !deleted)
+          IdeMenuAction(
+            l10n.scmOpenFile,
+            onSelected: () => _openFile(FileOpenRequest(path)),
+          ),
+        if (local && !deleted && !kIsWeb) ...[
+          if (extension == '.html' || extension == '.htm')
+            IdeMenuAction(
+              l10n.fileLinkOpenInBrowser,
+              onSelected: () => unawaited(openExternal(path)),
+            ),
+          if (WindowControls.canOpenInDefaultApp)
+            IdeMenuAction(
+              l10n.openInDefaultApp,
+              onSelected: () => unawaited(openExternal(path)),
+            ),
+          IdeMenuAction(
+            l10n.changeOpenWith,
+            submenu: [
+              for (final editor in editors)
+                IdeMenuAction(
+                  editor.localizedPlatformLabel(l10n),
+                  onSelected: () => unawaited(openInEditor(editor, path)),
+                ),
+            ],
+          ),
+        ],
+      ],
+      [
+        IdeMenuAction(
+          l10n.tabCopyPath,
+          onSelected: () =>
+              unawaited(Clipboard.setData(ClipboardData(text: path))),
+        ),
+        if (local && !deleted && WindowControls.canRevealInFileManager)
+          IdeMenuAction(
+            l10n.revealInFileManager,
+            onSelected: () =>
+                unawaited(WindowControls.revealInFileManager(path)),
+          ),
+      ],
+    ];
+  }
 
   /// The files `@` offers: [ChatScreen.fileMentions]' with the kernel's, or
   /// the kernel's alone; null when neither looks.
@@ -682,6 +821,13 @@ class _ChatScreenState extends State<ChatScreen>
             child: scoped,
           );
         }
+        scoped = CommandDetails(
+          // Methods: the same each build.
+          describe: _describeCommand,
+          fileOf: _commandFile,
+          open: _openCommandFile,
+          child: scoped,
+        );
         return PlanStartScope(session: _session, child: scoped);
       },
       child: _buildBody(),
@@ -803,6 +949,8 @@ class _ChatScreenState extends State<ChatScreen>
                   // Claude Code being downloaded for this machine, or put on
                   // a remote project's host.
                   ClaudeInstallBanner(location: _session.kernelContext.cwd),
+                  // BaoCode's own core picked: the CLI suggested.
+                  if (_localClaudeCode) ClaudeCoreHint(onSwitched: _movedToCli),
                   _PanelSlot(
                     child: switch (_session.pendingInteraction) {
                       final request? => InteractionPanel(

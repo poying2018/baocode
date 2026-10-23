@@ -41,6 +41,7 @@ const _path = '/project/docs/guide.md';
 class FakeHost {
   final reads = <String>[];
   final opened = <(String, String?)>[];
+  final revealed = <String>[];
   var edits = 0;
 
   Future<Uint8List> read(String path) async {
@@ -71,6 +72,7 @@ Future<FakeHost> pumpPreview(
           readBytes: host.read,
           onEdited: () => host.edits++,
           onOpenFile: (path, fragment) => host.opened.add((path, fragment)),
+          onReveal: host.revealed.add,
         ),
       ),
     ),
@@ -560,6 +562,26 @@ void main() {
     controller.selection = const TextSelection(baseOffset: 0, extentOffset: 4);
     await tester.pumpAndSettle();
     expect(find.byIcon(Codicons.bold), findsOneWidget);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('right-clicked, a file shown in the file manager: a link\'s '
+      'where it goes, else the document', (tester) async {
+    final model = EditorDocumentModel('See [the guide](../README.md) here.');
+    final host = await pumpPreview(tester, model);
+    Future<void> reveal(String text) async {
+      await tester.tapAt(
+        _at(tester, text, within: 'See the guide here.', index: 1),
+        buttons: kSecondaryButton,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reveal in Finder'));
+      await tester.pumpAndSettle();
+    }
+
+    await reveal('guide');
+    await reveal('here');
+    expect(host.revealed, ['/project/README.md', _path]);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
   testWidgets('scrolled, the bar goes with the selection at once; out of '

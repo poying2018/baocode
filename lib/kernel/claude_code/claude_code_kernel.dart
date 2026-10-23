@@ -283,6 +283,10 @@ class ClaudeCodeKernel
   final Map<String, _Permission> _permissions = {};
   String? _pendingTitle;
 
+  /// The names sent, until the CLI tells them back: not renames of its
+  /// own (see [SessionRenamed]).
+  final List<String> _sentTitles = [];
+
   // What the CLI offers and has in effect. The catalog of the last session
   // to start stands in until this one's arrives; before any has this run,
   // Claude Code's own models as [modelCache] kept them.
@@ -622,6 +626,7 @@ class ClaudeCodeKernel
       _tell('file_suggestions', {'query': ''});
       if (_pendingTitle case final title?) {
         _pendingTitle = null;
+        _sentTitles.add(title);
         // Waited on: a process freed as soon as it is ready (out of view
         // by then) would end before it took the title.
         await control
@@ -1256,6 +1261,7 @@ class ClaudeCodeKernel
       _pendingTitle = title;
       return;
     }
+    _sentTitles.add(title);
     _tell('rename_session', {'title': title, 'source': 'host'});
   }
 
@@ -1711,6 +1717,20 @@ class ClaudeCodeKernel
         // A turn's checks of the goal are all kept by now.
         if (!_cliWorking) _syncGoal();
         if (!_cliWorking && _releaseWanted) release();
+      // Its name as it stands, at start and on each change. The host's own
+      // come back too, in the order sent: not told. Nor the old name, told
+      // at start while the host's waits to be sent.
+      case 'system' when message['subtype'] == 'session_title_changed':
+        if (message['title'] case final String named
+            when named.trim().isNotEmpty) {
+          final title = named.trim();
+          final sent = _sentTitles.indexOf(title);
+          if (sent >= 0) {
+            _sentTitles.removeRange(0, sent + 1);
+          } else if (_pendingTitle == null) {
+            emit(SessionRenamed(nextSeq, title));
+          }
+        }
       case 'system' when message['subtype'] == 'commands_changed':
         _catalog = _catalog.copyWith(
           commands: _commandsFrom(message['commands']),

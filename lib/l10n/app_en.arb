@@ -743,6 +743,10 @@
   "@sidePanelSource": {
     "description": "Shows a markdown file's text."
   },
+  "commandOpenDetails": "Open details",
+  "@commandOpenDetails": {
+    "description": "Under a /command's description: opens its file (a skill's SKILL.md, a command's markdown) in the side panel."
+  },
   "sidePanelNoOriginal": "The file before the agent's changes is not known: showing it as it is.",
   "@sidePanelNoOriginal": {
     "description": "Over a side panel preview asked for a diff it cannot show."
@@ -2380,7 +2384,7 @@
   "@generalSettingsClaudeCore": {
     "description": "Settings → General → Claude Code row: what runs Claude Code sessions, BaoCode's built-in core (written in Dart) or the Claude Code CLI."
   },
-  "generalSettingsClaudeCoreDescription": "Claude Code CLI: Anthropic's own program, with this machine's sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default when Claude Code is installed here, the built-in core otherwise. Changes apply to new sessions.",
+  "generalSettingsClaudeCoreDescription": "Claude Code CLI: Anthropic's own program, with this machine's sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.",
   "generalSettingsClaudeCoreBuiltin": "Built-in",
   "@generalSettingsClaudeCoreBuiltin": {
     "description": "Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app."
@@ -2534,6 +2538,7 @@
   "placeholderNotFound": "The editor could not be opened because the file was not found.",
   "placeholderUnexpected": "The editor could not be opened due to an unexpected error.",
   "placeholderOpenAnyway": "Open Anyway",
+  "changeOpenWith": "Open With",
   "openInDefaultApp": "Open in Default App",
   "@openInDefaultApp": {
     "description": "Hands a file the IDE does not show (a PDF, a video…) to the app the system opens it with."
@@ -4755,6 +4760,7 @@
   "modelsShowChecked": "Show Checked Only",
   "modelsNoneChecked": "No model is checked: show all to check some.",
   "modelsEdit": "Edit…",
+  "modelsDuplicate": "Duplicate…",
   "modelsRemove": "Remove",
   "modelsMore": "More Actions",
   "modelsTestModel": "Test",
@@ -4819,6 +4825,16 @@
   "modelsHeaders": "Custom Headers",
   "modelsHeadersDescription": "One Name: Value a line, sent on every request to this upstream. Values may use the CLAUDE_SESSION_ID variable (this conversation's session) and ANTHROPIC_MODEL (the model asked for), each between double braces; over the direct Anthropic protocol those two go as written, so only fixed values work there. Auth headers (Authorization, x-api-key) are ignored here: the key is set above.",
   "modelsHeadersPlaceholder": "x-session-id: my-session",
+  "modelsDuplicateProvider": "Duplicate Upstream",
+  "modelsDuplicateProviderDescription": "A copy of this upstream, with its models, settings and key.",
+  "modelsDuplicateName": "{name} Copy",
+  "@modelsDuplicateName": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "modelsDelete": "Delete Upstream",
   "modelsDeleteDescription": "Removes it, and its key from the keychain.",
   "modelsDeleteConfirm": "Delete “{name}”?",
@@ -5540,6 +5556,14 @@
   },
   "remoteStatusTooltipLost": "The connection to {host} is lost: click to reconnect now",
   "@remoteStatusTooltipLost": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "remoteStatusTooltipResuming": "The connection to {host} is lost, and being made again: its terminals and Claude Code keep running there meanwhile. Click to reconnect now",
+  "@remoteStatusTooltipResuming": {
     "placeholders": {
       "host": {
         "type": "String"
@@ -6984,6 +7008,9 @@
   "modelWelcomeStart": "Start Chatting",
   "healthNoModel": "Pick a model to start: add an upstream and its models are ready to use.",
   "modelSetUp": "Set Up a Model",
+  "claudeCoreHint": "This chat runs on BaoCode's built-in core. We recommend the Claude Code core for the fullest experience; it's downloaded for you if needed.",
+  "claudeCoreHintSwitch": "Switch to Claude Code",
+  "claudeCoreHintLater": "Not Now",
   "remoteAddServer": "Add SSH Server...",
   "remoteEditServer": "Edit",
   "settingsSectionSsh": "SSH Servers",
