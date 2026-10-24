@@ -155,6 +155,10 @@ class AgentLoop {
   int _callsSinceTodos = 0;
   List<Map<String, Object?>> _todosSeen = const [];
 
+  /// The Stop hook's feedback, as a message of its own: the one before it
+  /// is replaced by it.
+  String? _stopFeedback;
+
   /// Runs the agent until it ends its turn.
   Future<LoopResult> runTurn(CancelToken cancel) async {
     var stopHookActive = false;
@@ -230,7 +234,10 @@ class AgentLoop {
           }
           stopFeedbacks++;
           stopHookActive = true;
-          _appendUser('Stop hook feedback:\n${stop.feedback}', meta: true);
+          // The feedback replaces the one before it: the hook's answer
+          // can be long (a goal check carries the whole transcript), and
+          // the conversation would grow by that much each time.
+          _replaceStopFeedback('Stop hook feedback:\n${stop.feedback}');
           continue;
         }
         return _result('end_turn');
@@ -774,6 +781,34 @@ class AgentLoop {
       });
     }
     return entry;
+  }
+
+  /// The Stop hook's feedback, as a message of its own: the one before it
+  /// is replaced, as the hook's answer can be long and the conversation
+  /// would grow by that much each time.
+  void _replaceStopFeedback(String text) {
+    final previous = _stopFeedback;
+    final entry = previous == null
+        ? _appendUser(text, meta: true)
+        : store.replace(previous, {
+            'type': 'user',
+            'message': {
+              'role': 'user',
+              'content': [
+                {'type': 'text', 'text': text},
+              ],
+            },
+            'isMeta': true,
+            if (!isMain) ...{'agentId': run.agentId, 'isSidechain': true},
+          });
+    _stopFeedback = entry['uuid'] as String?;
+    session.emit({
+      'type': 'user',
+      'message': entry['message'],
+      'parent_tool_use_id': _parent,
+      'uuid': entry['uuid'],
+      'isMeta': true,
+    });
   }
 
   /// A message sent while the turn ran, taken up now.

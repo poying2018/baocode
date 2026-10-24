@@ -127,6 +127,15 @@ class SessionStore {
       entry = parent == null ? null : _byUuid[parent];
     }
     chain.addAll(branch.reversed.where(_kept));
+    // A message that was replaced is left out: the one that replaced it
+    // is in the conversation in its place.
+    final replaced = {
+      for (final entry in chain)
+        if (entry['replaces'] case final String uuid) uuid,
+    };
+    if (replaced.isNotEmpty) {
+      chain.removeWhere((entry) => replaced.contains(entry['uuid']));
+    }
     // The branch as it is now: what a message appended next belongs to.
     _leaf = chain.isEmpty ? null : chain.last['uuid'] as String;
   }
@@ -221,6 +230,40 @@ class SessionStore {
   }
 
   static String _now() => DateTime.now().toUtc().toIso8601String();
+
+  /// Replaces the message [uuid] of the branch with [entry]: the one
+  /// before it is left out of the conversation, and the new one is put in
+  /// its place. The file keeps both: the new one names the one it
+  /// replaces.
+  Map<String, Object?> replace(String uuid, Map<String, Object?> entry) {
+    final at = chain.indexWhere((e) => e['uuid'] == uuid);
+    final parent = at < 0
+        ? leaf
+        : (chain[at]['parentUuid'] ?? chain[at]['logicalParentUuid']) as String?;
+    final full = <String, Object?>{
+      'parentUuid': parent,
+      'isSidechain': false,
+      'userType': 'external',
+      'cwd': cwd,
+      'sessionId': sessionId,
+      'version': agentVersion,
+      'gitBranch': ?gitBranch,
+      ...entry,
+      'uuid': entry['uuid'] ?? newUuid(),
+      'timestamp': entry['timestamp'] ?? _now(),
+      'replaces': uuid,
+    };
+    _byUuid[full['uuid'] as String] = full;
+    if (at < 0) {
+      chain.add(full);
+    } else {
+      chain[at] = full;
+    }
+    _write(full);
+    _leaf = full['uuid'] as String;
+    _markBranch(_leaf);
+    return full;
+  }
 
   /// Goes back to before [uuid] (a message of the branch): it and what
   /// followed are left on a branch of their own. Returns whether it was on

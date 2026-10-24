@@ -84,4 +84,53 @@ void main() {
       expect(() => jsonDecode(line), returnsNormally);
     }
   });
+
+  test('a message replaced is left out of the conversation', () {
+    final first = store();
+    final prompt = first.append({'type': 'user', 'message': {'role': 'user'}});
+    final old = first.append({
+      'type': 'user',
+      'message': {
+        'role': 'user',
+        'content': [
+          {'type': 'text', 'text': 'the old answer'},
+        ],
+      },
+      'isMeta': true,
+    });
+    first.replace(old['uuid'] as String, {
+      'type': 'user',
+      'message': {
+        'role': 'user',
+        'content': [
+          {'type': 'text', 'text': 'the new answer'},
+        ],
+      },
+      'isMeta': true,
+    });
+
+    // In the conversation now: the new one, in the old one's place.
+    final messages = first.apiMessages();
+    final texts = [
+      for (final message in messages)
+        for (final block in (message['content'] as List))
+          if (block['type'] == 'text') block['text'],
+    ];
+    expect(texts, contains('the new answer'));
+    expect(texts, isNot(contains('the old answer')));
+
+    // And after the file is read back.
+    final resumed = SessionStore.resume(
+      sessionId: 's',
+      cwd: root.path,
+      file: file,
+    );
+    final reread = [
+      for (final message in resumed.apiMessages())
+        for (final block in (message['content'] as List))
+          if (block['type'] == 'text') block['text'],
+    ];
+    expect(reread, contains('the new answer'));
+    expect(reread, isNot(contains('the old answer')));
+  });
 }
