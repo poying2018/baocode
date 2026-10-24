@@ -5,6 +5,7 @@ import 'package:baocode/models/featured_upstreams.dart';
 import 'package:baocode/models/model_provider.dart';
 import 'package:baocode/models/upstream_import.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 String _link(Map<String, String> query) => Uri(
   scheme: 'baocode',
@@ -161,7 +162,7 @@ void main() {
       expect(list.map((u) => u.id), ['example']);
       final example = list.single;
       expect(example.url.queryParameters['aff'], 'abc');
-      expect(example.logo, '/cache/example.svg');
+      expect(example.logo, p.join('/cache', 'example.svg'));
       expect(example.describe('zh'), '便宜');
       expect(example.describe('fr'), 'Cheap');
       expect(FeaturedUpstream.at('api.EXAMPLE.com', list)?.id, 'example');

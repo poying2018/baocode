@@ -60,7 +60,7 @@ void main() {
     await server.close(force: true);
     final kept = await fetchFeaturedUpstreams(feed: feed, cacheDir: cache.path);
     expect(kept.map((u) => u.id), ['a', 'b']);
-    expect(kept.first.logo, p.join(cache.path, 'a.png').replaceAll(r'\', '/'));
+    expect(kept.first.logo, p.join(cache.path, 'a.png'));
   });
 
   test('none before the first answer', () async {

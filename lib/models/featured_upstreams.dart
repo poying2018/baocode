@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
 
 import '../platform/app_links.dart';
 import 'featured_upstreams_stub.dart'
@@ -41,7 +42,11 @@ class FeaturedUpstream {
       name: name,
       url: url,
       logo: switch (json['logo']) {
-        final String logo when isLogoName(logo) => '$logoDirectory/$logo',
+        // The logo's file, where the list's logos are: a path of this
+        // machine's.
+        final String logo when isLogoName(logo) => logoDirectory.isEmpty
+            ? logo
+            : p.join(logoDirectory, logo),
         _ => null,
       },
       description: {
