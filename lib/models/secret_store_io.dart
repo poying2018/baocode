@@ -249,12 +249,18 @@ class FileSecretStore implements SecretStore {
     final folder = Directory(directory);
     if (!folder.existsSync()) {
       await folder.create(recursive: true);
-      await Process.run('chmod', ['700', directory]);
+      // Windows has no `chmod`: the folder is in the user's own, which
+      // only the user reads.
+      if (!Platform.isWindows) {
+        await Process.run('chmod', ['700', directory]);
+      }
     }
     final file = _file(id);
     // Made empty and closed to others before the secret goes in.
     await file.writeAsString('');
-    await Process.run('chmod', ['600', file.path]);
+    if (!Platform.isWindows) {
+      await Process.run('chmod', ['600', file.path]);
+    }
     await file.writeAsString(value, flush: true);
   }
 
