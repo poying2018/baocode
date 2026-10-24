@@ -1312,17 +1312,32 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     final below = position.pixels < position.maxScrollExtent - 0.5;
     final above = position.pixels > position.minScrollExtent + 0.5;
     if (below != _contentBelow || above != _contentAbove) {
-      setState(() {
+      _setState(() {
         _contentBelow = below;
         _contentAbove = above;
       });
     }
   }
 
+  /// [setState], but not while the framework is building or laying out: the
+  /// scroll's own notifications come during layout, and a build cannot be
+  /// asked for then. It happens on the next frame instead.
+  void _setState(VoidCallback change) {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(change);
+      });
+      return;
+    }
+    setState(change);
+  }
+
   bool _handleMetricsChanged(ScrollMetricsNotification notification) {
     // Let go of as it laid out (see [_replyStart]).
     if (_shownAtBottom != _atBottom) {
-      setState(() => _shownAtBottom = _atBottom);
+      _setState(() => _shownAtBottom = _atBottom);
     }
     _syncEdgeFades();
     _scheduleStickyUpdate();
@@ -1361,7 +1376,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
 
   void _setAnchored(bool value) {
     _scrollController.anchored = value;
-    if (_shownAtBottom != value) setState(() => _shownAtBottom = value);
+    if (_shownAtBottom != value) _setState(() => _shownAtBottom = value);
   }
 
   void _handleSessionChanged() {
