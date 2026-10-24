@@ -98,6 +98,8 @@ Future<({AgentSidePanel panel, ChatSession session})> _pump(
               files: _files,
               watchDirectory: (_) => const Stream.empty(),
               searchEngine: _engine,
+              // The project is a POSIX path, as a host's is.
+              paths: p.posix,
             ),
             child: const SizedBox.expand(),
           ),
