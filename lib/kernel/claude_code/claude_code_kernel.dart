@@ -1867,6 +1867,9 @@ class ClaudeCodeKernel
         if (_turn != id &&
             _sent.containsKey(id) &&
             !_stoppedTurns.contains(id)) {
+          // The CLI took up this turn while another was running: that one
+          // is over, and is ended, or it would go on under this one.
+          if (_turn != null) _endTurn(interrupted: true);
           _beginTurn(id);
         }
         _release();

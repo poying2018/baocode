@@ -1566,6 +1566,30 @@ void main() {
       kernel.dispose();
     });
 
+    test('a turn the CLI takes up while another runs does not orphan it', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, :events) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+      await pumpEventQueue();
+      // A second message, queued: the CLI takes it up while the first is
+      // still running.
+      kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+      await pumpEventQueue();
+      cli.push({
+        'type': 'command_lifecycle',
+        'command_uuid': 'u2',
+        'state': 'started',
+      });
+      await pumpEventQueue();
+      // The first turn is ended, not left running under the second.
+      final ended = events.whereType<TurnEnded>().map((event) => event.turnId);
+      expect(ended, contains('u1'));
+      // And the second is the one running.
+      final started = events.whereType<TurnStarted>().map((event) => event.turnId);
+      expect(started.where((id) => id == 'u2'), hasLength(1));
+      kernel.dispose();
+    });
+
     test(
       'denying says why; a plan is put to the user, who starts it',
       () async {
