@@ -476,8 +476,8 @@ class WorkspaceBridge {
   String? _phonePath(Project project, String full) {
     final paths = _filesOf(project).paths;
     for (final (name, root) in _rootsOf(project)) {
-      if (!paths.isWithin(root, full)) continue;
-      final relative = paths.relative(full, from: root).replaceAll(r'\', '/');
+      if (!_within(paths, root, full)) continue;
+      final relative = _relative(paths, root, full);
       return name.isEmpty ? relative : '$name/$relative';
     }
     return null;
@@ -495,9 +495,34 @@ class WorkspaceBridge {
           : null;
       if (rest == null || rest.isEmpty) continue;
       final full = paths.normalize(paths.join(root, rest));
-      if (paths.isWithin(root, full)) return full;
+      if (_within(paths, root, full)) return full;
     }
     return null;
+  }
+
+  /// Whether [full] is in [root]: a root that starts at the home folder
+  /// (`~/code/app`) is a root of its own, and the paths' own comparison
+  /// would read it as relative to the current folder.
+  static bool _within(p.Context paths, String root, String full) {
+    if (root.startsWith('~/') || root.startsWith(r'~\')) {
+      return full == root ||
+          full.startsWith('$root/') ||
+          full.startsWith('$root\\');
+    }
+    return paths.isWithin(root, full);
+  }
+
+  /// [full] as the phone names it in [root]: a root that starts at the
+  /// home folder (`~/code/app`) is a root of its own, and the paths' own
+  /// comparison would read the rest as relative to the current folder.
+  static String _relative(p.Context paths, String root, String full) {
+    if (root.startsWith('~/') || root.startsWith(r'~\')) {
+      return full
+          .substring(root.length)
+          .replaceAll(r'\', '/')
+          .replaceFirst('/', '');
+    }
+    return paths.relative(full, from: root).replaceAll(r'\', '/');
   }
 
   Future<Map<String, Object?>> _listFiles(Project project) async {

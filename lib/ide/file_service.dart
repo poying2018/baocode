@@ -239,7 +239,9 @@ Future<IdeFileListing> listProjectFiles(
       continue;
     }
     for (final entry in entries) {
-      final path = p.join(directory, entry.name);
+      // The service's own spelling: a remote host's paths are POSIX, and
+      // a local one's are this machine's.
+      final path = p.posix.join(directory, entry.name);
       if (entry.isDirectory) {
         if (!ideIndexExcludedDirectories.contains(entry.name)) {
           pending.add(path);
