@@ -109,6 +109,9 @@ List<IdeScmTreeNode> ideScmGroupTree(IdeGitState state, IdeGitGroup group) =>
     (_trees[state] ??= {})[group] ??= ideScmTree(
       state.root,
       state.group(group),
+      // The paths are the project's own: a remote host's are POSIX, a
+      // local machine's are its own.
+      paths: state.pathContext,
     );
 
 /// Sorts [nodes] by [_compareNodes], each one's name split once rather than

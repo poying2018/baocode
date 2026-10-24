@@ -122,6 +122,8 @@ Future<({AgentSidePanel panel, ChatSession session})> _pump(
               repositories: repositories,
               onAddFolder: onAddFolder,
               onRemoveFolder: onRemoveFolder,
+              // The projects are POSIX paths, as a host's are.
+              paths: p.posix,
             ),
             child: const SizedBox.expand(),
           ),
@@ -225,8 +227,8 @@ void main() {
 
   testWidgets('the changes page lists each folder\'s repository with its '
       'changes, counts them all, and shows the one clicked', (tester) async {
-    final site = FakeGit(_site)..status = '## main\x00 M index.html\x00';
-    final api = FakeGit(_api)..status = '## dev\x00 M main.go\x00?? new.go\x00';
+    final site = FakeGit(_site, paths: p.posix)..status = '## main\x00 M index.html\x00';
+    final api = FakeGit(_api, paths: p.posix)..status = '## dev\x00 M main.go\x00?? new.go\x00';
     final repositories = [(_site, site.repository()), (_api, api.repository())];
     for (final (_, git) in repositories) {
       addTearDown(git.dispose);
@@ -263,8 +265,8 @@ void main() {
 
   testWidgets('a repository on the changes page has its menu on a right '
       'click', (tester) async {
-    final site = FakeGit(_site)..status = '## main\x00 M index.html\x00';
-    final api = FakeGit(_api)..status = '## dev\x00 M main.go\x00';
+    final site = FakeGit(_site, paths: p.posix)..status = '## main\x00 M index.html\x00';
+    final api = FakeGit(_api, paths: p.posix)..status = '## dev\x00 M main.go\x00';
     final repositories = [(_site, site.repository()), (_api, api.repository())];
     for (final (_, git) in repositories) {
       addTearDown(git.dispose);
@@ -317,8 +319,8 @@ void main() {
 
   testWidgets('a folder\'s project lists the repositories found in its '
       'subfolders, its own left out once known not to be one', (tester) async {
-    final own = FakeGit(_workspace)..isRepository = false;
-    final nested = FakeGit(_api)..status = '## dev\x00?? new.go\x00';
+    final own = FakeGit(_workspace, paths: p.posix)..isRepository = false;
+    final nested = FakeGit(_api, paths: p.posix)..status = '## dev\x00?? new.go\x00';
     final (ownGit, nestedGit) = (own.repository(), nested.repository());
     addTearDown(ownGit.dispose);
     addTearDown(nestedGit.dispose);

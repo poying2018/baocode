@@ -51,10 +51,13 @@ class FileDragData {
 bool Function(String path) pastedAsPicture = (_) => false;
 
 /// [path] as the composer shows and sends it: from the project's [root]
-/// when it is in the project, else as it is.
-String displayPath(String path, String? root) {
-  if (root == null || !p.isWithin(root, path)) return path;
-  return p.relative(path, from: root);
+/// when it is in the project, else as it is. The paths are spelled the
+/// project's way ([paths]): a remote host's are POSIX, this machine's are
+/// its own.
+String displayPath(String path, String? root, [p.Context? paths]) {
+  final context = paths ?? p.context;
+  if (root == null || !context.isWithin(root, path)) return path;
+  return context.relative(path, from: root);
 }
 
 /// A file or folder as a message's text refers to it: `@lib/main.dart`, a

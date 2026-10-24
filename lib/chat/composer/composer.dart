@@ -268,7 +268,9 @@ class ChatComposerState extends State<ChatComposer>
       if (CopiedCode.matching(text) case final code?) {
         _insertTags([
           ComposerCodeEmbed.of(
-            code.withPath(displayPath(code.path, widget.session.root)),
+            code.withPath(
+              displayPath(code.path, widget.session.root, widget.session.paths),
+            ),
           ),
         ]);
         return true;
@@ -477,7 +479,7 @@ class ChatComposerState extends State<ChatComposer>
           ComposerImageEmbed.of(image.number!)
         else if (paths[index] case final path?)
           ComposerTokenEmbed.file(
-            displayPath(path.path, root),
+            displayPath(path.path, root, widget.session.paths),
             directory: file.directory,
           ),
     ], at: at);

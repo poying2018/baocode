@@ -139,7 +139,8 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
   _bigWindow(tester);
   final session = ChatSession(
     historyCount: 8,
-    kernelContext: const KernelContext(cwd: '/p'),
+    // The project is on a host: its paths are POSIX, as a host's are.
+    kernelContext: const KernelContext(cwd: 'ssh://dev/p'),
     openReview: (root, {session}) async => null,
   );
   addTearDown(session.dispose);
@@ -156,6 +157,8 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
           session: session,
           files: files,
           watchDirectory: (_) => const Stream.empty(),
+          // The project is a POSIX path, as a host's is.
+          paths: p.posix,
           terminals: terminals,
           git: git,
           commitMessage: commitMessage,
@@ -739,7 +742,7 @@ void main() {
 
   testWidgets('the rail counts what the pages\' bar counts: the changes, the '
       'commands running', (tester) async {
-    final fake = FakeGit('/p')
+    final fake = FakeGit('/p', paths: p.posix)
       ..status =
           '## main...origin/main\x00'
           ' M lib/main.dart\x00'
@@ -925,7 +928,7 @@ void main() {
       'view does, and opens their diffs against HEAD and the index', (
     tester,
   ) async {
-    final fake = FakeGit('/p')
+    final fake = FakeGit('/p', paths: p.posix)
       ..status =
           '## main\x00'
           'M  lib/staged.dart\x00'
@@ -1115,7 +1118,7 @@ void main() {
       'copies its path and folds the tree; a file\'s opens it too', (
     tester,
   ) async {
-    final fake = FakeGit('/p')
+    final fake = FakeGit('/p', paths: p.posix)
       ..status =
           '## main\x00'
           ' M lib/a/main.dart\x00'
@@ -1194,7 +1197,7 @@ void main() {
       'commit\'s files show once it is tapped, and a file opens', (
     tester,
   ) async {
-    final fake = FakeGit('/p')
+    final fake = FakeGit('/p', paths: p.posix)
       ..status = '## main\x00 M lib/main.dart\x00'
       ..log =
           '${gitLogRecord('c2', ['c1'], 'Second', refs: 'HEAD -> refs/heads/main')}\n'
@@ -1244,7 +1247,7 @@ void main() {
   testWidgets('the changes page is the Source Control view: a message '
       'wanted, written by the sparkle from the staged changes, then the '
       'staged changes committed', (tester) async {
-    final fake = FakeGit('/p')
+    final fake = FakeGit('/p', paths: p.posix)
       ..status =
           '## main\x00'
           'M  lib/staged.dart\x00'
@@ -2333,6 +2336,8 @@ void main() {
           request: const FileOpenRequest('/p/docs/notes.md'),
           files: files,
           root: '/p',
+          // The project is on a host: its paths are POSIX.
+          paths: p.posix,
           onEdit: (made) => edit = made,
         ),
       ),

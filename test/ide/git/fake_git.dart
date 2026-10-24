@@ -1,13 +1,18 @@
 import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/git_service.dart';
+import 'package:path/path.dart' as p;
 
 /// Git as widget tests need it: no processes, canned output, and the
 /// commands it was asked to run.
 class FakeGit {
-  FakeGit(this.root);
+  FakeGit(this.root, {p.Context? paths}) : paths = paths ?? p.context;
 
   final String root;
+
+  /// How the paths are spelled: a host's are POSIX, a local machine's
+  /// are its own.
+  final p.Context paths;
 
   /// Whether [root] is in a repository (`rev-parse --show-toplevel`).
   bool isRepository = true;
@@ -132,7 +137,7 @@ class FakeGit {
   }
 
   IdeGitRepository repository() => IdeGitRepository(
-    IdeGitService(root, runner: run, watcher: (_) => const Stream.empty()),
+    IdeGitService(root, runner: run, watcher: (_) => const Stream.empty(), pathContext: paths),
     refreshDelay: Duration.zero,
   );
 }
