@@ -87,7 +87,7 @@ void main() {
 
   test('a message replaced is left out of the conversation', () {
     final first = store();
-    final prompt = first.append({'type': 'user', 'message': {'role': 'user'}});
+    first.append({'type': 'user', 'message': {'role': 'user'}});
     final old = first.append({
       'type': 'user',
       'message': {

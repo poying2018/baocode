@@ -12,8 +12,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/lsp/lsp_process.dart';
 import 'package:path/path.dart' as p;
 
-import '../../../fixtures/lsp/fake_lsp.dart';
-
 void main() {
   late Directory dir;
 
