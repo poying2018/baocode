@@ -312,6 +312,9 @@ class RemoteClient {
       tunnel._ended();
     }
     _forwards.clear();
+    // What came early for something that never came: it is not to be
+    // kept for a connection that is gone.
+    _early.clear();
   }
 
   Future<T> _call<T>(
