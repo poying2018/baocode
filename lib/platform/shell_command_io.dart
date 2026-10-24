@@ -256,7 +256,14 @@ exec open -b $bundleId "\$request"
   /// The AppleScript that runs [command] as root: the command is a string
   /// in it, its backslashes and quotes escaped.
   static String administratorScript(String command) {
-    final escaped = command.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
+    // AppleScript's own escapes, not only the shell's: a path may hold a
+    // newline or a tab, and those would end the string it is in.
+    final escaped = command
+        .replaceAll(r'\', r'\\')
+        .replaceAll('"', r'\"')
+        .replaceAll('\n', r'\n')
+        .replaceAll('\r', r'\r')
+        .replaceAll('\t', r'\t');
     return 'do shell script "$escaped" with administrator privileges';
   }
 }
