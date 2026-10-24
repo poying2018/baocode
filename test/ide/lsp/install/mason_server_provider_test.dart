@@ -877,6 +877,26 @@ void main() {
       }
     });
 
+    test('a command with a folder in it is looked for on the PATH', () async {
+      final mason = provider();
+      // A folder of the PATH's own, with a command in it: as `cmd.exe`
+      // finds it, and not only where the app stands.
+      final folder = Directory(p.join(toolsDir, 'bin'))..createSync();
+      final path = p.join(folder.path, 'nested-ls');
+      await File(path).writeAsBytes(
+        Platform.isWindows ? _windowsProgram() : '#!/bin/sh\n'.codeUnits,
+      );
+      if (Platform.isWindows) {
+        await File('$path.cmd').writeAsString('@echo off\r\n');
+      }
+      final expected = Platform.isWindows ? '$path.cmd' : path;
+      expect(
+        (await mason.locate(server('bin/nested-ls')) as LspServerFound)
+            .executable,
+        expected,
+      );
+    });
+
     test(
       'suggests a package by command; none when it cannot install',
       () async {

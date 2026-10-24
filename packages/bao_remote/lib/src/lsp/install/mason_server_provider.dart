@@ -120,7 +120,10 @@ class MasonServerProvider implements LspServerProvider {
   @override
   Future<LspServerLocation> locate(LspServerDefinition server) async {
     final command = server.command;
-    if (p.isAbsolute(command) || command.contains('/')) {
+    // A path of its own: it is where it says it is, not on the PATH.
+    // A name with a separator in it is one of the PATH's folders, and is
+    // looked for there (as `cmd.exe` does).
+    if (p.isAbsolute(command)) {
       return await _isExecutable(command)
           ? LspServerFound(await _asSpelled(command))
           : const LspServerMissing();
