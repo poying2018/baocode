@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 import 'package:bao_remote/claude.dart'
     show ClaudeHistoryPage, ClaudeNotInstalled;
 import 'package:baocode/chat/chat_models.dart';
@@ -39,6 +40,12 @@ List<Map<String, Object?>> recorded(String name) => [
     if (line.trim().isNotEmpty)
       (jsonDecode(line) as Map).cast<String, Object?>(),
 ];
+
+/// The smallest bytes [CliLocator] asks of a program Windows can run.
+Uint8List _windowsProgram() => Uint8List(0x48)
+  ..setAll(0, 'MZ'.codeUnits)
+  ..[0x3C] = 0x40
+  ..setAll(0x40, [0x50, 0x45, 0, 0]);
 
 /// The payload of the recorded response to [subtype], e.g. `initialize`.
 Map<String, Object?> recordedResponse(String name, bool Function(Map) match) {
@@ -4687,12 +4694,23 @@ void main() {
       addTearDown(() => root.delete(recursive: true));
       final variant = File('${root.path}/claude-variant')
         ..writeAsStringSync('#!/bin/sh\n');
-      final installed = File('${root.path}/bin/claude')
-        ..createSync(recursive: true)
-        ..writeAsStringSync('#!/bin/sh\n');
+      final installed =
+          File(
+              p.join(
+                root.path,
+                'bin',
+                Platform.isWindows ? 'claude.exe' : 'claude',
+              ),
+            )
+            ..createSync(recursive: true)
+            ..writeAsBytesSync(
+              Platform.isWindows
+                  ? _windowsProgram()
+                  : Uint8List.fromList('#!/bin/sh\n'.codeUnits),
+            );
       CliLocator.use({
         'BAOCODE_CLAUDE_PATH': variant.path,
-        'PATH': '${root.path}/bin',
+        'PATH': p.join(root.path, 'bin'),
       });
 
       final cli = await CliLocator.locate();
@@ -4796,16 +4814,27 @@ void main() {
     test('Volta\'s shim is passed over for its package\'s build', () async {
       final root = await Directory.systemTemp.createTemp('baocode-locator-');
       addTearDown(() => root.delete(recursive: true));
-      final volta = '${root.path}/Volta';
-      final bin = '$volta/bin';
+      final volta = p.join(root.path, 'Volta');
+      final bin = p.join(volta, 'bin');
       final environment = {'LOCALAPPDATA': root.path};
 
       // No build in Volta's image: the shim is left to the PATH's turn.
       expect(CliLocator.behindVolta(bin, environment), isNull);
 
       final exe = File(
-        '$volta/tools/image/packages/@anthropic-ai/claude-code/'
-        'node_modules/@anthropic-ai/claude-code/bin/claude.exe',
+        p.join(
+          volta,
+          'tools',
+          'image',
+          'packages',
+          '@anthropic-ai',
+          'claude-code',
+          'node_modules',
+          '@anthropic-ai',
+          'claude-code',
+          'bin',
+          'claude.exe',
+        ),
       )..createSync(recursive: true);
       expect(CliLocator.behindVolta(bin, environment), exe.path);
       expect(CliLocator.behindVolta(bin, {'VOLTA_HOME': volta}), exe.path);
@@ -5081,12 +5110,12 @@ exec /usr/bin/env "\$@"
         'keeps only the files still there', () async {
       final root = await Directory.systemTemp.createTemp('baocode-storage-');
       addTearDown(() => root.delete(recursive: true));
-      final config = '${root.path}/config';
-      final cwd = '${root.path}/project';
-      final cacheFile = '${root.path}/cache/claude-sessions.json';
+      final config = p.join(root.path, 'config');
+      final cwd = p.join(root.path, 'project');
+      final cacheFile = p.join(root.path, 'cache', 'claude-sessions.json');
       Directory(cwd).createSync(recursive: true);
       File write(String id, String prompt) =>
-          File('$config/projects/-p/$id.jsonl')
+          File(p.join(config, 'projects', '-p', '$id.jsonl'))
             ..createSync(recursive: true)
             ..writeAsStringSync(
               '${jsonEncode({
@@ -5110,7 +5139,7 @@ exec /usr/bin/env "\$@"
 
       // Same size, same time: taken as unchanged.
       write('one', 'bbbb').setLastModifiedSync(modified);
-      File('$config/projects/-p/two.jsonl').deleteSync();
+      File(p.join(config, 'projects', '-p', 'two.jsonl')).deleteSync();
       expect(await titles(), {'one': 'aaaa'});
       final kept = jsonDecode(File(cacheFile).readAsStringSync()) as Map;
       expect((kept['files'] as Map).keys, [first.path]);
@@ -5200,7 +5229,7 @@ exec /usr/bin/env "\$@"
     test('a fork copies the conversation up to a message, apart', () async {
       final root = await Directory.systemTemp.createTemp('baocode-storage-');
       addTearDown(() => root.delete(recursive: true));
-      final config = '${root.path}/config';
+      final config = p.join(root.path, 'config');
       const id = 'aaaaaaaa-1111-4111-8111-111111111111';
       const into = 'bbbbbbbb-2222-4222-8222-222222222222';
       Map<String, Object?> line(String type, String uuid, String? parent) => {
@@ -5210,7 +5239,7 @@ exec /usr/bin/env "\$@"
         'sessionId': id,
         'message': {'role': type, 'content': uuid},
       };
-      final original = File('$config/projects/-p/$id.jsonl')
+      final original = File(p.join(config, 'projects', '-p', '$id.jsonl'))
         ..createSync(recursive: true)
         ..writeAsStringSync(
           [
@@ -5231,7 +5260,7 @@ exec /usr/bin/env "\$@"
       ];
 
       final path = await storage.fork(id, into, title: 'Mine (fork)');
-      expect(path, '$config/projects/-p/$into.jsonl');
+      expect(path, p.join(config, 'projects', '-p', '$into.jsonl'));
       final all = read(path);
       expect(all.map((e) => e['uuid'] ?? e['customTitle']), [
         'u1',

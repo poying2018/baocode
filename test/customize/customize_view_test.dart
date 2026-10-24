@@ -80,6 +80,18 @@ class _MemoryStore implements CustomizationStore {
       : null;
 
   @override
+  Future<String?> commandFile(String name, {String? project}) async {
+    for (final path in files.keys) {
+      final normal = path.replaceAll('\\', '/');
+      if (normal.endsWith('/skills/$name/SKILL.md') ||
+          normal.endsWith('/commands/$name.md')) {
+        return path;
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<void> write(String path, String text) async => files[path] = text;
 
   @override
@@ -387,9 +399,7 @@ void main() {
     final store = _MemoryStore();
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: CustomizeSettingsPage(customizations: store),
-        ),
+        home: Scaffold(body: CustomizeSettingsPage(customizations: store)),
       ),
     );
     await tester.pumpAndSettle();

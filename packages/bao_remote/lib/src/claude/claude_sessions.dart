@@ -117,7 +117,7 @@ class ClaudeSessions {
 
   /// The projects with sessions, the most recently talked in first.
   Future<List<ClaudeProjectSummary>> projects() async {
-    final root = '${await _config()}/projects';
+    final root = p.join(await _config(), 'projects');
     final cache = cacheFile;
     return Isolate.run(() => _scan(root, cache));
   }
@@ -180,12 +180,12 @@ String _fork(
   String? before,
   String? title,
 ) {
-  final projects = Directory('$config/projects');
+  final projects = Directory(p.join(config, 'projects'));
   final file = projects.existsSync()
       ? projects
             .listSync()
             .whereType<Directory>()
-            .map((project) => File('${project.path}/$id.jsonl'))
+            .map((project) => File(p.join(project.path, '$id.jsonl')))
             .where((file) => file.existsSync())
             .firstOrNull
       : null;
@@ -241,7 +241,7 @@ String _fork(
       }),
     );
   }
-  final forked = File('${file.parent.path}/$into.jsonl');
+  final forked = File(p.join(file.parent.path, '$into.jsonl'));
   // Whole or not at all: a half-written one would resume as a broken
   // conversation.
   final temp = File('${forked.path}.$pid.tmp');
@@ -252,10 +252,10 @@ String _fork(
 
 /// The `goal_status` lines of the session [id], wherever its project is.
 List<Map<String, Object?>> _goal(String id, String config) {
-  final projects = Directory('$config/projects');
+  final projects = Directory(p.join(config, 'projects'));
   if (!projects.existsSync()) return const [];
   for (final project in projects.listSync().whereType<Directory>()) {
-    final file = File('${project.path}/$id.jsonl');
+    final file = File(p.join(project.path, '$id.jsonl'));
     if (!file.existsSync()) continue;
     return [
       for (final line in const LineSplitter().convert(file.readAsStringSync()))
@@ -291,16 +291,17 @@ void _delete(String id, String config, String temp) {
   }
 
   final doomed = <FileSystemEntity>[
-    Directory('$config/file-history/$id'),
-    Directory('$config/session-env/$id'),
+    Directory(p.join(config, 'file-history', id)),
+    Directory(p.join(config, 'session-env', id)),
     // Under the project it ran in, whichever that was.
-    for (final project in dirs('$config/projects')) ...[
-      File('${project.path}/$id.jsonl'),
-      Directory('${project.path}/$id'),
+    for (final project in dirs(p.join(config, 'projects'))) ...[
+      File(p.join(project.path, '$id.jsonl')),
+      Directory(p.join(project.path, id)),
     ],
     for (final user in dirs(temp))
       if (p.basename(user.path).startsWith('claude-'))
-        for (final project in dirs(user.path)) Directory('${project.path}/$id'),
+        for (final project in dirs(user.path))
+          Directory(p.join(project.path, id)),
   ];
   for (final entity in doomed) {
     if (!entity.existsSync()) continue;

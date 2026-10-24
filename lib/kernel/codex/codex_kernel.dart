@@ -177,7 +177,11 @@ class CodexKernel
       emitInfoChanged();
       return;
     }
-    unawaited(_initialize().catchError((Object _) {}));
+    // A view attaches while it is being built. Reporting "starting" now
+    // would make the workspace notify its listeners during that build.
+    unawaited(
+      Future<void>.microtask(_initialize).catchError((Object _) {}),
+    );
   }
 
   @override
