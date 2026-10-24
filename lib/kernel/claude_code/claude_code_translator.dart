@@ -423,6 +423,11 @@ class ClaudeTranslator {
     return false;
   }
 
+  /// What the call [id] is kept of: what it was called with, once it is
+  /// answered, is let go of (see [_toolResult]).
+  Map<String, Object?> keptInput(String id) =>
+      _tools[id]?.input ?? const <String, Object?>{};
+
   // --- Items -------------------------------------------------------------------
 
   /// Adds or replaces [id], at the top level or in the subagent [parent].
@@ -673,6 +678,11 @@ class ClaudeTranslator {
         final ids? when ids.isNotEmpty => ids.removeAt(0),
         _ => key,
       };
+      // The list of what is left is let go of once there is none: a long
+      // session would keep a list for every message it had.
+      if (_unclaimed['$messageId:$kind']?.isEmpty ?? false) {
+        _unclaimed.remove('$messageId:$kind');
+      }
       switch (block['type']) {
         case 'text':
           final text = block['text'] as String? ?? '';
@@ -1169,6 +1179,29 @@ class ClaudeTranslator {
     final tool = id == null ? null : _tools[id];
     if (id == null || tool == null) return;
     _unanswered.remove(id);
+    try {
+      _toolResultOf(block, result, tool);
+    } finally {
+      // The call is answered: the file it wrote is not needed any more,
+      // and a long session would keep every one of them in memory. What
+      // says what it did is kept.
+      tool.input = _slim(tool.input);
+    }
+  }
+
+  /// [input] without what is long: the file it wrote, the lines it read.
+  static Map<String, Object?> _slim(Map<String, Object?> input) => {
+    for (final MapEntry(:key, :value) in input.entries)
+      if (!const {'content', 'new_string', 'newSource', 'old_string', 'patch'}.contains(key))
+        key: value,
+  };
+
+  void _toolResultOf(
+    Map<String, Object?> block,
+    Object? result,
+    _Tool tool,
+  ) {
+    final id = tool.id;
     final error = block['is_error'] == true;
     final text = _resultText(block['content']);
     final structured = result is Map ? result.cast<String, Object?>() : null;
@@ -1951,7 +1984,11 @@ class _Tool {
   /// Its tool use's.
   final String id;
   final String name;
-  final Map<String, Object?> input;
+
+  /// What it was called with. The heavy parts of it are let go of once the
+  /// call is answered (see [_toolResult]): a long session would keep every
+  /// file it wrote in memory.
+  Map<String, Object?> input;
 
   /// The subagent's tool use id, for a subagent's tool.
   final String? parent;

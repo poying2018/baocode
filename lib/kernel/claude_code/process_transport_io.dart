@@ -225,8 +225,10 @@ class ProcessTransport implements ClaudeCodeTransport {
     if (_exitCode != null) return;
     try {
       _process.stdin.writeln(jsonEncode(message));
-    } on StateError {
-      // Closed under us: the exit message follows.
+    } on Object {
+      // Closed under us: the exit message follows. The pipe may throw
+      // before the process is known to be gone, so every kind of failure
+      // is caught here.
     }
   }
 

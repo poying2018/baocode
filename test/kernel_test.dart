@@ -301,6 +301,48 @@ void main() {
       expect(transcript.edits.single.turnId, startsWith('11111111'));
     });
 
+    test('what a call wrote is let go of once it is answered', () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      );
+      // A call that writes a whole file: its input holds the file.
+      translator.translate({
+        'type': 'assistant',
+        'message': {
+          'id': 'm1',
+          'role': 'assistant',
+          'content': [
+            {
+              'type': 'tool_use',
+              'id': 'w1',
+              'name': 'Write',
+              'input': {
+                'file_path': '/p/a.txt',
+                'content': 'x' * 100000,
+              },
+            },
+          ],
+        },
+      });
+      // Its answer: the call is done, and the file it wrote is not needed
+      // any more. What says what it did is kept.
+      translator.translate({
+        'type': 'user',
+        'message': {
+          'role': 'user',
+          'content': [
+            {'type': 'tool_result', 'tool_use_id': 'w1', 'content': 'ok'},
+          ],
+        },
+      });
+      final kept = translator.keptInput('w1');
+      expect(kept.containsKey('content'), isFalse);
+      expect(kept['file_path'], '/p/a.txt');
+    });
+
     test('a malformed event does not take the session down', () {
       final transcript = Transcript();
       var seq = 0;
