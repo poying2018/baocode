@@ -54,7 +54,10 @@ class StashForge extends ChangeNotifier {
     _started = true;
     store.addListener(_storeChanged);
     accounts.addListener(_accountsChanged);
-    _timer = Timer.periodic(refreshEvery, (_) => unawaited(refresh()));
+    _timer = Timer.periodic(
+      refreshEvery,
+      (_) => unawaited(refresh().catchError((Object _) {})),
+    );
     _storeChanged();
   }
 
