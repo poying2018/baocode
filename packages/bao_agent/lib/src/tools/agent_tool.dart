@@ -381,6 +381,7 @@ class _Job {
       cwd: session.cwd,
       file: file,
       gitBranch: session.store.gitBranch,
+      isSidechain: true,
     );
   }
 

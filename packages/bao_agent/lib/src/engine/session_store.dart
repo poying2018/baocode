@@ -22,6 +22,7 @@ class SessionStore {
     required this.cwd,
     this.file,
     this.gitBranch,
+    this.isSidechain = false,
   });
 
   /// Continues the session kept in [file], on the branch it ended on.
@@ -38,6 +39,7 @@ class SessionStore {
       cwd: cwd,
       file: persist ? file : null,
       gitBranch: gitBranch,
+      isSidechain: sidechain,
     );
     store._load(file, sidechain: sidechain);
     return store;
@@ -45,6 +47,10 @@ class SessionStore {
 
   final String sessionId;
   final String cwd;
+
+  /// Whether this is a subagent's own conversation: every line of it is
+  /// of its side chain.
+  final bool isSidechain;
 
   /// Where it is written; null when nothing is kept.
   final String? file;
@@ -55,6 +61,11 @@ class SessionStore {
   /// The branch the session is on, oldest first: messages, compaction
   /// boundaries and how the goal stood.
   final List<Map<String, Object?>> chain = [];
+
+  /// The message the branch the session is on ends at, as it is kept: the
+  /// file holds other branches too, and the one that was left is not the
+  /// one the session ends on.
+  String? _leaf;
 
   /// Lines kept beside the conversation (titles), as read.
   final List<Map<String, Object?>> extras = [];
@@ -85,16 +96,24 @@ class SessionStore {
       return;
     }
     for (final entry in entries) {
+      if (entry['type'] == _branchMark) continue;
       if (entry['uuid'] case final String uuid) _byUuid[uuid] = entry;
       if (!_kept(entry)) extras.add(entry);
     }
+    // The branch the session ended on: the file's own last line is not
+    // it, as a branch that was left is written after it.
+    final tip = _branchTip(entries, sidechain: sidechain);
     Map<String, Object?>? last;
-    for (final entry in entries.reversed) {
-      if (_kept(entry) &&
-          (sidechain || entry['isSidechain'] != true) &&
-          entry['uuid'] is String) {
-        last = entry;
-        break;
+    if (tip != null && _byUuid[tip] != null) {
+      last = _byUuid[tip];
+    } else {
+      for (final entry in entries.reversed) {
+        if (_kept(entry) &&
+            (sidechain || entry['isSidechain'] != true) &&
+            entry['uuid'] is String) {
+          last = entry;
+          break;
+        }
       }
     }
     final branch = <Map<String, Object?>>[];
@@ -108,7 +127,27 @@ class SessionStore {
       entry = parent == null ? null : _byUuid[parent];
     }
     chain.addAll(branch.reversed.where(_kept));
+    // The branch as it is now: what a message appended next belongs to.
+    _leaf = chain.isEmpty ? null : chain.last['uuid'] as String;
   }
+
+  /// The message the branch the session is on ends at, as the file says:
+  /// the last line that names it.
+  String? _branchTip(
+    List<Map<String, Object?>> entries, {
+    required bool sidechain,
+  }) {
+    for (final entry in entries.reversed) {
+      if (entry['type'] != _branchMark) continue;
+      if (sidechain || entry['isSidechain'] != true) {
+        return entry['branch'] as String?;
+      }
+    }
+    return null;
+  }
+
+  /// The line that says which branch the session is on.
+  static const _branchMark = 'branch';
 
   /// Whether [entry] is part of the conversation (read back), not a line
   /// kept beside it.
@@ -138,7 +177,28 @@ class SessionStore {
     _byUuid[full['uuid'] as String] = full;
     chain.add(full);
     _write(full);
+    // The branch the session is on ends at this message now; the file
+    // says so, as a branch that was left is written after it.
+    _leaf = full['uuid'] as String;
+    _markBranch(_leaf);
     return full;
+  }
+
+  /// Says which branch the session is on, so that it is found again when
+  /// the file is read: a branch that was left is written after it.
+  ///
+  /// [tip] is the message the branch ends at.
+  void _markBranch(String? tip) {
+    _write({
+      'type': _branchMark,
+      'branch': tip,
+      'uuid': newUuid(),
+      'parentUuid': null,
+      'isSidechain': isSidechain,
+      'sessionId': sessionId,
+      'version': agentVersion,
+      'timestamp': _now(),
+    });
   }
 
   /// Keeps [entry] beside the conversation: a title, a snapshot of files.
@@ -169,6 +229,10 @@ class SessionStore {
     final at = chain.indexWhere((entry) => entry['uuid'] == uuid);
     if (at < 0) return false;
     chain.removeRange(at, chain.length);
+    // The branch the session is on now ends at the message before the
+    // one it went back to before.
+    _leaf = chain.isEmpty ? null : chain.last['uuid'] as String;
+    _markBranch(_leaf);
     return true;
   }
 

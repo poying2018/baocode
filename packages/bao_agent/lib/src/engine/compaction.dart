@@ -58,13 +58,18 @@ class Compaction {
   int get threshold => session.contextWindow - session.compactBuffer;
 
   /// Compacts if the conversation has filled the context.
-  Future<void> autoCompactIfNeeded(
+  ///
+  /// Returns whether it did: a compaction that could not shrink the
+  /// conversation enough is worth no second attempt, as the summary
+  /// itself and what is carried over may fill the context all the same,
+  /// and each attempt is a whole request to the model.
+  Future<bool> autoCompactIfNeeded(
     SessionStore store,
     CancelToken cancel,
   ) async {
-    if (!autoEnabled) return;
-    if (usedTokens(store) < threshold) return;
-    await compact(store, trigger: 'auto', cancel: cancel);
+    if (!autoEnabled) return false;
+    if (usedTokens(store) < threshold) return false;
+    return compact(store, trigger: 'auto', cancel: cancel);
   }
 
   /// Sums up the conversation and goes on from the summary. Returns

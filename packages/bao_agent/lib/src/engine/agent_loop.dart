@@ -133,6 +133,10 @@ class AgentLoop {
   static const _contextBeta = 'context-management-2025-06-27';
   static const _effortBeta = 'effort-2025-11-24';
 
+  /// How many times a Stop hook may ask the agent to go on before the turn
+  /// ends: each time is a whole round-trip to the model.
+  static const _maxStopFeedbacks = 10;
+
   final Map<String, Object?> _usage = {
     'input_tokens': 0,
     'cache_creation_input_tokens': 0,
@@ -155,14 +159,20 @@ class AgentLoop {
   Future<LoopResult> runTurn(CancelToken cancel) async {
     var stopHookActive = false;
     var compactedForLength = false;
+    var stopFeedbacks = 0;
+    // A compaction that could not shrink the conversation enough: it is
+    // not tried again, as each attempt is a whole request to the model.
+    var compactedToNoAvail = false;
     while (true) {
       if (cancel.isCancelled) return _interrupted(during: false);
       if (maxTurns != null && _requests >= maxTurns!) {
         return _result('max_turns');
       }
-      if (isMain && !compactedForLength) {
+      if (isMain && !compactedForLength && !compactedToNoAvail) {
         try {
-          await Compaction(session).autoCompactIfNeeded(store, cancel);
+          if (await Compaction(session).autoCompactIfNeeded(store, cancel)) {
+            compactedToNoAvail = true;
+          }
         } on Cancelled {
           return _interrupted(during: false);
         }
@@ -206,6 +216,19 @@ class AgentLoop {
         if (stop == null) return _interrupted(during: false);
         if (stop.stop) return _result('stopped');
         if (stop.blocked) {
+          // A hook that says "not yet" is asked again, with the answer it
+          // gave; a hook that says it again and again would spend the
+          // model's tokens for ever, so the turn ends with its say on it.
+          if (stopFeedbacks >= _maxStopFeedbacks) {
+            session.emitSystem('informational', {
+              'level': 'warning',
+              'content':
+                  'The Stop hook asked the agent to go on $_maxStopFeedbacks '
+                  'times; the turn ends here.',
+            });
+            return _result('end_turn');
+          }
+          stopFeedbacks++;
           stopHookActive = true;
           _appendUser('Stop hook feedback:\n${stop.feedback}', meta: true);
           continue;
