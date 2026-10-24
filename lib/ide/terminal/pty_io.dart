@@ -27,11 +27,14 @@ abstract final class PtyProcesses {
     await registry.reaped;
     final pty = await spawnPty(launch);
     _live.add(pty);
-    unawaited(registry.add(pty.pid));
+    // The process is recorded before it can end: the exit removes it
+    // again, and the removal must not come before the recording.
+    final recorded = registry.add(pty.pid);
+    unawaited(recorded);
     unawaited(
       pty.exitCode.then((_) {
         _live.remove(pty);
-        unawaited(registry.remove(pty.pid));
+        unawaited(recorded.then((_) => registry.remove(pty.pid)));
       }),
     );
     return pty;

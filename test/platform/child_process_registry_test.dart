@@ -84,6 +84,28 @@ void main() {
     expect(jsonDecode(file.readAsStringSync()), isEmpty);
   });
 
+  test('a removal that comes before the recording is not lost', () async {
+    // The recording takes a moment (the command line is looked up):
+    // a removal that comes before it is a no-op, and the pid would stay
+    // in the list for ever.
+    final processes = ChildProcessRegistry(
+      file: file,
+      ownPid: 4242,
+      lookup: (_) async {
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        return null;
+      },
+      signal: (_) => false,
+    );
+    final recorded = processes.add(7);
+    // The exit: the removal is asked for at once, as the process's exit
+    // does.
+    processes.remove(7).ignore();
+    await recorded;
+    await processes.flush();
+    expect(jsonDecode(file.readAsStringSync()), isEmpty);
+  });
+
   test('flush of a list never used writes nothing', () async {
     await registry().flush();
     expect(names(), isEmpty);

@@ -44,6 +44,10 @@ class ChildProcessRegistry {
   /// This run's children and their command lines (null when unknown).
   final Map<int, String?> _children = {};
 
+  /// The recordings under way, by the pid recorded: a removal that comes
+  /// before one is a no-op, and the pid would stay in the list for ever.
+  final Map<int, Completer<void>> _recordings = {};
+
   /// Entries of other apps still running, kept as they were.
   final List<Map<String, Object?>> _others = [];
   Future<void> _writes = Future.value();
@@ -88,20 +92,41 @@ class ChildProcessRegistry {
 
   /// Records [child]; its command line is looked up unless given.
   Future<void> add(int child, {String? command}) async {
-    await reaped;
-    if (command == null && !Platform.isWindows) {
-      try {
-        command = (await lookup(child))?.command;
-      } on Object {
-        // Recorded without one: only [recognizes] can end it later.
+    // The recording is marked before anything is waited for: a removal
+    // that comes at once is to know of it.
+    final recording = _recording(child);
+    try {
+      await reaped;
+      if (command == null) {
+        try {
+          command = (await lookup(child))?.command;
+        } on Object {
+          // Recorded without one: only [recognizes] can end it later.
+        }
       }
+      _children[child] = command;
+      await _save();
+    } finally {
+      // The recording is done, however it went: a removal waiting for it
+      // is not to wait for ever.
+      if (identical(_recordings[child], recording)) {
+        _recordings.remove(child);
+      }
+      if (!recording.isCompleted) recording.complete();
     }
-    _children[child] = command;
-    await _save();
   }
 
+  /// The recording of [child] under way, if any: a removal that comes
+  /// before it is a no-op, and the pid would stay in the list for ever.
+  Completer<void> _recording(int child) =>
+      _recordings.putIfAbsent(child, Completer<void>.new);
+
   Future<void> remove(int child) async {
+    // The recording of this pid, if one is under way: it is waited for,
+    // or the removal would be a no-op and the pid would stay in the list.
+    final recording = _recordings[child];
     await reaped;
+    await recording?.future;
     if (_children.containsKey(child)) {
       _children.remove(child);
       await _save();
