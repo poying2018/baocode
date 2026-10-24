@@ -475,7 +475,10 @@ class ClaudeTranslator {
       case 'message_stop':
         _endMessage();
       case 'content_block_start':
-        final index = event['index'] as int;
+        // What is not there is skipped: a CLI or a proxy may send an
+        // event that is not whole, and the session goes on.
+        final index = event['index'];
+        if (index is! int) return;
         final block = _map(event['content_block']);
         final id = '$_messageId:$index';
         switch (block['type']) {
@@ -504,8 +507,9 @@ class ClaudeTranslator {
           case 'tool_use':
             // Its input may come all at once as it ends: timed from here.
             if (!replaying) _meter.startBlock();
-            final toolId = block['id'] as String;
-            final name = block['name'] as String;
+            final toolId = block['id'];
+            final name = block['name'];
+            if (toolId is! String || name is! String) return;
             if (!_tools.containsKey(toolId)) {
               _toolUse(toolId, name, const {}, null);
             }
@@ -519,7 +523,9 @@ class ClaudeTranslator {
       case 'content_block_delta':
         final delta = _map(event['delta']);
         _meterDelta(delta);
-        final id = _streamed[event['index']];
+        final index = event['index'];
+        if (index is! int) return;
+        final id = _streamed[index];
         if (id == null) return;
         switch (delta['type']) {
           case 'thinking_delta':
@@ -691,12 +697,11 @@ class ClaudeTranslator {
             );
           }
         case 'tool_use':
-          _toolUse(
-            block['id'] as String,
-            block['name'] as String,
-            _map(block['input']),
-            parent,
-          );
+          final toolId = block['id'];
+          final name = block['name'];
+          // A block that is not whole is skipped: the session goes on.
+          if (toolId is! String || name is! String) return;
+          _toolUse(toolId, name, _map(block['input']), parent);
       }
     }
   }
@@ -896,8 +901,10 @@ class ClaudeTranslator {
           _reportTodos();
         }
       case 'TaskCreate' when input['subject'] != null:
+        final subject = input['subject'];
+        if (subject is! String) return;
         _todos[id] = TodoEntry(
-          input['subject'] as String,
+          subject,
           TodoStatus.pending,
           activeForm: _string(input['activeForm']),
         );
@@ -1553,7 +1560,9 @@ class ClaudeTranslator {
           ),
         );
       case 'task_started' when !replaying:
-        final taskId = message['task_id'] as String;
+        final taskId = message['task_id'];
+        // A message that is not whole is skipped: the session goes on.
+        if (taskId is! String) return;
         final agent = message['task_type'] == 'local_agent';
         final call = message['tool_use_id'] as String?;
         // A subagent's task is its card's, continued or not.
@@ -1585,7 +1594,8 @@ class ClaudeTranslator {
           _agentToBackground(card ?? call);
         }
       case 'task_progress' when !replaying:
-        final taskId = message['task_id'] as String;
+        final taskId = message['task_id'];
+        if (taskId is! String) return;
         final usage = _map(message['usage']);
         final summary =
             _string(message['summary']) ?? _string(message['description']);
@@ -1605,7 +1615,8 @@ class ClaudeTranslator {
           _putAgent(toolUseId!);
         }
       case 'task_updated' when !replaying:
-        final taskId = message['task_id'] as String;
+        final taskId = message['task_id'];
+        if (taskId is! String) return;
         final patch = _map(message['patch']);
         if (_tasks[taskId] case final task?) {
           _tasks[taskId] = task.copyWith(
@@ -1620,8 +1631,10 @@ class ClaudeTranslator {
           }
         }
       case 'task_notification' when !replaying:
+        final taskId = message['task_id'];
+        if (taskId is! String) return;
         _taskEnded(
-          message['task_id'] as String,
+          taskId,
           _taskStatus(message['status']) ?? CommandStatus.succeeded,
           toolUseId: message['tool_use_id'] as String?,
           summary: _string(message['summary']),
@@ -1631,7 +1644,7 @@ class ClaudeTranslator {
       case 'background_tasks_changed' when !replaying:
         final live = {
           for (final raw in _list(message['tasks']))
-            _map(raw)['task_id'] as String,
+            if (_map(raw)['task_id'] case final String id) id,
         };
         var changed = false;
         for (final id in live) {

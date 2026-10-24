@@ -301,6 +301,61 @@ void main() {
       expect(transcript.edits.single.turnId, startsWith('11111111'));
     });
 
+    test('a malformed event does not take the session down', () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      );
+      // What a CLI or a proxy may send: an event with no index, a block
+      // with no id, one of a kind nobody knows.
+      for (final event in [
+        {'type': 'content_block_start'},
+        {
+          'type': 'content_block_start',
+          'index': 0,
+          'content_block': {'type': 'tool_use'},
+        },
+        {
+          'type': 'content_block_start',
+          'index': 1,
+          'content_block': {'type': 'tool_use', 'id': 't1'},
+        },
+        {
+          'type': 'content_block_start',
+          'index': 2,
+          'content_block': {'type': 'tool_use', 'id': 't2', 'name': 'Bash'},
+        },
+        {
+          'type': 'content_block_start',
+          'index': 3,
+          'content_block': {'type': 'something_new'},
+        },
+        {'type': 'content_block_delta', 'index': 0},
+        {'type': 'message_delta'},
+      ]) {
+        expect(
+          () => translator.translate({
+            'type': 'stream_event',
+            'event': event,
+          }),
+          returnsNormally,
+          reason: '$event',
+        );
+      }
+      // The session is still there, and works.
+      translator.translate({
+        'type': 'stream_event',
+        'event': {
+          'type': 'content_block_start',
+          'index': 4,
+          'content_block': {'type': 'text'},
+        },
+      });
+      expect(transcript.length, greaterThan(0));
+    });
+
     test('the summary a compacted conversation goes on from is not shown '
         'as a message: live or kept', () {
       final transcript = Transcript();
@@ -1026,6 +1081,54 @@ void main() {
   });
 
   group('Claude Code kernel', () {
+    test('a message that is not whole does not take the session down', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      // What a CLI or a proxy may send: an event with no index, a block
+      // with no id, a task with no id of its own.
+      for (final message in [
+        {
+          'type': 'stream_event',
+          'event': {'type': 'content_block_start'},
+        },
+        {
+          'type': 'stream_event',
+          'event': {
+            'type': 'content_block_start',
+            'index': 0,
+            'content_block': {'type': 'tool_use'},
+          },
+        },
+        {'type': 'system', 'subtype': 'task_started'},
+        {
+          'type': 'assistant',
+          'message': {
+            'role': 'assistant',
+            'content': [
+              {'type': 'tool_use', 'id': 't1'},
+            ],
+          },
+        },
+      ]) {
+        cli.push(message);
+        await pumpEventQueue();
+      }
+      // The session is still there, and takes the next turn.
+      cli.push({
+        'type': 'result',
+        'subtype': 'success',
+        'is_error': false,
+        'duration_ms': 100,
+      });
+      await pumpEventQueue();
+      final message = transcript.itemAt(0) as UserMessageItem;
+      expect(message.text, 'hi');
+      expect(message.worked, const Duration(milliseconds: 100));
+      kernel.dispose();
+    });
+
     test('a turn is timed as the CLI says it took', () async {
       final cli = FakeCli();
       final (:kernel, :transcript, events: _) = claude(cli);

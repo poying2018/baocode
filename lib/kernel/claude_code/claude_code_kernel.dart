@@ -1659,6 +1659,16 @@ class ClaudeCodeKernel
 
   void _receive(Map<String, Object?> message) {
     if (_control?.receive(message) ?? false) return;
+    try {
+      _handle(message);
+    } on Object catch (error) {
+      // A message that is not whole does not take the session down: it is
+      // skipped, and the session goes on.
+      debugPrint('claude-code: message not understood: $error');
+    }
+  }
+
+  void _handle(Map<String, Object?> message) {
     switch (message['type']) {
       case ClaudeExit.type:
         _exited(
