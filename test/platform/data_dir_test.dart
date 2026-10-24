@@ -1,6 +1,7 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -19,8 +20,12 @@ void main() {
   });
   tearDown(() {
     // Undo a read-only folder's mode, so it can go.
-    for (final entity in home.listSync(recursive: true)) {
-      if (entity is Directory) Process.runSync('chmod', ['755', entity.path]);
+    if (!Platform.isWindows) {
+      for (final entity in home.listSync(recursive: true)) {
+        if (entity is Directory) {
+          Process.runSync('chmod', ['755', entity.path]);
+        }
+      }
     }
     home.deleteSync(recursive: true);
   });
@@ -28,6 +33,11 @@ void main() {
   File pointer() =>
       File(p.join(home.path, '.baocode', 'config-dir.json'))
         ..parent.createSync(recursive: true);
+
+  /// The pointer saying [dataDir], written as JSON (a Windows path has
+  /// backslashes, which JSON escapes).
+  void pointAt(String dataDir) =>
+      pointer().writeAsStringSync(jsonEncode({'dataDir': dataDir}));
 
   Directory folder(String name) =>
       Directory(p.join(home.path, name))..createSync(recursive: true);
@@ -54,7 +64,7 @@ void main() {
   test('the pointer, then the variable, win', () {
     final pointed = folder('Pointed');
     final variable = folder('Variable');
-    pointer().writeAsStringSync('{"dataDir": "${pointed.path}"}');
+    pointAt(pointed.path);
     expect(
       (resolve().path, resolve().source),
       (pointed.path, DataDirectorySource.pointer),
@@ -105,7 +115,7 @@ void main() {
   test('a folder that is missing or read-only is reported, not replaced '
       'by the default', () {
     final gone = p.join(home.path, 'Volumes', 'D', 'BaoCode');
-    pointer().writeAsStringSync('{"dataDir": "$gone"}');
+    pointAt(gone);
     var resolution = resolve();
     expect(resolution.ok, isFalse);
     expect(resolution.problem, DataDirectoryProblem.missing);
@@ -118,28 +128,30 @@ void main() {
     expect(resolve().problem, DataDirectoryProblem.missing);
 
     final readOnly = folder('ReadOnly');
-    Process.runSync('chmod', ['555', readOnly.path]);
-    environment['BAOCODE_DATA_DIR'] = readOnly.path;
-    resolution = resolve();
-    expect(resolution.problem, DataDirectoryProblem.notWritable);
-    expect(resolution.source, DataDirectorySource.environment);
+    if (!Platform.isWindows) {
+      // Windows has no such permission: the folder is writable there.
+      Process.runSync('chmod', ['555', readOnly.path]);
+      environment['BAOCODE_DATA_DIR'] = readOnly.path;
+      resolution = resolve();
+      expect(resolution.problem, DataDirectoryProblem.notWritable);
+      expect(resolution.source, DataDirectorySource.environment);
+    }
   });
 
   test('the layout', () {
     const dir = DataDirectory('/data');
-    expect(dir.settingsFile, '/data/User/settings.json');
-    expect(dir.keybindingsFile, '/data/User/keybindings.json');
-    expect(dir.lspSettingsFile, '/data/User/lsp.json');
-    expect(dir.argvFile, '/data/argv.json');
-    expect(dir.keymapsDir, '/data/keymaps');
-    expect(dir.stateFile, '/data/state/state.json');
-    expect(dir.storageFile, '/data/state/storage.json');
-    expect(
-      dir.processRegistryFile('claude'),
-      '/data/state/claude-processes.json',
-    );
-    expect(dir.serversDir, '/data/servers');
-    expect(dir.languagePacksDir, '/data/language-packs');
+    // The paths are the machine's own: the data folder is a local one.
+    String at(String parts) => p.joinAll(['/data', ...parts.split('/')]);
+    expect(dir.settingsFile, at('User/settings.json'));
+    expect(dir.keybindingsFile, at('User/keybindings.json'));
+    expect(dir.lspSettingsFile, at('User/lsp.json'));
+    expect(dir.argvFile, at('argv.json'));
+    expect(dir.keymapsDir, at('keymaps'));
+    expect(dir.stateFile, at('state/state.json'));
+    expect(dir.storageFile, at('state/storage.json'));
+    expect(dir.processRegistryFile('claude'), at('state/claude-processes.json'));
+    expect(dir.serversDir, at('servers'));
+    expect(dir.languagePacksDir, at('language-packs'));
   });
 
   test('under test, the current one is never the user\'s', () {
