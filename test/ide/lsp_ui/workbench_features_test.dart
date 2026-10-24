@@ -173,7 +173,8 @@ void main() {
       LspSemanticToken(2, 4, 5, 'class', {}),
     ];
     final languages = FakeLanguageFeatures()
-      ..onSemanticTokens = (path) => path.endsWith(_a) ? answer : null;
+      ..onSemanticTokens = (path) =>
+          path.replaceAll(r'\', '/').endsWith(_a) ? answer : null;
     const b = 'lib/b.dart';
     final workspace = await pumpLanguageWorkbench(
       tester,
@@ -198,13 +199,17 @@ void main() {
     expect(printColor(), classColor);
 
     workspace.select(
-      workspace.documents.firstWhere((d) => d.path.endsWith(b)).key,
+      workspace.documents
+          .firstWhere((d) => d.path.replaceAll(r'\', '/').endsWith(b))
+          .key,
     );
     await settle(tester, const Duration(milliseconds: 350));
     // The server has no answer yet when the tab is shown again.
     answer = null;
     workspace.select(
-      workspace.documents.firstWhere((d) => d.path.endsWith(_a)).key,
+      workspace.documents
+          .firstWhere((d) => d.path.replaceAll(r'\', '/').endsWith(_a))
+          .key,
     );
     await tester.pump();
     expect(printColor(), classColor);

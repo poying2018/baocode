@@ -15,6 +15,7 @@ import 'package:baocode/ide/ide_chat_history.dart';
 import 'package:baocode/ide/ide_workbench.dart';
 import 'package:baocode/main.dart';
 import 'package:baocode/workspace/workspace.dart';
+import 'package:path/path.dart' as p;
 
 const _window = MethodChannel('baocode/window');
 const _open = MethodChannel('baocode/open');
@@ -76,7 +77,8 @@ void main() {
       'the agent told of it', (tester) async {
     final folder = Directory.systemTemp.createTempSync('baocode-loose-file');
     addTearDown(() => folder.deleteSync(recursive: true));
-    final file = File('${folder.path}/CN2-GIA.conf')
+    // The path as the machine spells it: the app makes it its own.
+    final file = File(p.join(folder.path, 'CN2-GIA.conf'))
       ..writeAsStringSync('[general]\nudp_drop_list = 443\n');
     final workspace = await _pumpApp(tester);
     await _showIde(tester, workspace);
