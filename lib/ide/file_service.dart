@@ -228,7 +228,8 @@ Future<IdeFileListing> listProjectFiles(
     return platform.walkProjectFiles(root, ideIndexExcludedDirectories, limit);
   }
   if (files is IdeHostFiles) return files.listProject(root, limit: limit);
-  final paths = <String>[];
+  final paths = files is IdeHostFiles ? p.posix : p.context;
+  final pathsTo = <String>[];
   final pending = <String>[root];
   while (pending.isNotEmpty) {
     final directory = pending.removeLast();
@@ -241,18 +242,18 @@ Future<IdeFileListing> listProjectFiles(
     for (final entry in entries) {
       // The service's own spelling: a remote host's paths are POSIX, and
       // a local one's are this machine's.
-      final path = p.posix.join(directory, entry.name);
+      final path = paths.join(directory, entry.name);
       if (entry.isDirectory) {
         if (!ideIndexExcludedDirectories.contains(entry.name)) {
           pending.add(path);
         }
       } else {
-        paths.add(path);
-        if (paths.length >= limit) {
-          return IdeFileListing(paths..sort(), truncated: true);
+        pathsTo.add(path);
+        if (pathsTo.length >= limit) {
+          return IdeFileListing(pathsTo..sort(), truncated: true);
         }
       }
     }
   }
-  return IdeFileListing(paths..sort());
+  return IdeFileListing(pathsTo..sort());
 }

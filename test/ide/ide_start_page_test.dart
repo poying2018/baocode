@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/ide_commands.dart';
@@ -70,15 +72,18 @@ void main() {
     expect(find.text('Recent projects'), findsOneWidget);
     expect(find.text('View all (7)'), findsOneWidget);
     expect(find.text('monad'), findsOneWidget);
-    expect(find.text('~/Documents'), findsOneWidget);
-    expect(find.text('~/Desktop'), findsOneWidget);
+    // The folder of each, with the home as `~` where the machine spells
+    // it that way (Windows does not, as VS Code's does not either).
+    final home = Platform.isWindows ? '/Users/me' : '~';
+    expect(find.text('$home/Documents'), findsOneWidget);
+    expect(find.text('$home/Desktop'), findsOneWidget);
     expect(find.text('/opt'), findsOneWidget);
     expect(find.text('~'), findsNWidgets(2));
     expect(find.text('b'), findsNothing);
     // Both ends in line: the names on the left, where each is on the right,
     // as View all (7) is.
     final right = tester.getTopRight(find.text('View all (7)')).dx;
-    for (final where in ['~/Documents', '~', '/opt']) {
+    for (final where in ['$home/Documents', '~', '/opt']) {
       expect(tester.getTopRight(find.text(where).first).dx, right);
     }
     expect(

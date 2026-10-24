@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/explorer_excludes.dart';
 import 'package:baocode/ide/ide_explorer.dart';
-import 'package:path/path.dart' as p;
 
 import 'fake_files.dart';
 
@@ -26,7 +25,6 @@ void main() {
       files: TreeFiles({
         for (final MapEntry(:key, :value) in files.entries) inRoot(key): value,
       }),
-      paths: p.posix,
       excludes: excludes,
       watch: (_) => const Stream.empty(),
     );
