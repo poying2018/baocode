@@ -16,6 +16,8 @@
 //   crashOnInitialize      exits (code 4) instead of answering initialize
 //   stubborn               ignores shutdown, exit, stdin's end and SIGTERM
 //
+// Run with `--die-at-start` it exits (code 6) before it is asked anything.
+//
 // A didChange inserting `CRASH` makes it exit with code 3. Lines holding
 // `ERROR` get an error diagnostic. `fake/state` answers what it knows.
 import 'dart:async';
@@ -37,7 +39,13 @@ final _pending = <int, Completer<Object?>>{};
 String get _name => _options['name'] as String? ?? 'fake';
 bool get _stubborn => _options['stubborn'] == true;
 
-void main() {
+void main(List<String> args) {
+  // `--die-at-start` exits before it is asked anything: the client that
+  // starts it finds it gone before it is ready.
+  if (const {'--die-at-start'}.any(args.contains)) {
+    stderr.writeln('$_name: dying at start');
+    exit(6);
+  }
   var pending = <int>[];
   stdin.listen(
     (chunk) {
@@ -176,7 +184,10 @@ Future<Object?> _answer(String method, Map<String, Object?> params) async {
           {};
       _clientCapabilities =
           (params['capabilities'] as Map?)?.cast<String, Object?>() ?? {};
-      if (_stubborn) ProcessSignal.sigterm.watch().listen((_) {});
+      // Windows has no SIGTERM to watch.
+      if (_stubborn && !Platform.isWindows) {
+        ProcessSignal.sigterm.watch().listen((_) {});
+      }
       if (_options['crashOnInitialize'] == true) {
         stderr.writeln('$_name: crashing on initialize');
         await stderr.flush();

@@ -20,13 +20,24 @@ final String fakeServerScript = p.absolute(
 /// An absolute `dart`, so starting does not depend on the child's PATH.
 final String dartExecutable = () {
   if (Platform.environment['FLUTTER_ROOT'] case final root?) {
-    final dart = p.join(root, 'bin', 'cache', 'dart-sdk', 'bin', 'dart');
-    if (File(dart).existsSync()) return dart;
+    // Windows spells it `dart.exe`; the extensionless path is not there.
+    for (final name in ['dart', 'dart.exe']) {
+      final dart = p.join(root, 'bin', 'cache', 'dart-sdk', 'bin', name);
+      if (File(dart).existsSync()) return dart;
+    }
   }
-  final which = Process.runSync('which', ['dart']);
-  final found = '${which.stdout}'.trim();
+  final found = _which('dart');
   return found.isEmpty ? 'dart' : found;
 }();
+
+/// [name]'s own path, as the machine's `where` or `which` says it.
+String _which(String name) {
+  final result = Platform.isWindows
+      ? Process.runSync('where', [name])
+      : Process.runSync('which', [name]);
+  if (result.exitCode != 0) return '';
+  return '${result.stdout}'.split('\n').first.trim();
+}
 
 LspServerDefinition fakeServer(
   String id, {
@@ -37,10 +48,11 @@ LspServerDefinition fakeServer(
   Set<LspFeature>? onlyFeatures,
   Set<LspFeature>? exceptFeatures,
   String? masonPackage,
+  List<String> args = const [],
 }) => LspServerDefinition(
   id: id,
   command: 'dart',
-  args: [fakeServerScript],
+  args: [fakeServerScript, ...args],
   initializationOptions: {'name': id, ...options},
   settings: settings,
   rootMarkers: rootMarkers,
@@ -131,6 +143,13 @@ Future<void> until(
 
 /// Whether process [pid] still runs (a zombie counts as gone).
 bool processRunning(int pid) {
+  if (Platform.isWindows) {
+    // The task list says of it, and its name.
+    final result = Process.runSync('tasklist', ['/FI', 'PID eq $pid', '/NH']);
+    if (result.exitCode != 0) return false;
+    final text = '${result.stdout}';
+    return text.contains(' $pid ') || text.contains('\t$pid\t');
+  }
   final result = Process.runSync('ps', ['-o', 'stat=', '-p', '$pid']);
   final stat = '${result.stdout}'.trim();
   return result.exitCode == 0 && stat.isNotEmpty && !stat.startsWith('Z');

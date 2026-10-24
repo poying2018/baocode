@@ -454,6 +454,17 @@ class LspManager extends ChangeNotifier
     } on JsonRpcClosed {
       // It exited while starting: its exit says whether it crashed, and
       // that is the one that knows whether to start it again.
+      // A process that died before its client was built has no exit to
+      // say anything: the state is left here, or the server would stay
+      // "starting" for ever and never be started again.
+      if (!stale() &&
+          server.state == LanguageServerState.starting &&
+          !identical(server.client, client)) {
+        server
+          ..state = LanguageServerState.failed
+          ..message = 'The server exited while starting';
+        _notify();
+      }
       return null;
     } on Object catch (error) {
       if (stale()) return null;

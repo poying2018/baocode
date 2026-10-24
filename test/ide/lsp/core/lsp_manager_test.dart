@@ -1,4 +1,4 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
 import 'dart:async';
@@ -122,13 +122,35 @@ void main() {
       fakeServer('fake', options: {'crashOnInitialize': true}),
     ]);
     final (_, doc) = await open(lsp, 'a.fake', 'x');
-    // It never runs: the server is said to have failed, not to be still
-    // starting (which would keep it from ever starting again).
+    // It never runs: the server is not said to be still starting (which
+    // would keep it from ever starting again), but to be tried again (and
+    // to have failed, once it has been tried enough).
     await until(
       () => status(lsp, doc.path).state != LanguageServerState.starting,
       reason: 'the server left the starting state',
     );
-    expect(status(lsp, doc.path).state, LanguageServerState.failed);
+    expect(
+      status(lsp, doc.path).state,
+      anyOf(LanguageServerState.restarting, LanguageServerState.failed),
+    );
+  });
+
+  test('a server that dies before it is ready does not stay "starting" for '
+      'ever', () async {
+    final lsp = manager([
+      fakeServer('fake', args: ['--die-at-start']),
+    ]);
+    final (_, doc) = await open(lsp, 'a.fake', 'x');
+    // It never runs: the server is not said to be still starting (which
+    // would keep it from ever starting again), but to be tried again.
+    await until(
+      () => status(lsp, doc.path).state != LanguageServerState.starting,
+      reason: 'the server left the starting state',
+    );
+    expect(
+      status(lsp, doc.path).state,
+      anyOf(LanguageServerState.restarting, LanguageServerState.failed),
+    );
   });
 
   test('incremental sync reproduces the editor text exactly', () async {
