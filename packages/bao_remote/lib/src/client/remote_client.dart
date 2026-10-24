@@ -426,13 +426,17 @@ class RemoteClient {
     {'root': root, 'path': path, 'data': encodeBytes(bytes)},
   );
 
-  Future<Uint8List> readBytes(String path) async => decodeBytes(
-    await _call<String>(RemoteProtocol.fsReadBytes, {'path': path}),
+  Future<Uint8List> readBytes(String root, String path) async => decodeBytes(
+    await _call<String>(RemoteProtocol.fsReadBytes, {
+      'root': root,
+      'path': path,
+    }),
   );
 
   /// At most [length] of [path]'s bytes from [offset] (fewer at its end),
   /// and its size; given up once [cancel] completes.
   Future<({Uint8List bytes, int size})> readRange(
+    String root,
     String path,
     int offset,
     int length, {
@@ -440,6 +444,7 @@ class RemoteClient {
   }) async {
     final result = _map(
       await _call<Object?>(RemoteProtocol.fsReadRange, {
+        'root': root,
         'path': path,
         'offset': offset,
         'length': length,

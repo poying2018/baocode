@@ -141,11 +141,15 @@ class RemoteServer {
           .writeBytes(args['path'] as String, decodeBytes(args['data']));
       return null;
     };
-    handlers[RemoteProtocol.fsReadBytes] = (params, _) async =>
-        encodeBytes(await readFileBytes(paramsOf(params)['path'] as String));
+    handlers[RemoteProtocol.fsReadBytes] = (params, _) async {
+      final args = paramsOf(params);
+      return encodeBytes(
+        await _filesOf(args).readBytes(args['path'] as String),
+      );
+    };
     handlers[RemoteProtocol.fsReadRange] = (params, _) async {
       final args = paramsOf(params);
-      final range = await readFileRange(
+      final range = await _filesOf(args).readRange(
         args['path'] as String,
         args['offset'] as int,
         args['length'] as int,

@@ -132,7 +132,7 @@ class RemoteIdeFileService implements IdeHostFiles, IdeRangeFiles {
 
   @override
   Future<Uint8List> readBytes(String path) async =>
-      (await _client).readBytes(path);
+      (await _client).readBytes(root, path);
 
   @override
   Future<({Uint8List bytes, int size})> readRange(
@@ -140,7 +140,13 @@ class RemoteIdeFileService implements IdeHostFiles, IdeRangeFiles {
     int offset,
     int length, {
     Future<void>? cancel,
-  }) async => (await _client).readRange(path, offset, length, cancel: cancel);
+  }) async => (await _client).readRange(
+    root,
+    path,
+    offset,
+    length,
+    cancel: cancel,
+  );
 
   @override
   Future<int> sizeOf(List<String> paths, {int? limit}) async =>

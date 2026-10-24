@@ -86,6 +86,41 @@ class LocalFiles {
     return files;
   }
 
+  /// [path]'s bytes, whole; throws [IdeFileNotFoundException] when there
+  /// is no such file.
+  Future<Uint8List> readBytes(String path) => _serialize(() async {
+    if (!await File(path).exists()) throw IdeFileNotFoundException(path);
+    final resolved = await _regularFile(path);
+    final handle = await File(resolved).open();
+    try {
+      _checkSize(path, await handle.length(), limit: _forcedMaximumFileBytes);
+      return await handle.read(_forcedMaximumFileBytes + 1);
+    } finally {
+      await handle.close();
+    }
+  });
+
+  /// At most [length] (up to [maxRangeLength]) of [path]'s bytes from
+  /// [offset], and the file's size.
+  Future<({Uint8List bytes, int size})> readRange(
+    String path,
+    int offset,
+    int length,
+  ) => _serialize(() async {
+    if (!await File(path).exists()) throw IdeFileNotFoundException(path);
+    final resolved = await _regularFile(path);
+    final open = await File(resolved).open();
+    try {
+      final size = await open.length();
+      if (offset >= size) return (bytes: Uint8List(0), size: size);
+      await open.setPosition(offset);
+      final bytes = await open.read(min(length, maxRangeLength));
+      return (bytes: bytes, size: size);
+    } finally {
+      await open.close();
+    }
+  });
+
   Future<String> read(String path, {bool force = false}) =>
       _serialize(() async {
         if (!await File(path).exists()) throw IdeFileNotFoundException(path);

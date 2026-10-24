@@ -62,7 +62,10 @@ class RemoteCustomizationDisk implements CustomizationDisk {
   Future<String?> read(String path) async {
     final client = await _client;
     try {
-      return utf8.decode(await client.readBytes(path), allowMalformed: true);
+      return utf8.decode(
+        await client.readBytes(_root, path),
+        allowMalformed: true,
+      );
     } on RpcClosed {
       rethrow;
     } on Object {
