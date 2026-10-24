@@ -452,7 +452,8 @@ class LspManager extends ChangeNotifier
       if (server.documents.isEmpty) _scheduleIdle(server);
       return started;
     } on JsonRpcClosed {
-      // It exited while starting: its exit says whether it crashed.
+      // It exited while starting: its exit says whether it crashed, and
+      // that is the one that knows whether to start it again.
       return null;
     } on Object catch (error) {
       if (stale()) return null;

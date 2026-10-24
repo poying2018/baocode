@@ -4,6 +4,7 @@
 library;
 
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -119,6 +120,10 @@ class JsonRpcConnection {
 
   final void Function(List<int> bytes) _output;
 
+  /// The frames waiting to go out, and whether one is on its way.
+  final _queue = Queue<Uint8List>();
+  bool _writing = false;
+
   /// Notifications no handler is registered for (`$/…` included).
   void Function(String method, Object? params)? onUnhandledNotification;
 
@@ -213,15 +218,32 @@ class JsonRpcConnection {
     if (_isClosed) return;
     final body = utf8.encode(jsonEncode(message));
     final header = ascii.encode('Content-Length: ${body.length}\r\n\r\n');
+    // The frames go out one after another: two writes at once would
+    // interleave, and the other side would lose its place in the stream
+    // for good.
+    final frame = Uint8List(header.length + body.length)
+      ..setRange(0, header.length, header)
+      ..setRange(header.length, header.length + body.length, body);
+    _queue.add(frame);
+    _drain();
+  }
+
+  /// Writes the queued frames, one at a time.
+  void _drain() {
+    if (_writing) return;
+    _writing = true;
     try {
-      _output(
-        Uint8List(header.length + body.length)
-          ..setRange(0, header.length, header)
-          ..setRange(header.length, header.length + body.length, body),
-      );
-    } on Object catch (error) {
-      // The other side is gone; the input's end fails what is pending.
-      onProtocolError?.call('write failed: $error');
+      while (_queue.isNotEmpty) {
+        final frame = _queue.removeFirst();
+        try {
+          _output(frame);
+        } on Object catch (error) {
+          // The other side is gone; the input's end fails what is pending.
+          onProtocolError?.call('write failed: $error');
+        }
+      }
+    } finally {
+      _writing = false;
     }
   }
 

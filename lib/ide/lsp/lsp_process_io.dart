@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:bao_remote/local.dart' show WatchChange, watchRecursively;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
@@ -90,7 +91,12 @@ class _IoLspProcess implements LspProcess {
     try {
       await Process.run('taskkill', ['/pid', '${_process.pid}', '/T', '/F']);
     } on ProcessException {
-      _process.kill();
+      // No taskkill on this machine: the process alone goes.
+      try {
+        _process.kill();
+      } on Object {
+        // It is already gone.
+      }
     }
   }
 
@@ -166,25 +172,20 @@ abstract final class LspProcesses {
 
   static Stream<LspFileEvent> watch(String root) {
     if (!FileSystemEntity.isWatchSupported) return const Stream.empty();
-    return Directory(root)
-        .watch(recursive: true)
-        .expand(
-          (event) => switch (event) {
-            FileSystemCreateEvent() => [
-              LspFileEvent(event.path, LspFileChangeType.created),
-            ],
-            FileSystemModifyEvent() => [
-              LspFileEvent(event.path, LspFileChangeType.changed),
-            ],
-            FileSystemDeleteEvent() => [
-              LspFileEvent(event.path, LspFileChangeType.deleted),
-            ],
-            FileSystemMoveEvent(:final destination) => [
-              LspFileEvent(event.path, LspFileChangeType.deleted),
-              if (destination != null)
-                LspFileEvent(destination, LspFileChangeType.created),
-            ],
-          },
+    // Linux's inotify watches one folder at a time, so the tree is
+    // watched folder by folder there; elsewhere the platform watches it
+    // as a whole. A root that is gone is no news: the watcher is empty
+    // rather than an error thrown at the caller.
+    return watchRecursively(root)
+        .map(
+          (event) => LspFileEvent(
+            event.path,
+            switch (event.change) {
+              WatchChange.created => LspFileChangeType.created,
+              WatchChange.modified => LspFileChangeType.changed,
+              WatchChange.deleted => LspFileChangeType.deleted,
+            },
+          ),
         )
         .handleError((Object _) {});
   }

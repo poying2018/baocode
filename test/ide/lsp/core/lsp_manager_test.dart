@@ -116,6 +116,21 @@ void main() {
 
   String uri(String path) => Uri.file(path).toString();
 
+  test('a server that exits while starting does not stay "starting" for ever',
+      () async {
+    final lsp = manager([
+      fakeServer('fake', options: {'crashOnInitialize': true}),
+    ]);
+    final (_, doc) = await open(lsp, 'a.fake', 'x');
+    // It never runs: the server is said to have failed, not to be still
+    // starting (which would keep it from ever starting again).
+    await until(
+      () => status(lsp, doc.path).state != LanguageServerState.starting,
+      reason: 'the server left the starting state',
+    );
+    expect(status(lsp, doc.path).state, LanguageServerState.failed);
+  });
+
   test('incremental sync reproduces the editor text exactly', () async {
     final lsp = manager([fakeServer('fake')]);
     final (workspace, doc) = await open(

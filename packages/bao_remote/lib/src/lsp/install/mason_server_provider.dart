@@ -587,7 +587,7 @@ class MasonServerProvider implements LspServerProvider {
     // installed here.
     final windows = Platform.isWindows;
     final extensions = windows && p.extension(command).isEmpty
-        ? (environment['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
+        ? _pathext(environment)
               .split(';')
               .where((extension) => extension.isNotEmpty)
               .toList()
@@ -605,6 +605,15 @@ class MasonServerProvider implements LspServerProvider {
       }
     }
     return null;
+  }
+
+  /// The machine's own list of the extensions a command may carry: the
+  /// environment names it however it spells it.
+  String _pathext(Map<String, String> environment) {
+    for (final MapEntry(key: name, value: value) in environment.entries) {
+      if (name.toUpperCase() == 'PATHEXT' && value.isNotEmpty) return value;
+    }
+    return '.COM;.EXE;.BAT;.CMD';
   }
 
   /// [path] as the folder spells it: Windows does not care how a name is

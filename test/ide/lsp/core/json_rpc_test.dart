@@ -205,6 +205,33 @@ void main() {
     expect(notes.single, text);
   });
 
+  test('the frames go out whole, one after another', () async {
+    // A sink that answers the write by sending another message: the
+    // answer must not overtake the message being written, or the other
+    // side loses its place in the stream for good.
+    final written = <int>[];
+    final input = StreamController<List<int>>();
+    late final JsonRpcConnection connection;
+    var answered = false;
+    connection = JsonRpcConnection(input.stream, (bytes) {
+      // The write is answered by a message of its own, from within it.
+      if (!answered) {
+        answered = true;
+        connection.notify('answer');
+      }
+      written.addAll(bytes);
+    });
+    connection.notify('question');
+    await pumpEventQueue();
+    final messages = unframe(written);
+    expect(messages.map((message) => message['method']), [
+      'question',
+      'answer',
+    ]);
+    await input.close();
+    await connection.done;
+  });
+
   group('LspGlob', () {
     test('matches the protocol glob syntax', () {
       expect(LspGlob('**/*.dart').matches('/a/b/c.dart'), isTrue);
