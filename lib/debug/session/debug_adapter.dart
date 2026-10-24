@@ -232,11 +232,17 @@ class DebugAdapter {
   }
 
   /// Fails what is still waiting for an answer, half a second on.
+  ///
+  /// The answer that comes in the meantime is taken as it is: a request
+  /// that was answered is not a cancelled one.
   Future<void> cancelPendingRequests() async {
     if (_pendingRequests.isEmpty) return;
     final pending = Map.of(_pendingRequests);
     await Future<void>.delayed(const Duration(milliseconds: 500));
-    pending.forEach((requestSeq, callback) {
+    for (final MapEntry(key: requestSeq, value: callback) in pending.entries) {
+      // The answer may have come in the meantime: what was answered is
+      // not failed now.
+      if (!_pendingRequests.containsKey(requestSeq)) continue;
       callback({
         'type': 'response',
         'seq': 0,
@@ -247,7 +253,7 @@ class DebugAdapter {
       });
       _pendingRequests.remove(requestSeq);
       _clearPendingRequestTimer(requestSeq);
-    });
+    }
   }
 
   void _clearPendingRequestTimer(int requestSeq) =>
@@ -261,6 +267,20 @@ class DebugAdapter {
       timer.cancel();
     }
     _pendingRequestTimers.clear();
+    // What is waiting for an answer is told there will be none: it would
+    // wait for ever.
+    for (final MapEntry(key: requestSeq, value: callback) in _pendingRequests
+        .entries) {
+      callback({
+        'type': 'response',
+        'seq': 0,
+        'request_seq': requestSeq,
+        'success': false,
+        'command': 'canceled',
+        'message': 'The debug adapter is gone.',
+      });
+    }
+    _pendingRequests.clear();
     _subscriptions.dispose();
     _onError.dispose();
     _onExit.dispose();

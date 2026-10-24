@@ -339,8 +339,8 @@ class RawDebugSession {
   }
 
   Future<void> _stopAdapter(Object? error) async {
+    final da = _debugAdapter;
     try {
-      final da = _debugAdapter;
       if (da != null) {
         _debugAdapter = null;
         await da.stopSession();
@@ -349,6 +349,9 @@ class RawDebugSession {
     } on Object {
       // Already gone.
     } finally {
+      // The adapter is ended: what is waiting for an answer of its own
+      // is told there will be none.
+      da?.dispose();
       _fireAdapterExitEvent(error);
     }
   }
@@ -497,6 +500,10 @@ class RawDebugSession {
 
   void dispose() {
     _toDispose.dispose();
+    // The adapter goes with it: what is waiting for an answer of its own
+    // is told there will be none.
+    _debugAdapter?.dispose();
+    _debugAdapter = null;
     for (final e in [
       onDidInitialize,
       onDidStop,
