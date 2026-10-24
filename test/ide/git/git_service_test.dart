@@ -74,20 +74,24 @@ void main() {
       'gitDecoration.ignoredResourceForeground',
     );
 
-    await service.stage([p.join(root, 'lib/new.dart')]);
+    await service.stage([p.join(root, 'lib', 'new.dart')]);
     state = (await service.status())!;
     expect(
       state.group(IdeGitGroup.staged).single.status,
       IdeGitStatus.indexAdded,
     );
 
-    await service.unstage([p.join(root, 'lib/new.dart')]);
+    await service.unstage([p.join(root, 'lib', 'new.dart')]);
     state = (await service.status())!;
     expect(state.group(IdeGitGroup.staged), isEmpty);
 
     await service.discard(state.resources);
-    expect(await File(p.join(root, 'lib/a.dart')).readAsString(), 'a\n');
-    expect(await File(p.join(root, 'lib/new.dart')).exists(), isFalse);
+    // Git writes the file as the machine has it: with CRLF on Windows.
+    expect(
+      await File(p.join(root, 'lib', 'a.dart')).readAsString(),
+      Platform.isWindows ? 'a\r\n' : 'a\n',
+    );
+    expect(await File(p.join(root, 'lib', 'new.dart')).exists(), isFalse);
     expect((await service.status())!.resources, isEmpty);
 
     await write('lib/a.dart', 'second\n');
@@ -100,12 +104,12 @@ void main() {
     expect(log.first.references.single.name, 'main');
     expect(log.first.parentIds, [log.last.id]);
 
-    final history = await service.fileLog(p.join(root, 'lib/a.dart'));
+    final history = await service.fileLog(p.join(root, 'lib', 'a.dart'));
     expect(history, hasLength(2));
     final changes = await service.commitChanges(log.first.id);
     expect(
       [for (final c in changes) (c.path, c.status)],
-      [(p.join(root, 'lib/a.dart'), 'M')],
+      [(p.join(root, 'lib', 'a.dart'), 'M')],
     );
   }, skip: hasGit ? false : 'Git is not installed');
 
@@ -234,7 +238,7 @@ void main() {
   test('blame gives the commits of the lines on disk', () async {
     final service = IdeGitService(root);
     await write('lib/a.dart', 'a\nb\n');
-    final blame = (await service.blame(p.join(root, 'lib/a.dart')))!;
+    final blame = (await service.blame(p.join(root, 'lib', 'a.dart')))!;
     final commit = blame.singleWhere((b) => !b.uncommitted);
     expect(commit.subject, 'Initial commit');
     expect(commit.authorName, 'Ada');
@@ -246,6 +250,6 @@ void main() {
     ]);
 
     await write('lib/new.dart', 'new\n');
-    expect(await service.blame(p.join(root, 'lib/new.dart')), isNull);
+    expect(await service.blame(p.join(root, 'lib', 'new.dart')), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 }
