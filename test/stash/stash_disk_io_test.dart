@@ -125,5 +125,20 @@ void main() {
       await settle();
       expect(told, 0);
     });
+
+    test('a write that failed does not pass over the next change of that '
+        'file by another', () async {
+      // A folder where the file goes: the move in place fails.
+      Directory(at('5.md')).createSync();
+      await expectLater(
+        disk.write(5, 'first'),
+        throwsA(isA<FileSystemException>()),
+      );
+      Directory(at('5.md')).deleteSync();
+      // Another app writes that file: it is told of.
+      events.add(FileSystemModifyEvent(at('5.md'), false, true));
+      await settle();
+      expect(told, 1);
+    });
   });
 }

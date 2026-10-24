@@ -90,9 +90,12 @@ class FileStashDisk implements StashDisk {
     );
     try {
       await temporary.writeAsString(text, flush: true);
-      _ownWrites.add(p.basename(file.path));
+      _own(p.basename(file.path));
       await temporary.rename(file.path);
     } on Object {
+      // The move did not happen: the name is not to be kept, or the
+      // next change of that file by another app would be passed over.
+      _ownWrites.remove(p.basename(file.path));
       try {
         await temporary.delete();
       } on FileSystemException {
@@ -269,6 +272,18 @@ class FileStashDisk implements StashDisk {
 
   /// The files this app wrote itself, not told of as another's changes.
   final Set<String> _ownWrites = {};
+
+  /// The most of them kept: a write whose move is never told of is not
+  /// to be kept for ever.
+  static const _maxOwnWrites = 64;
+
+  /// Notes that this app wrote [name] itself.
+  void _own(String name) {
+    _ownWrites.add(name);
+    if (_ownWrites.length > _maxOwnWrites) {
+      _ownWrites.remove(_ownWrites.first);
+    }
+  }
 
   StreamController<void>? _changes;
   StreamSubscription<FileSystemEvent>? _watch;
