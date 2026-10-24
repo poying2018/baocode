@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:bao_editor/monaco/flutter/editor_document_model.dart';
 
+import '../platform/path_style.dart';
 import 'file_service.dart';
 import 'file_views.dart';
 import 'git/git_repository.dart';
@@ -228,7 +229,7 @@ class IdeWorkspace extends ChangeNotifier
     p.Context? paths,
   }) : _detection = repositoryDetection,
        paths = paths == null
-           ? p.context
+           ? p.Context(style: PathStyle.of(root).style, current: root)
            : p.Context(style: paths.style, current: root),
        files = files ?? IdeFileService(root),
        _watchDirectory =

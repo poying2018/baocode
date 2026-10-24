@@ -79,7 +79,7 @@ void main() {
     addTearDown(multi.dispose);
     expect(
       IdeDebugHost(workspace: multi).workspaceFolders
-          .map((folder) => folder.uri.fsPath()),
+          .map((folder) => folder.uri.fsPath(windows: Platform.isWindows)),
       [first, second],
     );
     expect(
@@ -99,10 +99,16 @@ void main() {
 
     await workspace.open(p.join(dir.path, 'main.py'));
     var editor = host.activeEditor!;
-    expect(editor.uri.fsPath(), p.join(dir.path, 'main.py'));
+    expect(
+      editor.uri.fsPath(windows: Platform.isWindows),
+      p.join(dir.path, 'main.py'),
+    );
     expect(editor.selectedText, 'two');
     expect((editor.lineNumber, editor.column), (2, 4));
-    expect(host.lastActiveWorkspaceRoot?.fsPath(), p.join(dir.path));
+    expect(
+      host.lastActiveWorkspaceRoot?.fsPath(windows: Platform.isWindows),
+      p.join(dir.path),
+    );
 
     // Out of its text, or none: no selection.
     selection = (start: 4, end: 99);

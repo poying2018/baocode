@@ -18,7 +18,9 @@ import 'dart:convert';
 const _empty = '';
 const _slash = '/';
 final _schemePattern = RegExp(r'^\w[\w\d+.-]*$');
-final _regexp = RegExp(r'^(([^:/?#]+?):)?(\/\/([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?');
+final _regexp = RegExp(
+  r'^(([^:/?#]+?):)?(\/\/([^/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?',
+);
 
 /// `MarshalledId.Uri`: how a URI is told apart in a JSON message.
 const int uriMarshalledId = 1;
@@ -148,7 +150,11 @@ final class VsUri {
   }
 
   /// `uri.fsPath`; Windows separators when [windows].
-  String fsPath({bool windows = false, bool keepDriveLetterCasing = false}) {
+  ///
+  /// The drive letter is kept as it was written: a path of this machine
+  /// names the same folder with any case, but the app shows it as the
+  /// user wrote it (`C:\Projects`, not `c:\projects`).
+  String fsPath({bool windows = false, bool keepDriveLetterCasing = true}) {
     String value;
     if (authority.isNotEmpty && path.length > 1 && scheme == 'file') {
       value = '//$authority$path';
@@ -193,9 +199,8 @@ final class VsUri {
   int get hashCode => Object.hash(scheme, authority, path, query, fragment);
 
   String _asFormatted(bool skipEncoding) {
-    String encoder(String s, bool isPath, bool isAuthority) => skipEncoding
-        ? _encodeMinimal(s)
-        : _encodeFast(s, isPath, isAuthority);
+    String encoder(String s, bool isPath, bool isAuthority) =>
+        skipEncoding ? _encodeMinimal(s) : _encodeFast(s, isPath, isAuthority);
     final res = StringBuffer();
     var authority = this.authority;
     var path = this.path;
@@ -263,7 +268,8 @@ final class VsUri {
   }
 }
 
-bool _isAsciiLetter(int c) => (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A);
+bool _isAsciiLetter(int c) =>
+    (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A);
 
 void _validate(VsUri ret, bool strict) {
   if (ret.scheme.isEmpty && strict) {
@@ -389,12 +395,10 @@ final _encodedAsHex = RegExp(r'(%[0-9A-Za-z][0-9A-Za-z])+');
 
 String _decodeGraceful(String str) {
   try {
-    return utf8.decode(
-      [
-        for (var i = 0; i < str.length; i += 3)
-          int.parse(str.substring(i + 1, i + 3), radix: 16),
-      ],
-    );
+    return utf8.decode([
+      for (var i = 0; i < str.length; i += 3)
+        int.parse(str.substring(i + 1, i + 3), radix: 16),
+    ]);
   } on FormatException {
     if (str.length > 3) {
       return str.substring(0, 3) + _decodeGraceful(str.substring(3));
