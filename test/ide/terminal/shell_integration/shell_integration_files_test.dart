@@ -165,7 +165,8 @@ void main() {
         os: TerminalOs.macOS,
         folder: folder,
       );
-      final script = p.join(folder.path, 'shellIntegration-bash.sh');
+      // The path as the shell is given it: with a slash, the shell's way.
+      final script = '${folder.path}/shellIntegration-bash.sh';
       expect(injected.arguments, ['--init-file', script]);
       expect(File(script).existsSync(), isTrue);
       expect(injected.environment!['VSCODE_SHELL_LOGIN'], '1');
