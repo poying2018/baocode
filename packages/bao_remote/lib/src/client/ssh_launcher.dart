@@ -686,7 +686,7 @@ class SshLauncher {
   String get probeScript =>
       '''
 printf 'BAOCODE-PROBE %s %s\\n' "\$(uname -s)" "\$(uname -m)"
-if [ -x '$serverPath' ]; then echo BAOCODE-PRESENT; fi
+if [ -x ${_quoted(serverPath)} ]; then echo BAOCODE-PRESENT; fi
 if command -v gzip >/dev/null 2>&1; then echo BAOCODE-GZIP; fi
 exit 0
 ''';
@@ -697,9 +697,14 @@ exit 0
   String uploadCommand(String nonce, {required bool gzip}) {
     final temporary = '$_folder/.upload-$nonce';
     final write = gzip ? 'gzip -dc > $temporary' : 'cat > $temporary';
-    return "sh -c 'mkdir -p $_folder && $write && chmod 755 $temporary && "
-        "mv -f $temporary $serverPath'";
+    return "sh -c 'mkdir -p ${_quoted(_folder)} && $write && "
+        "chmod 755 $temporary && mv -f $temporary ${_quoted(serverPath)}'";
   }
+
+  /// [value] as the shell has it in one word: a quote of its own is
+  /// closed, escaped and opened again, so that it cannot end the quoting.
+  static String _quoted(String value) =>
+      "'${value.replaceAll("'", r"'\''")}'";
 
   /// [uname -m] as mason names it; null for one there is no build for.
   static String? architecture(String machine) => switch (machine) {
