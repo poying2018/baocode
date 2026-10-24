@@ -1440,7 +1440,17 @@ class AgentEngine {
         return {'rewound': false, 'error': 'A turn is running'};
       }
       _interrupt();
+      // The turn ends when it ends: a tool that does not take the
+      // interrupt, or a hook that never answers, would keep it here for
+      // ever.
+      final deadline = DateTime.now().add(const Duration(seconds: 30));
       while (identical(_turn, turn)) {
+        if (DateTime.now().isAfter(deadline)) {
+          return {
+            'rewound': false,
+            'error': 'The turn did not end; it was not rewound.',
+          };
+        }
         await Future<void>.delayed(const Duration(milliseconds: 20));
       }
     }

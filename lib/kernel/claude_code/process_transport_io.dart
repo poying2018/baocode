@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'package:bao_remote/local.dart' show killTree;
+
 import '../../models/launch_environment.dart';
 import '../../network/network_proxy_io.dart';
 import '../../platform/data_dir.dart';
@@ -226,26 +228,18 @@ class ProcessTransport implements ClaudeCodeTransport {
   void close() {
     if (_exitCode != null) return;
     unawaited(_process.stdin.close().catchError((_) {}));
-    if (Platform.isWindows) {
-      unawaited(_endTree());
-    } else {
-      _process.kill();
-    }
+    // The MCP servers it started go on without it: the tree goes with it.
+    unawaited(_endTree());
   }
 
-  /// Windows ends a killed process alone, and the MCP servers it started
-  /// go on without it: given a moment to end them itself, its input
-  /// closed, then ended with all it started.
+  /// Ends the CLI and what it started: given a moment to end itself, its
+  /// input closed, then ended with all it started.
   Future<void> _endTree() async {
     final ended = await _process.exitCode
         .timeout(const Duration(seconds: 1))
         .then((_) => true, onError: (Object _) => false);
     if (ended) return;
-    try {
-      await Process.run('taskkill', ['/pid', '${_process.pid}', '/T', '/F']);
-    } on ProcessException {
-      _process.kill();
-    }
+    await killTree(_process.pid, force: true);
   }
 }
 

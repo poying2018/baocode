@@ -74,6 +74,9 @@ class RpcPeer {
   /// Asks [method]; completes with the result, or with the error the other
   /// side answered (see [RpcError.toException]). Completing [cancel] gives
   /// up on it: the future fails with [RpcCancelled].
+  ///
+  /// A request the other side never answers fails after [timeout]: it
+  /// would otherwise wait for ever, holding what it asked for.
   Future<Object?> request(
     String method, [
     Object? params,
@@ -84,14 +87,24 @@ class RpcPeer {
     final completer = Completer<Object?>();
     _pending[id] = completer;
     _write({'jsonrpc': '2.0', 'id': id, 'method': method, 'params': ?params});
+    final timer = Timer(timeout, () {
+      if (_pending.remove(id) == null) return;
+      completer.completeError(
+        TimeoutException('$method timed out', timeout),
+      );
+    });
     cancel?.then((_) {
       if (_pending.remove(id) case final pending?) {
+        timer.cancel();
         notify(r'$/cancel', {'id': id});
         pending.completeError(const RpcCancelled());
       }
     });
-    return completer.future;
+    return completer.future.whenComplete(timer.cancel);
   }
+
+  /// How long a request waits for its answer.
+  static const timeout = Duration(minutes: 5);
 
   /// Tells [method], expecting no answer.
   void notify(String method, [Object? params]) {
@@ -147,8 +160,12 @@ class RpcPeer {
       }
       return;
     }
-    if (id is! int) return;
-    final completer = _pending.remove(id);
+    // The id of a response is what the peer named the request with: it
+    // may be a number or a string, as the protocol allows either, and a
+    // server may answer with the number as a string.
+    if (id is! int && id is! String) return;
+    final completer = _pending.remove(id) ??
+        _pending.remove(int.tryParse('$id'));
     if (completer == null) return;
     if (message['error'] case final Map error) {
       completer.completeError(

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:bao_remote/local.dart' show WatchChange, watchRecursively;
+import 'package:bao_remote/local.dart' show WatchChange, killTree, watchRecursively;
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
@@ -88,16 +88,7 @@ class _IoLspProcess implements LspProcess {
         // Still running: take the tree.
       }
     }
-    try {
-      await Process.run('taskkill', ['/pid', '${_process.pid}', '/T', '/F']);
-    } on ProcessException {
-      // No taskkill on this machine: the process alone goes.
-      try {
-        _process.kill();
-      } on Object {
-        // It is already gone.
-      }
-    }
+    await killTree(_process.pid, force: true);
   }
 
   Future<void> _stop(Duration timeout) async {

@@ -120,6 +120,20 @@ void main() {
     expect(await a.request('echo', 'still here'), 'still here');
   });
 
+  test('an answer with an id that is not a number still answers', () async {
+    // The protocol allows an id to be a string: the answer must not be
+    // dropped for that, or the request waits for ever.
+    final lines = StreamController<String>();
+    final peer = RpcPeer(lines.stream, (_) {});
+    final answer = peer.request('ask');
+    await Future<void>.delayed(Duration.zero);
+    lines.add(
+      jsonEncode({'jsonrpc': '2.0', 'id': '1', 'result': 'answered'}),
+    );
+    expect(await answer, 'answered');
+    await lines.close();
+  });
+
   test('a server of another protocol version is refused', () async {
     b.handlers[RemoteProtocol.initialize] = (_, _) => {
       'protocol': RemoteProtocol.version + 1,

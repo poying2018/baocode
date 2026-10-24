@@ -374,8 +374,21 @@ class TaskManager {
     for (final task in [...running]) {
       await stop(task.id);
     }
-    for (final command in [...foreground.values]) {
+    final commands = [...foreground.values];
+    for (final command in commands) {
       await killTree(command.process.pid);
+    }
+    // The commands are waited for: a session that ends with a command
+    // still running leaves it behind.
+    for (final command in commands) {
+      try {
+        await command.process.exitCode.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => 0,
+        );
+      } on Object {
+        // It is gone already.
+      }
     }
   }
 }
