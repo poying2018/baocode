@@ -395,7 +395,8 @@ void main() {
     final state = tester.state<StashEditorState>(find.byType(StashEditor));
     final asked = state.textPart!.text;
     expect(asked, isNot(contains('需求')));
-    expect(asked, contains('1/a.png]'));
+    // The picture's path in the stash's folder, as the machine spells it.
+    expect(asked, contains('${stashAbsolute('/stash', '1/a.png')}]'));
     // Changed meanwhile: not replaced.
     expect(state.rewrite('$asked!', 'whatever'), isFalse);
     expect(

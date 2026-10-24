@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -66,6 +67,10 @@ class FileStashDisk implements StashDisk {
   /// Counts the temporary files written, for their names.
   int _written = 0;
 
+  /// This disk's own mark in the names of its temporary files: two disks
+  /// of one process (two windows of it) are told apart by it.
+  final String _tag = Random().nextInt(1 << 32).toRadixString(16);
+
   @override
   Future<void> write(int id, String text) {
     final previous = _writing[id] ?? Future<void>.value();
@@ -82,16 +87,18 @@ class FileStashDisk implements StashDisk {
     await _folder();
     // Written whole, then moved in place: never half a file. A name of its
     // own, so another window (its own isolate, its own disk) writing the
-    // same stash meanwhile does not write into it.
+    // same stash meanwhile does not write into it. The name is of this
+    // disk's own too: two disks of one process (two windows of it) would
+    // else write into the same file.
     final file = _file(id);
     final temporary = File(
-      '${file.path}.$pid-${_written++}-'
+      '${file.path}.$pid-$_tag-${_written++}-'
       '${DateTime.now().microsecondsSinceEpoch}.tmp',
     );
     try {
       await temporary.writeAsString(text, flush: true);
       _own(p.basename(file.path));
-      await temporary.rename(file.path);
+      await _renameInPlace(temporary, file.path);
     } on Object {
       // The move did not happen: the name is not to be kept, or the
       // next change of that file by another app would be passed over.
@@ -102,6 +109,28 @@ class FileStashDisk implements StashDisk {
         // Moved in place, or never made.
       }
       rethrow;
+    }
+  }
+
+  /// [temporary] moved over [target], which takes its place whole.
+  ///
+  /// Windows lets a file be moved over another only when that one is not
+  /// held open: another window writing the same stash holds it for a
+  /// moment, and the move is tried again a while (as a file the system's
+  /// own indexing holds open is).
+  static Future<void> _renameInPlace(File temporary, String target) async {
+    for (var attempt = 0;; attempt++) {
+      try {
+        await temporary.rename(target);
+        return;
+      } on FileSystemException catch (error) {
+        final code = error.osError?.errorCode;
+        final held = code == 5 || code == 32 || error is PathAccessException;
+        if (!held || attempt >= 20) rethrow;
+        await Future<void>.delayed(
+          Duration(milliseconds: 20 + attempt * 20),
+        );
+      }
     }
   }
 
