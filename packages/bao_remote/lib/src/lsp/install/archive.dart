@@ -91,7 +91,29 @@ String _inside(String directory, String entry) {
   return target;
 }
 
-Future<void> _link(String directory, String path, String target) async {
+/// A link the archive meant, that the machine could not make: it is
+/// filled in once the archive is wholly unpacked, since the target may
+/// come after the link in it.
+class _PendingLink {
+  _PendingLink(this.path, this.target);
+
+  final String path;
+  final String target;
+}
+
+/// Makes the link at [path] to [target], both inside [directory].
+///
+/// Where the machine cannot make a link (Windows asks for a privilege a
+/// machine without Developer Mode does not have), the link is remembered in
+/// [pending] and filled in with the target's own bytes once the archive is
+/// wholly unpacked: the archive means the same file by either, and the
+/// server it is installed for runs it.
+Future<void> _link(
+  String directory,
+  String path,
+  String target,
+  List<_PendingLink> pending,
+) async {
   final resolved = p.normalize(p.join(p.dirname(path), target));
   if (p.isAbsolute(target) || !p.isWithin(directory, resolved)) {
     throw LspInstallException('Archive link escapes its folder: $target');
@@ -101,7 +123,31 @@ Future<void> _link(String directory, String path, String target) async {
   if (await link.exists() || await File(path).exists()) {
     await File(path).delete();
   }
-  await link.create(target);
+  try {
+    await link.create(target);
+  } on FileSystemException {
+    // The machine would not make the link. The target may not be there
+    // yet (it can come later in the archive), so the copy waits for the
+    // archive to be wholly unpacked.
+    pending.add(_PendingLink(path, target));
+  }
+}
+
+/// Puts the target's bytes where the link would have pointed.
+Future<void> _copyLinkTarget(String resolved, String path) async {
+  final source = File(resolved);
+  if (!await source.exists()) {
+    throw LspInstallException('Archive link points at nothing: $resolved');
+  }
+  await source.copy(path);
+}
+
+/// Fills in the links the machine would not make.
+Future<void> _fillLinks(List<_PendingLink> pending) async {
+  for (final link in pending) {
+    final resolved = p.normalize(p.join(p.dirname(link.path), link.target));
+    await _copyLinkTarget(resolved, link.path);
+  }
 }
 
 /// Extracts a ZIP archive (stored or deflated entries, Zip64 included)
@@ -129,6 +175,7 @@ Future<List<String>> extractZip(Uint8List bytes, String directory) async {
     offset = data.getUint64(zip64 + 48, Endian.little);
   }
   final executables = <String>[];
+  final pending = <_PendingLink>[];
   for (var i = 0; i < count; i++) {
     if (data.getUint32(offset, Endian.little) != 0x02014b50) {
       throw const LspInstallException('Broken ZIP central directory');
@@ -192,13 +239,14 @@ Future<List<String>> extractZip(Uint8List bytes, String directory) async {
       ),
     };
     if (mode & 0xF000 == 0xA000) {
-      await _link(directory, target, utf8.decode(content));
+      await _link(directory, target, utf8.decode(content), pending);
       continue;
     }
     await Directory(p.dirname(target)).create(recursive: true);
     await File(target).writeAsBytes(content);
     if (mode & 0x49 != 0) executables.add(target);
   }
+  await _fillLinks(pending);
   return executables;
 }
 
@@ -229,6 +277,7 @@ Future<List<String>> extractTar(List<int> input, String directory) async {
 
   final executables = <String>[];
   final hardLinks = <(String, String)>[];
+  final pending = <_PendingLink>[];
   String? longName;
   String? longLink;
   var offset = 0;
@@ -285,7 +334,7 @@ Future<List<String>> extractTar(List<int> input, String directory) async {
       case '5':
         await Directory(target).create(recursive: true);
       case '2':
-        await _link(directory, target, linkName);
+        await _link(directory, target, linkName, pending);
       case '1':
         hardLinks.add((target, _inside(directory, linkName)));
       case '0' || '7':
@@ -300,5 +349,6 @@ Future<List<String>> extractTar(List<int> input, String directory) async {
     await File(source).copy(path);
     if (executables.contains(source)) executables.add(path);
   }
+  await _fillLinks(pending);
   return executables;
 }
