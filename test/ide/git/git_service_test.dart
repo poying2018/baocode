@@ -191,6 +191,13 @@ void main() {
       ['--upload-pack=calc'],
       ['--exec-path=/tmp'],
       ['--receive-pack', 'calc'],
+      // A hook is a program too, and so is a filter.
+      ['-c', 'core.hooksPath=/tmp/hooks'],
+      ['-c', 'filter.lfs.process=calc'],
+      ['-c', 'core.fsmonitor=calc'],
+      ['-c', 'core.askPass=calc'],
+      // A setting read from the environment is one more way in.
+      ['--config-env=core.sshCommand=EVIL'],
     ]) {
       await expectLater(
         runGit(arguments, workingDirectory: root),

@@ -30,6 +30,10 @@ const _forbiddenGitOptions = {
   '--receive-pack',
   '--ssh-command',
   '--super-prefix',
+  '--config-env',
+  '--html-path',
+  '--man-path',
+  '--info-path',
 };
 
 /// The settings of `-c` that make Git run a program of the caller's.
@@ -43,6 +47,14 @@ const _forbiddenGitSettings = {
   'diff.tool',
   'credential.helper',
   'sequence.editor',
+  // The hooks it runs are programs too, and so are the filters it runs
+  // on the files it adds or checks out.
+  'core.hookspath',
+  'core.fsmonitor',
+  'core.askpass',
+  'filter.',
+  'uploadpack.packobjectshook',
+  'receivepack.packobjectshook',
 };
 
 /// Whether [arguments] are Git's own and safe to run: the ones that make
