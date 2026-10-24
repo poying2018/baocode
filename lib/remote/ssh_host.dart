@@ -63,6 +63,8 @@ class SshHost extends ChangeNotifier implements ProjectHost {
   @override
   String get name => host;
 
+  /// The paths as the host spells them: the host is a POSIX machine (the
+  /// server there is run with `sh`), so `/…`.
   @override
   p.Context get paths => p.posix;
 

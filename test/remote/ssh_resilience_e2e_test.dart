@@ -273,7 +273,7 @@ void main() {
     final path = '$home/weak.bin';
     await client.writeBytes(home, path, bytes);
     for (var i = 0; i < 3; i++) {
-      expect(await client.readBytes(path), bytes);
+      expect(await client.readBytes(home, path), bytes);
       expect([
         for (final file in await client.list(home, home)) file.name,
       ], contains('weak.bin'));

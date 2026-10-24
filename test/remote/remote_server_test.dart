@@ -158,15 +158,15 @@ void main() {
       Directory(at('sub')).createSync();
       File(at('sub/a.txt')).writeAsStringSync('abc');
 
-      final first = await client().readRange(at('big.bin'), 0, 4);
+      final first = await client().readRange(root, at('big.bin'), 0, 4);
       expect(first.bytes, [0, 1, 2, 3]);
       expect(first.size, 10);
-      final last = await client().readRange(at('big.bin'), 8, 4);
+      final last = await client().readRange(root, at('big.bin'), 8, 4);
       expect(last.bytes, [8, 9]);
-      final past = await client().readRange(at('big.bin'), 12, 4);
+      final past = await client().readRange(root, at('big.bin'), 12, 4);
       expect(past.bytes, isEmpty);
       await expectLater(
-        client().readRange(at('none'), 0, 4),
+        client().readRange(root, at('none'), 0, 4),
         throwsA(isA<IdeFileNotFoundException>()),
       );
 
@@ -182,7 +182,7 @@ void main() {
       File(at('lib/m.dart'))
         ..createSync(recursive: true)
         ..writeAsStringSync('');
-      expect(await client().readBytes(at('img.png')), [137, 80, 78, 71]);
+      expect(await client().readBytes(root, at('img.png')), [137, 80, 78, 71]);
       final listing = await client().walk(root);
       expect(listing.paths, [at('img.png'), at('lib/m.dart')]);
       expect(listing.truncated, isFalse);
