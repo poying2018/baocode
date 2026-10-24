@@ -367,8 +367,8 @@ class _ChatScreenState extends State<ChatScreen>
     if (_contextPanelOpen) _session.refreshUsage();
   }
 
-  void _answer(InteractionAnswer answer) {
-    _session.answer(answer);
+  void _answer(InteractionAnswer answer, {String? requestId}) {
+    _session.answer(answer, requestId: requestId);
     _composerKey.currentState?.focus();
   }
 
@@ -478,11 +478,15 @@ class _ChatScreenState extends State<ChatScreen>
     ChatCommandIds.find: _findIn,
     if (_session.isStreaming)
       ChatCommandIds.cancel: () => stopTurn(context, _session),
-    if (_session.pendingInteraction is ApprovalRequest) ...{
-      ChatCommandIds.acceptTool: () =>
-          _answer(const ApprovalAnswer(ApprovalDecision.allowOnce)),
-      ChatCommandIds.skipTool: () =>
-          _answer(const ApprovalAnswer(ApprovalDecision.deny)),
+    if (_session.pendingInteraction case final ApprovalRequest request?) ...{
+      ChatCommandIds.acceptTool: () => _answer(
+        const ApprovalAnswer(ApprovalDecision.allowOnce),
+        requestId: request.id,
+      ),
+      ChatCommandIds.skipTool: () => _answer(
+        const ApprovalAnswer(ApprovalDecision.deny),
+        requestId: request.id,
+      ),
     },
     ChatCommandIds.toggleContextPanel: _toggleContextPanel,
     if (_renames)
@@ -956,7 +960,8 @@ class _ChatScreenState extends State<ChatScreen>
                       final request? => InteractionPanel(
                         key: ObjectKey(request),
                         request: request,
-                        onAnswer: _answer,
+                        onAnswer: (answer) =>
+                            _answer(answer, requestId: request.id),
                       ),
                       null => null,
                     },

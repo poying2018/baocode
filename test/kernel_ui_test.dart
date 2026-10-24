@@ -139,6 +139,39 @@ Map<String, Object?> result(
 };
 
 void main() {
+  testWidgets('an answer goes to the request it was given for', (tester) async {
+    final (:session, :cli) = await pumpScripted(tester, cli: FakeCli());
+    void ask(String id, String tool) => cli.push({
+      'type': 'control_request',
+      'request_id': id,
+      'request': {
+        'subtype': 'can_use_tool',
+        'tool_name': tool,
+        'input': {'command': 'ls', 'description': 'List'},
+      },
+    });
+
+    ask('r1', 'Bash');
+    await tester.pump(const Duration(milliseconds: 100));
+    final first = session.pendingInteraction!;
+    expect(first.id, 'r1');
+
+    // A second request comes: the panel is built for the first, and the
+    // answer of the second must not answer the first.
+    ask('r2', 'Read');
+    await tester.pump(const Duration(milliseconds: 100));
+
+    session.answer(
+      const ApprovalAnswer(ApprovalDecision.deny),
+      requestId: 'r2',
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+    final answered = cli.responses.map((response) => response['behavior']);
+    expect(answered, ['deny']);
+    // The first is still asked: it was not answered.
+    expect(session.pendingInteraction?.id, 'r1');
+  });
+
   testWidgets('Enter in the empty composer while the agent works sends the '
       'queued message now; with none queued, does nothing (#160)', (
     tester,

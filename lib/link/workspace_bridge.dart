@@ -294,7 +294,7 @@ class WorkspaceBridge {
         if (answer == null) {
           throw const LinkRemoteException('bad', 'Not an answer');
         }
-        session.answer(answer);
+        session.answer(answer, requestId: pending.id);
         return null;
       case LinkMethods.startPlan:
         final session = _thread(params['session']).session;

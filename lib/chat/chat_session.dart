@@ -1100,10 +1100,13 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
 
   void stop() => _kernel.cancel();
 
-  void answer(InteractionAnswer answer) {
-    if (pendingInteraction case final request?) {
-      _kernel.answer(request.id, answer);
-    }
+  /// Answers the request [requestId] — the one the panel was built for:
+  /// another may be pending as well, and it is not this one's answer.
+  /// Without one, the pending request is answered.
+  void answer(InteractionAnswer answer, {String? requestId}) {
+    final id = requestId ?? pendingInteraction?.id;
+    if (id == null) return;
+    _kernel.answer(id, answer);
   }
 
   void rename(String title) {
