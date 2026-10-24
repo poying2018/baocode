@@ -359,6 +359,13 @@ class ModelProxy {
       response.write(events);
       await response.flush();
     }
+    // The upstream's stream ended without saying the message was over:
+    // the client waits for a `message_stop`, and it would wait for ever.
+    final ended = translator.finish();
+    if (ended.isNotEmpty) {
+      response.write(ended);
+      await response.flush();
+    }
     return response.close();
   }
 

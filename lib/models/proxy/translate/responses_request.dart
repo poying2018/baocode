@@ -168,11 +168,14 @@ Map<String, Object?> convertClaudeRequestToResponses(
               final id = content.get('id').string;
               if (id.isNotEmpty) pendingToolUseIds.add(id);
               final name = content.get('name').string;
+              final input = content.get('input');
               inputItems.add({
                 'type': 'function_call',
                 'call_id': shortenCallIdIfNeeded(id),
                 'name': toolNameMap[name] ?? shortenNameIfNeeded(name),
-                'arguments': content.get('input').raw,
+                // The arguments are JSON: a call with none is an empty
+                // object, not an empty text.
+                'arguments': input.exists ? input.raw : '{}',
               });
             case 'tool_result':
               flushMessage();

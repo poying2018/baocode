@@ -65,6 +65,39 @@ class ResponsesResponseTranslator {
   bool get hasPendingFunctionCalls =>
       _functionCalls.isNotEmpty || _queue.isNotEmpty || _last != null;
 
+  /// The events that end the message, when the upstream's stream ended
+  /// without saying so: the client waits for a `message_stop`, and it
+  /// would wait for ever without one.
+  String finish() {
+    if (_stopped) return '';
+    _stopped = true;
+    final output = StringBuffer()
+      ..write(_finalizeThinkingBlock())
+      ..write(_stopTextBlock())
+      ..write(_flushDeferred());
+    final (input, outputTokens, cached, cacheWrite) = extractResponsesUsage(
+      _request.get('usage'),
+    );
+    return '$output${sseEvent('message_delta', {
+      'type': 'message_delta',
+      'delta': {
+        'stop_reason': mapResponsesStopReasonToClaude(
+          'completed',
+          hasEmittedToolUse,
+        ),
+        'stop_sequence': null,
+      },
+      'usage': {
+        'input_tokens': input,
+        'output_tokens': outputTokens,
+        if (cached > 0) 'cache_read_input_tokens': cached,
+        if (cacheWrite > 0) 'cache_creation_input_tokens': cacheWrite,
+      },
+    })}${sseEvent('message_stop', {'type': 'message_stop'})}';
+  }
+
+  bool _stopped = false;
+
   /// The events for one line of the upstream's stream, as one text; empty
   /// for a line that is not `data:`, or one whose events wait.
   String convert(String line) {
@@ -173,6 +206,7 @@ class ResponsesResponseTranslator {
             }),
           )
           ..write(sseEvent('message_stop', {'type': 'message_stop'}));
+        _stopped = true;
       case 'response.output_item.added':
         final item = root.get('item');
         switch (item.get('type').string) {

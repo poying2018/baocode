@@ -42,6 +42,20 @@ void main() {
     expect(out.get('prompt_cache_key').exists, isFalse);
   });
 
+  test('a tool call with no arguments is an empty object, not empty text', () {
+    // The arguments are JSON: an empty text is not JSON, and the
+    // upstream would have nothing to run.
+    final out = convert(
+      '{"messages":[{"role":"assistant","content":[{"type":"tool_use",'
+      '"id":"t1","name":"Read"}]},{"role":"user","content":'
+      '[{"type":"tool_result","tool_use_id":"t1","content":"ok"}]}]}',
+    );
+    final call = inputs(out).firstWhere(
+      (item) => item.get('type').string == 'function_call',
+    );
+    expect(call.get('arguments').string, '{}');
+  });
+
   group('system message scenarios', () {
     final cases = [
       (

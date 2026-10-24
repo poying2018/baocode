@@ -1268,4 +1268,22 @@ void main() {
     expect(stopReason(outputs), 'tool_use');
     expect(messageDelta(outputs)!.get('usage.output_tokens').integer, 7);
   });
+
+  test('a stream that ends without saying so is ended all the same', () {
+    // The upstream's connection drops: the client waits for a
+    // message_stop, and it would wait for ever without one.
+    final translator = ResponsesResponseTranslator('{"messages":[]}');
+    final outputs = feed(translator, [
+      'data: {"type":"response.created","response":{"id":"resp_x"}}',
+      'data: {"type":"response.output_text.delta","delta":"Hi.","output_index":0}',
+    ]);
+    expect(dataOf(outputs).where((d) => d.get('type').string == 'message_stop'), isEmpty);
+
+    final ended = translator.finish();
+    expect(ended, isNotEmpty);
+    final data = dataOf([ended]);
+    expect(data.last.get('type').string, 'message_stop');
+    // Said once, however often it is asked.
+    expect(translator.finish(), isEmpty);
+  });
 }
