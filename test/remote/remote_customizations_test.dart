@@ -1,4 +1,4 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
 import 'dart:convert';
@@ -34,10 +34,12 @@ void main() {
   setUp(() {
     dataDir = Directory.systemTemp.createTempSync('baocode-remote-data-');
     temp = Directory.systemTemp.createTempSync('baocode-remote-custom-');
-    final root = temp.resolveSymbolicLinksSync();
-    home = p.join(root, 'home');
-    config = p.join(home, '.claude');
-    project = p.join(root, 'project');
+    // The host's paths are the host's own: a POSIX one, the host the
+    // server runs on is (the server there is run with `sh`).
+    final root = temp.resolveSymbolicLinksSync().replaceAll(r'\', '/');
+    home = p.posix.join(root, 'home');
+    config = p.posix.join(home, '.claude');
+    project = p.posix.join(root, 'project');
     Directory(project).createSync(recursive: true);
     host = SshHost('dev', connect: MemoryConnector(dataDir.path).call);
     store = CustomizationStore(
@@ -54,28 +56,37 @@ void main() {
 
   test("the host's skills, the user's, synced and its project's", () async {
     write(
-      p.join(config, 'skills', 'pdf', 'SKILL.md'),
+      p.posix.join(config, 'skills', 'pdf', 'SKILL.md'),
       '---\nname: pdf\ndescription: Reads PDF files\n---\n',
     );
-    write(p.join(config, 'skills', 'synced', 'a', 'web', 'SKILL.md'), 'Web');
-    write(p.join(project, '.claude', 'skills', 'ship', 'SKILL.md'), 'Ships');
-    // A skill linked in from elsewhere, as installers do.
-    write(p.join(home, 'shared', 'lint', 'SKILL.md'), 'Lints');
-    Link(
-      p.join(config, 'skills', 'lint'),
-    ).createSync(p.join(home, 'shared', 'lint'));
+    write(p.posix.join(config, 'skills', 'synced', 'a', 'web', 'SKILL.md'), 'Web');
+    write(p.posix.join(project, '.claude', 'skills', 'ship', 'SKILL.md'), 'Ships');
+    // A skill linked in from elsewhere, as installers do. Windows needs a
+    // privilege to make a link; without it, the link is left out.
+    write(p.posix.join(home, 'shared', 'lint', 'SKILL.md'), 'Lints');
+    var linked = true;
+    try {
+      Link(
+        p.posix.join(config, 'skills', 'lint'),
+      ).createSync(p.posix.join(home, 'shared', 'lint'));
+    } on FileSystemException {
+      linked = false;
+    }
 
     final skills = await store.list(
       CustomizationKind.skills,
       project: project,
     );
     expect([for (final skill in skills) (skill.scope, skill.name)], [
-      (CustomizationScope.user, 'lint'),
+      if (linked) (CustomizationScope.user, 'lint'),
       (CustomizationScope.user, 'pdf'),
       (CustomizationScope.synced, 'web'),
       (CustomizationScope.project, 'ship'),
     ]);
-    expect(skills[1].description, 'Reads PDF files');
+    expect(
+      skills.firstWhere((skill) => skill.name == 'pdf').description,
+      'Reads PDF files',
+    );
   });
 
   test('made there, folders and all; edited and deleted there', () async {
@@ -85,7 +96,7 @@ void main() {
       'reviewer',
       project: project,
     );
-    expect(path, p.join(project, '.claude', 'agents', 'reviewer.md'));
+    expect(path, p.posix.join(project, '.claude', 'agents', 'reviewer.md'));
     expect(File(path).existsSync(), isTrue);
     await expectLater(
       store.create(
@@ -112,7 +123,7 @@ void main() {
 
   test('its MCP servers, from its ~/.claude.json and the project', () async {
     write(
-      p.join(home, '.claude.json'),
+      p.posix.join(home, '.claude.json'),
       jsonEncode({
         'mcpServers': {
           'docs': {'command': 'docs-server'},
