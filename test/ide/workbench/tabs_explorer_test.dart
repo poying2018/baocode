@@ -7,6 +7,7 @@ import 'package:baocode/ide/ide_explorer.dart';
 import 'package:baocode/ide/ide_hover.dart';
 import 'package:baocode/ide/ide_tab_bar.dart';
 import 'package:baocode/ide/ide_welcome.dart';
+import 'package:path/path.dart' as p;
 
 import 'fake_files.dart';
 
@@ -117,7 +118,8 @@ void main() {
     await pumpWorkbench(tester, files, open: ['lib/util.dart', 'a.dart']);
     await _menu(tester, 'util.dart', 'Copy Relative Path');
     await _menu(tester, 'util.dart', 'Copy Path');
-    expect(copied, ['lib/util.dart', inRoot('lib/util.dart')]);
+    // The relative path as the machine spells it.
+    expect(copied, [p.join('lib', 'util.dart'), inRoot('lib/util.dart')]);
 
     // The explorer follows the active editor: a.dart is selected now.
     await tester.pumpAndSettle();

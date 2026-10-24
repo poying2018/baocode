@@ -18,9 +18,14 @@ import 'package:baocode/ide/terminal/terminal_view.dart';
 import 'package:baocode/ide/terminal/terminal_widget.dart';
 import 'package:baocode/theme/code_font.dart';
 import 'package:baocode/theme/codicons.dart';
+import 'package:path/path.dart' as p;
 
 import 'fake_pty.dart';
 import 'fake_terminal.dart';
+
+/// The terminal's folder, and the file in it, as the machine spells them.
+final _root = p.normalize('/project');
+final _main = p.join(_root, 'src', 'main.dart');
 
 /// A terminal on a fake process, shown 600 by 300.
 Future<({TerminalInstance terminal, FakePty pty})> _show(
@@ -34,7 +39,7 @@ Future<({TerminalInstance terminal, FakePty pty})> _show(
   final started = <FakePty>[];
   final terminal = TerminalInstance(
     id: 1,
-    root: '/project',
+    root: _root,
     backend: fakeTerminalBackend(started, files: files),
   );
   await tester.pumpWidget(
@@ -595,7 +600,7 @@ void main() {
     final (:terminal, :pty) = await _show(
       tester,
       onOpenLink: opened.add,
-      files: {'/project/src/main.dart': false},
+      files: {_main: false},
     );
     pty.emitText('see https://example.com/a\r\nsrc/main.dart:12:3 and word');
     await _parsed(tester);
@@ -636,7 +641,7 @@ void main() {
     expect(opened[0].text, 'https://example.com/a');
     expect(
       (opened[1].path, opened[1].line, opened[1].column),
-      ('/project/src/main.dart', 12, 3),
+      (_main, 12, 3),
     );
 
     // A word is a link to search for: underlined only with Ctrl down.
@@ -657,7 +662,7 @@ void main() {
     final started = <FakePty>[];
     final terminal = TerminalInstance(
       id: 1,
-      root: '/project',
+      root: _root,
       backend: fakeTerminalBackend(started),
     );
     addTearDown(() async {
