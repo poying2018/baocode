@@ -15,10 +15,32 @@ const fixtures = 'test/fixtures/lsp/mason';
 const mac = MasonPlatform('darwin', 'arm64');
 const win = MasonPlatform('win', 'x64');
 
+/// The machine the tests run on: the files are on it, however the
+/// package under test was built for another platform.
+final machine = MasonServerProvider.currentPlatform();
+
 /// Whether [file] may be run: its executable bit on Unix, its being a file
 /// on Windows (where there are none).
 bool _executable(File file) =>
     Platform.isWindows ? file.existsSync() : file.statSync().mode & 0x40 != 0;
+
+/// What the link at [path] points at; where Windows could not make one,
+/// the copy of the target it made instead.
+String _linkTarget(String path) {
+  final link = Link(path);
+  if (link.existsSync()) return link.targetSync();
+  // A copy of the target: what it holds is what the link pointed at.
+  return File(path).readAsStringSync().contains('fake-ls') ? 'fake-ls' : '';
+}
+
+/// The smallest bytes Windows accepts as a program: a PE image.
+List<int> _windowsProgram() => [
+  0x4D, 0x5A, // 'MZ'
+  ...List<int>.filled(0x3A, 0),
+  0x40, 0, 0, 0, // the offset of the PE header
+  0x50, 0x45, 0, 0, // 'PE'
+  ...List<int>.filled(0x34, 0),
+];
 
 /// Serves fixture files for URLs by their last path segment; never the
 /// network.
@@ -47,9 +69,14 @@ class FakeDownloader implements Downloader {
 /// Records commands and acts out what each installer would leave behind;
 /// `chmod` really runs (a local file mode change).
 class FakeRunner implements CommandRunner {
-  FakeRunner({this.exitCode = 0});
+  FakeRunner({this.exitCode = 0, MasonPlatform? platform})
+    : platform = platform ?? MasonServerProvider.currentPlatform();
 
   final int exitCode;
+
+  /// The platform the package is installed for: it decides the name the
+  /// installer writes its executable under.
+  final MasonPlatform platform;
   final calls = <(String, List<String>, Map<String, String>?)>[];
 
   @override
@@ -68,7 +95,9 @@ class FakeRunner implements CommandRunner {
         return const CommandResult(0);
       }
     }
-    calls.add((p.basename(executable), arguments, environment));
+    // The command as it was given: the path matters, as where the
+    // installer left things depends on it.
+    calls.add((executable, arguments, environment));
     if (exitCode != 0) {
       return CommandResult(
         exitCode,
@@ -81,21 +110,28 @@ class FakeRunner implements CommandRunner {
       try {
         await Process.run('chmod', ['+x', path]);
       } on ProcessException {
-        // No chmod on Windows; the injected platform says executable
+        // No chmod on Windows; the platform under test says executable
         // there anyway.
       }
     }
 
-    switch (p.basename(executable)) {
-      case 'npm' || 'npm.cmd':
+    // The name the installer wrote it under: the platform the package is
+    // installed for decides it.
+    String named(String name) => platform.isWindows ? '$name.exe' : name;
+
+    // The program the command is: its own name, without the extension
+    // the machine gives it.
+    final program = p.basenameWithoutExtension(executable).toLowerCase();
+
+    switch (program) {
+      case 'npm':
         final prefix = arguments[arguments.indexOf('--prefix') + 1];
         await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls'));
         await touch(
           p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
         );
-      case 'node' || 'node.exe' || 'node.EXE'
-        when arguments.isNotEmpty &&
-            arguments.first.endsWith('npm-cli.js'):
+      case 'node'
+          when arguments.isNotEmpty && arguments.first.endsWith('npm-cli.js'):
         // Run as node with npm's own script (Windows): the same install,
         // the same things left behind.
         final prefix = arguments[arguments.indexOf('--prefix') + 1];
@@ -103,15 +139,17 @@ class FakeRunner implements CommandRunner {
         await touch(
           p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
         );
-      case 'python3' when arguments.contains('venv'):
+      case 'python'
+          when arguments.contains('-m') && arguments.contains('venv'):
+        // The venv's own python: where pip runs from.
         await touch(p.join(arguments.last, 'bin', 'python'));
       case 'python':
-        await touch(p.join(p.dirname(executable), 'fake-py-ls'));
+        await touch(p.join(p.dirname(executable), named('fake-py-ls')));
       case 'go':
-        await touch(p.join(environment!['GOBIN']!, 'fake-go-ls'));
+        await touch(p.join(environment!['GOBIN']!, named('fake-go-ls')));
       case 'cargo':
         final root = arguments[arguments.indexOf('--root') + 1];
-        await touch(p.join(root, 'bin', 'fake-cargo-ls'));
+        await touch(p.join(root, 'bin', named('fake-cargo-ls')));
     }
     return const CommandResult(0);
   }
@@ -127,6 +165,16 @@ final registry = MasonRegistry.fromJson({
         'asset': [
           {
             'target': 'darwin_arm64',
+            'file': 'fake-ls-{{ version | strip_prefix "v" }}.zip',
+            'bin': 'fake-ls/bin/fake-ls',
+          },
+          {
+            'target': 'win_x64',
+            'file': 'fake-ls-{{ version | strip_prefix "v" }}.zip',
+            'bin': 'fake-ls/bin/fake-ls',
+          },
+          {
+            'target': 'linux_x64',
             'file': 'fake-ls-{{ version | strip_prefix "v" }}.zip',
             'bin': 'fake-ls/bin/fake-ls',
           },
@@ -152,7 +200,7 @@ final registry = MasonRegistry.fromJson({
       'name': 'fake-gz',
       'source': {
         'id': 'pkg:github/example/fake-ls@1.0',
-        'asset': {'target': 'unix', 'file': 'fake-ls.gz'},
+        'asset': {'file': 'fake-ls.gz'},
       },
       'bin': {'fake-gz-ls': 'fake-ls'},
     },
@@ -226,7 +274,11 @@ void main() {
           'printf "%s\\n" "\$@" > "${p.join(dir.path, 'args')}"\n',
         );
       try {
-        Process.runSync('chmod', ['755', java.path, '$package/mason-bin/jdtls']);
+        Process.runSync('chmod', [
+          '755',
+          java.path,
+          '$package/mason-bin/jdtls',
+        ]);
       } on ProcessException {
         // No chmod on Windows.
       }
@@ -286,9 +338,20 @@ void main() {
 
   tearDown(() => temp.delete(recursive: true));
 
+  /// A tool in the tools folder, as the machine would look for it: with
+  /// one of its extensions on Windows, and a program Windows can start.
   Future<void> tool(String name) async {
     final path = p.join(toolsDir, name);
-    await File(path).writeAsString('#!/bin/sh\n');
+    // Windows starts a PE image, or a batch file; elsewhere the
+    // executable bit is what counts.
+    await File(path).writeAsBytes(
+      Platform.isWindows ? _windowsProgram() : '#!/bin/sh\n'.codeUnits,
+    );
+    // Windows looks for a command with one of its extensions, as
+    // `cmd.exe` does.
+    if (Platform.isWindows) {
+      await File('$path.cmd').writeAsString('@echo off\r\n');
+    }
     try {
       await Process.run('chmod', ['+x', path]);
     } on ProcessException {
@@ -296,6 +359,11 @@ void main() {
       // there anyway.
     }
   }
+
+  /// The path of the tool [name] as this machine spells it: with the
+  /// extension Windows gives it.
+  String toolPath(String name) =>
+      Platform.isWindows ? p.join(toolsDir, '$name.cmd') : p.join(toolsDir, name);
 
   /// A Windows-style Node folder: only `npm.cmd` (and node) on PATH, npm's
   /// Bash script beside it as a plain extensionless file, and its
@@ -314,21 +382,26 @@ void main() {
   MasonServerProvider provider({
     FakeDownloader? downloader,
     FakeRunner? runner,
-    MasonPlatform platform = mac,
-  }) => MasonServerProvider(
-    registry: registry,
-    installRoot: root,
-    downloader:
-        downloader ??
-        FakeDownloader({
-          'fake-ls-1.0.0.zip': 'fake-ls.zip',
-          'fake-ls.tar.gz': 'fake-ls.tar.gz',
-          'fake-ls.gz': 'fake-ls.gz',
-        }),
-    runner: runner ?? FakeRunner(),
-    environment: () async => environment,
-    platform: platform,
-  );
+    MasonPlatform? platform,
+  }) {
+    // The machine's own platform, unless the test asks for another: the
+    // files are on this machine, however the package is built for.
+    final target = platform ?? MasonServerProvider.currentPlatform();
+    return MasonServerProvider(
+      registry: registry,
+      installRoot: root,
+      downloader:
+          downloader ??
+          FakeDownloader({
+            'fake-ls-1.0.0.zip': 'fake-ls.zip',
+            'fake-ls.tar.gz': 'fake-ls.tar.gz',
+            'fake-ls.gz': 'fake-ls.gz',
+          }),
+      runner: runner ?? FakeRunner(platform: target),
+      environment: () async => environment,
+      platform: target,
+    );
+  }
 
   LspServerDefinition server(String command, [String? package]) =>
       LspServerDefinition(id: command, command: command, masonPackage: package);
@@ -339,7 +412,10 @@ void main() {
       await File(p.join(fixtures, fixture)).copy(file);
       final executables = await unpackDownload(file, runner: FakeRunner());
       expect(File(file).existsSync(), isFalse, reason: 'archive removed');
-      return [for (final e in executables) p.relative(e, from: temp.path)];
+      return [
+        for (final e in executables)
+          p.relative(e, from: temp.path).replaceAll(r'\', '/'),
+      ];
     }
 
     test('zip: files, modes, directories and symlinks', () async {
@@ -350,7 +426,7 @@ void main() {
         contains('echo fake-ls'),
       );
       expect(File(p.join(dir, 'share', 'readme.txt')).lengthSync(), 300);
-      expect(Link(p.join(dir, 'bin', 'fake-link')).targetSync(), 'fake-ls');
+      expect(_linkTarget(p.join(dir, 'bin', 'fake-link')), 'fake-ls');
     });
 
     test('tar.gz: GNU long names, symlinks and hard links', () async {
@@ -369,7 +445,7 @@ void main() {
         ).readAsStringSync(),
         'deep',
       );
-      expect(Link(p.join(dir, 'bin', 'fake-link')).targetSync(), 'fake-ls');
+      expect(_linkTarget(p.join(dir, 'bin', 'fake-link')), 'fake-ls');
       expect(
         File(p.join(dir, 'bin', 'fake-hard')).readAsStringSync(),
         contains('echo fake-ls'),
@@ -453,14 +529,20 @@ void main() {
       await mason.install('fake-tar');
       final dir = p.join(root, 'fake-tar');
       final manifest = (await mason.installed('fake-tar'))!;
+      // The wrapper is a `.cmd` on Windows: it is what `cmd.exe` runs.
+      final wrapperName = machine.isWindows ? 'fake-tar-node.cmd' : 'fake-tar-node';
       expect(manifest.bin, {
         'fake-tar-ls': 'libexec/fake-ls-1.0/bin/fake-ls',
-        'fake-tar-node': 'mason-bin/fake-tar-node',
+        'fake-tar-node': 'mason-bin/$wrapperName',
       });
-      final wrapper = File(p.join(dir, 'mason-bin', 'fake-tar-node'));
+      final wrapper = File(p.join(dir, 'mason-bin', wrapperName));
+      // The wrapper is what the machine runs: a shell script elsewhere, a
+      // batch file on Windows.
       expect(
         wrapper.readAsStringSync(),
-        contains(r'exec node "$dir/libexec/fake-ls-1.0/bin/fake-ls" "$@"'),
+        machine.isWindows
+            ? contains(r'node "%~dp0..\libexec\fake-ls-1.0\bin\fake-ls"')
+            : contains(r'exec node "$dir/libexec/fake-ls-1.0/bin/fake-ls" "$@"'),
       );
       expect(_executable(wrapper), isTrue);
       final location = await mason.locate(server('fake-tar-node', 'fake-tar'));
@@ -508,7 +590,8 @@ void main() {
       await tool('npm');
       await mason.install('fake-npm');
       final (npm, arguments, env) = runner.calls.single;
-      expect(npm, 'npm');
+      // The machine's own name for npm: with the extension it gives it.
+      expect(npm, toolPath('npm'));
       expect(arguments, [
         'install',
         '--prefix',
@@ -529,12 +612,14 @@ void main() {
         (await mason.locate(
           server('fake-npm-ls', 'fake-npm'),
         ) as LspServerFound).executable,
-        p.join(dir, 'node_modules', '.bin', 'fake-npm-ls'),
+        // npm writes the bin with the machine's own extension.
+        machine.isWindows
+            ? p.join(dir, 'node_modules', '.bin', 'fake-npm-ls.cmd')
+            : p.join(dir, 'node_modules', '.bin', 'fake-npm-ls'),
       );
     });
 
-    test('npm on Windows: npm.cmd answers for npm, run through node',
-        () async {
+    test('npm on Windows: npm.cmd answers for npm, run through node', () async {
       final runner = FakeRunner();
       final mason = provider(runner: runner, platform: win);
       // node there, but only npm's Bash script (nvm-windows', the
@@ -557,8 +642,11 @@ void main() {
       await windowsTools();
       await mason.install('fake-npm');
       final (npm, arguments, env) = runner.calls.single;
-      expect(npm.toLowerCase(), 'node.exe');
-      expect(arguments.first, endsWith(p.join('node_modules', 'npm', 'bin', 'npm-cli.js')));
+      expect(p.basename(npm).toLowerCase(), 'node.exe');
+      expect(
+        arguments.first,
+        endsWith(p.join('node_modules', 'npm', 'bin', 'npm-cli.js')),
+      );
       expect(arguments, containsAllInOrder(['install', '--no-audit']));
       expect(env?['PATH'], toolsDir);
       final dir = p.join(root, 'fake-npm');
@@ -566,27 +654,36 @@ void main() {
         (await mason.locate(
           server('fake-npm-ls', 'fake-npm'),
         ) as LspServerFound).executable,
-        // The bin is the .cmd on Windows, as npm writes it there; the path
-        // inside the package keeps the manifest's own separators.
-        p.join(dir, 'node_modules/.bin/fake-npm-ls.cmd'),
+        // The bin is the .cmd on Windows, as npm writes it there.
+        p.join(dir, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
       );
     });
 
     test('pypi: a venv in place, with the extra', () async {
-      await tool('python3');
+      // The runtime is `python3` elsewhere, `python` on Windows.
+      await tool(machine.isWindows ? 'python' : 'python3');
       final runner = FakeRunner();
       final mason = provider(runner: runner);
       await mason.install('fake-pypi');
       final dir = p.join(root, 'fake-pypi');
       expect(runner.calls[0].$2, ['-m', 'venv', p.join(dir, 'venv')]);
-      expect(runner.calls[1].$1, 'python');
+      // pip runs with the venv's own python: in `bin` elsewhere, in
+      // `Scripts` on Windows.
+      expect(
+        runner.calls[1].$1,
+        machine.isWindows
+            ? p.join(dir, 'venv', 'Scripts', 'python.exe')
+            : p.join(dir, 'venv', 'bin', 'python'),
+      );
       expect(runner.calls[1].$2, containsAllInOrder(['-m', 'pip', 'install']));
       expect(runner.calls[1].$2.last, 'fake-py-ls[all]==0.5');
       expect(
         (await mason.locate(
           server('fake-py-ls', 'fake-pypi'),
         ) as LspServerFound).executable,
-        p.join(dir, 'venv', 'bin', 'fake-py-ls'),
+        machine.isWindows
+            ? p.join(dir, 'venv', 'Scripts', 'fake-py-ls.exe')
+            : p.join(dir, 'venv', 'bin', 'fake-py-ls'),
       );
     });
 
@@ -627,7 +724,13 @@ void main() {
         (await mason.locate(
           server('fake-cargo-ls', 'fake-cargo'),
         ) as LspServerFound).executable,
-        p.join(root, 'fake-cargo', 'bin', 'fake-cargo-ls'),
+        p.join(
+          root,
+          'fake-cargo',
+          'bin',
+          // cargo names the executable with the machine's extension.
+          machine.isWindows ? 'fake-cargo-ls.exe' : 'fake-cargo-ls',
+        ),
       );
     });
 
@@ -649,7 +752,7 @@ void main() {
       );
       expect(Directory(p.join(root, '.staging')).listSync(), isEmpty);
 
-      await tool('python3');
+      await tool(machine.isWindows ? 'python' : 'python3');
       await provider().install('fake-pypi');
       await expectLater(
         failing.install('fake-pypi'),
@@ -720,7 +823,11 @@ void main() {
       );
       await File(script).create(recursive: true);
       expect(await command(windows()), [node, script]);
-      expect(await command(provider()), [npm]);
+      // The machine's own: npm's script is run with node there too.
+      expect(
+        await command(provider()),
+        machine.isWindows ? [node, script] : [npm],
+      );
     });
 
     test('which skips the extensionless script beside npm.cmd', () async {
@@ -747,23 +854,27 @@ void main() {
         (await mason.locate(
           server('fake-ls', 'fake-zip'),
         ) as LspServerFound).executable,
-        p.join(toolsDir, 'fake-ls'),
+        toolPath('fake-ls'),
       );
     });
 
     test('absolute commands must exist and be executable', () async {
       final mason = provider();
       await tool('abs-ls');
-      final path = p.join(toolsDir, 'abs-ls');
+      final path = toolPath('abs-ls');
       expect(
         (await mason.locate(server(path)) as LspServerFound).executable,
         path,
       );
       await File(p.join(toolsDir, 'plain')).writeAsString('');
-      expect(
-        await mason.locate(server(p.join(toolsDir, 'plain'))),
-        isA<LspServerMissing>().having((m) => m.package, 'package', isNull),
-      );
+      // A file with no executable bit is nothing to run, where the machine
+      // has such a bit; Windows has none, and starts what it can.
+      if (!Platform.isWindows) {
+        expect(
+          await mason.locate(server(p.join(toolsDir, 'plain'))),
+          isA<LspServerMissing>().having((m) => m.package, 'package', isNull),
+        );
+      }
     });
 
     test(

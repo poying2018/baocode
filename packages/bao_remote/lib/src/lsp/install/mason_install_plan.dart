@@ -298,6 +298,8 @@ class MasonInstallPlan {
     final colon = value.indexOf(':');
     final prefix = colon > 0 ? value.substring(0, colon) : null;
     final target = colon > 0 ? value.substring(colon + 1) : value;
+    // The machine the package is installed for decides the extension: the
+    // installer itself runs there.
     final exe = platform.isWindows ? '.exe' : '';
     MasonBin wrapped(String runtime, [List<String> args = const []]) {
       _checkRelative(target);

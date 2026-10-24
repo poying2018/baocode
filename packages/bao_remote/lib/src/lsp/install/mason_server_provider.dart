@@ -122,7 +122,7 @@ class MasonServerProvider implements LspServerProvider {
     final command = server.command;
     if (p.isAbsolute(command) || command.contains('/')) {
       return await _isExecutable(command)
-          ? LspServerFound(command)
+          ? LspServerFound(await _asSpelled(command))
           : const LspServerMissing();
     }
     final environment = await _environment();
@@ -138,7 +138,13 @@ class MasonServerProvider implements LspServerProvider {
       final manifest = await installed(package);
       final relative = manifest?.bin[command];
       if (relative == null) continue;
-      final path = p.join(packageDirectory(package), relative);
+      // The manifest names the executable the way the archives spell it:
+      // with `/` between the parts. The path on this machine is the one
+      // the machine can open.
+      final path = p.joinAll([
+        packageDirectory(package),
+        ...relative.split(RegExp(r'[/\\]')),
+      ]);
       if (package == 'jdtls') await _updateLauncher(path);
       if (await _isExecutable(path)) return LspServerFound(path);
     }
@@ -438,6 +444,10 @@ class MasonServerProvider implements LspServerProvider {
 
   /// Checks each bin exists, makes the plain ones executable and writes
   /// wrappers for the ones a runtime runs; returns name → relative path.
+  ///
+  /// The paths are the manifest's own: relative to the package folder and
+  /// spelled with `/`, as the archives spell them and as the registry
+  /// names them. The machine reads them back with its own separator.
   Future<Map<String, String>> _link(
     MasonInstallPlan plan,
     String directory,
@@ -446,7 +456,12 @@ class MasonServerProvider implements LspServerProvider {
     final executables = <String>[];
     for (final MapEntry(key: name, value: bin) in plan.bins.entries) {
       if (bin.path.isNotEmpty) {
-        final path = p.join(directory, bin.path);
+        // The plan names the executable with `/` between the parts; the
+        // machine's own separator joins them here.
+        final path = p.joinAll([
+          directory,
+          ...bin.path.split(RegExp(r'[/\\]')),
+        ]);
         if (!await File(path).exists()) {
           throw LspInstallException(
             '${plan.package.name} installed no "$name"',
@@ -466,7 +481,11 @@ class MasonServerProvider implements LspServerProvider {
       await Directory(p.join(directory, _wrappers)).create(recursive: true);
       await File(p.join(directory, wrapper)).writeAsString(_wrapper(bin));
       executables.add(p.join(directory, wrapper));
-      bins[name] = wrapper;
+      // The manifest names it as the archives do.
+      bins[name] = p.posix.join(
+        _wrappers,
+        platform.isWindows ? '$name.cmd' : name,
+      );
     }
     await makeExecutable(
       executables,
@@ -553,31 +572,70 @@ class MasonServerProvider implements LspServerProvider {
 
   /// [command] on [environment]'s PATH (with `PATHEXT` on Windows).
   ///
-  /// On Windows a bare name only matches with a `PATHEXT` extension, as in
-  /// `cmd.exe`: Node installs (nvm-windows among them) put a Bash script
-  /// `npm` beside `npm.cmd`, and Windows cannot start that script.
+  /// On Windows a bare name is looked for with the machine's extensions,
+  /// as `cmd.exe` does: Node installs (nvm-windows among them) put a Bash
+  /// script `npm` beside `npm.cmd`, and Windows cannot start that script.
+  /// A name that already carries an extension is looked for as it is.
+  ///
+  /// The PATH is the machine's own: it is separated the machine's way (a
+  /// Windows one holds drive letters, so a colon separates nothing
+  /// there), and an entry that is quoted is unquoted, as `cmd.exe` does.
   Future<String?> which(String command, Map<String, String> environment) async {
     final path = environment['PATH'] ?? environment['Path'] ?? '';
-    final extensions = platform.isWindows && p.extension(command).isEmpty
+    // The machine's own PATH: how it is separated and how a command is
+    // looked for are the machine's business, whichever package is
+    // installed here.
+    final windows = Platform.isWindows;
+    final extensions = windows && p.extension(command).isEmpty
         ? (environment['PATHEXT'] ?? '.COM;.EXE;.BAT;.CMD')
               .split(';')
               .where((extension) => extension.isNotEmpty)
               .toList()
         : const [''];
-    for (final directory in path.split(platform.isWindows ? ';' : ':')) {
-      if (directory.isEmpty) continue;
+    for (final directory in path.split(windows ? ';' : ':')) {
+      final trimmed = directory.trim();
+      if (trimmed.isEmpty) continue;
+      // A quoted entry names the folder it holds.
+      final folder = trimmed.startsWith('"') && trimmed.endsWith('"')
+          ? trimmed.substring(1, trimmed.length - 1)
+          : trimmed;
       for (final extension in extensions) {
-        final candidate = p.join(directory, '$command$extension');
-        if (await _isExecutable(candidate)) return candidate;
+        final candidate = p.join(folder, '$command$extension');
+        if (await _isExecutable(candidate)) return await _asSpelled(candidate);
       }
     }
     return null;
   }
 
+  /// [path] as the folder spells it: Windows does not care how a name is
+  /// cased, but the one that is shown, and the one a program is named by,
+  /// is the one on disk.
+  Future<String> _asSpelled(String path) async {
+    if (!Platform.isWindows) return path;
+    final folder = p.dirname(path);
+    final name = p.basename(path).toLowerCase();
+    try {
+      for (final entry in Directory(folder).listSync()) {
+        if (p.basename(entry.path).toLowerCase() == name) return entry.path;
+      }
+    } on FileSystemException {
+      // The folder is gone: the path as it was is what there is.
+    }
+    return path;
+  }
+
+  /// Whether [path] is a program this machine can run.
+  ///
+  /// The machine decides: a Windows folder has no executable bit, however
+  /// the package it holds was built, and a link is the file it points at.
   Future<bool> _isExecutable(String path) async {
     final stat = await FileStat.stat(path);
+    // A link is the file it points at: what the archive meant by it.
+    if (stat.type == FileSystemEntityType.link) {
+      return _isExecutable(await File(path).resolveSymbolicLinks());
+    }
     if (stat.type != FileSystemEntityType.file) return false;
-    return platform.isWindows || stat.mode & 0x49 != 0;
+    return Platform.isWindows || stat.mode & 0x49 != 0;
   }
 }
 
