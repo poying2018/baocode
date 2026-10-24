@@ -16,11 +16,14 @@ class _IoLspProcess implements LspProcess {
     LspProcesses._live.add(this);
     // Writes to a server that died fail here, not as uncaught errors.
     _process.stdin.done.then<void>((_) {}, onError: (Object _) {});
-    unawaited(LspProcesses.registry.add(_process.pid));
+    // The process is recorded before it can end: the exit removes it
+    // again, and the removal must not come before the recording.
+    final recorded = LspProcesses.registry.add(_process.pid);
+    unawaited(recorded);
     unawaited(
       _process.exitCode.then((_) {
         LspProcesses._live.remove(this);
-        unawaited(LspProcesses.registry.remove(_process.pid));
+        unawaited(recorded.then((_) => LspProcesses.registry.remove(_process.pid)));
       }),
     );
   }

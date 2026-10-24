@@ -19,7 +19,10 @@ import 'local_claude_io.dart';
 class ProcessTransport implements ClaudeCodeTransport {
   ProcessTransport._(this._process, {this.executable}) {
     _live.add(this);
-    unawaited(registry.add(_process.pid));
+    // The process is recorded before it can end: the exit removes it
+    // again, and the removal must not come before the recording.
+    _recorded = registry.add(_process.pid);
+    unawaited(_recorded);
     _process.stdout
         .transform(_decoder)
         .transform(const LineSplitter())
@@ -30,6 +33,10 @@ class ProcessTransport implements ClaudeCodeTransport {
         .listen(_stderrLine, onError: _undecodable);
     unawaited(_process.exitCode.then(_exited));
   }
+
+  /// The process's recording in the registry: it is awaited before the
+  /// process is taken out of it again.
+  late final Future<void> _recorded;
 
   /// What both streams are read with, and not strict about it: a line that
   /// is not UTF-8 takes the replacement character and goes on to [_line],
@@ -195,7 +202,9 @@ class ProcessTransport implements ClaudeCodeTransport {
   void _exited(int code) {
     _exitCode = code;
     _live.remove(this);
-    unawaited(registry.remove(_process.pid));
+    // The recording is finished before the process is taken out of it:
+    // the two must not come in the other order.
+    unawaited(_recorded.then((_) => registry.remove(_process.pid)));
     _finish();
   }
 
