@@ -1,5 +1,7 @@
 import 'package:path/path.dart' as p;
 
+import '../../platform/path_style.dart';
+
 /// Lines of a file, from 1: [start] to [end], at [column] (from 1) when
 /// one is said.
 class FileLineRange {
@@ -110,7 +112,7 @@ class FileLink {
 
   /// [path] (absolute, or relative to [root]) in [root]; null outside.
   static String? resolvePath(String path, String root, {p.Context? paths}) {
-    final context = paths ?? p.context;
+    final context = paths ?? PathStyle.of(root);
     if (path.isEmpty || path.startsWith('~')) return null;
     final full = context.normalize(
       context.isAbsolute(path) ? path : context.join(root, path),

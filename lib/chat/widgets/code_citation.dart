@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:markdown/markdown.dart' as md;
-import 'package:path/path.dart' as p;
 
 import '../../ide/ide_hover.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/path_style.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/codicons.dart';
 import '../../theme/material_file_icons.dart';
@@ -49,8 +49,8 @@ class CodeCitation {
 
   /// [path] in [root], the folder the agent works in; null when outside.
   String? pathIn(String root) {
-    final full = p.normalize(p.isAbsolute(path) ? path : p.join(root, path));
-    return p.isWithin(root, full) ? full : null;
+    final full = PathStyle.join(root, path);
+    return PathStyle.isWithin(root, full) ? full : null;
   }
 
   @override

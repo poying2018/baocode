@@ -9,6 +9,7 @@ import '../kernel/kernel_event.dart';
 import '../kernel/kernel_registry.dart';
 import '../kernel/kernel_types.dart';
 import '../kernel/transcript.dart';
+import '../platform/path_style.dart';
 import '../remote/remote_location.dart';
 import 'chat_feed.dart';
 import 'chat_models.dart';
@@ -870,7 +871,9 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   String _absolute(String path) {
     final cwd = kernelContext.cwd;
     if (cwd == null) return path;
-    final paths = RemoteLocation.pathsOf(cwd);
+    final paths = RemoteLocation.isRemote(cwd)
+        ? RemoteLocation.pathsOf(cwd)
+        : PathStyle.of(cwd);
     return paths.isAbsolute(path)
         ? path
         : paths.join(RemoteLocation.pathOf(cwd), path);

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 
 import '../../ide/file_service.dart';
 import '../../ide/file_views.dart';
+import '../../platform/path_style.dart';
 import '../../workspace/window_controls.dart';
 import '../chat_models.dart';
 import 'file_link.dart';
@@ -314,7 +315,7 @@ class FileOpenScope extends InheritedWidget {
   /// to [root]), or the one it ends with (as whole names, `b.dart` not
   /// `ab.dart`); the last read of those.
   String? _seen(String path) {
-    final context = paths ?? p.context;
+    final context = paths ?? PathStyle.of(root);
     if (path.isEmpty || path.startsWith('~')) return null;
     final normalized = context.normalize(path);
     final index = _SeenIndex.of(seen, context);

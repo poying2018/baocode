@@ -171,7 +171,7 @@ void main() {
     test('relative paths join it; those outside are refused', () {
       expect(
         const FileLink('lib/a.dart').resolveIn('/p'),
-        p.join('/p', 'lib', 'a.dart'),
+        p.posix.join('/p', 'lib', 'a.dart'),
       );
       expect(const FileLink('/p/lib/a.dart').resolveIn('/p'), '/p/lib/a.dart');
       expect(const FileLink('../etc/passwd').resolveIn('/p'), isNull);
