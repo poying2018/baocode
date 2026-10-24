@@ -20,10 +20,14 @@ import 'package:baocode/theme/app_theme.dart';
 
 const _root = '/work/app';
 
+/// The project is on a host: its paths are POSIX, as a host's are (the
+/// machine the tests run on is of another kind).
+const _cwd = 'ssh://dev$_root';
+
 Future<ChatSession> _pump(WidgetTester tester, {Widget? above}) async {
   final session = ChatSession(
     kernel: MockKernels.claudeCode,
-    kernelContext: const KernelContext(cwd: _root),
+    kernelContext: const KernelContext(cwd: _cwd),
     historyCount: 0,
   );
   addTearDown(session.dispose);
