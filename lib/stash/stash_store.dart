@@ -256,20 +256,13 @@ class StashStore extends ChangeNotifier {
 
   /// The stash a stash that is blank was opened for, and closed without
   /// anything written: it goes, as if never made.
+  ///
+  /// Its number is not given again: another app may have taken it in the
+  /// meantime, and a number given twice is one stash over another.
   Future<void> discardIfBlank(int id) async {
     final note = _notes[id];
     if (note == null || !note.isBlank) return;
     await delete(id);
-    // Its number is the next one's again, if none was given after it.
-    await disk.locked(() async {
-      final meta = await disk.readMeta();
-      if (meta['next'] != id + 1) return;
-      final listed = await disk.list();
-      final taken = [...listed.keys, ..._notes.keys, ..._redirects.keys];
-      if (taken.any((other) => other >= id)) return;
-      meta['next'] = id;
-      await disk.writeMeta(meta);
-    });
   }
 
   // --- Pictures and files ------------------------------------------------------
