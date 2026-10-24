@@ -3,6 +3,7 @@ import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/chat/open_editor.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
+import 'package:baocode/kernel/queued_messages.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -102,6 +103,11 @@ void main() {
       historyCount: 0,
     );
     addTearDown(session.dispose);
+    // The messages go while the agent works, as they do in the terminal.
+    QueuedMessages.current = () => QueuedMessages.duringTurn;
+    addTearDown(
+      () => QueuedMessages.current = () => QueuedMessages.fallback,
+    );
 
     OpenEditor? open;
     Future<List<String>> send(String text) async {
