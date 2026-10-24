@@ -19,6 +19,9 @@ void main() {
 
   String path(String name) => p.join(dir.path, name);
 
+  /// The line break of a new file's lines: the platform's.
+  final eol = Platform.isWindows ? '\r\n' : '\n';
+
   /// Waits (a while) for [condition], which the file watcher makes true.
   Future<void> eventually(bool Function() condition) async {
     final deadline = DateTime.now().add(const Duration(seconds: 10));
@@ -75,7 +78,12 @@ void main() {
     await file.edit([-1], {'key': 'cmd+k', 'command': 'a'}, insert: true);
     expect(
       File(file.path).readAsStringSync(),
-      '[\n    {\n        "key": "cmd+k",\n        "command": "a"\n    }\n]',
+      '['
+      '$eol    {'
+      '$eol        "key": "cmd+k",'
+      '$eol        "command": "a"'
+      '$eol    }'
+      '$eol]',
     );
     expect(notified, 1);
 
@@ -188,13 +196,19 @@ void main() {
     final target = File(path('dotfiles/settings.json'))
       ..createSync(recursive: true)
       ..writeAsStringSync('{}');
-    final link = Link(path('User/settings.json'))
-      ..createSync(target.path, recursive: true);
+    final link = Link(path('User/settings.json'));
+    try {
+      link.createSync(target.path, recursive: true);
+    } on FileSystemException {
+      // Windows needs a privilege to make a link; without it, there is
+      // no link to write through.
+      return;
+    }
     final file = JsoncFile(link.path);
     addTearDown(file.dispose);
     await file.edit(['a'], true);
     expect(FileSystemEntity.isLinkSync(link.path), isTrue);
-    expect(target.readAsStringSync(), '{\n    "a": true\n}');
+    expect(target.readAsStringSync(), '{$eol    "a": true$eol}');
   });
 
   group('settings', () {

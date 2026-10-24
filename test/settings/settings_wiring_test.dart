@@ -46,12 +46,25 @@ void main() {
       ..debugPlatform = KeybindingPlatform.mac;
   });
 
+  /// [folder] deleted, a while it takes: Windows may hold a file of it
+  /// open a moment after it was written.
+  Future<void> deleteFolder(Directory folder) async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      try {
+        await folder.delete(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
+    }
+  }
+
   tearDown(() async {
     sync.dispose();
     files.dispose();
     KeybindingService.instance = KeybindingService();
-    await data.delete(recursive: true);
-    await home.delete(recursive: true);
+    await deleteFolder(data);
+    await deleteFolder(home);
   });
 
   /// Makes the settings over the data folder, its files as they are now.

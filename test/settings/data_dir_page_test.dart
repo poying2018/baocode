@@ -5,6 +5,7 @@ import 'package:baocode/ide/ide_button.dart';
 import 'package:baocode/platform/data_dir.dart';
 import 'package:baocode/settings/data_dir_service.dart';
 import 'package:baocode/settings/pages/data_dir_page.dart';
+import 'package:path/path.dart' as p;
 
 /// Moves as the page asks for them: nothing is copied, no file touched.
 class _FakeService extends DataDirectoryService {
@@ -85,7 +86,7 @@ void main() {
     final (:revealed, quits: _) = await pumpPage(tester, _FakeService());
     expect(find.text('/data/baocode'), findsOneWidget);
     expect(
-      find.text('Set in /home/me/.baocode/config-dir.json.'),
+      find.text('Set in ${p.join('/home/me', '.baocode', 'config-dir.json')}.'),
       findsOneWidget,
     );
     await tester.tap(find.text('Reveal in Finder'));

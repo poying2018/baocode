@@ -94,6 +94,8 @@ void main() {
     await tester.tap(find.text('Finishes a turn'));
     await settle(tester, () => settings[AttentionSettings.eventsKey] is List);
     expect(settings[AttentionSettings.eventsKey], ['needsInput']);
+    // The page shows the switch as it is now: a frame, so it is.
+    await tester.pump();
     await tester.tap(find.text('Finishes a turn'));
     await settle(
       tester,
@@ -103,7 +105,12 @@ void main() {
     Future<void> choose(Finder dropdown, String label) async {
       await tester.tap(dropdown);
       await tester.pumpAndSettle();
-      await tester.tap(find.text(label).last);
+      final item = find.text(label).last;
+      // The menu is as long as the sounds of the machine (Windows has
+      // some), so the item may be out of the window.
+      await tester.ensureVisible(item);
+      await tester.pumpAndSettle();
+      await tester.tap(item);
       await tester.pumpAndSettle();
     }
 

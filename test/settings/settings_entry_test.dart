@@ -338,8 +338,10 @@ void main() {
       '⌘K ⌘S the keyboard shortcuts\'', (tester) async {
     _stillMotion(tester);
     // Appearance whole in the window: one cut off at the bottom sends a
-    // semantics update the desktop engines reject.
-    await _pumpApp(tester, height: 1600);
+    // semantics update the desktop engines reject. The window is as tall as
+    // the page needs, which the machine's metrics say (Windows' page is
+    // taller than macOS').
+    await _pumpApp(tester, height: 3000);
     await _press(tester, LogicalKeyboardKey.comma, meta: true);
     expect(_section(tester), SettingsSection.general);
     await _press(tester, LogicalKeyboardKey.keyK, meta: true);
@@ -359,8 +361,10 @@ void main() {
   testWidgets('so in the IDE\'s settings', (tester) async {
     _stillMotion(tester);
     // Appearance whole in the window: one cut off at the bottom sends a
-    // semantics update the desktop engines reject.
-    final workspace = await _pumpApp(tester, height: 1600);
+    // semantics update the desktop engines reject. The window is as tall as
+    // the page needs, which the machine's metrics say (Windows' page is
+    // taller than macOS').
+    final workspace = await _pumpApp(tester, height: 3000);
     workspace.layout = WorkspaceLayout.ide;
     await tester.pump();
     await tester.pump();
