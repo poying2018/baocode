@@ -805,19 +805,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     await session.loadEarlier();
     // Its items come with the kernel's events, a moment later.
     await Future<void>.delayed(Duration.zero);
-    // The held position is put back when the items come (see
-    // [_handleSessionChanged]): it is not let go of here, or the list
-    // would jump.
+    _held = null;
     if (!mounted) return;
     final failed =
         session.hasEarlierHistory && session.prependedCount == before;
     if (failed != _earlierFailed) setState(() => _earlierFailed = failed);
-    if (failed) {
-      // Nothing came: there is nothing to put back.
-      _held = null;
-    } else {
-      _wantEarlier();
-    }
+    if (!failed) _wantEarlier();
   }
 
   /// The first row that shows any of it, and how far its top is above the
