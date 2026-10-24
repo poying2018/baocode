@@ -40,6 +40,10 @@ class RollingText extends StatelessWidget {
       return Text(text, style: style);
     }
     final runs = runsOf(text);
+    // The places are counted from the end, where a number's ones are: a
+    // digit gained in front leaves the rest where they were, and their
+    // animation with them.
+    final places = keysOf(text);
     return Semantics(
       label: text,
       excludeSemantics: true,
@@ -48,7 +52,7 @@ class RollingText extends StatelessWidget {
         children: [
           for (final (index, run) in runs.indexed)
             KeyedSubtree(
-              key: ValueKey(runs.length - index),
+              key: ValueKey(places[index]),
               child: _isDigit(run)
                   ? _Digit(run, style: style)
                   : Text(run, style: style),
@@ -56,6 +60,33 @@ class RollingText extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// The key of each run of [text]: a digit's is its place in the number
+  /// it is of, counted from the end where a number's ones are; the rest
+  /// is where it stands.
+  ///
+  /// A digit gained in front leaves the rest where they were, and their
+  /// animation with them: the places are counted from the end, and each
+  /// number has its own ones place.
+  static List<Object> keysOf(String text) {
+    final runs = runsOf(text);
+    final keys = List<Object?>.filled(runs.length, null);
+    // The number a run is of, and its place in it.
+    var number = 0;
+    var place = 0;
+    for (var i = runs.length - 1; i >= 0; i--) {
+      if (_isDigit(runs[i])) {
+        keys[i] = 'digit $number.$place';
+        place++;
+        continue;
+      }
+      // Not a digit: the numbers about it are counted apart.
+      number++;
+      place = 0;
+      keys[i] = 'run $number.$i';
+    }
+    return keys.cast<Object>();
   }
 }
 

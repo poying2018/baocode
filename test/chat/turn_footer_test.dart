@@ -33,6 +33,29 @@ void main() {
     ]);
   });
 
+  test('the places of the digits are counted from the end', () {
+    // A digit gained in front leaves the rest where they were: the ones
+    // place is where it was before.
+    expect(RollingText.keysOf('12'), ['digit 0.1', 'digit 0.0']);
+    expect(RollingText.keysOf('123'), ['digit 0.2', 'digit 0.1', 'digit 0.0']);
+    // Two numbers: each has its own ones place.
+    expect(RollingText.keysOf('1.2'), ['digit 1.0', 'run 1.1', 'digit 0.0']);
+  });
+
+  testWidgets('a digit gained in front leaves the others where they were',
+      (tester) async {
+    const style = TextStyle(fontSize: 12);
+    await _pump(tester, const RollingText('99', style: style));
+    // A hundred: the two digits before are the tens and the ones now.
+    await _pump(tester, const RollingText('100', style: style));
+    await tester.pump(const Duration(milliseconds: 100));
+    // The nine that was the tens is still rolling out where it was: the
+    // one that was the ones is not moved to another place.
+    expect(find.text('9'), findsNWidgets(2));
+    expect(find.text('1'), findsOneWidget);
+    expect(find.text('0'), findsNWidgets(2));
+  });
+
   testWidgets('a digit changed rolls: the old one going as the new one '
       'comes, back and forth however fast', (tester) async {
     const style = TextStyle(fontSize: 12);

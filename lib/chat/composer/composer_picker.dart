@@ -127,7 +127,10 @@ class ComposerPickerState extends State<ComposerPicker> {
   void toggle() => _setOpen(!_open);
 
   final Object _tapRegion = Object();
-  late List<GlobalKey> _rowKeys = _keysFor(widget.options);
+  /// The keys the rows are built with: one a row, kept as it is however
+  /// many options there are, so that a row that is still mounted keeps
+  /// its key.
+  final List<GlobalKey> _rowKeys = [];
   bool _open = false;
 
   // What the pointer and the keys move (the option highlighted, the one
@@ -366,9 +369,14 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// a press-drag-release onto an option.
   Offset? _pressOrigin;
 
-  static List<GlobalKey> _keysFor(List<KernelOption> options) => [
-    for (final _ in options) GlobalKey(),
-  ];
+  /// The key of the row at [index]: one a row, kept as it is however many
+  /// options there are, so that a row that is still mounted keeps its key.
+  GlobalKey _rowKeyAt(int index) {
+    while (_rowKeys.length <= index) {
+      _rowKeys.add(GlobalKey());
+    }
+    return _rowKeys[index];
+  }
 
   @override
   void initState() {
@@ -382,9 +390,6 @@ class ComposerPickerState extends State<ComposerPicker> {
   void didUpdateWidget(ComposerPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
     _settings.clear();
-    if (widget.options.length != oldWidget.options.length) {
-      _rowKeys = _keysFor(widget.options);
-    }
   }
 
   @override
@@ -859,6 +864,7 @@ class ComposerPickerState extends State<ComposerPicker> {
   /// is on its way out of the tree, not to be asked where it is.
   Rect _settingsAnchor(Rect menu) {
     if (!_rowsBuilt.contains(_settingsAt)) return menu;
+    if (_settingsAt >= _rowKeys.length) return menu;
     final box = _menuKey.currentContext?.findRenderObject();
     final row = _rowKeys[_settingsAt].currentContext?.findRenderObject();
     if (box is! RenderBox || row is! RenderBox) return menu;
@@ -1044,7 +1050,7 @@ class ComposerPickerState extends State<ComposerPicker> {
         Padding(
           padding: sides,
           child: _PickerRow(
-            key: _rowKeys[i],
+            key: _rowKeyAt(i),
             option: option,
             matches: _matchesIn(option.label),
             height: _rowHeight,
