@@ -184,6 +184,28 @@ void main() {
     expect(await service.status(), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 
+  test('the options that make Git run a program are refused', () async {
+    // Git would run it with the user's own rights.
+    for (final arguments in [
+      ['-c', 'core.sshCommand=calc'],
+      ['--upload-pack=calc'],
+      ['--exec-path=/tmp'],
+      ['--receive-pack', 'calc'],
+    ]) {
+      await expectLater(
+        runGit(arguments, workingDirectory: root),
+        throwsA(isA<IdeGitException>()),
+        reason: '${arguments.join(' ')} was allowed',
+      );
+    }
+    // The ordinary ones are not refused.
+    final status = await runGit(
+      ['status', '--porcelain=v1'],
+      workingDirectory: root,
+    );
+    expect(status.exitCode, 0);
+  }, skip: hasGit ? false : 'Git is not installed');
+
   test('the repository commits everything, untracked files included', () async {
     final repository = IdeGitRepository(
       IdeGitService(root),

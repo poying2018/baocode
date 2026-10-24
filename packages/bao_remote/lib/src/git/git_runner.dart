@@ -22,8 +22,63 @@ List<String> _gitArguments(List<String> arguments) => [
   ...arguments,
 ];
 
+/// The options that make Git run a program of the caller's: they are not
+/// passed on, whoever asked for them.
+const _forbiddenGitOptions = {
+  '--exec-path',
+  '--upload-pack',
+  '--receive-pack',
+  '--ssh-command',
+  '--super-prefix',
+};
+
+/// The settings of `-c` that make Git run a program of the caller's.
+const _forbiddenGitSettings = {
+  'core.sshcommand',
+  'core.pager',
+  'core.editor',
+  'core.gitproxy',
+  'gpg.program',
+  'diff.external',
+  'diff.tool',
+  'credential.helper',
+  'sequence.editor',
+};
+
+/// Whether [arguments] are Git's own and safe to run: the ones that make
+/// it run a program (`-c core.sshCommand=…`, `--upload-pack …`) are not.
+bool gitArgumentsAreSafe(List<String> arguments) {
+  for (var i = 0; i < arguments.length; i++) {
+    final argument = arguments[i];
+    // `--upload-pack=…` and the like, in one word.
+    final equals = argument.indexOf('=');
+    if (equals > 0) {
+      final name = argument.substring(0, equals);
+      if (_forbiddenGitOptions.contains(name)) return false;
+      if (name == '-c' &&
+          _forbiddenGitSettings.any(
+            argument.substring(equals + 1).toLowerCase().startsWith,
+          )) {
+        return false;
+      }
+      continue;
+    }
+    if (_forbiddenGitOptions.contains(argument)) return false;
+    // `-c` takes what follows as its own.
+    if (argument == '-c' &&
+        i + 1 < arguments.length &&
+        _forbiddenGitSettings.any(arguments[i + 1].toLowerCase().startsWith)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 /// Runs the local `git` without a shell, prompts or an editor, and without
 /// optional index refreshes or a configured fsmonitor hook.
+///
+/// The options that make Git run a program of the caller's are refused:
+/// they would run it with the user's own rights.
 ///
 /// With [limit], the output is NUL-terminated records (`-z`) of which only
 /// the first [limit] are read: Git is stopped at the one after, and the
@@ -33,6 +88,9 @@ Future<IdeGitOutput> runGit(
   required String workingDirectory,
   int? limit,
 }) async {
+  if (!gitArgumentsAreSafe(arguments)) {
+    throw const IdeGitException('That Git command is not allowed.');
+  }
   try {
     if (limit != null) {
       return await _runLimited(arguments, workingDirectory, limit);
