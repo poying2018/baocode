@@ -98,7 +98,17 @@ void main() {
     ClaudeEnvironment.use(null);
     ModelProviders.current = providers;
     await api.close();
-    Directory(root).deleteSync(recursive: true);
+    // The core runs in an isolate of its own, and what it left open goes
+    // a moment after it is gone: on Windows a file that is open cannot be
+    // deleted.
+    for (var attempt = 0; attempt < 40; attempt++) {
+      try {
+        Directory(root).deleteSync(recursive: true);
+        return;
+      } on FileSystemException {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+    }
   });
 
   /// Every request went to the upstream's model, with its key.
