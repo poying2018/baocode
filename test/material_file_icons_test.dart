@@ -64,11 +64,16 @@ void main() {
         ...(manifest[key]! as Map<String, Object?>).values.cast<String>(),
     };
     expect(ids.length, greaterThan(1000));
+    var parsed = 0;
     for (final id in ids) {
       final svg = File('assets/material_icons/icons/$id.svg')
           .readAsStringSync();
       final bytes = await SvgStringLoader(svg).loadBytes(null);
       expect(bytes.lengthInBytes, greaterThan(0), reason: id);
+      // flutter_svg parses on this isolate in a test (`compute` spawns no
+      // isolate in debug), and Windows' stack is 1 MB: a thousand of them
+      // in one go overflow it. An event-loop turn starts a new stack.
+      if (++parsed % 100 == 0) await Future<void>.delayed(Duration.zero);
     }
   });
 
