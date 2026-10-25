@@ -291,6 +291,30 @@ Start-Process $chrome -ArgumentList @(
 - **token 不能当网页密码用**了（GitHub 已不支持），所以在干净 profile 里登录不了；
   要用有登录态的 profile。
 
+## 附：本 fork 只做 Windows 版（macOS 已去掉）
+
+2026-10-25 起，这个 fork 不构建也不发布 macOS 的应用。合并上游时**上游会把 macOS 带回来**，
+每次合并后要检查这几处，把它们改回去：
+
+| 地方 | 要做的事 |
+|---|---|
+| `macos/`、`tool/build_macos.dart`、`tool/dmg_background.swift` | 上游可能新增或修改；这个 fork 不该有它们（已在 1.6.1 删掉，别让合并带回来）|
+| `tool/release_manifest.dart` | 去掉 `--macos-*` / `--dmg-*` 选项、dmg 的签名逻辑、`_macArchitectures` |
+| `site/download.html`、`site/zh/download.html` | 删掉 macOS 区块（Apple 芯片 / Intel 按钮）、"拖进应用程序"的公证说明、meta 里的 macOS |
+| `site/index.html`、`site/zh/index.html` | 删掉 "Download for Mac" 按钮、平台列表里的 macOS 行、描述里的 macOS |
+| `site/site.js`、`site/download.js`、`site-worker/index.js` | `DESKTOP` 集合去掉 `macos-*`；`download.js` 的 `os` 判断是 `isLinux ? 'linux' : 'windows'` |
+| `README.md`、`docs/`、`pubspec.yaml` | 注释与说明里提到 macOS 构建/下载的地方 |
+
+**保留不动的**：`lib/` 里的 macOS 条件（应用在 Mac 上跑时会走到）、`remote.yml` 的
+macOS **远程服务端**（装在 SSH 主机上，与桌面应用无关）、`mobile.yml`（iOS/Android）、
+`site/changelog.html` 里的历史字样。
+
+**两个会咬人的地方**：
+- `git checkout upstream/main -- site/` 做基线对比会**把推广位的图片带回来**
+  （`ymengcc.svg`、`ymeng.png`、`ifruit.png`）—— 对比完记得删回去。
+- 改了 `site/*.html` 之后要重跑 `dart run tool/build_changelog.dart` 与
+  `tool/make_download_qr.dart`：那两个测试是**逐字节比较**生成物与文件，行尾不对就失败。
+
 ## Examples
 
 **输入**："看看上游更新日志，修一下我们这边对应的问题，然后发版"
