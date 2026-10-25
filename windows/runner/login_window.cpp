@@ -95,10 +95,14 @@ std::wstring TemporaryFolder() {
   const DWORD length = ::GetTempPathW(MAX_PATH + 1, path);
   std::wstring folder(path, length);
   // The product's own folder: the two products sign in side by side, and
-  // one WebView2 profile must not be the other's.
+  // one WebView2 profile must not be the other's. The Claude Code product
+  // keeps the folder it always had, though its executable carries the
+  // "claude" suffix now.
   const std::wstring product = ProductSuffix();
-  return folder + L"BaoCode" +
-         (product.empty() ? L"" : L"-" + product) + L"-Login";
+  if (product.empty() || product == L"claude") {
+    return folder + L"BaoCode-Login";
+  }
+  return folder + L"BaoCode-" + product + L"-Login";
 }
 
 }  // namespace

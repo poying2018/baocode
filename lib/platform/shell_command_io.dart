@@ -312,10 +312,10 @@ class WindowsShellCommand implements ShellCommandInstaller {
     final local = environment['LOCALAPPDATA'] ?? '';
     // The product's own folder: the two products install the command
     // side by side, and one must not overwrite the other's.
-    final product = AppPaths.product();
+    final product = AppPaths.productOf();
     return local.isEmpty
         ? ''
-        : p.join(local, product == 'baocode-codex' ? 'BaoCode Codex' : 'BaoCode', 'bin');
+        : p.join(local, product.directoryName, 'bin');
   }
 
   /// The folder the command goes in; empty when there is no

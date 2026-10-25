@@ -6,7 +6,7 @@
 
 先读这一段，能省掉后面很多摸索：
 
-- **一份源码，两个产品**：`baocode.exe` 是 BaoCode（Claude Code 内核），
+- **一份源码，两个产品**：`baocode-claude.exe` 是 BaoCode Claude（Claude Code 内核），
   `baocode-codex.exe` 是 BaoCode Codex（Codex 内核）。**产品由可执行文件的名字决定**，
   其它一切（数据目录、窗口类、注册表、更新通道、URL scheme、Stash、钥匙串、
   远端服务器）都从这一个事实派生。见 `product.dart` 与
@@ -350,26 +350,33 @@ flutter test test/codex_live_test.dart             # 对着真的 Codex（CODEX_
 
 ---
 
-## 9. 产品身份：codex 产品与 BaoCode 的分别
+## 9. 产品身份：codex 产品与 BaoCode Claude 的分别
 
 两个产品是**两份程序**，不是一份程序的两个开关。改了任何一处与身份有关的地方，
-问一句「BaoCode 那边还成立吗」。
+问一句「BaoCode Claude 那边还成立吗」。
 
-| 方面 | BaoCode | BaoCode Codex |
+| 方面 | BaoCode Claude | BaoCode Codex |
 | --- | --- | --- |
-| 可执行文件 | `baocode.exe` | `baocode-codex.exe` |
+| 可执行文件 | `baocode-claude.exe` | `baocode-codex.exe` |
 | 数据目录 | `%APPDATA%\baocode` | `%APPDATA%\baocode-codex` |
-| 窗口类 / 标题 | `FLUTTER_RUNNER_WIN32_WINDOW` / BaoCode | `…_codex` / BaoCode Codex |
+| 窗口类 / 标题 | `FLUTTER_RUNNER_WIN32_WINDOW_claude` / BaoCode Claude | `…_codex` / BaoCode Codex |
 | 注册表 | `Software\BaoCode` | `Software\BaoCodeCodex` |
-| 安装 | AppId `{6fdd732b-…}`，目录 `BaoCode` | AppId `{3c9e2b14-…}`，目录 `BaoCode Codex` |
-| 安装包文件名 | `BaoCode-<版本>-setup.exe` | `BaoCodeCodex-<版本>-setup.exe` |
+| 安装 | AppId `{6fdd732b-…}`，目录 `BaoCode` | AppId `{3c9e2b14-…}`，目录 `BaoCodeCodex` |
+| 安装包文件名 | `BaoCodeClaude-<版本>-setup.exe` | `BaoCodeCodex-<版本>-setup.exe` |
 | URL scheme | `baocode://` | `baocode-codex://` |
 | 更新清单 | `latest.json` | `latest-codex.json` |
 | 浏览器宿主 | `dev.baocode.browser` | `dev.baocode-codex.browser` |
-| Stash | `~/BaoCode/Stash` | `~/BaoCode Codex/Stash` |
+| Stash | `~/BaoCode/Stash` | `~/BaoCodeCodex/Stash` |
 | 钥匙串服务 | `BaoCode` | `BaoCode Codex` |
 | 远端服务器 | `baocode-server-*` | `baocode-codex-server-*` |
 | 内核 | Claude Code | Codex |
+
+**BaoCode Claude 改过名字**：它以前叫 BaoCode，可执行文件是 `baocode.exe`。
+改名只改了**名字**（显示名、可执行文件名、安装包文件名），
+**没有改**它的安装 id、数据目录、更新通道、链接与钥匙串——
+所以 1.7.0 是它的一次**升级**，不是旁边多了一个程序。
+（原生侧因此有两处「例外」：注册表键与单实例互斥量对 Claude Code 产品**保持原样**，
+否则旧版留下的设置会被丢在后面。）
 
 **这些都从一处来**：`packages/bao_remote/lib/src/platform/product.dart`。
 原生侧（窗口类、注册表键、单实例互斥量）读的是同一个可执行文件的名字

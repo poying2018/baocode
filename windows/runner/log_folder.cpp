@@ -64,9 +64,14 @@ std::wstring DefaultFolder() {
   if (length == 0 || length >= MAX_PATH) {
     return std::wstring();
   }
+  // The Claude Code product keeps the folder it always had, though its
+  // executable carries the "claude" suffix now: its data folder is the same
+  // one, and the logs belong beside it.
   const std::wstring product = ProductSuffix();
-  return std::wstring(app_data) + L"\\baocode" +
-         (product.empty() ? L"" : L"-" + product) + L"\\logs";
+  if (product.empty() || product == L"claude") {
+    return std::wstring(app_data) + L"\\baocode\\logs";
+  }
+  return std::wstring(app_data) + L"\\baocode-" + product + L"\\logs";
 }
 
 // Whether |folder| is there, made if need be — with the folders above it:

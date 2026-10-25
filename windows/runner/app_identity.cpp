@@ -13,7 +13,7 @@ namespace {
 constexpr wchar_t kRunnerClass[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
 
 // The name the app is released as, which every product's executable
-// carries a suffix of: baocode.exe, baocode-codex.exe.
+// carries a suffix of: baocode-claude.exe, baocode-codex.exe.
 constexpr wchar_t kAppName[] = L"baocode";
 
 // The name this program was started as, without its folder or .exe.
@@ -132,19 +132,30 @@ std::wstring SettingsKey() {
   // The product's own key: the codex product keeps its settings under
   // Software\BaoCodeCodex, so that the two do not write over each
   // other's (the window's frame, the folder the logs go in).
-  std::wstring key = L"Software\\BaoCode";
-  if (const std::wstring product = ProductSuffix(); !product.empty()) {
-    key += Capitalised(product);
+  //
+  // The Claude Code product keeps the key it always had (Software\BaoCode),
+  // though its executable carries the "claude" suffix: its settings are
+  // where they have been since before the rename, and a new key would
+  // leave them behind.
+  const std::wstring product = ProductSuffix();
+  if (product.empty() || product == L"claude") {
+    return std::wstring(L"Software\\BaoCode");
   }
-  return key;
+  return std::wstring(L"Software\\BaoCode") + Capitalised(product);
 }
 
 std::wstring SingleInstanceName() {
-  // The mutex is the product's own: a copy of BaoCode running must not
-  // keep the codex product from starting (each has windows of its own
-  // class, so neither hands its paths to the other).
+  // The mutex is the product's own: a copy of the Claude Code product
+  // running must not keep the codex product from starting (each has
+  // windows of its own class, so neither hands its paths to the other).
+  //
+  // The Claude Code product keeps the name it always had, though its
+  // executable carries the "claude" suffix now: it keeps the same data
+  // folder, and two copies of one product writing into it are worse than
+  // one handing its paths to the other.
   std::wstring name = L"Local\\BaoCode.SingleInstance";
-  if (const std::wstring product = ProductSuffix(); !product.empty()) {
+  const std::wstring product = ProductSuffix();
+  if (!product.empty() && product != L"claude") {
     name += L"." + product;
   }
   if (const std::wstring id = AppId(); !id.empty()) {

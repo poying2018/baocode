@@ -1,34 +1,35 @@
 // Says which product this build of the app is, by the name of the
-// executable it builds: baocode.exe is BaoCode (the Claude Code one) and
-// baocode-codex.exe is the codex one. The name decides the folder the
-// product's data goes in, the window it has and the registration Windows
-// keeps for it (see windows/runner/app_identity.cpp), so the two products
-// keep apart and neither disturbs the other.
+// executable it builds: baocode-claude.exe is BaoCode Claude (the Claude
+// Code one) and baocode-codex.exe is the codex one. The name decides the
+// folder the product's data goes in, the window it has and the
+// registration Windows keeps for it (see windows/runner/app_identity.cpp),
+// so the two products keep apart and neither disturbs the other.
 //
 // The name is in windows/CMakeLists.txt, as the `set(BINARY_NAME "...")` the
 // Flutter tool reads to find the executable to run. This tool writes it.
 //
 //   dart run tool/set_product.dart            the codex product
-//   dart run tool/set_product.dart baocode    BaoCode (the Claude Code one)
+//   dart run tool/set_product.dart baocode    BaoCode Claude (the Claude Code one)
 //
 // It changes only that one line, so the build that follows is a rebuild of
 // the app, not of the native assets.
 import 'dart:io';
 
+import 'package:baocode/platform/app_paths.dart';
+
 void main(List<String> arguments) {
   final product = arguments.isEmpty ? 'codex' : arguments.first;
-  const products = {
-    'baocode': 'baocode',
-    'codex': 'baocode-codex',
-  };
-  final binaryName = products[product];
-  if (binaryName == null) {
+  // The products and their executable names: one table (the product table),
+  // so that this script and the app cannot disagree about them.
+  final spec = Product.byId(product);
+  if (spec == null) {
     stderr.writeln(
-      'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
-      'one) or codex (the codex one).',
+      'Unknown product "$product". It is baocode (BaoCode Claude, the Claude '
+      'Code one) or codex (the codex one).',
     );
     exit(2);
   }
+  final binaryName = spec.binary;
 
   final file = File('windows/CMakeLists.txt');
   if (!file.existsSync()) {
