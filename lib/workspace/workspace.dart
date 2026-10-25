@@ -1931,11 +1931,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           if ((key, value) case (final String key, final String value))
             key: value,
     };
-    // This build's agent is Codex: a workspace kept on Claude Code goes
-    // there on first open, while Claude stays available in the picker.
-    final keptKernel = kept['kernel'] == KernelRegistry.claudeCode.id
-        ? KernelRegistry.codex.id
-        : kept['kernel'];
+    // A workspace kept on a kernel this product does not carry (BaoCode's
+    // Claude Code, in the codex product) goes to the one it does.
+    final keptKernel = kernels.any((k) => k.id == kept['kernel'])
+        ? kept['kernel']
+        : kernels.first.id;
     if (kernels.where((k) => k.id == keptKernel).firstOrNull
         case final kernel?) {
       _preferredKernel = kernel;
