@@ -13,6 +13,7 @@ import '../kernel/claude_code/claude_path_setting.dart' show installLocalClaude;
 import '../keybindings/chat_keybindings.dart';
 import '../l10n/l10n.dart';
 import '../models/model_welcome.dart';
+import '../platform/app_paths.dart';
 import '../remote/remote_location.dart';
 import '../remote/remote_status.dart' show ClaudeInstallBanner, SshHostBanner;
 import '../stash/stash_actions.dart';
@@ -381,6 +382,10 @@ class _ChatScreenState extends State<ChatScreen>
         final cwd? => RemoteLocation.hostOf(cwd) == null,
         null => true,
       };
+
+  /// Whether this product carries Claude Code: BaoCode does, the codex one
+  /// does not.
+  bool get _hasClaudeCode => AppPaths.hasClaudeCode();
 
   /// The CLI picked from [ClaudeCoreHint]: the session moves to it now
   /// when at rest, downloaded first where there is none (as
@@ -951,8 +956,10 @@ class _ChatScreenState extends State<ChatScreen>
                   if (!HealthBanner.shows(_session.health))
                     SshHostBanner(location: _session.kernelContext.cwd),
                   // Claude Code being downloaded for this machine, or put on
-                  // a remote project's host.
-                  ClaudeInstallBanner(location: _session.kernelContext.cwd),
+                  // a remote project's host. The codex product has no
+                  // Claude Code, and says nothing of it.
+                  if (_hasClaudeCode)
+                    ClaudeInstallBanner(location: _session.kernelContext.cwd),
                   // BaoCode's own core picked: the CLI suggested.
                   if (_localClaudeCode) ClaudeCoreHint(onSwitched: _movedToCli),
                   _PanelSlot(

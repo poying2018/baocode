@@ -126,6 +126,10 @@ import 'workspace/preference_store.dart';
 import 'workspace/window_controls.dart';
 import 'workspace/workspace.dart';
 
+/// Whether this product carries Claude Code: BaoCode does, the codex one
+/// does not — it has no Claude Code to carry, and says nothing of it.
+bool get _hasClaudeCode => AppPaths.hasClaudeCode();
+
 Future<void> main(List<String> arguments) async {
   // All the app keeps is in its data folder: found first, once. One the
   // user set that cannot be used (a drive gone) is reported before the app
@@ -148,7 +152,9 @@ Future<void> main(List<String> arguments) async {
     // And what the app went through, to read what led to it.
     EventLog.current = EventLog(DataDirectory.current.logsDir);
   }
-  unawaited(reapClaudeProcesses());
+  // The codex product has no Claude Code: none of its processes are left
+  // behind, and none are reaped.
+  if (_hasClaudeCode) unawaited(reapClaudeProcesses());
   unawaited(reapLspProcesses());
   unawaited(reapPtyProcesses());
   WidgetsFlutterBinding.ensureInitialized();
@@ -216,21 +222,25 @@ Future<void> main(List<String> arguments) async {
           }),
     );
     // Settings → General → Claude Code: the build to run, read as each
-    // agent starts.
-    ClaudePathSetting.current = () =>
-        ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
-    // Settings → General → Claude Code: the core sessions run on (BaoCode's
-    // own, or the CLI), read as each agent starts. Unset, the CLI.
-    ClaudeCore.current = () =>
-        ClaudeCore.parse(files.settings[ClaudeCore.settingKey]);
-    ClaudeCore.changes = files.settings;
-    ClaudeCore.pick = (core) =>
-        files.settings.update(ClaudeCore.settingKey, core.name);
+    // agent starts. The codex product does not carry Claude Code, and
+    // says nothing of it.
+    if (_hasClaudeCode) {
+      ClaudePathSetting.current = () =>
+          ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
+      // Settings → General → Claude Code: the core sessions run on
+      // (BaoCode's own, or the CLI), read as each agent starts. Unset,
+      // the CLI.
+      ClaudeCore.current = () =>
+          ClaudeCore.parse(files.settings[ClaudeCore.settingKey]);
+      ClaudeCore.changes = files.settings;
+      ClaudeCore.pick = (core) =>
+          files.settings.update(ClaudeCore.settingKey, core.name);
+      // Claude Code's own models as it last listed them: in the picker
+      // before a session on them starts.
+      ClaudeCodeKernel.modelCache = files.storage;
+    }
     // Settings → Models: the upstreams, kept in settings.json.
     ModelProviders.current = ModelProviders.settings(files.settings);
-    // Claude Code's own models as it last listed them: in the picker
-    // before a session on them starts.
-    ClaudeCodeKernel.modelCache = files.storage;
     // Whether the welcome to setting a model up has shown by itself.
     ModelWelcome.storage = files.storage;
     // The channel build's first start: set up before anything else shows.
@@ -238,9 +248,11 @@ Future<void> main(List<String> arguments) async {
     _openChannelGate(files);
     // What each turn took and spent, for its footer when the session is
     // opened again: in the data folder, a file per session.
-    ClaudeCodeKernel.turnStats = turnStatsIn(
-      p.join(DataDirectory.current.path, 'turn-stats'),
-    );
+    if (_hasClaudeCode) {
+      ClaudeCodeKernel.turnStats = turnStatsIn(
+        p.join(DataDirectory.current.path, 'turn-stats'),
+      );
+    }
     // The upstreams' sites' icons, for those that show no other: in the
     // cache, fetched as soon as one is added.
     SiteIcons.current = SiteIcons(
@@ -730,9 +742,11 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
         return AppExitResponse.cancel;
       }
       await Future.wait([
-        stopClaudeProcesses(),
+        // The codex product has no Claude Code: none of its processes run,
+        // and none are stopped.
+        if (_hasClaudeCode) stopClaudeProcesses(),
         CodexTransportFactory.stopAll(),
-        RemoteClaudeTransport.stopAll(),
+        if (_hasClaudeCode) RemoteClaudeTransport.stopAll(),
         stopModelProxy(),
         stopLspProcesses(),
         ?widget.themeExtensions?.dispose(),

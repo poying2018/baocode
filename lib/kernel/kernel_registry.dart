@@ -46,18 +46,20 @@ abstract final class KernelRegistry {
     ),
   );
 
-  /// The kernels on offer, in the order they are offered: the product's own
-  /// first, so that a new agent runs on it. The codex product
-  /// (`baocode-codex.exe`) runs on codex, BaoCode (the Claude Code one) on
-  /// Claude Code; the other is there in both, for a user who wants it.
+  /// The kernels on offer: the product's own only. The codex product
+  /// (`baocode-codex.exe`) runs on codex and offers nothing else; BaoCode
+  /// (the Claude Code one) runs on Claude Code. The two products are
+  /// separate programs: one does not carry the other's core.
   static List<KernelDescriptor> _all = _byProduct();
 
-  static List<KernelDescriptor> _byProduct() {
-    final product = AppPaths.product(Platform.resolvedExecutable);
-    final own = product == 'baocode-codex' ? codex : claudeCode;
-    final other = product == 'baocode-codex' ? claudeCode : codex;
-    return [own, other];
-  }
+  static List<KernelDescriptor> _byProduct() => kernelsOf(
+    AppPaths.product(Platform.resolvedExecutable),
+  );
+
+  /// The kernels [product] offers: its own core only.
+  @visibleForTesting
+  static List<KernelDescriptor> kernelsOf(String product) =>
+      [product == 'baocode-codex' ? codex : claudeCode];
 
   static List<KernelDescriptor> get all => _all;
 

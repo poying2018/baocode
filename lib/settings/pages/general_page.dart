@@ -16,6 +16,7 @@ import '../../chat/composer/composer_polish.dart' show ComposerPolishSetting;
 import '../../chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import '../../kernel/queued_messages.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/app_paths.dart';
 import '../../platform/app_platform.dart';
 import '../../platform/context_menu.dart';
 import '../../platform/shell_command.dart';
@@ -48,6 +49,7 @@ class GeneralSettingsPage extends StatelessWidget {
     this.settings,
     this.tips,
     this.claudeStatus,
+    this.hasClaudeCode,
   });
 
   /// settings.json; none under test, where choices are not kept.
@@ -56,6 +58,13 @@ class GeneralSettingsPage extends StatelessWidget {
   /// The Claude Code that runs now ([localClaudeStatus]); none under
   /// test and on the web, where the path is not shown.
   final Future<LocalClaudeStatus?> Function()? claudeStatus;
+
+  /// Whether this product carries Claude Code: BaoCode does, the codex
+  /// product does not. None says the product's own.
+  final bool? hasClaudeCode;
+
+  /// Whether Claude Code is in this product: the codex one has none of it.
+  bool get _hasClaudeCode => hasClaudeCode ?? AppPaths.hasClaudeCode();
 
   /// The feature tips: those not on yet are listed first.
   final FeatureTipsController? tips;
@@ -388,7 +397,11 @@ class GeneralSettingsPage extends StatelessWidget {
                 ),
               ],
             ),
-            if (claudeStatus case final claudeStatus? when !kIsWeb)
+            // The Claude Code settings: in BaoCode, the Claude Code one.
+            // The codex product does not carry Claude Code, and says
+            // nothing of it.
+            if (claudeStatus case final claudeStatus?
+                when !kIsWeb && _hasClaudeCode)
               SettingsGroup(
                 title: 'Claude Code',
                 children: [

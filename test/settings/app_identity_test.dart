@@ -90,4 +90,14 @@ void main() {
       p.join('/home', '.baocode', 'config-dir.json'),
     );
   });
+
+  test('only BaoCode carries Claude Code', () {
+    // The codex product has no Claude Code to carry, and says nothing of
+    // it: the two products are separate programs.
+    expect(AppPaths.hasClaudeCode('baocode.exe'), isTrue);
+    expect(AppPaths.hasClaudeCode('baocode-codex.exe'), isFalse);
+    // A name belonging to no product (a test host, a build named
+    // otherwise) is BaoCode's.
+    expect(AppPaths.hasClaudeCode('flutter_tester.exe'), isTrue);
+  });
 }

@@ -59,6 +59,11 @@ abstract final class AppPaths {
     return [first, ...parts.skip(1).map(capitalised)].join(' ');
   }
 
+  /// Whether this product carries Claude Code: BaoCode does, the codex one
+  /// does not — it has no Claude Code to carry, and says nothing of it.
+  static bool hasClaudeCode([String? executable]) =>
+      product(executable) != 'baocode-codex';
+
   /// The user's home directory as [environment] says: `USERPROFILE` on
   /// Windows, `HOME` elsewhere.
   static String home(Map<String, String> environment) {
