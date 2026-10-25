@@ -1,6 +1,5 @@
 import 'package:bao_markdown/bao_markdown.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The characters keep their order: what is typed goes where the caret is,
