@@ -56,10 +56,6 @@ const _symbolsRelative = r'build\symbols';
 /// failure skipped, and the executable cannot start without it.
 const _required = [
   'flutter_windows.dll',
-  // The browsers' native messaging host and its manifest, which the
-  // installer's keys point the browsers to (windows/BrowserBridge).
-  'baocode-browser-host.exe',
-  'dev.baocode.browser.json',
   // The VC++ runtime, carried rather than taken from System32, which may
   // be older than the build's (see windows/CMakeLists.txt).
   'msvcp140.dll',
@@ -156,7 +152,7 @@ Future<void> main(List<String> arguments) async {
       ? 'dev.baocode.codex.browser'
       : 'dev.baocode.browser';
   final productBrowserManifest = product == 'codex'
-      ? 'dev.baocode.codex.browser.json'
+      ? 'dev.baocode-codex.browser.json'
       : 'dev.baocode.browser.json';
 
   // The script lives in tool/, so the repository is one level above it.
@@ -174,9 +170,15 @@ Future<void> main(List<String> arguments) async {
     // executable names the product (windows/runner/app_identity.cpp).
     await _run(
       Platform.resolvedExecutable,
-      ['run', '${root.path}\\tool\\set_product.dart', product],
+      // Not `dart run`: that would build the package's native assets
+      // again, which is a long build for a one-line change.
+      ['${root.path}\\tool\\set_product.dart', product],
       root.path,
     );
+    // CMake keeps the target's name in its cache, and a build of another
+    // product fails on it ("No target baocode"): the cache goes when the
+    // product changed.
+    _clearBuildCacheIfProductChanged(root, binaryName);
     final symbols = Directory('${root.path}\\$_symbolsRelative')
       ..createSync(recursive: true);
     await _run('flutter', [
@@ -194,7 +196,15 @@ Future<void> main(List<String> arguments) async {
   }
 
   _step('Checking the bundle');
-  _checkBundle(bundle, ['$binaryName.exe', ..._required]);
+  _checkBundle(bundle, [
+    '$binaryName.exe',
+    // The browsers' native messaging host and its manifest, which the
+    // installer's keys point the browsers to (windows/BrowserBridge): each
+    // product's own.
+    '$binaryName-browser-host.exe',
+    productBrowserManifest,
+    ..._required,
+  ]);
 
   if (stockEngine) {
     _step('Keeping Flutter\'s own engine');
@@ -448,6 +458,25 @@ Future<void> _putOpenSsh(Directory root, Directory bundle) async {
     if (!file.existsSync()) _fail('No $name in the OpenSSH release.');
     file.copySync('${target.path}\\$name');
   }
+}
+
+/// Clears CMake's cache when it was made for another product: it keeps the
+/// target's name, and a build of the other product fails on it ("No target
+/// baocode", the install prefix it cached pointing at the old one).
+void _clearBuildCacheIfProductChanged(Directory root, String binaryName) {
+  final cache = File(
+    '${root.path}\\build\\windows\\x64\\CMakeCache.txt',
+  );
+  if (!cache.existsSync()) return;
+  final text = cache.readAsStringSync();
+  final built = RegExp(
+    r'^CMAKE_INSTALL_PREFIX:PATH=.*[/\\]([A-Za-z0-9_.-]+)$',
+    multiLine: true,
+  ).firstMatch(text)?.group(1);
+  if (built == null || built == binaryName) return;
+  _step('Clearing the build cache (it was made for $built)');
+  final windows = Directory('${root.path}\\build\\windows');
+  if (windows.existsSync()) windows.deleteSync(recursive: true);
 }
 
 /// The Inno Setup compiler: where winget puts it, then where a manual

@@ -25,10 +25,12 @@ class BrowserBridge extends ChangeNotifier {
 
   static final instance = BrowserBridge._();
 
-  /// The native messaging host's name, as the extension asks for it. Both
-  /// products' hosts have this one name (the extension is one), and each
-  /// answers for its own product: the host of a product reads the port file
-  /// of that product (see [portPath]).
+  /// The native messaging host's name, as the extension asks for it.
+  ///
+  /// The extension is one, so it asks for one name; each product's host
+  /// answers under it and reads the port file of the product it belongs to
+  /// (see [portPath]). So the browser talks to the product that is running,
+  /// and not to the other one.
   static const hostName = 'dev.baocode.browser';
 
   /// The extension's id: the Chrome Web Store's, and the zip's to load
@@ -410,8 +412,24 @@ class BrowserBridge extends ChangeNotifier {
     ].any((folder) => Directory(folder).existsSync());
   }
 
-  static File _hostManifest(String folder) =>
-      File(p.join(folder, 'NativeMessagingHosts', '$hostName.json'));
+  /// The manifest the browsers find the host by: in the browser's own
+  /// folder, under the host's name.
+  ///
+  /// The file is the product's own (its name says so), so that the two
+  /// products' hosts are both registered and each browser starts the one
+  /// of the product that is running.
+  static File _hostManifest(String folder) => File(
+    p.join(folder, 'NativeMessagingHosts', '${_hostName()}.json'),
+  );
+
+  /// The host's name, as the file it is registered under: the product's
+  /// own ("dev.baocode.browser", "dev.baocode-codex.browser").
+  static String _hostName() {
+    final product = _product();
+    return product == 'baocode'
+        ? hostName
+        : 'dev.${product.replaceFirst('baocode', 'baocode')}.browser';
+  }
 
   /// The host's executable: beside the app's, and named for the product as
   /// the app's is (baocode-browser-host, baocode-codex-browser-host).
@@ -435,8 +453,8 @@ class BrowserBridge extends ChangeNotifier {
       return;
     }
     final manifest = const JsonEncoder.withIndent('  ').convert({
-      'name': hostName,
-      'description': 'BaoCode',
+      'name': _hostName(),
+      'description': AppPaths.displayName(Platform.environment),
       'path': hostExecutable,
       'type': 'stdio',
       'allowed_origins': [
