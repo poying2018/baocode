@@ -58,11 +58,15 @@ void main() {
 
   test('the picks are kept in the global storage, and read back', () async {
     final folder = await Directory.systemTemp.createTemp('language_modes');
-    addTearDown(() => folder.delete(recursive: true));
+    // Teardowns run in reverse: the storages are disposed first, so that
+    // nothing writes into the folder as it goes (a write landing after
+    // the delete leaves the folder non-empty on Windows).
+    addTearDown(() => deleteFolder(folder));
     final storage = GlobalStorage(
       '${folder.path}/storage.json',
       debounce: Duration.zero,
     );
+    addTearDown(storage.dispose);
     await storage.load();
     keepLanguageModes(storage);
     overrides.set('/x/run', 'shellscript');
@@ -79,8 +83,22 @@ void main() {
 
     overrides.load(const {});
     final again = GlobalStorage('${folder.path}/storage.json');
+    addTearDown(again.dispose);
     await again.load();
     overrides.load(again.get<Map<Object?, Object?>>(languageModesKey));
     expect(overrides.of('/x/run'), 'shellscript');
   });
+}
+
+/// [folder] and what is in it, gone: a write may still be finishing, and
+/// on Windows a folder that is in use cannot be deleted.
+Future<void> deleteFolder(Directory folder) async {
+  for (var attempt = 0; attempt < 40; attempt++) {
+    try {
+      await folder.delete(recursive: true);
+      return;
+    } on FileSystemException {
+      await Future<void>.delayed(const Duration(milliseconds: 25));
+    }
+  }
 }
