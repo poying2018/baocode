@@ -57,8 +57,22 @@ Future<void> _loadFonts() async {
     '$material/Roboto-Italic.ttf',
     '$material/Roboto-Bold.ttf',
   ]);
-  await load('ScreenMono', ['/System/Library/Fonts/Monaco.ttf']);
+  await load('ScreenMono', _monoFont());
   await load('codicon', ['../../assets/codicons/codicon.ttf']);
+}
+
+/// The machine's monospace font, where there is one: the editor shows the
+/// text in it, and the tests measure what it is drawn as.
+List<String> _monoFont() {
+  const candidates = [
+    '/System/Library/Fonts/Monaco.ttf',
+    r'C:\Windows\Fonts\consola.ttf',
+    '/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf',
+  ];
+  return [
+    for (final path in candidates)
+      if (File(path).existsSync()) path,
+  ];
 }
 
 EditorSurfaceController _controller(String text) {
