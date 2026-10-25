@@ -638,12 +638,12 @@ class _BrowserMirrorState extends State<BrowserMirror> with TextInputClient {
     // a tab of.
     var settings = true;
     if (_bridge.otherApp) {
-      message = l10n.browserOtherApp;
+      message = l10n.browserOtherApp(productName);
     } else if (_bridge.browsers.isEmpty) {
-      message = l10n.browserNotConnected;
+      message = l10n.browserNotConnected(productName);
     } else if (_shown == null) {
       settings = false;
-      message = l10n.browserNoSharedTab;
+      message = l10n.browserNoSharedTab(productName);
     } else {
       message = null;
     }
@@ -766,7 +766,7 @@ class _BrowserMirrorState extends State<BrowserMirror> with TextInputClient {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            context.l10n.browserDetached,
+                            context.l10n.browserDetached(productName),
                             textAlign: TextAlign.center,
                             style: TextStyle(color: AppColors.textMuted),
                           ),

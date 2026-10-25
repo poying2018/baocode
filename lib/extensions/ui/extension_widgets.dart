@@ -147,13 +147,13 @@ class _ExtensionIconState extends State<ExtensionIcon> {
   ),
   ExtensionCapabilityLevel.partial => (
     label: l10n.extsCapabilityPartial,
-    detail: l10n.extsCapabilityPartialDetail,
+    detail: l10n.extsCapabilityPartialDetail(productName),
     icon: Codicons.warning,
     color: themeColors['editorWarning.foreground'],
   ),
   ExtensionCapabilityLevel.unsupported => (
     label: l10n.extsCapabilityUnsupported,
-    detail: l10n.extsCapabilityUnsupportedDetail,
+    detail: l10n.extsCapabilityUnsupportedDetail(productName),
     icon: Codicons.circleSlash,
     color: themeColors['errorForeground'],
   ),

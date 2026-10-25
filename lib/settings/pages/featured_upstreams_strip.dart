@@ -292,7 +292,7 @@ class _WhyState extends State<_Why> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(l10n.modelsFeaturedNote),
+                      Text(l10n.modelsFeaturedNote(productName)),
                       const SizedBox(height: 2),
                       Text(
                         l10n.modelsFeaturedNoteHow,

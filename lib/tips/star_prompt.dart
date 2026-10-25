@@ -178,8 +178,8 @@ Future<void> showStarDialog(
   final l10n = context.l10n;
   final button = await showIdeDialog(
     context,
-    message: l10n.starPromptMessage,
-    detail: l10n.starPromptDetail,
+    message: l10n.starPromptMessage(productName),
+    detail: l10n.starPromptDetail(productName),
     buttons: [l10n.starPromptStar],
     cancel: l10n.starPromptLater,
     type: IdeDialogType.info,

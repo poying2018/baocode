@@ -114,7 +114,7 @@ class _StashWelcomeState extends State<StashWelcome>
       (
         const BaoCodeLogo(size: 15),
         l10n.stashWelcomeAgentTitle,
-        l10n.stashWelcomeAgent,
+        l10n.stashWelcomeAgent(productName),
       ),
       (
         const Icon(Codicons.pulse, size: 15),

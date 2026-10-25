@@ -3468,10 +3468,10 @@ class _UpdateButton extends StatelessWidget {
     final release = updates.release!;
     final version = release.version.marketing;
     final message = updates.isMandatory(release)
-        ? l10n.updateMandatory(version)
+        ? l10n.updateMandatory(productName, version)
         : updates.status == UpdateStatus.ready
-        ? l10n.updateReady(version)
-        : l10n.updateAvailable(version);
+        ? l10n.updateReady(productName, version)
+        : l10n.updateAvailable(productName, version);
     return IdeHover(
       message: message,
       excludeFromSemantics: true,

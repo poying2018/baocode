@@ -186,16 +186,14 @@ class _DataDirectoryRecoveryState extends State<DataDirectoryRecovery> {
     final fromEnvironment = problem.source == DataDirectorySource.environment;
     final l10n = context.l10n;
     final title = switch (problem.problem) {
-      DataDirectoryProblem.invalidPointer => l10n.dataDirSettingUnreadable,
-      DataDirectoryProblem.notWritable => l10n.dataDirCannotWrite,
-      _ => l10n.dataDirUnavailable,
+      DataDirectoryProblem.invalidPointer => l10n.dataDirSettingUnreadable(productName),
+      DataDirectoryProblem.notWritable => l10n.dataDirCannotWrite(productName),
+      _ => l10n.dataDirUnavailable(productName),
     };
-    // The product's own name, not the one the strings were written with.
-    final productTitle = withProductName(title);
     final where = fromEnvironment
         ? l10n.dataDirWhereEnv(DataDirectory.environmentVariable)
         : problem.problem == DataDirectoryProblem.invalidPointer
-        ? l10n.dataDirWhereFixPointer(problem.pointerFile)
+        ? l10n.dataDirWhereFixPointer(productName, problem.pointerFile)
         : l10n.dataDirWherePointer(problem.pointerFile);
     final error = switch (problem.problem) {
       final kind? => localizedDataDirectoryProblem(
@@ -251,7 +249,7 @@ class _DataDirectoryRecoveryState extends State<DataDirectoryRecovery> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        productTitle,
+                        title,
                         style: text(
                           color: AppColors.textPrimary,
                           size: 15,
@@ -337,10 +335,10 @@ Future<void> offerOldDataDirRemoval(
   final l10n = context.l10n;
   final choice = await showIdeDialog(
     context,
-    message: l10n.dataDirRemoveOldTitle,
+    message: l10n.dataDirRemoveOldTitle(productName),
     detail:
         '$previous\n\n'
-        '${l10n.dataDirRemoveOldDetail(service.current.path, items.join(', '))}',
+        '${l10n.dataDirRemoveOldDetail(productName, service.current.path, items.join(', '))}',
     buttons: [l10n.dataDirRemove, l10n.dataDirKeep],
     cancel: l10n.dataDirLater,
     type: IdeDialogType.question,
@@ -353,7 +351,7 @@ Future<void> offerOldDataDirRemoval(
         context,
         message: l10n.dataDirRemoveOldInUse,
         detail:
-            '$previous\n\n${l10n.dataDirRemoveOldInUseDetail(left.join(', '))}',
+            '$previous\n\n${l10n.dataDirRemoveOldInUseDetail(productName, left.join(', '))}',
         buttons: [l10n.commonOk],
         cancel: null,
       );

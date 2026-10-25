@@ -402,9 +402,9 @@ class FeatureTipsController extends ChangeNotifier {
     var acted = false;
     presenter.notifications.notify(
       IdeSeverity.info,
-      l10n.tipsUpdated(
-        _version.marketing,
+      l10n.tipsUpdated(productName, 
         shown.map((tip) => tip.title(l10n)).join(l10n.tipsListSeparator),
+        _version.marketing,
       ),
       sticky: true,
       primary: [

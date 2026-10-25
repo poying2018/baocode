@@ -176,11 +176,11 @@ abstract class AppLocalizations {
   /// **'Display Language'**
   String get languageSettingsDisplayLanguage;
 
-  /// No description provided for @languageSettingsDescription.
+  /// The language of BaoCode's menus, views and messages. Changes apply at once.
   ///
   /// In en, this message translates to:
-  /// **'The language of BaoCode\'s menus, views and messages. Changes apply at once.'**
-  String get languageSettingsDescription;
+  /// **'The language of {product}\'s menus, views and messages. Changes apply at once.'**
+  String languageSettingsDescription(String product);
 
   /// Follow System, with the language the system's resolves to, named in its own language.
   ///
@@ -2762,11 +2762,11 @@ abstract class AppLocalizations {
   /// **'Context Panel'**
   String get menuContextPanel;
 
-  /// No description provided for @menuAboutBaoCode.
+  /// About BaoCode
   ///
   /// In en, this message translates to:
-  /// **'About BaoCode'**
-  String get menuAboutBaoCode;
+  /// **'About {product}'**
+  String menuAboutBaoCode(String product);
 
   /// Tooltip.
   ///
@@ -2840,23 +2840,23 @@ abstract class AppLocalizations {
   /// **'Browser'**
   String get sidePanelBrowser;
 
-  /// No description provided for @browserNotConnected.
+  /// No browser is connected. Add BaoCode's extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.
   ///
   /// In en, this message translates to:
-  /// **'No browser is connected. Add BaoCode\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.'**
-  String get browserNotConnected;
+  /// **'No browser is connected. Add {product}\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.'**
+  String browserNotConnected(String product);
 
-  /// No description provided for @browserNoSharedTab.
+  /// No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.
   ///
   /// In en, this message translates to:
-  /// **'No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.'**
-  String get browserNoSharedTab;
+  /// **'No tab is shared yet. Ask an agent to open a page, or click {product} in the browser toolbar to share the tab in front.'**
+  String browserNoSharedTab(String product);
 
-  /// No description provided for @browserOtherApp.
+  /// Another BaoCode is connected to the browser.
   ///
   /// In en, this message translates to:
-  /// **'Another BaoCode is connected to the browser.'**
-  String get browserOtherApp;
+  /// **'Another {product} is connected to the browser.'**
+  String browserOtherApp(String product);
 
   /// No description provided for @browserSharedTabs.
   ///
@@ -2876,11 +2876,11 @@ abstract class AppLocalizations {
   /// **'Show in Browser'**
   String get browserShowInBrowser;
 
-  /// No description provided for @browserDetached.
+  /// The browser stopped letting BaoCode see this tab.
   ///
   /// In en, this message translates to:
-  /// **'The browser stopped letting BaoCode see this tab.'**
-  String get browserDetached;
+  /// **'The browser stopped letting {product} see this tab.'**
+  String browserDetached(String product);
 
   /// No description provided for @browserReconnect.
   ///
@@ -2900,11 +2900,11 @@ abstract class AppLocalizations {
   /// **'Watching you in the browser'**
   String get browserWatchTitle;
 
-  /// No description provided for @browserWatchHint.
+  /// Do it in the BaoCode tab of your browser. When you're done, click Done here or the BaoCode button in the browser's toolbar.
   ///
   /// In en, this message translates to:
-  /// **'Do it in the BaoCode tab of your browser. When you\'re done, click Done here or the BaoCode button in the browser\'s toolbar.'**
-  String get browserWatchHint;
+  /// **'Do it in the {product} tab of your browser. When you\'re done, click Done here or the {product} button in the browser\'s toolbar.'**
+  String browserWatchHint(String product);
 
   /// No description provided for @browserWatchSteps.
   ///
@@ -5972,11 +5972,11 @@ abstract class AppLocalizations {
   /// **'Core'**
   String get generalSettingsClaudeCore;
 
-  /// No description provided for @generalSettingsClaudeCoreDescription.
+  /// Claude Code CLI: Anthropic's own program, with this machine's sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.
   ///
   /// In en, this message translates to:
-  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.'**
-  String get generalSettingsClaudeCoreDescription;
+  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with {product}, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.'**
+  String generalSettingsClaudeCoreDescription(String product);
 
   /// Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app.
   ///
@@ -6212,11 +6212,11 @@ abstract class AppLocalizations {
   /// **'Closing the window hides it there and the agents keep running; its menu shows the agents waiting on you, and quits the app.'**
   String get trayEnabledDescription;
 
-  /// No description provided for @trayShow.
+  /// Show BaoCode
   ///
   /// In en, this message translates to:
-  /// **'Show BaoCode'**
-  String get trayShow;
+  /// **'Show {product}'**
+  String trayShow(String product);
 
   /// Tray menu header over the agents waiting on the user.
   ///
@@ -6236,11 +6236,11 @@ abstract class AppLocalizations {
   /// **'{count} running'**
   String trayRunning(int count);
 
-  /// No description provided for @trayQuit.
+  /// Quit BaoCode
   ///
   /// In en, this message translates to:
-  /// **'Quit BaoCode'**
-  String get trayQuit;
+  /// **'Quit {product}'**
+  String trayQuit(String product);
 
   /// Notification: the agent waits on the user.
   ///
@@ -8451,11 +8451,11 @@ abstract class AppLocalizations {
   /// **'The when clause does not parse ({error}): this keybinding never applies.'**
   String kbWhenNotParse(String error);
 
-  /// No description provided for @kbUnknownContextKeys.
+  /// {count, plural, =1{BaoCode does not know the context key {keys}: this keybinding never applies.} other{BaoCode does not know the context keys {keys}: this keybinding never applies.}}
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, =1{BaoCode does not know the context key {keys}: this keybinding never applies.} other{BaoCode does not know the context keys {keys}: this keybinding never applies.}}'**
-  String kbUnknownContextKeys(int count, String keys);
+  /// **'{count, plural, =1{{product} does not know the context key {keys}: this keybinding never applies.} other{{product} does not know the context keys {keys}: this keybinding never applies.}}'**
+  String kbUnknownContextKeys(String product, num count, Object keys);
 
   /// No description provided for @kbChangeFailed.
   ///
@@ -8589,11 +8589,11 @@ abstract class AppLocalizations {
   /// **'No keybindings found'**
   String get kbNoneFound;
 
-  /// No description provided for @kbCannotReadKey.
+  /// BaoCode cannot read the key “{key}”: this keybinding never applies.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode cannot read the key “{key}”: this keybinding never applies.'**
-  String kbCannotReadKey(String key);
+  /// **'{product} cannot read the key “{key}”: this keybinding never applies.'**
+  String kbCannotReadKey(String product, Object key);
 
   /// No description provided for @kbNotSupported.
   ///
@@ -8601,11 +8601,11 @@ abstract class AppLocalizations {
   /// **'Not supported'**
   String get kbNotSupported;
 
-  /// No description provided for @kbNotSupportedHover.
+  /// BaoCode does not have this command: the keybinding is kept, but does nothing.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode does not have this command: the keybinding is kept, but does nothing.'**
-  String get kbNotSupportedHover;
+  /// **'{product} does not have this command: the keybinding is kept, but does nothing.'**
+  String kbNotSupportedHover(String product);
 
   /// No description provided for @kbPressKeys.
   ///
@@ -8691,41 +8691,41 @@ abstract class AppLocalizations {
   /// **'Checking the folder…'**
   String get dataDirChecking;
 
-  /// No description provided for @dataDirAlreadyHolds.
+  /// The folder already holds BaoCode data
   ///
   /// In en, this message translates to:
-  /// **'The folder already holds BaoCode data'**
-  String get dataDirAlreadyHolds;
+  /// **'The folder already holds {product} data'**
+  String dataDirAlreadyHolds(String product);
 
-  /// No description provided for @dataDirMoveBack.
+  /// Move BaoCode's data back to the default folder?
   ///
   /// In en, this message translates to:
-  /// **'Move BaoCode\'s data back to the default folder?'**
-  String get dataDirMoveBack;
+  /// **'Move {product}\'s data back to the default folder?'**
+  String dataDirMoveBack(String product);
 
-  /// No description provided for @dataDirMoveHere.
+  /// Move BaoCode's data to this folder?
   ///
   /// In en, this message translates to:
-  /// **'Move BaoCode\'s data to this folder?'**
-  String get dataDirMoveHere;
+  /// **'Move {product}\'s data to this folder?'**
+  String dataDirMoveHere(String product);
 
-  /// No description provided for @dataDirUseAsIsDetail.
+  /// After a restart BaoCode uses the data there as it is; nothing is copied, and the current folder keeps yours.
   ///
   /// In en, this message translates to:
-  /// **'After a restart BaoCode uses the data there as it is; nothing is copied, and the current folder keeps yours.'**
-  String get dataDirUseAsIsDetail;
+  /// **'After a restart {product} uses the data there as it is; nothing is copied, and the current folder keeps yours.'**
+  String dataDirUseAsIsDetail(String product);
 
-  /// No description provided for @dataDirCopyDetail.
+  /// BaoCode copies its settings, keybindings, language servers and state there, and uses that folder after a restart.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode copies its settings, keybindings, language servers and state there, and uses that folder after a restart.'**
-  String get dataDirCopyDetail;
+  /// **'{product} copies its settings, keybindings, language servers and state there, and uses that folder after a restart.'**
+  String dataDirCopyDetail(String product);
 
-  /// No description provided for @dataDirOtherFiles.
+  /// The folder holds other files: they stay, beside BaoCode's own.
   ///
   /// In en, this message translates to:
-  /// **'The folder holds other files: they stay, beside BaoCode\'s own.'**
-  String get dataDirOtherFiles;
+  /// **'The folder holds other files: they stay, beside {product}\'s own.'**
+  String dataDirOtherFiles(String product);
 
   /// No description provided for @dataDirUseItsData.
   ///
@@ -8763,17 +8763,17 @@ abstract class AppLocalizations {
   /// **'{path} is in use by another program. Close that program, then try again.'**
   String dataDirMoveInUse(String path);
 
-  /// No description provided for @dataDirRestartTitle.
+  /// Restart BaoCode to use the new data folder
   ///
   /// In en, this message translates to:
-  /// **'Restart BaoCode to use the new data folder'**
-  String get dataDirRestartTitle;
+  /// **'Restart {product} to use the new data folder'**
+  String dataDirRestartTitle(String product);
 
-  /// No description provided for @dataDirRestartDetail.
+  /// BaoCode keeps using {current} until it restarts. The next start uses {next}, and offers to remove what is left in the old one.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode keeps using {current} until it restarts. The next start uses {next}, and offers to remove what is left in the old one.'**
-  String dataDirRestartDetail(String current, String next);
+  /// **'{product} keeps using {current} until it restarts. The next start uses {next}, and offers to remove what is left in the old one.'**
+  String dataDirRestartDetail(String product, Object current, Object next);
 
   /// No description provided for @dataDirTheNewFolder.
   ///
@@ -8781,11 +8781,11 @@ abstract class AppLocalizations {
   /// **'the new folder'**
   String get dataDirTheNewFolder;
 
-  /// No description provided for @quitConfirmMessage.
+  /// Quit BaoCode?
   ///
   /// In en, this message translates to:
-  /// **'Quit BaoCode?'**
-  String get quitConfirmMessage;
+  /// **'Quit {product}?'**
+  String quitConfirmMessage(String product);
 
   /// No description provided for @quitConfirmDetail.
   ///
@@ -8841,11 +8841,11 @@ abstract class AppLocalizations {
   /// **'Data Folder'**
   String get dataDirTitle;
 
-  /// No description provided for @dataDirDescription.
+  /// Where BaoCode keeps your settings, keybindings, language servers and its own state. Other programs keep files there too (the web view's caches); BaoCode never moves or removes those.
   ///
   /// In en, this message translates to:
-  /// **'Where BaoCode keeps your settings, keybindings, language servers and its own state. Other programs keep files there too (the web view\'s caches); BaoCode never moves or removes those.'**
-  String get dataDirDescription;
+  /// **'Where {product} keeps your settings, keybindings, language servers and its own state. Other programs keep files there too (the web view\'s caches); {product} never moves or removes those.'**
+  String dataDirDescription(String product);
 
   /// No description provided for @dataDirCurrentFolder.
   ///
@@ -8889,23 +8889,23 @@ abstract class AppLocalizations {
   /// **'Cannot write {file}: {error}'**
   String dataDirCannotWritePointer(String file, String error);
 
-  /// No description provided for @dataDirSettingUnreadable.
+  /// BaoCode's data folder setting cannot be read
   ///
   /// In en, this message translates to:
-  /// **'BaoCode\'s data folder setting cannot be read'**
-  String get dataDirSettingUnreadable;
+  /// **'{product}\'s data folder setting cannot be read'**
+  String dataDirSettingUnreadable(String product);
 
-  /// No description provided for @dataDirCannotWrite.
+  /// BaoCode cannot write to its data folder
   ///
   /// In en, this message translates to:
-  /// **'BaoCode cannot write to its data folder'**
-  String get dataDirCannotWrite;
+  /// **'{product} cannot write to its data folder'**
+  String dataDirCannotWrite(String product);
 
-  /// No description provided for @dataDirUnavailable.
+  /// BaoCode's data folder is not available
   ///
   /// In en, this message translates to:
-  /// **'BaoCode\'s data folder is not available'**
-  String get dataDirUnavailable;
+  /// **'{product}\'s data folder is not available'**
+  String dataDirUnavailable(String product);
 
   /// No description provided for @dataDirWhereEnv.
   ///
@@ -8913,11 +8913,11 @@ abstract class AppLocalizations {
   /// **'It is set by the {variable} environment variable.'**
   String dataDirWhereEnv(String variable);
 
-  /// No description provided for @dataDirWhereFixPointer.
+  /// Fix or delete {file} and try again; BaoCode changes it only if you choose another folder.
   ///
   /// In en, this message translates to:
-  /// **'Fix or delete {file} and try again; BaoCode changes it only if you choose another folder.'**
-  String dataDirWhereFixPointer(String file);
+  /// **'Fix or delete {file} and try again; {product} changes it only if you choose another folder.'**
+  String dataDirWhereFixPointer(String product, Object file);
 
   /// No description provided for @dataDirWherePointer.
   ///
@@ -8949,17 +8949,17 @@ abstract class AppLocalizations {
   /// **'Choose Another Folder…'**
   String get dataDirChooseAnother;
 
-  /// No description provided for @dataDirRemoveOldTitle.
+  /// Remove the data BaoCode left in its previous folder?
   ///
   /// In en, this message translates to:
-  /// **'Remove the data BaoCode left in its previous folder?'**
-  String get dataDirRemoveOldTitle;
+  /// **'Remove the data {product} left in its previous folder?'**
+  String dataDirRemoveOldTitle(String product);
 
-  /// No description provided for @dataDirRemoveOldDetail.
+  /// BaoCode now keeps its data in {current}. Only its own items are removed from the previous folder ({items}); the folder and everything else in it stay.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode now keeps its data in {current}. Only its own items are removed from the previous folder ({items}); the folder and everything else in it stay.'**
-  String dataDirRemoveOldDetail(String current, String items);
+  /// **'{product} now keeps its data in {current}. Only its own items are removed from the previous folder ({items}); the folder and everything else in it stay.'**
+  String dataDirRemoveOldDetail(String product, Object current, Object items);
 
   /// No description provided for @dataDirRemove.
   ///
@@ -8979,11 +8979,11 @@ abstract class AppLocalizations {
   /// **'Some of the old data could not be removed'**
   String get dataDirRemoveOldInUse;
 
-  /// No description provided for @dataDirRemoveOldInUseDetail.
+  /// Files in {items} are in use, perhaps by another program. Everything else was removed; BaoCode offers to remove the rest the next time it starts.
   ///
   /// In en, this message translates to:
-  /// **'Files in {items} are in use, perhaps by another program. Everything else was removed; BaoCode offers to remove the rest the next time it starts.'**
-  String dataDirRemoveOldInUseDetail(String items);
+  /// **'Files in {items} are in use, perhaps by another program. Everything else was removed; {product} offers to remove the rest the next time it starts.'**
+  String dataDirRemoveOldInUseDetail(String product, Object items);
 
   /// No description provided for @impTitle.
   ///
@@ -9309,11 +9309,11 @@ abstract class AppLocalizations {
   /// **'Shell command \'{name}\' successfully uninstalled from PATH.'**
   String shellCommandUninstalled(String name);
 
-  /// No description provided for @shellCommandOccupied.
+  /// {path} already runs another app's '{name}' command. Replace it with BaoCode's?
   ///
   /// In en, this message translates to:
-  /// **'{path} already runs another app\'s \'{name}\' command. Replace it with BaoCode\'s?'**
-  String shellCommandOccupied(String path, String name);
+  /// **'{path} already runs another app\'s \'{name}\' command. Replace it with {product}\'s?'**
+  String shellCommandOccupied(String product, Object name, Object path);
 
   /// No description provided for @shellCommandReplace.
   ///
@@ -9339,11 +9339,11 @@ abstract class AppLocalizations {
   /// **'Open at Launch'**
   String get generalSettingsMainWindow;
 
-  /// No description provided for @generalSettingsMainWindowDescription.
+  /// What BaoCode opens to: the agents, or the IDE windows (as Restore Windows says), never both. By default, wherever it was left when it last quit.
   ///
   /// In en, this message translates to:
-  /// **'What BaoCode opens to: the agents, or the IDE windows (as Restore Windows says), never both. By default, wherever it was left when it last quit.'**
-  String get generalSettingsMainWindowDescription;
+  /// **'What {product} opens to: the agents, or the IDE windows (as Restore Windows says), never both. By default, wherever it was left when it last quit.'**
+  String generalSettingsMainWindowDescription(String product);
 
   /// No description provided for @generalSettingsMainWindowLabel.
   ///
@@ -9447,11 +9447,11 @@ abstract class AppLocalizations {
   /// **'In use: {path}'**
   String claudePathInUseUnknown(String path);
 
-  /// No description provided for @claudePathInUseDownloaded.
+  /// In use: Claude Code {version}, downloaded by BaoCode
   ///
   /// In en, this message translates to:
-  /// **'In use: Claude Code {version}, downloaded by BaoCode'**
-  String claudePathInUseDownloaded(String version);
+  /// **'In use: Claude Code {version}, downloaded by {product}'**
+  String claudePathInUseDownloaded(String product, Object version);
 
   /// No description provided for @claudePathMissing.
   ///
@@ -9729,11 +9729,14 @@ abstract class AppLocalizations {
   /// **'Shell Command'**
   String get generalSettingsShellCommand;
 
-  /// No description provided for @generalSettingsShellCommandDescription.
+  /// Open files and folders in BaoCode from a terminal: 'code <path>'. Installed at {location}.
   ///
   /// In en, this message translates to:
-  /// **'Open files and folders in BaoCode from a terminal: \'code <path>\'. Installed at {location}.'**
-  String generalSettingsShellCommandDescription(String location);
+  /// **'Open files and folders in {product} from a terminal: \'code <path>\'. Installed at {location}.'**
+  String generalSettingsShellCommandDescription(
+    String product,
+    Object location,
+  );
 
   /// No description provided for @generalSettingsShellCommandInstalled.
   ///
@@ -10263,11 +10266,11 @@ abstract class AppLocalizations {
   /// **'Why am I seeing this?'**
   String get modelsFeaturedWhy;
 
-  /// No description provided for @modelsFeaturedNote.
+  /// These sites are officially listed by BaoCode
   ///
   /// In en, this message translates to:
-  /// **'These sites are officially listed by BaoCode'**
-  String get modelsFeaturedNote;
+  /// **'These sites are officially listed by {product}'**
+  String modelsFeaturedNote(String product);
 
   /// No description provided for @modelsFeaturedNoteHow.
   ///
@@ -10377,11 +10380,11 @@ abstract class AppLocalizations {
   /// **'This import link can\'t be used'**
   String get modelsImportInvalid;
 
-  /// No description provided for @modelsImportInvalidDetail.
+  /// It needs a base URL (http or https) and a protocol BaoCode knows. Ask the site for a new link, or add the upstream by hand in Settings → Models.
   ///
   /// In en, this message translates to:
-  /// **'It needs a base URL (http or https) and a protocol BaoCode knows. Ask the site for a new link, or add the upstream by hand in Settings → Models.'**
-  String get modelsImportInvalidDetail;
+  /// **'It needs a base URL (http or https) and a protocol {product} knows. Ask the site for a new link, or add the upstream by hand in Settings → Models.'**
+  String modelsImportInvalidDetail(String product);
 
   /// No description provided for @modelsAddProvider.
   ///
@@ -10959,11 +10962,11 @@ abstract class AppLocalizations {
   /// **'Subagents'**
   String get modelsRoleSubagent;
 
-  /// No description provided for @modelsRoleSubagentDescription.
+  /// CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent's call names (but inherit). It may be another upstream's: BaoCode's local proxy sends its requests there.
   ///
   /// In en, this message translates to:
-  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.'**
-  String get modelsRoleSubagentDescription;
+  /// **'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: {product}\'s local proxy sends its requests there.'**
+  String modelsRoleSubagentDescription(String product);
 
   /// Under a role that picks another upstream's model, once that upstream or model is gone.
   ///
@@ -11433,11 +11436,11 @@ abstract class AppLocalizations {
   /// **'Updates'**
   String get updatesSettingsTitle;
 
-  /// No description provided for @updatesSettingsDescription.
+  /// BaoCode looks for new versions in this repository's releases.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode looks for new versions in this repository\'s releases.'**
-  String get updatesSettingsDescription;
+  /// **'{product} looks for new versions in this repository\'s releases.'**
+  String updatesSettingsDescription(String product);
 
   /// No description provided for @updateCurrentVersion.
   ///
@@ -11469,41 +11472,45 @@ abstract class AppLocalizations {
   /// **'Checking for updates…'**
   String get updateChecking;
 
-  /// No description provided for @updateUpToDate.
+  /// BaoCode is up to date.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode is up to date.'**
-  String get updateUpToDate;
+  /// **'{product} is up to date.'**
+  String updateUpToDate(String product);
 
-  /// No description provided for @updateAvailable.
+  /// BaoCode {version} is available.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode {version} is available.'**
-  String updateAvailable(String version);
+  /// **'{product} {version} is available.'**
+  String updateAvailable(String product, Object version);
 
-  /// No description provided for @updateReady.
+  /// BaoCode {version} has been downloaded. Restart to update.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode {version} has been downloaded. Restart to update.'**
-  String updateReady(String version);
+  /// **'{product} {version} has been downloaded. Restart to update.'**
+  String updateReady(String product, Object version);
 
-  /// No description provided for @updateDownloading.
+  /// Downloading BaoCode {version}…
   ///
   /// In en, this message translates to:
-  /// **'Downloading BaoCode {version}…'**
-  String updateDownloading(String version);
+  /// **'Downloading {product} {version}…'**
+  String updateDownloading(String product, Object version);
 
-  /// No description provided for @updateDownloadingProgress.
+  /// Downloading BaoCode {version}… {percent}%
   ///
   /// In en, this message translates to:
-  /// **'Downloading BaoCode {version}… {percent}%'**
-  String updateDownloadingProgress(String version, int percent);
+  /// **'Downloading {product} {version}… {percent}%'**
+  String updateDownloadingProgress(
+    String product,
+    Object percent,
+    Object version,
+  );
 
-  /// No description provided for @updateMandatory.
+  /// This version of BaoCode is no longer supported. Update to {version} to keep using it.
   ///
   /// In en, this message translates to:
-  /// **'This version of BaoCode is no longer supported. Update to {version} to keep using it.'**
-  String updateMandatory(String version);
+  /// **'This version of {product} is no longer supported. Update to {version} to keep using it.'**
+  String updateMandatory(String product, Object version);
 
   /// No description provided for @updateRestartNow.
   ///
@@ -11529,11 +11536,11 @@ abstract class AppLocalizations {
   /// **'You skipped this version: it is not offered again, but can still be installed here.'**
   String get updateSkippedNote;
 
-  /// No description provided for @updateFailed.
+  /// Couldn't update BaoCode: {error}
   ///
   /// In en, this message translates to:
-  /// **'Couldn\'t update BaoCode: {error}'**
-  String updateFailed(String error);
+  /// **'Couldn\'t update {product}: {error}'**
+  String updateFailed(String product, Object error);
 
   /// No description provided for @updateCheckFailed.
   ///
@@ -11547,17 +11554,17 @@ abstract class AppLocalizations {
   /// **'Updates are turned off (update.mode is \"none\").'**
   String get updateDisabled;
 
-  /// No description provided for @updateUnsupported.
+  /// This build of BaoCode doesn't update itself.
   ///
   /// In en, this message translates to:
-  /// **'This build of BaoCode doesn\'t update itself.'**
-  String get updateUnsupported;
+  /// **'This build of {product} doesn\'t update itself.'**
+  String updateUnsupported(String product);
 
-  /// No description provided for @updateManual.
+  /// BaoCode can't update itself here ({reason}). Download the new version from this repository's releases.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode can\'t update itself here ({reason}). Download the new version from this repository\'s releases.'**
-  String updateManual(String reason);
+  /// **'{product} can\'t update itself here ({reason}). Download the new version from this repository\'s releases.'**
+  String updateManual(String product, Object reason);
 
   /// No description provided for @updateOpenDownloadPage.
   ///
@@ -11565,11 +11572,11 @@ abstract class AppLocalizations {
   /// **'Open Download Page'**
   String get updateOpenDownloadPage;
 
-  /// No description provided for @updateUnfinished.
+  /// BaoCode {version} wasn't installed: this is still {current}. Try again from Settings > Updates, or download it from this repository's releases.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode {version} wasn\'t installed: this is still {current}. Try again from Settings > Updates, or download it from this repository\'s releases.'**
-  String updateUnfinished(String version, String current);
+  /// **'{product} {version} wasn\'t installed: this is still {current}. Try again from Settings > Updates, or download it from this repository\'s releases.'**
+  String updateUnfinished(String product, Object current, Object version);
 
   /// No description provided for @updateShowLog.
   ///
@@ -11595,11 +11602,11 @@ abstract class AppLocalizations {
   /// **'Update Mode'**
   String get updateMode;
 
-  /// No description provided for @updateModeDescription.
+  /// Whether BaoCode looks for new versions by itself (update.mode).
   ///
   /// In en, this message translates to:
-  /// **'Whether BaoCode looks for new versions by itself (update.mode).'**
-  String get updateModeDescription;
+  /// **'Whether {product} looks for new versions by itself (update.mode).'**
+  String updateModeDescription(String product);
 
   /// The update mode dropdown, as read out.
   ///
@@ -11631,11 +11638,11 @@ abstract class AppLocalizations {
   /// **'Diagnostic Logs'**
   String get diagnosticsTitle;
 
-  /// No description provided for @diagnosticsDescription.
+  /// Send BaoCode's error logs to its developers to help track down a problem. Nothing is sent until you upload.
   ///
   /// In en, this message translates to:
-  /// **'Send BaoCode\'s error logs to its developers to help track down a problem. Nothing is sent until you upload.'**
-  String get diagnosticsDescription;
+  /// **'Send {product}\'s error logs to its developers to help track down a problem. Nothing is sent until you upload.'**
+  String diagnosticsDescription(String product);
 
   /// No description provided for @diagnosticsUpload.
   ///
@@ -11703,11 +11710,11 @@ abstract class AppLocalizations {
   /// **'Uploaded. Report ID:'**
   String get diagnosticsUploaded;
 
-  /// No description provided for @diagnosticsUploadedDetail.
+  /// Give this ID to BaoCode's developers so they can find these logs.
   ///
   /// In en, this message translates to:
-  /// **'Give this ID to BaoCode\'s developers so they can find these logs.'**
-  String get diagnosticsUploadedDetail;
+  /// **'Give this ID to {product}\'s developers so they can find these logs.'**
+  String diagnosticsUploadedDetail(String product);
 
   /// No description provided for @diagnosticsOmittedDumps.
   ///
@@ -12273,17 +12280,17 @@ abstract class AppLocalizations {
   /// **'File Explorer Context Menu'**
   String get generalSettingsContextMenuExplorer;
 
-  /// No description provided for @generalSettingsContextMenuDescription.
+  /// Adds "Open with BaoCode" (a new agent) and "Open with Fast Ide" (a new IDE window) to the context menu of files, folders and a folder's background.
   ///
   /// In en, this message translates to:
-  /// **'Adds \"Open with BaoCode\" (a new agent) and \"Open with Fast Ide\" (a new IDE window) to the context menu of files, folders and a folder\'s background.'**
-  String get generalSettingsContextMenuDescription;
+  /// **'Adds \"Open with {product}\" (a new agent) and \"Open with Fast Ide\" (a new IDE window) to the context menu of files, folders and a folder\'s background.'**
+  String generalSettingsContextMenuDescription(String product);
 
-  /// No description provided for @generalSettingsContextMenuMacNote.
+  /// Finder's own setting is in System Settings' extensions, where the BaoCode extension can also be turned on and off.
   ///
   /// In en, this message translates to:
-  /// **'Finder\'s own setting is in System Settings\' extensions, where the BaoCode extension can also be turned on and off.'**
-  String get generalSettingsContextMenuMacNote;
+  /// **'Finder\'s own setting is in System Settings\' extensions, where the {product} extension can also be turned on and off.'**
+  String generalSettingsContextMenuMacNote(String product);
 
   /// No description provided for @generalSettingsContextMenuOn.
   ///
@@ -12579,11 +12586,11 @@ abstract class AppLocalizations {
   /// **'Update'**
   String get updateButton;
 
-  /// No description provided for @tipsSetupTitle.
+  /// Set Up BaoCode
   ///
   /// In en, this message translates to:
-  /// **'Set Up BaoCode'**
-  String get tipsSetupTitle;
+  /// **'Set Up {product}'**
+  String tipsSetupTitle(String product);
 
   /// No description provided for @tipsSetupCount.
   ///
@@ -12633,11 +12640,11 @@ abstract class AppLocalizations {
   /// **'Couldn\'t turn on {title}: {error}'**
   String tipsFailed(String title, String error);
 
-  /// No description provided for @tipsUpdated.
+  /// BaoCode was updated to {version}. New: {features}.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode was updated to {version}. New: {features}.'**
-  String tipsUpdated(String version, String features);
+  /// **'{product} was updated to {version}. New: {features}.'**
+  String tipsUpdated(String product, Object features, Object version);
 
   /// No description provided for @tipsListSeparator.
   ///
@@ -12657,11 +12664,11 @@ abstract class AppLocalizations {
   /// **'Features not turned on yet. Show Setup Guide brings back the setup checklist; \"workbench.tips.enabled\": false in settings.json turns tips off.'**
   String get tipsSettingsDescription;
 
-  /// No description provided for @tipContextMenuBody.
+  /// Open files and folders in BaoCode from their context menu.
   ///
   /// In en, this message translates to:
-  /// **'Open files and folders in BaoCode from their context menu.'**
-  String get tipContextMenuBody;
+  /// **'Open files and folders in {product} from their context menu.'**
+  String tipContextMenuBody(String product);
 
   /// No description provided for @tipShellCommandTitle.
   ///
@@ -12669,11 +12676,11 @@ abstract class AppLocalizations {
   /// **'\'{name}\' Command'**
   String tipShellCommandTitle(String name);
 
-  /// No description provided for @tipShellCommandBody.
+  /// Open folders in BaoCode from a terminal: {name} <path>.
   ///
   /// In en, this message translates to:
-  /// **'Open folders in BaoCode from a terminal: {name} <path>.'**
-  String tipShellCommandBody(String name);
+  /// **'Open folders in {product} from a terminal: {name} <path>.'**
+  String tipShellCommandBody(String product, Object name);
 
   /// No description provided for @tipImportKeybindingsTitle.
   ///
@@ -12699,23 +12706,23 @@ abstract class AppLocalizations {
   /// **'Show Setup Guide'**
   String get cmdShowSetupGuide;
 
-  /// No description provided for @cmdStarOnGitHub.
+  /// Star BaoCode on GitHub
   ///
   /// In en, this message translates to:
-  /// **'Star BaoCode on GitHub'**
-  String get cmdStarOnGitHub;
+  /// **'Star {product} on GitHub'**
+  String cmdStarOnGitHub(String product);
 
-  /// No description provided for @starPromptMessage.
+  /// Enjoying BaoCode?
   ///
   /// In en, this message translates to:
-  /// **'Enjoying BaoCode?'**
-  String get starPromptMessage;
+  /// **'Enjoying {product}?'**
+  String starPromptMessage(String product);
 
-  /// No description provided for @starPromptDetail.
+  /// BaoCode is free and open source. If it helps you, a star on GitHub helps other people find it.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode is free and open source. If it helps you, a star on GitHub helps other people find it.'**
-  String get starPromptDetail;
+  /// **'{product} is free and open source. If it helps you, a star on GitHub helps other people find it.'**
+  String starPromptDetail(String product);
 
   /// No description provided for @starPromptStar.
   ///
@@ -12927,11 +12934,11 @@ abstract class AppLocalizations {
   /// **'Network'**
   String get networkSettingsTitle;
 
-  /// No description provided for @networkSettingsDescription.
+  /// How BaoCode and the Claude Code it starts reach the internet.
   ///
   /// In en, this message translates to:
-  /// **'How BaoCode and the Claude Code it starts reach the internet.'**
-  String get networkSettingsDescription;
+  /// **'How {product} and the Claude Code it starts reach the internet.'**
+  String networkSettingsDescription(String product);
 
   /// No description provided for @networkProxy.
   ///
@@ -12939,11 +12946,11 @@ abstract class AppLocalizations {
   /// **'Proxy'**
   String get networkProxy;
 
-  /// No description provided for @networkProxyDescription.
+  /// The proxy for BaoCode and Claude Code (http.proxyMode). System Proxy follows the system's settings, such as Clash's system proxy. New sessions take a change; restart a running one for it.
   ///
   /// In en, this message translates to:
-  /// **'The proxy for BaoCode and Claude Code (http.proxyMode). System Proxy follows the system\'s settings, such as Clash\'s system proxy. New sessions take a change; restart a running one for it.'**
-  String get networkProxyDescription;
+  /// **'The proxy for {product} and Claude Code (http.proxyMode). System Proxy follows the system\'s settings, such as Clash\'s system proxy. New sessions take a change; restart a running one for it.'**
+  String networkProxyDescription(String product);
 
   /// The proxy dropdown, as read out.
   ///
@@ -13035,11 +13042,11 @@ abstract class AppLocalizations {
   /// **'Direct.'**
   String get networkProxyStatusOff;
 
-  /// No description provided for @networkProxyStatusAutoConfig.
+  /// Direct: the system sets its proxy with an auto-config (PAC) file, which BaoCode doesn't follow. Turn on Clash's system proxy, or enter the address manually.
   ///
   /// In en, this message translates to:
-  /// **'Direct: the system sets its proxy with an auto-config (PAC) file, which BaoCode doesn\'t follow. Turn on Clash\'s system proxy, or enter the address manually.'**
-  String get networkProxyStatusAutoConfig;
+  /// **'Direct: the system sets its proxy with an auto-config (PAC) file, which {product} doesn\'t follow. Turn on Clash\'s system proxy, or enter the address manually.'**
+  String networkProxyStatusAutoConfig(String product);
 
   /// No description provided for @networkProxyRefresh.
   ///
@@ -13179,11 +13186,11 @@ abstract class AppLocalizations {
   /// **'Partly supported'**
   String get extsCapabilityPartial;
 
-  /// No description provided for @extsCapabilityPartialDetail.
+  /// Its themes apply; the rest of it does nothing in BaoCode.
   ///
   /// In en, this message translates to:
-  /// **'Its themes apply; the rest of it does nothing in BaoCode.'**
-  String get extsCapabilityPartialDetail;
+  /// **'Its themes apply; the rest of it does nothing in {product}.'**
+  String extsCapabilityPartialDetail(String product);
 
   /// No description provided for @extsEngineIncompatible.
   ///
@@ -13545,11 +13552,11 @@ abstract class AppLocalizations {
   /// **'Not supported'**
   String get extsCapabilityUnsupported;
 
-  /// No description provided for @extsCapabilityUnsupportedDetail.
+  /// It has no color or file icon theme: BaoCode only uses themes from extensions.
   ///
   /// In en, this message translates to:
-  /// **'It has no color or file icon theme: BaoCode only uses themes from extensions.'**
-  String get extsCapabilityUnsupportedDetail;
+  /// **'It has no color or file icon theme: {product} only uses themes from extensions.'**
+  String extsCapabilityUnsupportedDetail(String product);
 
   /// No description provided for @extsFindingCode.
   ///
@@ -13725,11 +13732,11 @@ abstract class AppLocalizations {
   /// **'phone iphone android ios pair qr code remote lan'**
   String get settingsMobileKeywords;
 
-  /// No description provided for @mobileSettingsDescription.
+  /// Follow and drive this computer's agents from BaoCode on your phone, over the local network or the internet. What goes between them is end-to-end encrypted.
   ///
   /// In en, this message translates to:
-  /// **'Follow and drive this computer\'s agents from BaoCode on your phone, over the local network or the internet. What goes between them is end-to-end encrypted.'**
-  String get mobileSettingsDescription;
+  /// **'Follow and drive this computer\'s agents from {product} on your phone, over the local network or the internet. What goes between them is end-to-end encrypted.'**
+  String mobileSettingsDescription(String product);
 
   /// No description provided for @mobileAllow.
   ///
@@ -13833,11 +13840,11 @@ abstract class AppLocalizations {
   /// **'Relay'**
   String get mobileRelay;
 
-  /// No description provided for @mobileRelayDescription.
+  /// Reach this computer through BaoCode's relay when none of its addresses can be reached. Coming later.
   ///
   /// In en, this message translates to:
-  /// **'Reach this computer through BaoCode\'s relay when none of its addresses can be reached. Coming later.'**
-  String get mobileRelayDescription;
+  /// **'Reach this computer through {product}\'s relay when none of its addresses can be reached. Coming later.'**
+  String mobileRelayDescription(String product);
 
   /// No description provided for @mobileRelayUnavailable.
   ///
@@ -13851,11 +13858,11 @@ abstract class AppLocalizations {
   /// **'Pair a Phone'**
   String get mobilePair;
 
-  /// No description provided for @mobilePairDescription.
+  /// Scan the code with BaoCode on the phone (Me → Paired computers → Pair a computer), or pick this computer under Nearby Computers there.
   ///
   /// In en, this message translates to:
-  /// **'Scan the code with BaoCode on the phone (Me → Paired computers → Pair a computer), or pick this computer under Nearby Computers there.'**
-  String get mobilePairDescription;
+  /// **'Scan the code with {product} on the phone (Me → Paired computers → Pair a computer), or pick this computer under Nearby Computers there.'**
+  String mobilePairDescription(String product);
 
   /// No description provided for @mobilePairShow.
   ///
@@ -14835,11 +14842,11 @@ abstract class AppLocalizations {
   /// **'The note could not be clarified: {error}'**
   String stashExpandFailed(String error);
 
-  /// No description provided for @stashImplement.
+  /// Implement in BaoCode
   ///
   /// In en, this message translates to:
-  /// **'Implement in BaoCode'**
-  String get stashImplement;
+  /// **'Implement in {product}'**
+  String stashImplement(String product);
 
   /// No description provided for @stashImplementHow.
   ///
@@ -15033,11 +15040,11 @@ abstract class AppLocalizations {
   /// **'Default'**
   String get stashSettingsDirectoryReset;
 
-  /// No description provided for @stashSettingsDirectoryRestart.
+  /// Takes effect after BaoCode restarts.
   ///
   /// In en, this message translates to:
-  /// **'Takes effect after BaoCode restarts.'**
-  String get stashSettingsDirectoryRestart;
+  /// **'Takes effect after {product} restarts.'**
+  String stashSettingsDirectoryRestart(String product);
 
   /// Opens the list of every stash beside the one written in, in the stash panel.
   ///
@@ -15273,11 +15280,11 @@ abstract class AppLocalizations {
   /// **'Sign out of {forge} account {login}?'**
   String accountsSignOutTitle(String login, String forge);
 
-  /// No description provided for @accountsSignOutDetail.
+  /// The token is deleted from this computer. To revoke BaoCode's access altogether, revoke it in your {forge} settings too.
   ///
   /// In en, this message translates to:
-  /// **'The token is deleted from this computer. To revoke BaoCode\'s access altogether, revoke it in your {forge} settings too.'**
-  String accountsSignOutDetail(String forge);
+  /// **'The token is deleted from this computer. To revoke {product}\'s access altogether, revoke it in your {forge} settings too.'**
+  String accountsSignOutDetail(String product, Object forge);
 
   /// No description provided for @accountsRevoke.
   ///
@@ -15339,11 +15346,11 @@ abstract class AppLocalizations {
   /// **'Sign in to {forge}'**
   String accountsBrowserTitle(String forge);
 
-  /// No description provided for @accountsBrowserDetail.
+  /// Enter this code on {host} to let BaoCode access your account:
   ///
   /// In en, this message translates to:
-  /// **'Enter this code on {host} to let BaoCode access your account:'**
-  String accountsBrowserDetail(String host);
+  /// **'Enter this code on {host} to let {product} access your account:'**
+  String accountsBrowserDetail(String product, Object host);
 
   /// No description provided for @accountsCopyAndOpen.
   ///
@@ -15711,11 +15718,11 @@ abstract class AppLocalizations {
   /// **'Hand it to an agent'**
   String get stashWelcomeAgentTitle;
 
-  /// No description provided for @stashWelcomeAgent.
+  /// Click Implement in BaoCode, or mention it in a conversation; the conversation and the stash stay linked.
   ///
   /// In en, this message translates to:
-  /// **'Click Implement in BaoCode, or mention it in a conversation; the conversation and the stash stay linked.'**
-  String get stashWelcomeAgent;
+  /// **'Click Implement in {product}, or mention it in a conversation; the conversation and the stash stay linked.'**
+  String stashWelcomeAgent(String product);
 
   /// No description provided for @stashWelcomeTrackTitle.
   ///
@@ -15831,11 +15838,11 @@ abstract class AppLocalizations {
   /// **'No browser connected'**
   String get browserSettingsNotRunning;
 
-  /// No description provided for @browserSettingsNotRunningDescription.
+  /// Open a browser with BaoCode's extension: it connects automatically.
   ///
   /// In en, this message translates to:
-  /// **'Open a browser with BaoCode\'s extension: it connects automatically.'**
-  String get browserSettingsNotRunningDescription;
+  /// **'Open a browser with {product}\'s extension: it connects automatically.'**
+  String browserSettingsNotRunningDescription(String product);
 
   /// No description provided for @browserSettingsSandboxed.
   ///
@@ -15843,11 +15850,11 @@ abstract class AppLocalizations {
   /// **'Snap and Flatpak browsers can\'t connect'**
   String get browserSettingsSandboxed;
 
-  /// No description provided for @browserSettingsSandboxedDescription.
+  /// Their sandbox keeps BaoCode's helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.
   ///
   /// In en, this message translates to:
-  /// **'Their sandbox keeps BaoCode\'s helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.'**
-  String get browserSettingsSandboxedDescription;
+  /// **'Their sandbox keeps {product}\'s helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.'**
+  String browserSettingsSandboxedDescription(String product);
 
   /// A browser connected, by its name (Google Chrome, Microsoft Edge…).
   ///
@@ -15873,11 +15880,11 @@ abstract class AppLocalizations {
   /// **'The extension is out of date. From the store, it updates automatically, or click Update in chrome://extensions; installed manually, download the zip again, replace the folder\'s contents and click reload.'**
   String get browserSettingsExtensionOld;
 
-  /// No description provided for @browserSettingsAppOld.
+  /// The extension is newer than this BaoCode. Update BaoCode.
   ///
   /// In en, this message translates to:
-  /// **'The extension is newer than this BaoCode. Update BaoCode.'**
-  String get browserSettingsAppOld;
+  /// **'The extension is newer than this {product}. Update {product}.'**
+  String browserSettingsAppOld(String product);
 
   /// No description provided for @browserSettingsInstall.
   ///
@@ -15933,11 +15940,11 @@ abstract class AppLocalizations {
   /// **'Debugging history'**
   String get browserHistoryTitle;
 
-  /// No description provided for @browserHistoryDescription.
+  /// What the tabs shared with BaoCode do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.
   ///
   /// In en, this message translates to:
-  /// **'What the tabs shared with BaoCode do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.'**
-  String get browserHistoryDescription;
+  /// **'What the tabs shared with {product} do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.'**
+  String browserHistoryDescription(String product);
 
   /// No description provided for @browserHistoryDetailed.
   ///
@@ -15999,11 +16006,11 @@ abstract class AppLocalizations {
   /// **'Agents can use your browser now'**
   String get browserWelcomeTitle;
 
-  /// No description provided for @browserWelcomeLead.
+  /// With BaoCode's extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.
   ///
   /// In en, this message translates to:
-  /// **'With BaoCode\'s extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.'**
-  String get browserWelcomeLead;
+  /// **'With {product}\'s extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.'**
+  String browserWelcomeLead(String product);
 
   /// No description provided for @browserWelcomeSharedTitle.
   ///
@@ -16011,11 +16018,11 @@ abstract class AppLocalizations {
   /// **'Only the tabs you share'**
   String get browserWelcomeSharedTitle;
 
-  /// No description provided for @browserWelcomeShared.
+  /// They work in the yellow BaoCode tab group alone; your other tabs stay yours.
   ///
   /// In en, this message translates to:
-  /// **'They work in the yellow BaoCode tab group alone; your other tabs stay yours.'**
-  String get browserWelcomeShared;
+  /// **'They work in the yellow {product} tab group alone; your other tabs stay yours.'**
+  String browserWelcomeShared(String product);
 
   /// No description provided for @browserWelcomeWatchTitle.
   ///
@@ -16107,11 +16114,11 @@ abstract class AppLocalizations {
   /// **'Pick a Model to Start'**
   String get modelWelcomeTitle;
 
-  /// No description provided for @modelWelcomeLead.
+  /// BaoCode runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.'**
-  String get modelWelcomeLead;
+  /// **'{product} runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.'**
+  String modelWelcomeLead(String product);
 
   /// No description provided for @modelWelcomeAnyTitle.
   ///
@@ -16203,11 +16210,11 @@ abstract class AppLocalizations {
   /// **'Set Up a Model'**
   String get modelSetUp;
 
-  /// No description provided for @claudeCoreHint.
+  /// This chat runs on BaoCode's built-in core. We recommend the Claude Code core for the fullest experience; it's downloaded for you if needed.
   ///
   /// In en, this message translates to:
-  /// **'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.'**
-  String get claudeCoreHint;
+  /// **'This chat runs on {product}\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.'**
+  String claudeCoreHint(String product);
 
   /// No description provided for @claudeCoreHintSwitch.
   ///
@@ -16479,11 +16486,11 @@ abstract class AppLocalizations {
   /// **'The server\'s Claude Code CLI if it has one, else the built-in core.'**
   String get sshServerCoreAutoHint;
 
-  /// No description provided for @sshServerCoreBuiltinHint.
+  /// BaoCode's own core: it runs on the upstreams of Settings → Models.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode\'s own core: it runs on the upstreams of Settings → Models.'**
-  String get sshServerCoreBuiltinHint;
+  /// **'{product}\'s own core: it runs on the upstreams of Settings → Models.'**
+  String sshServerCoreBuiltinHint(String product);
 
   /// No description provided for @sshServerCoreCliHint.
   ///
@@ -16605,11 +16612,11 @@ abstract class AppLocalizations {
   /// **'The server could not be reached: check the address, port and network.'**
   String get remoteFailUnreachable;
 
-  /// No description provided for @channelSetupTitle.
+  /// Welcome to BaoCode
   ///
   /// In en, this message translates to:
-  /// **'Welcome to BaoCode'**
-  String get channelSetupTitle;
+  /// **'Welcome to {product}'**
+  String channelSetupTitle(String product);
 
   /// No description provided for @channelSetupLead.
   ///
@@ -16623,11 +16630,11 @@ abstract class AppLocalizations {
   /// **'Finish setup in your browser'**
   String get channelSetupStepTitle;
 
-  /// No description provided for @channelSetupStep.
+  /// BaoCode opens baocode.dev in your browser. Once the page says it's done, BaoCode continues on its own.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode opens baocode.dev in your browser. Once the page says it\'s done, BaoCode continues on its own.'**
-  String get channelSetupStep;
+  /// **'{product} opens baocode.dev in your browser. Once the page says it\'s done, {product} continues on its own.'**
+  String channelSetupStep(String product);
 
   /// No description provided for @channelSetupWaitingTitle.
   ///
@@ -16635,11 +16642,11 @@ abstract class AppLocalizations {
   /// **'Waiting for your browser…'**
   String get channelSetupWaitingTitle;
 
-  /// No description provided for @channelSetupWaiting.
+  /// Once the page says it's done, BaoCode continues on its own. Closed the page by mistake? Open it again.
   ///
   /// In en, this message translates to:
-  /// **'Once the page says it\'s done, BaoCode continues on its own. Closed the page by mistake? Open it again.'**
-  String get channelSetupWaiting;
+  /// **'Once the page says it\'s done, {product} continues on its own. Closed the page by mistake? Open it again.'**
+  String channelSetupWaiting(String product);
 
   /// No description provided for @channelSetupOpenFailedTitle.
   ///
@@ -16647,11 +16654,11 @@ abstract class AppLocalizations {
   /// **'Your browser didn\'t open'**
   String get channelSetupOpenFailedTitle;
 
-  /// No description provided for @channelSetupOpenFailed.
+  /// Copy this address and open it in your browser. Once the page says it's done, BaoCode continues on its own.
   ///
   /// In en, this message translates to:
-  /// **'Copy this address and open it in your browser. Once the page says it\'s done, BaoCode continues on its own.'**
-  String get channelSetupOpenFailed;
+  /// **'Copy this address and open it in your browser. Once the page says it\'s done, {product} continues on its own.'**
+  String channelSetupOpenFailed(String product);
 
   /// No description provided for @channelSetupAddressCopied.
   ///
@@ -16713,11 +16720,11 @@ abstract class AppLocalizations {
   /// **'That isn\'t the link from the page. Copy the whole link shown there.'**
   String get channelSetupLinkInvalid;
 
-  /// No description provided for @channelSetupLinkOther.
+  /// That link is for another BaoCode install. Use the page this BaoCode opened.
   ///
   /// In en, this message translates to:
-  /// **'That link is for another BaoCode install. Use the page this BaoCode opened.'**
-  String get channelSetupLinkOther;
+  /// **'That link is for another {product} install. Use the page this {product} opened.'**
+  String channelSetupLinkOther(String product);
 
   /// No description provided for @channelSetupTrouble.
   ///
@@ -16743,11 +16750,11 @@ abstract class AppLocalizations {
   /// **'Nothing personal'**
   String get channelSetupPrivateTitle;
 
-  /// No description provided for @channelSetupPrivate.
+  /// The page only tells BaoCode where you heard of it, like a video or a website.
   ///
   /// In en, this message translates to:
-  /// **'The page only tells BaoCode where you heard of it, like a video or a website.'**
-  String get channelSetupPrivate;
+  /// **'The page only tells {product} where you heard of it, like a video or a website.'**
+  String channelSetupPrivate(String product);
 
   /// No description provided for @channelSetupFindingTitle.
   ///
@@ -16767,11 +16774,11 @@ abstract class AppLocalizations {
   /// **'Can\'t reach baocode.dev'**
   String get channelSetupSiteOfflineTitle;
 
-  /// No description provided for @channelSetupSiteOffline.
+  /// BaoCode needs to be online to read your channel. Check your connection and retry.
   ///
   /// In en, this message translates to:
-  /// **'BaoCode needs to be online to read your channel. Check your connection and retry.'**
-  String get channelSetupSiteOffline;
+  /// **'{product} needs to be online to read your channel. Check your connection and retry.'**
+  String channelSetupSiteOffline(String product);
 
   /// No description provided for @channelSetupUnavailableTitle.
   ///
@@ -16857,11 +16864,11 @@ abstract class AppLocalizations {
   /// **'Sign out?'**
   String get channelAccountSignOutTitle;
 
-  /// No description provided for @channelAccountSignOutDetail.
+  /// You'll need to sign in to {channel} again to keep using BaoCode.
   ///
   /// In en, this message translates to:
-  /// **'You\'ll need to sign in to {channel} again to keep using BaoCode.'**
-  String channelAccountSignOutDetail(String channel);
+  /// **'You\'ll need to sign in to {channel} again to keep using {product}.'**
+  String channelAccountSignOutDetail(String product, Object channel);
 
   /// No description provided for @channelAccountOpenSite.
   ///

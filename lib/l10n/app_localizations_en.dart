@@ -49,8 +49,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get languageSettingsDisplayLanguage => 'Display Language';
 
   @override
-  String get languageSettingsDescription =>
-      'The language of BaoCode\'s menus, views and messages. Changes apply at once.';
+  String languageSettingsDescription(String product) {
+    return 'The language of $product\'s menus, views and messages. Changes apply at once.';
+  }
 
   @override
   String languageSettingsFollowSystemCurrent(String language) {
@@ -1406,7 +1407,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuContextPanel => 'Context Panel';
 
   @override
-  String get menuAboutBaoCode => 'About BaoCode';
+  String menuAboutBaoCode(String product) {
+    return 'About $product';
+  }
 
   @override
   String get windowShowSidebar => 'Show sidebar';
@@ -1445,15 +1448,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidePanelBrowser => 'Browser';
 
   @override
-  String get browserNotConnected =>
-      'No browser is connected. Add BaoCode\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.';
+  String browserNotConnected(String product) {
+    return 'No browser is connected. Add $product\'s extension to Chrome (or Edge, Brave, Arc) and agents can use the tabs you share with them.';
+  }
 
   @override
-  String get browserNoSharedTab =>
-      'No tab is shared yet. Ask an agent to open a page, or click BaoCode in the browser toolbar to share the tab in front.';
+  String browserNoSharedTab(String product) {
+    return 'No tab is shared yet. Ask an agent to open a page, or click $product in the browser toolbar to share the tab in front.';
+  }
 
   @override
-  String get browserOtherApp => 'Another BaoCode is connected to the browser.';
+  String browserOtherApp(String product) {
+    return 'Another $product is connected to the browser.';
+  }
 
   @override
   String get browserSharedTabs => 'Shared Tabs';
@@ -1465,8 +1472,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserShowInBrowser => 'Show in Browser';
 
   @override
-  String get browserDetached =>
-      'The browser stopped letting BaoCode see this tab.';
+  String browserDetached(String product) {
+    return 'The browser stopped letting $product see this tab.';
+  }
 
   @override
   String get browserReconnect => 'Reconnect';
@@ -1478,8 +1486,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserWatchTitle => 'Watching you in the browser';
 
   @override
-  String get browserWatchHint =>
-      'Do it in the BaoCode tab of your browser. When you\'re done, click Done here or the BaoCode button in the browser\'s toolbar.';
+  String browserWatchHint(String product) {
+    return 'Do it in the $product tab of your browser. When you\'re done, click Done here or the $product button in the browser\'s toolbar.';
+  }
 
   @override
   String browserWatchSteps(int count) {
@@ -3532,8 +3541,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get generalSettingsClaudeCore => 'Core';
 
   @override
-  String get generalSettingsClaudeCoreDescription =>
-      'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
+  String generalSettingsClaudeCoreDescription(String product) {
+    return 'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with $product, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
+  }
 
   @override
   String get generalSettingsClaudeCoreBuiltin => 'Built-in';
@@ -3668,7 +3678,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Closing the window hides it there and the agents keep running; its menu shows the agents waiting on you, and quits the app.';
 
   @override
-  String get trayShow => 'Show BaoCode';
+  String trayShow(String product) {
+    return 'Show $product';
+  }
 
   @override
   String get trayWaiting => 'Waiting for You';
@@ -3684,7 +3696,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get trayQuit => 'Quit BaoCode';
+  String trayQuit(String product) {
+    return 'Quit $product';
+  }
 
   @override
   String get attentionNeedsInput => 'Needs your input';
@@ -5215,14 +5229,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String kbUnknownContextKeys(int count, String keys) {
+  String kbUnknownContextKeys(String product, num count, Object keys) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
       other:
-          'BaoCode does not know the context keys $keys: this keybinding never applies.',
+          '$product does not know the context keys $keys: this keybinding never applies.',
       one:
-          'BaoCode does not know the context key $keys: this keybinding never applies.',
+          '$product does not know the context key $keys: this keybinding never applies.',
     );
     return '$_temp0';
   }
@@ -5298,16 +5312,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get kbNoneFound => 'No keybindings found';
 
   @override
-  String kbCannotReadKey(String key) {
-    return 'BaoCode cannot read the key “$key”: this keybinding never applies.';
+  String kbCannotReadKey(String product, Object key) {
+    return '$product cannot read the key “$key”: this keybinding never applies.';
   }
 
   @override
   String get kbNotSupported => 'Not supported';
 
   @override
-  String get kbNotSupportedHover =>
-      'BaoCode does not have this command: the keybinding is kept, but does nothing.';
+  String kbNotSupportedHover(String product) {
+    return '$product does not have this command: the keybinding is kept, but does nothing.';
+  }
 
   @override
   String get kbPressKeys =>
@@ -5371,26 +5386,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dataDirChecking => 'Checking the folder…';
 
   @override
-  String get dataDirAlreadyHolds => 'The folder already holds BaoCode data';
+  String dataDirAlreadyHolds(String product) {
+    return 'The folder already holds $product data';
+  }
 
   @override
-  String get dataDirMoveBack =>
-      'Move BaoCode\'s data back to the default folder?';
+  String dataDirMoveBack(String product) {
+    return 'Move $product\'s data back to the default folder?';
+  }
 
   @override
-  String get dataDirMoveHere => 'Move BaoCode\'s data to this folder?';
+  String dataDirMoveHere(String product) {
+    return 'Move $product\'s data to this folder?';
+  }
 
   @override
-  String get dataDirUseAsIsDetail =>
-      'After a restart BaoCode uses the data there as it is; nothing is copied, and the current folder keeps yours.';
+  String dataDirUseAsIsDetail(String product) {
+    return 'After a restart $product uses the data there as it is; nothing is copied, and the current folder keeps yours.';
+  }
 
   @override
-  String get dataDirCopyDetail =>
-      'BaoCode copies its settings, keybindings, language servers and state there, and uses that folder after a restart.';
+  String dataDirCopyDetail(String product) {
+    return '$product copies its settings, keybindings, language servers and state there, and uses that folder after a restart.';
+  }
 
   @override
-  String get dataDirOtherFiles =>
-      'The folder holds other files: they stay, beside BaoCode\'s own.';
+  String dataDirOtherFiles(String product) {
+    return 'The folder holds other files: they stay, beside $product\'s own.';
+  }
 
   @override
   String get dataDirUseItsData => 'Use Its Data';
@@ -5417,19 +5440,22 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get dataDirRestartTitle =>
-      'Restart BaoCode to use the new data folder';
+  String dataDirRestartTitle(String product) {
+    return 'Restart $product to use the new data folder';
+  }
 
   @override
-  String dataDirRestartDetail(String current, String next) {
-    return 'BaoCode keeps using $current until it restarts. The next start uses $next, and offers to remove what is left in the old one.';
+  String dataDirRestartDetail(String product, Object current, Object next) {
+    return '$product keeps using $current until it restarts. The next start uses $next, and offers to remove what is left in the old one.';
   }
 
   @override
   String get dataDirTheNewFolder => 'the new folder';
 
   @override
-  String get quitConfirmMessage => 'Quit BaoCode?';
+  String quitConfirmMessage(String product) {
+    return 'Quit $product?';
+  }
 
   @override
   String get quitConfirmDetail =>
@@ -5466,8 +5492,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dataDirTitle => 'Data Folder';
 
   @override
-  String get dataDirDescription =>
-      'Where BaoCode keeps your settings, keybindings, language servers and its own state. Other programs keep files there too (the web view\'s caches); BaoCode never moves or removes those.';
+  String dataDirDescription(String product) {
+    return 'Where $product keeps your settings, keybindings, language servers and its own state. Other programs keep files there too (the web view\'s caches); $product never moves or removes those.';
+  }
 
   @override
   String get dataDirCurrentFolder => 'Current folder';
@@ -5497,14 +5524,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get dataDirSettingUnreadable =>
-      'BaoCode\'s data folder setting cannot be read';
+  String dataDirSettingUnreadable(String product) {
+    return '$product\'s data folder setting cannot be read';
+  }
 
   @override
-  String get dataDirCannotWrite => 'BaoCode cannot write to its data folder';
+  String dataDirCannotWrite(String product) {
+    return '$product cannot write to its data folder';
+  }
 
   @override
-  String get dataDirUnavailable => 'BaoCode\'s data folder is not available';
+  String dataDirUnavailable(String product) {
+    return '$product\'s data folder is not available';
+  }
 
   @override
   String dataDirWhereEnv(String variable) {
@@ -5512,8 +5544,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String dataDirWhereFixPointer(String file) {
-    return 'Fix or delete $file and try again; BaoCode changes it only if you choose another folder.';
+  String dataDirWhereFixPointer(String product, Object file) {
+    return 'Fix or delete $file and try again; $product changes it only if you choose another folder.';
   }
 
   @override
@@ -5536,12 +5568,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dataDirChooseAnother => 'Choose Another Folder…';
 
   @override
-  String get dataDirRemoveOldTitle =>
-      'Remove the data BaoCode left in its previous folder?';
+  String dataDirRemoveOldTitle(String product) {
+    return 'Remove the data $product left in its previous folder?';
+  }
 
   @override
-  String dataDirRemoveOldDetail(String current, String items) {
-    return 'BaoCode now keeps its data in $current. Only its own items are removed from the previous folder ($items); the folder and everything else in it stay.';
+  String dataDirRemoveOldDetail(String product, Object current, Object items) {
+    return '$product now keeps its data in $current. Only its own items are removed from the previous folder ($items); the folder and everything else in it stay.';
   }
 
   @override
@@ -5555,8 +5588,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'Some of the old data could not be removed';
 
   @override
-  String dataDirRemoveOldInUseDetail(String items) {
-    return 'Files in $items are in use, perhaps by another program. Everything else was removed; BaoCode offers to remove the rest the next time it starts.';
+  String dataDirRemoveOldInUseDetail(String product, Object items) {
+    return 'Files in $items are in use, perhaps by another program. Everything else was removed; $product offers to remove the rest the next time it starts.';
   }
 
   @override
@@ -5781,8 +5814,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String shellCommandOccupied(String path, String name) {
-    return '$path already runs another app\'s \'$name\' command. Replace it with BaoCode\'s?';
+  String shellCommandOccupied(String product, Object name, Object path) {
+    return '$path already runs another app\'s \'$name\' command. Replace it with $product\'s?';
   }
 
   @override
@@ -5802,8 +5835,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get generalSettingsMainWindow => 'Open at Launch';
 
   @override
-  String get generalSettingsMainWindowDescription =>
-      'What BaoCode opens to: the agents, or the IDE windows (as Restore Windows says), never both. By default, wherever it was left when it last quit.';
+  String generalSettingsMainWindowDescription(String product) {
+    return 'What $product opens to: the agents, or the IDE windows (as Restore Windows says), never both. By default, wherever it was left when it last quit.';
+  }
 
   @override
   String generalSettingsMainWindowLabel(String name) {
@@ -5867,8 +5901,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String claudePathInUseDownloaded(String version) {
-    return 'In use: Claude Code $version, downloaded by BaoCode';
+  String claudePathInUseDownloaded(String product, Object version) {
+    return 'In use: Claude Code $version, downloaded by $product';
   }
 
   @override
@@ -6022,8 +6056,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get generalSettingsShellCommand => 'Shell Command';
 
   @override
-  String generalSettingsShellCommandDescription(String location) {
-    return 'Open files and folders in BaoCode from a terminal: \'code <path>\'. Installed at $location.';
+  String generalSettingsShellCommandDescription(
+    String product,
+    Object location,
+  ) {
+    return 'Open files and folders in $product from a terminal: \'code <path>\'. Installed at $location.';
   }
 
   @override
@@ -6325,8 +6362,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsFeaturedWhy => 'Why am I seeing this?';
 
   @override
-  String get modelsFeaturedNote =>
-      'These sites are officially listed by BaoCode';
+  String modelsFeaturedNote(String product) {
+    return 'These sites are officially listed by $product';
+  }
 
   @override
   String get modelsFeaturedNoteHow =>
@@ -6392,8 +6430,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsImportInvalid => 'This import link can\'t be used';
 
   @override
-  String get modelsImportInvalidDetail =>
-      'It needs a base URL (http or https) and a protocol BaoCode knows. Ask the site for a new link, or add the upstream by hand in Settings → Models.';
+  String modelsImportInvalidDetail(String product) {
+    return 'It needs a base URL (http or https) and a protocol $product knows. Ask the site for a new link, or add the upstream by hand in Settings → Models.';
+  }
 
   @override
   String get modelsAddProvider => 'Add Upstream';
@@ -6762,8 +6801,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsRoleSubagent => 'Subagents';
 
   @override
-  String get modelsRoleSubagentDescription =>
-      'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: BaoCode\'s local proxy sends its requests there.';
+  String modelsRoleSubagentDescription(String product) {
+    return 'CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent\'s call names (but inherit). It may be another upstream\'s: $product\'s local proxy sends its requests there.';
+  }
 
   @override
   String get modelsRoleMissing =>
@@ -7032,8 +7072,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updatesSettingsTitle => 'Updates';
 
   @override
-  String get updatesSettingsDescription =>
-      'BaoCode looks for new versions in this repository\'s releases.';
+  String updatesSettingsDescription(String product) {
+    return '$product looks for new versions in this repository\'s releases.';
+  }
 
   @override
   String get updateCurrentVersion => 'Current Version';
@@ -7053,31 +7094,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateChecking => 'Checking for updates…';
 
   @override
-  String get updateUpToDate => 'BaoCode is up to date.';
-
-  @override
-  String updateAvailable(String version) {
-    return 'BaoCode $version is available.';
+  String updateUpToDate(String product) {
+    return '$product is up to date.';
   }
 
   @override
-  String updateReady(String version) {
-    return 'BaoCode $version has been downloaded. Restart to update.';
+  String updateAvailable(String product, Object version) {
+    return '$product $version is available.';
   }
 
   @override
-  String updateDownloading(String version) {
-    return 'Downloading BaoCode $version…';
+  String updateReady(String product, Object version) {
+    return '$product $version has been downloaded. Restart to update.';
   }
 
   @override
-  String updateDownloadingProgress(String version, int percent) {
-    return 'Downloading BaoCode $version… $percent%';
+  String updateDownloading(String product, Object version) {
+    return 'Downloading $product $version…';
   }
 
   @override
-  String updateMandatory(String version) {
-    return 'This version of BaoCode is no longer supported. Update to $version to keep using it.';
+  String updateDownloadingProgress(
+    String product,
+    Object percent,
+    Object version,
+  ) {
+    return 'Downloading $product $version… $percent%';
+  }
+
+  @override
+  String updateMandatory(String product, Object version) {
+    return 'This version of $product is no longer supported. Update to $version to keep using it.';
   }
 
   @override
@@ -7094,8 +7141,8 @@ class AppLocalizationsEn extends AppLocalizations {
       'You skipped this version: it is not offered again, but can still be installed here.';
 
   @override
-  String updateFailed(String error) {
-    return 'Couldn\'t update BaoCode: $error';
+  String updateFailed(String product, Object error) {
+    return 'Couldn\'t update $product: $error';
   }
 
   @override
@@ -7108,20 +7155,21 @@ class AppLocalizationsEn extends AppLocalizations {
       'Updates are turned off (update.mode is \"none\").';
 
   @override
-  String get updateUnsupported =>
-      'This build of BaoCode doesn\'t update itself.';
+  String updateUnsupported(String product) {
+    return 'This build of $product doesn\'t update itself.';
+  }
 
   @override
-  String updateManual(String reason) {
-    return 'BaoCode can\'t update itself here ($reason). Download the new version from this repository\'s releases.';
+  String updateManual(String product, Object reason) {
+    return '$product can\'t update itself here ($reason). Download the new version from this repository\'s releases.';
   }
 
   @override
   String get updateOpenDownloadPage => 'Open Download Page';
 
   @override
-  String updateUnfinished(String version, String current) {
-    return 'BaoCode $version wasn\'t installed: this is still $current. Try again from Settings > Updates, or download it from this repository\'s releases.';
+  String updateUnfinished(String product, Object current, Object version) {
+    return '$product $version wasn\'t installed: this is still $current. Try again from Settings > Updates, or download it from this repository\'s releases.';
   }
 
   @override
@@ -7139,8 +7187,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateMode => 'Update Mode';
 
   @override
-  String get updateModeDescription =>
-      'Whether BaoCode looks for new versions by itself (update.mode).';
+  String updateModeDescription(String product) {
+    return 'Whether $product looks for new versions by itself (update.mode).';
+  }
 
   @override
   String updateModeLabel(String name) {
@@ -7160,8 +7209,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsTitle => 'Diagnostic Logs';
 
   @override
-  String get diagnosticsDescription =>
-      'Send BaoCode\'s error logs to its developers to help track down a problem. Nothing is sent until you upload.';
+  String diagnosticsDescription(String product) {
+    return 'Send $product\'s error logs to its developers to help track down a problem. Nothing is sent until you upload.';
+  }
 
   @override
   String get diagnosticsUpload => 'Upload…';
@@ -7211,8 +7261,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsUploaded => 'Uploaded. Report ID:';
 
   @override
-  String get diagnosticsUploadedDetail =>
-      'Give this ID to BaoCode\'s developers so they can find these logs.';
+  String diagnosticsUploadedDetail(String product) {
+    return 'Give this ID to $product\'s developers so they can find these logs.';
+  }
 
   @override
   String diagnosticsOmittedDumps(int count) {
@@ -7556,12 +7607,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get generalSettingsContextMenuExplorer => 'File Explorer Context Menu';
 
   @override
-  String get generalSettingsContextMenuDescription =>
-      'Adds \"Open with BaoCode\" (a new agent) and \"Open with Fast Ide\" (a new IDE window) to the context menu of files, folders and a folder\'s background.';
+  String generalSettingsContextMenuDescription(String product) {
+    return 'Adds \"Open with $product\" (a new agent) and \"Open with Fast Ide\" (a new IDE window) to the context menu of files, folders and a folder\'s background.';
+  }
 
   @override
-  String get generalSettingsContextMenuMacNote =>
-      'Finder\'s own setting is in System Settings\' extensions, where the BaoCode extension can also be turned on and off.';
+  String generalSettingsContextMenuMacNote(String product) {
+    return 'Finder\'s own setting is in System Settings\' extensions, where the $product extension can also be turned on and off.';
+  }
 
   @override
   String get generalSettingsContextMenuOn => 'On';
@@ -7777,7 +7830,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updateButton => 'Update';
 
   @override
-  String get tipsSetupTitle => 'Set Up BaoCode';
+  String tipsSetupTitle(String product) {
+    return 'Set Up $product';
+  }
 
   @override
   String tipsSetupCount(int done, int total) {
@@ -7810,8 +7865,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String tipsUpdated(String version, String features) {
-    return 'BaoCode was updated to $version. New: $features.';
+  String tipsUpdated(String product, Object features, Object version) {
+    return '$product was updated to $version. New: $features.';
   }
 
   @override
@@ -7825,8 +7880,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Features not turned on yet. Show Setup Guide brings back the setup checklist; \"workbench.tips.enabled\": false in settings.json turns tips off.';
 
   @override
-  String get tipContextMenuBody =>
-      'Open files and folders in BaoCode from their context menu.';
+  String tipContextMenuBody(String product) {
+    return 'Open files and folders in $product from their context menu.';
+  }
 
   @override
   String tipShellCommandTitle(String name) {
@@ -7834,8 +7890,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String tipShellCommandBody(String name) {
-    return 'Open folders in BaoCode from a terminal: $name <path>.';
+  String tipShellCommandBody(String product, Object name) {
+    return 'Open folders in $product from a terminal: $name <path>.';
   }
 
   @override
@@ -7853,14 +7909,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cmdShowSetupGuide => 'Show Setup Guide';
 
   @override
-  String get cmdStarOnGitHub => 'Star BaoCode on GitHub';
+  String cmdStarOnGitHub(String product) {
+    return 'Star $product on GitHub';
+  }
 
   @override
-  String get starPromptMessage => 'Enjoying BaoCode?';
+  String starPromptMessage(String product) {
+    return 'Enjoying $product?';
+  }
 
   @override
-  String get starPromptDetail =>
-      'BaoCode is free and open source. If it helps you, a star on GitHub helps other people find it.';
+  String starPromptDetail(String product) {
+    return '$product is free and open source. If it helps you, a star on GitHub helps other people find it.';
+  }
 
   @override
   String get starPromptStar => 'Star on GitHub';
@@ -7995,15 +8056,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkSettingsTitle => 'Network';
 
   @override
-  String get networkSettingsDescription =>
-      'How BaoCode and the Claude Code it starts reach the internet.';
+  String networkSettingsDescription(String product) {
+    return 'How $product and the Claude Code it starts reach the internet.';
+  }
 
   @override
   String get networkProxy => 'Proxy';
 
   @override
-  String get networkProxyDescription =>
-      'The proxy for BaoCode and Claude Code (http.proxyMode). System Proxy follows the system\'s settings, such as Clash\'s system proxy. New sessions take a change; restart a running one for it.';
+  String networkProxyDescription(String product) {
+    return 'The proxy for $product and Claude Code (http.proxyMode). System Proxy follows the system\'s settings, such as Clash\'s system proxy. New sessions take a change; restart a running one for it.';
+  }
 
   @override
   String networkProxyLabel(String name) {
@@ -8062,8 +8125,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get networkProxyStatusOff => 'Direct.';
 
   @override
-  String get networkProxyStatusAutoConfig =>
-      'Direct: the system sets its proxy with an auto-config (PAC) file, which BaoCode doesn\'t follow. Turn on Clash\'s system proxy, or enter the address manually.';
+  String networkProxyStatusAutoConfig(String product) {
+    return 'Direct: the system sets its proxy with an auto-config (PAC) file, which $product doesn\'t follow. Turn on Clash\'s system proxy, or enter the address manually.';
+  }
 
   @override
   String get networkProxyRefresh => 'Detect Again';
@@ -8144,8 +8208,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get extsCapabilityPartial => 'Partly supported';
 
   @override
-  String get extsCapabilityPartialDetail =>
-      'Its themes apply; the rest of it does nothing in BaoCode.';
+  String extsCapabilityPartialDetail(String product) {
+    return 'Its themes apply; the rest of it does nothing in $product.';
+  }
 
   @override
   String extsEngineIncompatible(String current, String requested) {
@@ -8355,8 +8420,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get extsCapabilityUnsupported => 'Not supported';
 
   @override
-  String get extsCapabilityUnsupportedDetail =>
-      'It has no color or file icon theme: BaoCode only uses themes from extensions.';
+  String extsCapabilityUnsupportedDetail(String product) {
+    return 'It has no color or file icon theme: $product only uses themes from extensions.';
+  }
 
   @override
   String get extsFindingCode => 'Its code does not run.';
@@ -8468,8 +8534,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'phone iphone android ios pair qr code remote lan';
 
   @override
-  String get mobileSettingsDescription =>
-      'Follow and drive this computer\'s agents from BaoCode on your phone, over the local network or the internet. What goes between them is end-to-end encrypted.';
+  String mobileSettingsDescription(String product) {
+    return 'Follow and drive this computer\'s agents from $product on your phone, over the local network or the internet. What goes between them is end-to-end encrypted.';
+  }
 
   @override
   String get mobileAllow => 'Allow Phones to Connect';
@@ -8533,8 +8600,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mobileRelay => 'Relay';
 
   @override
-  String get mobileRelayDescription =>
-      'Reach this computer through BaoCode\'s relay when none of its addresses can be reached. Coming later.';
+  String mobileRelayDescription(String product) {
+    return 'Reach this computer through $product\'s relay when none of its addresses can be reached. Coming later.';
+  }
 
   @override
   String get mobileRelayUnavailable => 'Not Available Yet';
@@ -8543,8 +8611,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mobilePair => 'Pair a Phone';
 
   @override
-  String get mobilePairDescription =>
-      'Scan the code with BaoCode on the phone (Me → Paired computers → Pair a computer), or pick this computer under Nearby Computers there.';
+  String mobilePairDescription(String product) {
+    return 'Scan the code with $product on the phone (Me → Paired computers → Pair a computer), or pick this computer under Nearby Computers there.';
+  }
 
   @override
   String get mobilePairShow => 'Show QR Code';
@@ -9106,7 +9175,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get stashImplement => 'Implement in BaoCode';
+  String stashImplement(String product) {
+    return 'Implement in $product';
+  }
 
   @override
   String get stashImplementHow => 'How should the agent work on it?';
@@ -9222,8 +9293,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stashSettingsDirectoryReset => 'Default';
 
   @override
-  String get stashSettingsDirectoryRestart =>
-      'Takes effect after BaoCode restarts.';
+  String stashSettingsDirectoryRestart(String product) {
+    return 'Takes effect after $product restarts.';
+  }
 
   @override
   String get stashAll => 'All';
@@ -9358,8 +9430,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String accountsSignOutDetail(String forge) {
-    return 'The token is deleted from this computer. To revoke BaoCode\'s access altogether, revoke it in your $forge settings too.';
+  String accountsSignOutDetail(String product, Object forge) {
+    return 'The token is deleted from this computer. To revoke $product\'s access altogether, revoke it in your $forge settings too.';
   }
 
   @override
@@ -9404,8 +9476,8 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String accountsBrowserDetail(String host) {
-    return 'Enter this code on $host to let BaoCode access your account:';
+  String accountsBrowserDetail(String product, Object host) {
+    return 'Enter this code on $host to let $product access your account:';
   }
 
   @override
@@ -9623,8 +9695,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stashWelcomeAgentTitle => 'Hand it to an agent';
 
   @override
-  String get stashWelcomeAgent =>
-      'Click Implement in BaoCode, or mention it in a conversation; the conversation and the stash stay linked.';
+  String stashWelcomeAgent(String product) {
+    return 'Click Implement in $product, or mention it in a conversation; the conversation and the stash stay linked.';
+  }
 
   @override
   String get stashWelcomeTrackTitle => 'See how it goes';
@@ -9695,16 +9768,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserSettingsNotRunning => 'No browser connected';
 
   @override
-  String get browserSettingsNotRunningDescription =>
-      'Open a browser with BaoCode\'s extension: it connects automatically.';
+  String browserSettingsNotRunningDescription(String product) {
+    return 'Open a browser with $product\'s extension: it connects automatically.';
+  }
 
   @override
   String get browserSettingsSandboxed =>
       'Snap and Flatpak browsers can\'t connect';
 
   @override
-  String get browserSettingsSandboxedDescription =>
-      'Their sandbox keeps BaoCode\'s helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.';
+  String browserSettingsSandboxedDescription(String product) {
+    return 'Their sandbox keeps $product\'s helper from running. Install the browser from its own .deb or .rpm package instead, such as Google Chrome from google.com/chrome.';
+  }
 
   @override
   String browserSettingsConnected(String browser) {
@@ -9726,8 +9801,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The extension is out of date. From the store, it updates automatically, or click Update in chrome://extensions; installed manually, download the zip again, replace the folder\'s contents and click reload.';
 
   @override
-  String get browserSettingsAppOld =>
-      'The extension is newer than this BaoCode. Update BaoCode.';
+  String browserSettingsAppOld(String product) {
+    return 'The extension is newer than this $product. Update $product.';
+  }
 
   @override
   String get browserSettingsInstall => 'Get the Extension';
@@ -9759,8 +9835,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserHistoryTitle => 'Debugging history';
 
   @override
-  String get browserHistoryDescription =>
-      'What the tabs shared with BaoCode do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.';
+  String browserHistoryDescription(String product) {
+    return 'What the tabs shared with $product do is kept as it happens, no recording needed: the pages, the requests, console errors and warnings. Agents look back at it when you ask (“it failed when I saved”). Kept on this computer; cookies and tokens are not.';
+  }
 
   @override
   String get browserHistoryDetailed => 'Detailed history';
@@ -9800,15 +9877,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get browserWelcomeTitle => 'Agents can use your browser now';
 
   @override
-  String get browserWelcomeLead =>
-      'With BaoCode\'s extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.';
+  String browserWelcomeLead(String product) {
+    return 'With $product\'s extension, agents open pages, read them, click and type in your own Chrome, signed in as you are.';
+  }
 
   @override
   String get browserWelcomeSharedTitle => 'Only the tabs you share';
 
   @override
-  String get browserWelcomeShared =>
-      'They work in the yellow BaoCode tab group alone; your other tabs stay yours.';
+  String browserWelcomeShared(String product) {
+    return 'They work in the yellow $product tab group alone; your other tabs stay yours.';
+  }
 
   @override
   String get browserWelcomeWatchTitle => 'Watch it work';
@@ -9863,8 +9942,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelWelcomeTitle => 'Pick a Model to Start';
 
   @override
-  String get modelWelcomeLead =>
-      'BaoCode runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.';
+  String modelWelcomeLead(String product) {
+    return '$product runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.';
+  }
 
   @override
   String get modelWelcomeAnyTitle => 'Any upstream';
@@ -9920,8 +10000,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelSetUp => 'Set Up a Model';
 
   @override
-  String get claudeCoreHint =>
-      'This chat runs on BaoCode\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.';
+  String claudeCoreHint(String product) {
+    return 'This chat runs on $product\'s built-in core. We recommend the Claude Code core for the fullest experience; it\'s downloaded for you if needed.';
+  }
 
   @override
   String get claudeCoreHintSwitch => 'Switch to Claude Code';
@@ -10079,8 +10160,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server\'s Claude Code CLI if it has one, else the built-in core.';
 
   @override
-  String get sshServerCoreBuiltinHint =>
-      'BaoCode\'s own core: it runs on the upstreams of Settings → Models.';
+  String sshServerCoreBuiltinHint(String product) {
+    return '$product\'s own core: it runs on the upstreams of Settings → Models.';
+  }
 
   @override
   String get sshServerCoreCliHint =>
@@ -10152,7 +10234,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'The server could not be reached: check the address, port and network.';
 
   @override
-  String get channelSetupTitle => 'Welcome to BaoCode';
+  String channelSetupTitle(String product) {
+    return 'Welcome to $product';
+  }
 
   @override
   String get channelSetupLead =>
@@ -10162,22 +10246,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelSetupStepTitle => 'Finish setup in your browser';
 
   @override
-  String get channelSetupStep =>
-      'BaoCode opens baocode.dev in your browser. Once the page says it\'s done, BaoCode continues on its own.';
+  String channelSetupStep(String product) {
+    return '$product opens baocode.dev in your browser. Once the page says it\'s done, $product continues on its own.';
+  }
 
   @override
   String get channelSetupWaitingTitle => 'Waiting for your browser…';
 
   @override
-  String get channelSetupWaiting =>
-      'Once the page says it\'s done, BaoCode continues on its own. Closed the page by mistake? Open it again.';
+  String channelSetupWaiting(String product) {
+    return 'Once the page says it\'s done, $product continues on its own. Closed the page by mistake? Open it again.';
+  }
 
   @override
   String get channelSetupOpenFailedTitle => 'Your browser didn\'t open';
 
   @override
-  String get channelSetupOpenFailed =>
-      'Copy this address and open it in your browser. Once the page says it\'s done, BaoCode continues on its own.';
+  String channelSetupOpenFailed(String product) {
+    return 'Copy this address and open it in your browser. Once the page says it\'s done, $product continues on its own.';
+  }
 
   @override
   String get channelSetupAddressCopied => 'Copied';
@@ -10213,8 +10300,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'That isn\'t the link from the page. Copy the whole link shown there.';
 
   @override
-  String get channelSetupLinkOther =>
-      'That link is for another BaoCode install. Use the page this BaoCode opened.';
+  String channelSetupLinkOther(String product) {
+    return 'That link is for another $product install. Use the page this $product opened.';
+  }
 
   @override
   String get channelSetupTrouble => 'Having trouble?';
@@ -10230,8 +10318,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelSetupPrivateTitle => 'Nothing personal';
 
   @override
-  String get channelSetupPrivate =>
-      'The page only tells BaoCode where you heard of it, like a video or a website.';
+  String channelSetupPrivate(String product) {
+    return 'The page only tells $product where you heard of it, like a video or a website.';
+  }
 
   @override
   String get channelSetupFindingTitle => 'Getting your channel ready…';
@@ -10243,8 +10332,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelSetupSiteOfflineTitle => 'Can\'t reach baocode.dev';
 
   @override
-  String get channelSetupSiteOffline =>
-      'BaoCode needs to be online to read your channel. Check your connection and retry.';
+  String channelSetupSiteOffline(String product) {
+    return '$product needs to be online to read your channel. Check your connection and retry.';
+  }
 
   @override
   String get channelSetupUnavailableTitle => 'This channel isn\'t available';
@@ -10296,8 +10386,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get channelAccountSignOutTitle => 'Sign out?';
 
   @override
-  String channelAccountSignOutDetail(String channel) {
-    return 'You\'ll need to sign in to $channel again to keep using BaoCode.';
+  String channelAccountSignOutDetail(String product, Object channel) {
+    return 'You\'ll need to sign in to $channel again to keep using $product.';
   }
 
   @override

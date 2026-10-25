@@ -100,7 +100,7 @@ class _BrowserWelcomeState extends State<BrowserWelcome>
       (
         const Icon(Codicons.lock, size: 15),
         l10n.browserWelcomeSharedTitle,
-        l10n.browserWelcomeShared,
+        l10n.browserWelcomeShared(productName),
       ),
       (
         const Icon(Codicons.eye, size: 15),
@@ -141,7 +141,7 @@ class _BrowserWelcomeState extends State<BrowserWelcome>
           animation: _step(.3, .7),
           child: WelcomeHeading(
             title: l10n.browserWelcomeTitle,
-            lead: l10n.browserWelcomeLead,
+            lead: l10n.browserWelcomeLead(productName),
           ),
         ),
         const SizedBox(height: 10),

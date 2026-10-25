@@ -318,7 +318,7 @@ class GeneralSettingsPage extends StatelessWidget {
               children: [
                 SettingsRow(
                   label: l10n.generalSettingsMainWindow,
-                  description: l10n.generalSettingsMainWindowDescription,
+                  description: l10n.generalSettingsMainWindowDescription(productName),
                   trailing: SettingsDropdown(
                     current: mainWindowShown,
                     semanticLabel: l10n.generalSettingsMainWindowLabel(
@@ -423,7 +423,7 @@ class GeneralSettingsPage extends StatelessWidget {
                         context,
                         key: ClaudeCore.settingKey,
                         label: l10n.generalSettingsClaudeCore,
-                        description: l10n.generalSettingsClaudeCoreDescription,
+                        description: l10n.generalSettingsClaudeCoreDescription(productName),
                         values: {
                           ClaudeCore.cli.name:
                               l10n.generalSettingsClaudeCoreCli,
@@ -547,6 +547,7 @@ class _ShellCommandSettingState extends State<_ShellCommandSetting> {
     return SettingsRow(
       label: l10n.generalSettingsShellCommand,
       description: l10n.generalSettingsShellCommandDescription(
+        productName,
         ShellCommand.location,
       ),
       below: [
@@ -654,8 +655,8 @@ class _ContextMenuSettingState extends State<_ContextMenuSetting> {
           ? l10n.generalSettingsContextMenuFinder
           : l10n.generalSettingsContextMenuExplorer,
       description: [
-        l10n.generalSettingsContextMenuDescription,
-        if (AppPlatform.isMacOS) l10n.generalSettingsContextMenuMacNote,
+        l10n.generalSettingsContextMenuDescription(productName),
+        if (AppPlatform.isMacOS) l10n.generalSettingsContextMenuMacNote(productName),
       ].join(' '),
       below: [
         if (status != null)
@@ -749,7 +750,7 @@ class _ClaudePathSettingState extends State<_ClaudePathSetting> {
                 false,
               ),
               LocalClaudeFound(:final version?, downloaded: true) => (
-                l10n.claudePathInUseDownloaded(version),
+                l10n.claudePathInUseDownloaded(productName, version),
                 false,
               ),
               LocalClaudeFound(:final path, :final version?) => (

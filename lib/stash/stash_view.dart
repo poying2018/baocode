@@ -1642,7 +1642,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
               ),
               Builder(
                 builder: (context) => IdeButton(
-                  label: l10n.stashImplement,
+                  label: l10n.stashImplement(productName),
                   leading: const BaoCodeLogo(),
                   onPressed: () {
                     final box = context.findRenderObject() as RenderBox?;

@@ -13,7 +13,7 @@
   "commonSelectAll": "全选",
   "languageSettingsTitle": "区域和语言",
   "languageSettingsDisplayLanguage": "显示语言",
-  "languageSettingsDescription": "BaoCode 的菜单、视图和消息所用的语言。更改立即生效。",
+  "languageSettingsDescription": "{product} 的菜单、视图和消息所用的语言。更改立即生效。",
   "languageSettingsFollowSystemCurrent": "跟随系统（{language}）",
   "languageSettingsDisplayLanguageLabel": "显示语言: {name}",
   "cmdCategoryFile": "文件",
@@ -444,7 +444,7 @@
   "menuHideSidebar": "隐藏侧边栏",
   "menuKeepOnTop": "窗口置顶",
   "menuContextPanel": "上下文面板",
-  "menuAboutBaoCode": "关于 BaoCode",
+  "menuAboutBaoCode": "关于 {product}",
   "windowShowSidebar": "显示侧边栏",
   "windowHideSidebar": "隐藏侧边栏",
   "chatTerminalHide": "隐藏终端",
@@ -457,17 +457,17 @@
   "sidePanelFiles": "文件",
   "sidePanelTerminal": "终端",
   "sidePanelBrowser": "浏览器",
-  "browserNotConnected": "没有连接浏览器。在 Chrome（或 Edge、Brave、Arc）中添加 BaoCode 扩展后，agent 就能使用你共享给它的标签页。",
-  "browserNoSharedTab": "还没有共享的标签页。让 agent 打开网页，或在浏览器工具栏点 BaoCode 按钮共享当前标签页。",
-  "browserOtherApp": "另一个 BaoCode 已连接浏览器。",
+  "browserNotConnected": "没有连接浏览器。在 Chrome（或 Edge、Brave、Arc）中添加 {product} 扩展后，agent 就能使用你共享给它的标签页。",
+  "browserNoSharedTab": "还没有共享的标签页。让 agent 打开网页，或在浏览器工具栏点 {product} 按钮共享当前标签页。",
+  "browserOtherApp": "另一个 {product} 已连接浏览器。",
   "browserSharedTabs": "共享的标签页",
   "browserReload": "重新加载",
   "browserShowInBrowser": "在浏览器中显示",
-  "browserDetached": "浏览器已停止让 BaoCode 查看这个标签页。",
+  "browserDetached": "浏览器已停止让 {product} 查看这个标签页。",
   "browserReconnect": "重新连接",
   "browserShowInPanel": "在侧边栏查看",
   "browserWatchTitle": "正在看你在浏览器里操作",
-  "browserWatchHint": "请在浏览器的 BaoCode 标签页里操作。完成后点这里的“完成”，或点浏览器工具栏上的 BaoCode 按钮。",
+  "browserWatchHint": "请在浏览器的 {product} 标签页里操作。完成后点这里的“完成”，或点浏览器工具栏上的 {product} 按钮。",
   "browserWatchSteps": "{count, plural, =0{还没有记录} other{已记录 {count} 步}}",
   "browserWatchCancel": "取消",
   "browserWatchDone": "完成",
@@ -979,7 +979,7 @@
   "generalSettingsCommitAttribution": "提交署名",
   "generalSettingsCommitAttributionDescription": "Agent 在它写的提交和 Pull Request 中添加的署名。更改对之后启动的 Agent 生效；目前仅支持 Claude Code。",
   "generalSettingsClaudeCore": "内核",
-  "generalSettingsClaudeCoreDescription": "Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。",
+  "generalSettingsClaudeCoreDescription": "Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：{product} 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。",
   "generalSettingsClaudeCoreBuiltin": "内置",
   "generalSettingsClaudeCoreCli": "Claude Code CLI",
   "generalSettingsQueuedMessages": "工作中发送的消息",
@@ -1019,11 +1019,11 @@
   "trayEnabledMacOS": "在菜单栏显示图标",
   "trayEnabledWindows": "在系统托盘显示图标",
   "trayEnabledDescription": "关闭窗口时隐藏到这里，Agent 继续在后台运行；它的菜单列出等待你回复的 Agent，也从这里退出应用。",
-  "trayShow": "显示 BaoCode",
+  "trayShow": "显示 {product}",
   "trayWaiting": "等待你回复",
   "trayWaitingCount": "{count} 个等待中",
   "trayRunning": "{count} 个运行中",
-  "trayQuit": "退出 BaoCode",
+  "trayQuit": "退出 {product}",
   "attentionNeedsInput": "需要你回复",
   "attentionFinished": "已完成",
   "attentionPlanReady": "计划待确认",
@@ -1391,7 +1391,7 @@
   "kbNone": "无",
   "kbImport": "从 VS Code/Cursor 导入…",
   "kbWhenNotParse": "when 子句无法解析({error}): 此快捷键永远不会生效。",
-  "kbUnknownContextKeys": "{count, plural, other{BaoCode 无法识别上下文键 {keys}: 此快捷键永远不会生效。}}",
+  "kbUnknownContextKeys": "{count, plural, other{{product} 无法识别上下文键 {keys}: 此快捷键永远不会生效。}}",
   "kbChangeFailed": "无法更改快捷键({error})。请打开 keybindings.json 并检查其中的错误。",
   "kbCopyCommandId": "复制命令 ID",
   "kbCopyCommandTitle": "复制命令标题",
@@ -1414,9 +1414,9 @@
   "kbColumnSource": "来源",
   "kbWhenLabel": "When 表达式",
   "kbNoneFound": "未找到快捷键",
-  "kbCannotReadKey": "BaoCode 无法识别按键“{key}”: 此快捷键永远不会生效。",
+  "kbCannotReadKey": "{product} 无法识别按键“{key}”: 此快捷键永远不会生效。",
   "kbNotSupported": "不支持",
-  "kbNotSupportedHover": "BaoCode 没有此命令: 快捷键会保留，但不起作用。",
+  "kbNotSupportedHover": "{product} 没有此命令: 快捷键会保留，但不起作用。",
   "kbPressKeys": "先按所需的组合键，再按 Enter 键。",
   "kbChordTo": "再按",
   "kbExistingCommands": "已有 {count} 个命令使用此快捷键",
@@ -1431,22 +1431,22 @@
   "dataDirRevealInFileExplorer": "在文件资源管理器中显示",
   "dataDirRevealInFileManager": "在文件管理器中显示",
   "dataDirChecking": "正在检查文件夹…",
-  "dataDirAlreadyHolds": "该文件夹中已有 BaoCode 数据",
-  "dataDirMoveBack": "将 BaoCode 的数据移回默认文件夹?",
-  "dataDirMoveHere": "将 BaoCode 的数据移到此文件夹?",
-  "dataDirUseAsIsDetail": "重启后 BaoCode 将直接使用那里的数据；不会复制任何内容，当前文件夹中的数据保持不变。",
-  "dataDirCopyDetail": "BaoCode 会将其设置、快捷键、语言服务器和状态复制到那里，并在重启后使用该文件夹。",
-  "dataDirOtherFiles": "该文件夹中还有其他文件: 它们会保留，与 BaoCode 自己的文件并存。",
+  "dataDirAlreadyHolds": "该文件夹中已有 {product} 数据",
+  "dataDirMoveBack": "将 {product} 的数据移回默认文件夹?",
+  "dataDirMoveHere": "将 {product} 的数据移到此文件夹?",
+  "dataDirUseAsIsDetail": "重启后 {product} 将直接使用那里的数据；不会复制任何内容，当前文件夹中的数据保持不变。",
+  "dataDirCopyDetail": "{product} 会将其设置、快捷键、语言服务器和状态复制到那里，并在重启后使用该文件夹。",
+  "dataDirOtherFiles": "该文件夹中还有其他文件: 它们会保留，与 {product} 自己的文件并存。",
   "dataDirUseItsData": "使用其中的数据",
   "dataDirCopyAndSwitch": "复制并切换",
   "dataDirCopying": "正在复制…",
   "dataDirCopyingProgress": "正在复制… {done}/{total} 个文件",
   "dataDirMoveFailed": "无法移动数据: {error}",
   "dataDirMoveInUse": "{path} 正被其他程序占用。请关闭该程序后重试。",
-  "dataDirRestartTitle": "重启 BaoCode 以使用新的数据文件夹",
-  "dataDirRestartDetail": "BaoCode 在重启前会继续使用 {current}。下次启动时将使用 {next}，并询问是否移除旧文件夹中剩余的内容。",
+  "dataDirRestartTitle": "重启 {product} 以使用新的数据文件夹",
+  "dataDirRestartDetail": "{product} 在重启前会继续使用 {current}。下次启动时将使用 {next}，并询问是否移除旧文件夹中剩余的内容。",
   "dataDirTheNewFolder": "新文件夹",
-  "quitConfirmMessage": "要退出 BaoCode 吗？",
+  "quitConfirmMessage": "要退出 {product} 吗？",
   "quitConfirmDetail": "正在运行的 Agent 和终端会一并停止。",
   "quitConfirmQuit": "退出",
   "dataDirQuitNow": "立即退出",
@@ -1456,7 +1456,7 @@
   "dataDirDefaultLocation": "默认位置。",
   "dataDirTemporaryDefault": "默认位置(仅本次): {file} 中设置的文件夹不可用。",
   "dataDirTitle": "数据文件夹",
-  "dataDirDescription": "BaoCode 存放你的设置、快捷键、语言服务器及其自身状态的位置。其他程序也会在此存放文件(如网页视图的缓存)；BaoCode 从不移动或删除这些文件。",
+  "dataDirDescription": "{product} 存放你的设置、快捷键、语言服务器及其自身状态的位置。其他程序也会在此存放文件(如网页视图的缓存)；{product} 从不移动或删除这些文件。",
   "dataDirCurrentFolder": "当前文件夹",
   "dataDirNewFolder": "新文件夹",
   "dataDirAfterRestart": "重启后: {path}",
@@ -1464,22 +1464,22 @@
   "dataDirResetDefault": "恢复默认",
   "dataDirEnvDecides": "文件夹由 {variable} 决定；取消设置该变量后才能在此选择。",
   "dataDirCannotWritePointer": "无法写入 {file}: {error}",
-  "dataDirSettingUnreadable": "无法读取 BaoCode 的数据文件夹设置",
-  "dataDirCannotWrite": "BaoCode 无法写入其数据文件夹",
-  "dataDirUnavailable": "BaoCode 的数据文件夹不可用",
+  "dataDirSettingUnreadable": "无法读取 {product} 的数据文件夹设置",
+  "dataDirCannotWrite": "{product} 无法写入其数据文件夹",
+  "dataDirUnavailable": "{product} 的数据文件夹不可用",
   "dataDirWhereEnv": "它由环境变量 {variable} 设置。",
-  "dataDirWhereFixPointer": "请修复或删除 {file} 后重试；只有在你选择其他文件夹时 BaoCode 才会更改它。",
+  "dataDirWhereFixPointer": "请修复或删除 {file} 后重试；只有在你选择其他文件夹时 {product} 才会更改它。",
   "dataDirWherePointer": "它在 {file} 中设置。如果它位于未连接的驱动器上，请连接后重试。",
   "dataDirDefaultIs": "默认文件夹为 {path}。",
   "dataDirRetry": "重试",
   "dataDirUseDefaultOnce": "本次使用默认文件夹",
   "dataDirChooseAnother": "选择其他文件夹…",
-  "dataDirRemoveOldTitle": "是否移除 BaoCode 留在之前文件夹中的数据?",
-  "dataDirRemoveOldDetail": "BaoCode 现在将数据存放在 {current}。只会从之前的文件夹中移除它自己的项目({items})；该文件夹及其中的其他内容都会保留。",
+  "dataDirRemoveOldTitle": "是否移除 {product} 留在之前文件夹中的数据?",
+  "dataDirRemoveOldDetail": "{product} 现在将数据存放在 {current}。只会从之前的文件夹中移除它自己的项目({items})；该文件夹及其中的其他内容都会保留。",
   "dataDirRemove": "移除",
   "dataDirKeep": "保留",
   "dataDirRemoveOldInUse": "部分旧数据未能移除",
-  "dataDirRemoveOldInUseDetail": "{items} 中有文件正在使用(可能被其他程序占用)。其余内容均已移除；BaoCode 下次启动时会再次询问是否移除剩下的部分。",
+  "dataDirRemoveOldInUseDetail": "{items} 中有文件正在使用(可能被其他程序占用)。其余内容均已移除；{product} 下次启动时会再次询问是否移除剩下的部分。",
   "impTitle": "导入快捷键",
   "impImport": "导入",
   "impNothingFound": "未找到 Visual Studio Code、Cursor、Windsurf 或 VSCodium 的快捷键或键盘映射方案。",
@@ -1534,12 +1534,12 @@
   "cmdCategoryShellCommand": "Shell 命令",
   "shellCommandInstalled": "已成功在 PATH 中安装了 Shell 命令“{name}”。",
   "shellCommandUninstalled": "已成功从 PATH 卸载了 Shell 命令“{name}”。",
-  "shellCommandOccupied": "{path} 已是其他应用的“{name}”命令。要替换为 BaoCode 的吗?",
+  "shellCommandOccupied": "{path} 已是其他应用的“{name}”命令。要替换为 {product} 的吗?",
   "shellCommandReplace": "替换",
   "shellCommandFailed": "无法安装 Shell 命令“{name}”：{error}",
   "shellCommandUninstallFailed": "无法卸载 Shell 命令“{name}”：{error}",
   "generalSettingsMainWindow": "启动时打开",
-  "generalSettingsMainWindowDescription": "BaoCode 启动时打开 Agent 还是 IDE 窗口（IDE 窗口按“恢复窗口”恢复），二者不会同时出现。默认是上次退出时所在的那个。",
+  "generalSettingsMainWindowDescription": "{product} 启动时打开 Agent 还是 IDE 窗口（IDE 窗口按“恢复窗口”恢复），二者不会同时出现。默认是上次退出时所在的那个。",
   "generalSettingsMainWindowLabel": "启动时打开：{name}",
   "generalSettingsMainWindowChat": "固定 Agent",
   "generalSettingsMainWindowIde": "固定 IDE",
@@ -1557,7 +1557,7 @@
   "claudePathChecking": "正在检查…",
   "claudePathInUse": "当前使用：{path}（{version}）",
   "claudePathInUseUnknown": "当前使用：{path}",
-  "claudePathInUseDownloaded": "当前使用：BaoCode 下载的 Claude Code {version}",
+  "claudePathInUseDownloaded": "当前使用：{product} 下载的 Claude Code {version}",
   "claudePathMissing": "尚未找到：开始第一个对话时会自动下载 Claude Code。",
   "generalSettingsIdeWindows": "Fast Ide 窗口",
   "generalSettingsIdeWindowsDescription": "Fast Ide 在哪里打开：在主窗口中替换对话，一次一个文件夹；或独立窗口，每个文件夹一个（新建窗口 ⇧⌘N / Ctrl+Shift+N 打开一个空窗口）。立即生效。（window.ideWindows）",
@@ -1604,7 +1604,7 @@
   "windowMenuWindows": "窗口",
   "windowOpened": "已打开",
   "generalSettingsShellCommand": "Shell 命令",
-  "generalSettingsShellCommandDescription": "在终端中用“code <路径>”在 BaoCode 中打开文件和文件夹。安装位置：{location}。",
+  "generalSettingsShellCommandDescription": "在终端中用“code <路径>”在 {product} 中打开文件和文件夹。安装位置：{location}。",
   "generalSettingsShellCommandInstalled": "已安装",
   "generalSettingsShellCommandNotInstalled": "未安装",
   "generalSettingsShellCommandOccupied": "已安装其他应用的命令",
@@ -1712,7 +1712,7 @@
   "modelsImportOpenExisting": "打开「{name}」",
   "modelsImportAsNew": "另存为新上游",
   "modelsImportInvalid": "这个导入链接无法使用",
-  "modelsImportInvalidDetail": "链接里需要有 Base URL（http 或 https）和 BaoCode 支持的协议。请让站点重新生成链接，或在 设置 → 模型 中手动添加上游。",
+  "modelsImportInvalidDetail": "链接里需要有 Base URL（http 或 https）和 {product} 支持的协议。请让站点重新生成链接，或在 设置 → 模型 中手动添加上游。",
   "modelsAddProvider": "添加上游",
   "modelsNewProviderName": "新上游",
   "modelsProviderNoUrl": "未设置 Base URL",
@@ -1809,7 +1809,7 @@
   "modelsRoleHaikuDescription": "ANTHROPIC_DEFAULT_HAIKU_MODEL：Claude Code 的后台任务，以及会话标题生成。",
   "modelsRoleHaikuWarning": "未设置时，后台任务会使用所选模型，可能更慢、更贵。建议选一个小而快的模型。",
   "modelsRoleSubagent": "子 Agent",
-  "modelsRoleSubagentDescription": "CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。",
+  "modelsRoleSubagentDescription": "CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 {product} 的本地代理发过去。",
   "modelsRoleMissing": "这个模型已不在它的上游里，子 Agent 的请求会失败。",
   "modelsAdvanced": "高级",
   "modelsAuth": "认证方式",
@@ -1888,40 +1888,40 @@
   "modelsAuxiliaryBuiltin": "Claude Code Haiku（本机配置）",
   "settingsSectionUpdates": "更新",
   "updatesSettingsTitle": "更新",
-  "updatesSettingsDescription": "BaoCode 会在本仓库的发布页上检查新版本。",
+  "updatesSettingsDescription": "{product} 会在本仓库的发布页上检查新版本。",
   "updateCurrentVersion": "当前版本",
   "updateLastChecked": "上次检查：{time}",
   "updateNeverChecked": "尚未检查",
   "updateCheckNow": "检查更新",
   "updateChecking": "正在检查更新…",
-  "updateUpToDate": "BaoCode 已是最新版本。",
-  "updateAvailable": "BaoCode {version} 已发布。",
-  "updateReady": "BaoCode {version} 已下载，重启即可完成更新。",
-  "updateDownloading": "正在下载 BaoCode {version}…",
-  "updateDownloadingProgress": "正在下载 BaoCode {version}… {percent}%",
-  "updateMandatory": "当前版本的 BaoCode 已停止支持，请更新到 {version}。",
+  "updateUpToDate": "{product} 已是最新版本。",
+  "updateAvailable": "{product} {version} 已发布。",
+  "updateReady": "{product} {version} 已下载，重启即可完成更新。",
+  "updateDownloading": "正在下载 {product} {version}…",
+  "updateDownloadingProgress": "正在下载 {product} {version}… {percent}%",
+  "updateMandatory": "当前版本的 {product} 已停止支持，请更新到 {version}。",
   "updateRestartNow": "立即重启更新",
   "updateLater": "稍后",
   "updateSkip": "跳过此版本",
   "updateSkippedNote": "已跳过此版本：不会再提醒，但仍可在此安装。",
-  "updateFailed": "BaoCode 更新失败：{error}",
+  "updateFailed": "{product} 更新失败：{error}",
   "updateCheckFailed": "检查更新失败：{error}",
   "updateDisabled": "更新已关闭（update.mode 为 \"none\"）。",
-  "updateUnsupported": "此版本的 BaoCode 不支持自动更新。",
-  "updateManual": "BaoCode 无法在当前位置自动更新（{reason}），请从本仓库的发布页下载新版本。",
+  "updateUnsupported": "此版本的 {product} 不支持自动更新。",
+  "updateManual": "{product} 无法在当前位置自动更新（{reason}），请从本仓库的发布页下载新版本。",
   "updateOpenDownloadPage": "打开下载页",
-  "updateUnfinished": "BaoCode {version} 没有装上，当前仍是 {current}。可以在“设置 → 更新”里重试，或者从本仓库的发布页下载安装。",
+  "updateUnfinished": "{product} {version} 没有装上，当前仍是 {current}。可以在“设置 → 更新”里重试，或者从本仓库的发布页下载安装。",
   "updateShowLog": "查看安装日志",
   "updateReleaseNotes": "更新日志",
   "updateReleaseNotesFor": "{version} 更新内容",
   "updateMode": "更新方式",
-  "updateModeDescription": "BaoCode 是否自动检查新版本（设置项 update.mode）。",
+  "updateModeDescription": "{product} 是否自动检查新版本（设置项 update.mode）。",
   "updateModeLabel": "更新方式：{name}",
   "updateModeDefault": "自动检查并下载",
   "updateModeManual": "仅手动检查",
   "updateModeNone": "关闭",
   "diagnosticsTitle": "诊断日志",
-  "diagnosticsDescription": "把 BaoCode 的错误日志发给开发者，帮助排查问题。只有点击上传时才会发送。",
+  "diagnosticsDescription": "把 {product} 的错误日志发给开发者，帮助排查问题。只有点击上传时才会发送。",
   "diagnosticsUpload": "上传…",
   "diagnosticsDialogTitle": "上传诊断日志",
   "diagnosticsNotePlaceholder": "备注（选填）：遇到了什么问题，怎样复现",
@@ -1933,7 +1933,7 @@
   "diagnosticsSend": "上传",
   "diagnosticsUploading": "正在上传…",
   "diagnosticsUploaded": "已上传。报告编号：",
-  "diagnosticsUploadedDetail": "把这个编号告诉 BaoCode 开发者，就能找到这份日志。",
+  "diagnosticsUploadedDetail": "把这个编号告诉 {product} 开发者，就能找到这份日志。",
   "diagnosticsOmittedDumps": "已省略 {count} 个较早的内存转储（超过 10 MB）。",
   "diagnosticsCopyId": "复制编号",
   "diagnosticsCopied": "已复制",
@@ -2028,8 +2028,8 @@
   "appearanceSettingsTerminalSizeLabel": "终端字号：{size}",
   "generalSettingsContextMenuFinder": "访达右键菜单",
   "generalSettingsContextMenuExplorer": "文件资源管理器右键菜单",
-  "generalSettingsContextMenuDescription": "在文件、文件夹及文件夹空白处的右键菜单中加入“用 BaoCode 打开”（新对话）和“用 Fast Ide 打开”（新 IDE 窗口）。",
-  "generalSettingsContextMenuMacNote": "访达的扩展开关在系统设置的“扩展”中，也可以在那里开启或关闭 BaoCode 扩展。",
+  "generalSettingsContextMenuDescription": "在文件、文件夹及文件夹空白处的右键菜单中加入“用 {product} 打开”（新对话）和“用 Fast Ide 打开”（新 IDE 窗口）。",
+  "generalSettingsContextMenuMacNote": "访达的扩展开关在系统设置的“扩展”中，也可以在那里开启或关闭 {product} 扩展。",
   "generalSettingsContextMenuOn": "已开启",
   "generalSettingsContextMenuOff": "未开启",
   "generalSettingsContextMenuUnsupported": "此版本的应用未包含访达扩展。",
@@ -2079,7 +2079,7 @@
   "remoteProjectTooltip": "位于 {host}（通过 SSH）",
   "quitConfirmRemote": "{count, plural, other{远程主机上的 {count} 个会话和终端也会结束。}}",
   "updateButton": "更新",
-  "tipsSetupTitle": "设置 BaoCode",
+  "tipsSetupTitle": "设置 {product}",
   "tipsSetupCount": "{done}/{total}",
   "tipsSetupEntry": "设置 {done}/{total}",
   "tipsHide": "收起",
@@ -2088,20 +2088,20 @@
   "tipsDone": "已完成",
   "tipsDontShowAgain": "不再提示",
   "tipsFailed": "无法开启{title}：{error}",
-  "tipsUpdated": "BaoCode 已更新到 {version}。新功能：{features}。",
+  "tipsUpdated": "{product} 已更新到 {version}。新功能：{features}。",
   "tipsListSeparator": "、",
   "tipsSettingsTitle": "推荐功能",
   "tipsSettingsDescription": "尚未开启的功能。「显示设置向导」可重新打开设置清单；在 settings.json 中设置 \"workbench.tips.enabled\": false 可关闭所有推荐。",
-  "tipContextMenuBody": "在右键菜单中直接用 BaoCode 打开文件和文件夹。",
+  "tipContextMenuBody": "在右键菜单中直接用 {product} 打开文件和文件夹。",
   "tipShellCommandTitle": "{name} 命令",
-  "tipShellCommandBody": "在终端里用 {name} <路径> 在 BaoCode 中打开文件夹。",
+  "tipShellCommandBody": "在终端里用 {name} <路径> 在 {product} 中打开文件夹。",
   "tipImportKeybindingsTitle": "导入快捷键",
   "tipImportKeybindingsBody": "从 VS Code 或 Cursor 导入你的快捷键。",
   "tipColorThemeBody": "选择对话、IDE 和终端使用的配色。",
   "cmdShowSetupGuide": "显示设置向导",
-  "cmdStarOnGitHub": "在 GitHub 上为 BaoCode 点 Star",
-  "starPromptMessage": "BaoCode 用得还顺手吗？",
-  "starPromptDetail": "BaoCode 免费开源。如果它对你有帮助，欢迎在 GitHub 上点个 Star，让更多人发现它。",
+  "cmdStarOnGitHub": "在 GitHub 上为 {product} 点 Star",
+  "starPromptMessage": "{product} 用得还顺手吗？",
+  "starPromptDetail": "{product} 免费开源。如果它对你有帮助，欢迎在 GitHub 上点个 Star，让更多人发现它。",
   "starPromptStar": "去 GitHub 点 Star",
   "starPromptLater": "以后再说",
   "cmdResetFeatureTips": "重置功能推荐",
@@ -2137,9 +2137,9 @@
   "settingsSectionNetwork": "网络",
   "settingsNetworkKeywords": "代理 网络 proxy clash vpn 梯子",
   "networkSettingsTitle": "网络",
-  "networkSettingsDescription": "BaoCode 及其启动的 Claude Code 如何访问网络。",
+  "networkSettingsDescription": "{product} 及其启动的 Claude Code 如何访问网络。",
   "networkProxy": "代理",
-  "networkProxyDescription": "BaoCode 和 Claude Code 使用的代理（http.proxyMode）。跟随系统代理：使用系统设置里的代理，例如 Clash 开启的系统代理。更改对新会话生效，正在运行的会话需重新开始。",
+  "networkProxyDescription": "{product} 和 Claude Code 使用的代理（http.proxyMode）。跟随系统代理：使用系统设置里的代理，例如 Clash 开启的系统代理。更改对新会话生效，正在运行的会话需重新开始。",
   "networkProxyLabel": "代理：{name}",
   "networkProxySystem": "跟随系统代理",
   "networkProxyManual": "手动设置",
@@ -2155,7 +2155,7 @@
   "networkProxyStatusManualMissing": "请填写代理地址。",
   "networkProxyStatusNone": "直连：系统没有设置代理。",
   "networkProxyStatusOff": "直连。",
-  "networkProxyStatusAutoConfig": "直连：系统使用自动代理配置（PAC），BaoCode 暂不支持。请在 Clash 中开启系统代理，或手动填写代理地址。",
+  "networkProxyStatusAutoConfig": "直连：系统使用自动代理配置（PAC），{product} 暂不支持。请在 Clash 中开启系统代理，或手动填写代理地址。",
   "networkProxyRefresh": "重新检测",
   "networkTest": "连通性测试",
   "networkTestDescription": "通过当前使用的代理访问这些网站，看能否连上、速度如何（新建连接到开始收到响应的用时）。",
@@ -2179,7 +2179,7 @@
   "extsCapabilityFull": "完全支持",
   "extsCapabilityFullDetail": "它的颜色主题或文件图标主题都能使用。",
   "extsCapabilityPartial": "部分支持",
-  "extsCapabilityPartialDetail": "主题可以使用；其余部分在 BaoCode 中不起作用。",
+  "extsCapabilityPartialDetail": "主题可以使用；其余部分在 {product} 中不起作用。",
   "extsEngineIncompatible": "需要 VS Code {requested}，当前为 {current}。",
   "extsEngineMissing": "它没有说明需要哪个版本的 VS Code。",
   "extsEngineInvalid": "无效的引擎“{requested}”。",
@@ -2240,7 +2240,7 @@
   "themeSelectIconThemePlaceholder": "选择文件图标主题（按上下箭头键预览）",
   "themeIconThemeBuiltIn": "内置",
   "extsCapabilityUnsupported": "不支持",
-  "extsCapabilityUnsupportedDetail": "它没有颜色主题或文件图标主题：BaoCode 只使用扩展中的主题。",
+  "extsCapabilityUnsupportedDetail": "它没有颜色主题或文件图标主题：{product} 只使用扩展中的主题。",
   "extsFindingCode": "它的代码不会运行。",
   "extsFindingContribution": "未使用：{name}",
   "extsPopularThemes": "热门主题",
@@ -2270,7 +2270,7 @@
   "explorerUndoCreateChanged": "{name} 创建后已被修改，仍要撤销（删除它）吗？",
   "settingsSectionMobile": "手机",
   "settingsMobileKeywords": "手机 移动端 配对 扫码 二维码 远程 局域网 iphone android",
-  "mobileSettingsDescription": "在手机上的 BaoCode 里查看并操作这台电脑的智能体，经由局域网或公网直连。两端之间的内容端到端加密。",
+  "mobileSettingsDescription": "在手机上的 {product} 里查看并操作这台电脑的智能体，经由局域网或公网直连。两端之间的内容端到端加密。",
   "mobileAllow": "允许手机连接",
   "mobileAllowDescription": "与这台电脑配对过的手机可以直接连接它。",
   "mobileStatus": "状态",
@@ -2288,10 +2288,10 @@
   "mobilePublicAddress": "公网地址",
   "mobilePublicAddressDescription": "可从公网访问这台电脑的域名或 IP（需转发端口），会写入二维码；多个用逗号分隔。经只收 HTTPS 的代理（如 Cloudflare Tunnel）访问时，写成 wss://域名。公网 IPv6 地址会自动加入。",
   "mobileRelay": "中转",
-  "mobileRelayDescription": "当这台电脑的地址都无法直连时，经由 BaoCode 中转服务连接。即将推出。",
+  "mobileRelayDescription": "当这台电脑的地址都无法直连时，经由 {product} 中转服务连接。即将推出。",
   "mobileRelayUnavailable": "暂不可用",
   "mobilePair": "配对手机",
-  "mobilePairDescription": "在手机 BaoCode 上扫码（我的 → 已配对的电脑 → 配对新电脑），或在那里的「附近的电脑」中选择这台电脑。",
+  "mobilePairDescription": "在手机 {product} 上扫码（我的 → 已配对的电脑 → 配对新电脑），或在那里的「附近的电脑」中选择这台电脑。",
   "mobilePairShow": "显示二维码",
   "mobilePairCancel": "取消",
   "mobilePairNewCode": "换一个",
@@ -2455,7 +2455,7 @@
   "stashClarifyChanged": "说清楚期间便签被改动了，没有替换，可以再试一次。",
   "stashRetry": "重试",
   "stashExpandFailed": "没能说清楚：{error}",
-  "stashImplement": "在 BaoCode 中实施",
+  "stashImplement": "在 {product} 中实施",
   "stashImplementHow": "让 agent 怎样开发？",
   "stashImplementHowDetail": "在新的 git worktree 里（独立分支，不动你当前的工作区），还是直接在项目当前分支上。",
   "stashImplementWorktree": "新建 worktree",
@@ -2488,7 +2488,7 @@
   "stashSettingsDirectory": "存放位置",
   "stashSettingsDirectoryChange": "更改…",
   "stashSettingsDirectoryReset": "恢复默认",
-  "stashSettingsDirectoryRestart": "重启 BaoCode 后生效。",
+  "stashSettingsDirectoryRestart": "重启 {product} 后生效。",
   "stashAll": "所有",
   "stashAllTooltip": "显示所有便签",
   "stashHintSave": "保存",
@@ -2536,7 +2536,7 @@
   "accountsViaToken": "令牌登录",
   "accountsSignOut": "退出登录",
   "accountsSignOutTitle": "退出 {forge} 账号 {login}？",
-  "accountsSignOutDetail": "会删除本机保存的令牌。要彻底撤销 BaoCode 的访问权限，还需要到 {forge} 的设置里撤销。",
+  "accountsSignOutDetail": "会删除本机保存的令牌。要彻底撤销 {product} 的访问权限，还需要到 {forge} 的设置里撤销。",
   "accountsRevoke": "退出并打开 {forge} 设置",
   "accountsTokenTitle": "用令牌登录 {forge}",
   "accountsSignIn": "登录",
@@ -2547,7 +2547,7 @@
   "accountsTokenCreate": "在 {host} 上创建令牌",
   "accountsTokenRefused": "令牌无效，请检查是否完整、是否已过期。",
   "accountsBrowserTitle": "登录 {forge}",
-  "accountsBrowserDetail": "在 {host} 上输入下面的代码，授权 BaoCode 访问你的账号：",
+  "accountsBrowserDetail": "在 {host} 上输入下面的代码，授权 {product} 访问你的账号：",
   "accountsCopyAndOpen": "复制代码并打开浏览器",
   "accountsOpenAgain": "已复制 · 再次打开",
   "accountsBrowserStarting": "正在获取代码…",
@@ -2609,7 +2609,7 @@
   "stashWelcomeLead": "想到就记下，准备好了交给 agent 去做，每一条进展如何一眼看清。",
   "stashWelcomeNoteTitle": "随手记下",
   "stashWelcomeAgentTitle": "交给 agent",
-  "stashWelcomeAgent": "点「在 BaoCode 中实施」，或在对话里 @ 它；对话和便签会自动关联。",
+  "stashWelcomeAgent": "点「在 {product} 中实施」，或在对话里 @ 它；对话和便签会自动关联。",
   "stashWelcomeTrackTitle": "看清进展",
   "stashWelcomeTrack": "卡片上实时显示对话状态，链接的 GitHub、GitLab issue 和 PR 也会同步状态。",
   "stashWelcomeStart": "开始使用",
@@ -2629,14 +2629,14 @@
   "browserSettingsNotInstalled": "还没有浏览器连接过",
   "browserSettingsNotInstalledDescription": "用下方任一方式安装扩展，之后打开浏览器就会自动连接。",
   "browserSettingsNotRunning": "浏览器未连接",
-  "browserSettingsNotRunningDescription": "打开装有 BaoCode 扩展的浏览器，会自动连接。",
+  "browserSettingsNotRunningDescription": "打开装有 {product} 扩展的浏览器，会自动连接。",
   "browserSettingsSandboxed": "Snap 和 Flatpak 装的浏览器连不上",
-  "browserSettingsSandboxedDescription": "它们的沙箱不让 BaoCode 的辅助程序运行。请改用浏览器官方的 .deb 或 .rpm 安装包，例如从 google.com/chrome 下载 Google Chrome。",
+  "browserSettingsSandboxedDescription": "它们的沙箱不让 {product} 的辅助程序运行。请改用浏览器官方的 .deb 或 .rpm 安装包，例如从 google.com/chrome 下载 Google Chrome。",
   "browserSettingsConnected": "{browser} 已连接",
   "browserSettingsIncompatible": "{browser} 的扩展版本不匹配",
   "browserSettingsExtensionVersion": "扩展版本 {version}",
   "browserSettingsExtensionOld": "扩展版本太旧，需要更新。商店版会自动更新，也可以在 chrome://extensions 里点「更新」；手动安装的请重新下载 zip，覆盖原来的文件夹后点刷新。",
-  "browserSettingsAppOld": "扩展比当前的 BaoCode 新，请更新 BaoCode。",
+  "browserSettingsAppOld": "扩展比当前的 {product} 新，请更新 {product}。",
   "browserSettingsInstall": "安装扩展",
   "browserSettingsStore": "Chrome 应用商店",
   "browserSettingsStoreDescription": "推荐。会自动更新，Chrome、Edge、Brave、Arc 等 Chromium 内核的浏览器都能装。",
@@ -2646,7 +2646,7 @@
   "browserSettingsUnpackedDownload": "下载 zip",
   "browserSettingsOpen": "浏览器设置",
   "browserHistoryTitle": "调试记录",
-  "browserHistoryDescription": "共享给 BaoCode 的标签页里打开过的页面、发出的请求、控制台的错误和警告会一直记下来，不用专门录制。你说“刚才保存时报错了”这类话时，agent 会自己翻看。记录只存在这台电脑上，不保存 Cookie 和令牌。",
+  "browserHistoryDescription": "共享给 {product} 的标签页里打开过的页面、发出的请求、控制台的错误和警告会一直记下来，不用专门录制。你说“刚才保存时报错了”这类话时，agent 会自己翻看。记录只存在这台电脑上，不保存 Cookie 和令牌。",
   "browserHistoryDetailed": "详细记录",
   "browserHistoryDetailedDescription": "另外记下请求体和响应体、你的操作（点击和输入，不含密码）以及全部控制台日志，占用空间更多。",
   "browserHistorySize": "已占用 {size}",
@@ -2657,9 +2657,9 @@
   "browserHistoryTooLargeDetail": "可以直接清理，也可以去 设置 → 浏览器 查看。",
   "browserHistoryOpenSettings": "浏览器设置",
   "browserWelcomeTitle": "agent 现在能用你的浏览器了",
-  "browserWelcomeLead": "装上 BaoCode 扩展，agent 就能在你自己的 Chrome 里打开网页、阅读、点击和输入，带着你的登录状态。",
+  "browserWelcomeLead": "装上 {product} 扩展，agent 就能在你自己的 Chrome 里打开网页、阅读、点击和输入，带着你的登录状态。",
   "browserWelcomeSharedTitle": "只用你共享的标签页",
-  "browserWelcomeShared": "它只在黄色的「BaoCode」标签页分组里工作，其他标签页仍然只属于你。",
+  "browserWelcomeShared": "它只在黄色的「{product}」标签页分组里工作，其他标签页仍然只属于你。",
   "browserWelcomeWatchTitle": "看着它操作",
   "browserWelcomeWatch": "侧边栏实时显示它正在用的网页，你随时可以接手。",
   "browserWelcomeShowTitle": "演示一遍就会",
@@ -2675,7 +2675,7 @@
   "cmdStashWelcome": "认识 Stash...",
   "cmdModelWelcome": "设置模型...",
   "modelWelcomeTitle": "选一个模型开始",
-  "modelWelcomeLead": "BaoCode 用你选的模型来运行 agent。添加一个上游（提供 API Key 的服务），它的模型就能直接用了。",
+  "modelWelcomeLead": "{product} 用你选的模型来运行 agent。添加一个上游（提供 API Key 的服务），它的模型就能直接用了。",
   "modelWelcomeAnyTitle": "任意上游",
   "modelWelcomeAny": "支持 Anthropic API、OpenAI Chat Completions 和 Responses，以及兼容它们的服务，比如 OpenRouter、DeepSeek。",
   "modelWelcomeKeysTitle": "Key 只在你手里",
@@ -2691,7 +2691,7 @@
   "modelWelcomeStart": "开始对话",
   "healthNoModel": "选一个模型就能开始：添加一个上游，它的模型就能直接用了。",
   "modelSetUp": "设置模型",
-  "claudeCoreHint": "当前用的是 BaoCode 内置内核。推荐换成 Claude Code 内核，体验更完整；没安装的话会自动帮你下载。",
+  "claudeCoreHint": "当前用的是 {product} 内置内核。推荐换成 Claude Code 内核，体验更完整；没安装的话会自动帮你下载。",
   "claudeCoreHintSwitch": "切换到 Claude Code",
   "claudeCoreHintLater": "暂不",
   "remoteAddServer": "新增 SSH 服务器…",
@@ -2737,7 +2737,7 @@
   "sshServerCore": "内核",
   "sshServerCoreAuto": "自动",
   "sshServerCoreAutoHint": "服务器上装了 Claude Code CLI 就用它，没装就用内置内核。",
-  "sshServerCoreBuiltinHint": "BaoCode 自带的内核，使用“设置 → 模型”里的上游。",
+  "sshServerCoreBuiltinHint": "{product} 自带的内核，使用“设置 → 模型”里的上游。",
   "sshServerCoreCliHint": "服务器上的 Claude Code CLI，没装会自动装上。",
   "sshServerJump": "跳板机（可选）",
   "sshServerNoJump": "不使用，直接连接",
@@ -2758,10 +2758,10 @@
   "remoteFailHostKey": "服务器的指纹未知，而你的 ssh 配置要求不自动接受新指纹（StrictHostKeyChecking）。",
   "remoteFailHostKeyChanged": "服务器的指纹和上次连接时不同：可能是服务器重装过，也可能有人在中间截获连接。",
   "remoteFailUnreachable": "连不上服务器：请检查地址、端口和网络。",
-  "channelSetupTitle": "欢迎使用 BaoCode",
+  "channelSetupTitle": "欢迎使用 {product}",
   "channelSetupLead": "打开官网完成首次设置，大约 10 秒。",
   "channelSetupStepTitle": "在浏览器中完成设置",
-  "channelSetupStep": "BaoCode 会在浏览器里打开 baocode.dev，网页显示完成后，这里会自动继续。",
+  "channelSetupStep": "{product} 会在浏览器里打开 baocode.dev，网页显示完成后，这里会自动继续。",
   "channelSetupWaitingTitle": "正在等待浏览器完成…",
   "channelSetupWaiting": "网页显示完成后，这里会自动继续。不小心关掉了网页，可以重新打开。",
   "channelSetupOpenFailedTitle": "浏览器没有打开",
@@ -2776,12 +2776,12 @@
   "channelSetupPasteLead": "网页上如果有一段链接，复制后粘贴到这里：",
   "channelSetupPasteConfirm": "确定",
   "channelSetupLinkInvalid": "这不是网页上的链接，请复制网页上显示的完整链接。",
-  "channelSetupLinkOther": "这个链接属于另一个 BaoCode（别的电脑或重装前的），请用这里打开的网页。",
+  "channelSetupLinkOther": "这个链接属于另一个 {product}（别的电脑或重装前的），请用这里打开的网页。",
   "channelSetupTrouble": "遇到问题？",
   "channelSetupOnceTitle": "只需一次",
   "channelSetupOnce": "完成后不会再出现，更新后也不会。",
   "channelSetupPrivateTitle": "不涉及个人信息",
-  "channelSetupPrivate": "网页只告诉 BaoCode 你是从哪里知道它的，比如某个视频或网站。",
+  "channelSetupPrivate": "网页只告诉 {product} 你是从哪里知道它的，比如某个视频或网站。",
   "channelSetupFindingTitle": "正在读取渠道信息…",
   "channelSetupFinding": "马上就好。",
   "channelSetupSiteOfflineTitle": "连不上 baocode.dev",
@@ -2800,7 +2800,7 @@
   "channelAccountRefresh": "刷新账户",
   "channelAccountSignOut": "退出登录",
   "channelAccountSignOutTitle": "退出登录？",
-  "channelAccountSignOutDetail": "退出后，需要重新登录 {channel} 才能继续使用 BaoCode。",
+  "channelAccountSignOutDetail": "退出后，需要重新登录 {channel} 才能继续使用 {product}。",
   "channelAccountOpenSite": "打开网站",
   "channelAccountDefaultModel": "新对话默认模型",
   "channelAccountNoModels": "正在使用的 Key 没有可用的模型。",
@@ -2825,5 +2825,779 @@
   "aboutChangelogDetail": "每个版本改了什么",
   "aboutFeedback": "反馈问题",
   "aboutFeedbackDetail": "在 GitHub 上提 issue，或者看看别人提过的",
-  "aboutOpen": "打开"
+  "aboutOpen": "打开",
+  "@languageSettingsDescription": {
+    "description": "BaoCode 的菜单、视图和消息所用的语言。更改立即生效。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@menuAboutBaoCode": {
+    "description": "关于 BaoCode",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserNotConnected": {
+    "description": "没有连接浏览器。在 Chrome（或 Edge、Brave、Arc）中添加 BaoCode 扩展后，agent 就能使用你共享给它的标签页。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserNoSharedTab": {
+    "description": "还没有共享的标签页。让 agent 打开网页，或在浏览器工具栏点 BaoCode 按钮共享当前标签页。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserOtherApp": {
+    "description": "另一个 BaoCode 已连接浏览器。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserDetached": {
+    "description": "浏览器已停止让 BaoCode 查看这个标签页。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserWatchHint": {
+    "description": "请在浏览器的 BaoCode 标签页里操作。完成后点这里的“完成”，或点浏览器工具栏上的 BaoCode 按钮。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@generalSettingsClaudeCoreDescription": {
+    "description": "Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：BaoCode 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@trayShow": {
+    "description": "显示 BaoCode",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@trayQuit": {
+    "description": "退出 BaoCode",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@kbUnknownContextKeys": {
+    "description": "{count, plural, other{BaoCode 无法识别上下文键 {keys}: 此快捷键永远不会生效。}}",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@kbCannotReadKey": {
+    "description": "BaoCode 无法识别按键“{key}”: 此快捷键永远不会生效。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@kbNotSupportedHover": {
+    "description": "BaoCode 没有此命令: 快捷键会保留，但不起作用。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirAlreadyHolds": {
+    "description": "该文件夹中已有 BaoCode 数据",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirMoveBack": {
+    "description": "将 BaoCode 的数据移回默认文件夹?",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirMoveHere": {
+    "description": "将 BaoCode 的数据移到此文件夹?",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirUseAsIsDetail": {
+    "description": "重启后 BaoCode 将直接使用那里的数据；不会复制任何内容，当前文件夹中的数据保持不变。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirCopyDetail": {
+    "description": "BaoCode 会将其设置、快捷键、语言服务器和状态复制到那里，并在重启后使用该文件夹。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirOtherFiles": {
+    "description": "该文件夹中还有其他文件: 它们会保留，与 BaoCode 自己的文件并存。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirRestartTitle": {
+    "description": "重启 BaoCode 以使用新的数据文件夹",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirRestartDetail": {
+    "description": "BaoCode 在重启前会继续使用 {current}。下次启动时将使用 {next}，并询问是否移除旧文件夹中剩余的内容。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@quitConfirmMessage": {
+    "description": "要退出 BaoCode 吗？",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirDescription": {
+    "description": "BaoCode 存放你的设置、快捷键、语言服务器及其自身状态的位置。其他程序也会在此存放文件(如网页视图的缓存)；BaoCode 从不移动或删除这些文件。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirSettingUnreadable": {
+    "description": "无法读取 BaoCode 的数据文件夹设置",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirCannotWrite": {
+    "description": "BaoCode 无法写入其数据文件夹",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirUnavailable": {
+    "description": "BaoCode 的数据文件夹不可用",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirWhereFixPointer": {
+    "description": "请修复或删除 {file} 后重试；只有在你选择其他文件夹时 BaoCode 才会更改它。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirRemoveOldTitle": {
+    "description": "是否移除 BaoCode 留在之前文件夹中的数据?",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirRemoveOldDetail": {
+    "description": "BaoCode 现在将数据存放在 {current}。只会从之前的文件夹中移除它自己的项目({items})；该文件夹及其中的其他内容都会保留。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@dataDirRemoveOldInUseDetail": {
+    "description": "{items} 中有文件正在使用(可能被其他程序占用)。其余内容均已移除；BaoCode 下次启动时会再次询问是否移除剩下的部分。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@shellCommandOccupied": {
+    "description": "{path} 已是其他应用的“{name}”命令。要替换为 BaoCode 的吗?",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@generalSettingsMainWindowDescription": {
+    "description": "BaoCode 启动时打开 Agent 还是 IDE 窗口（IDE 窗口按“恢复窗口”恢复），二者不会同时出现。默认是上次退出时所在的那个。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@claudePathInUseDownloaded": {
+    "description": "当前使用：BaoCode 下载的 Claude Code {version}",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@generalSettingsShellCommandDescription": {
+    "description": "在终端中用“code <路径>”在 BaoCode 中打开文件和文件夹。安装位置：{location}。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@modelsImportInvalidDetail": {
+    "description": "链接里需要有 Base URL（http 或 https）和 BaoCode 支持的协议。请让站点重新生成链接，或在 设置 → 模型 中手动添加上游。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@modelsRoleSubagentDescription": {
+    "description": "CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updatesSettingsDescription": {
+    "description": "BaoCode 会在本仓库的发布页上检查新版本。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateUpToDate": {
+    "description": "BaoCode 已是最新版本。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateAvailable": {
+    "description": "BaoCode {version} 已发布。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateReady": {
+    "description": "BaoCode {version} 已下载，重启即可完成更新。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateDownloading": {
+    "description": "正在下载 BaoCode {version}…",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateDownloadingProgress": {
+    "description": "正在下载 BaoCode {version}… {percent}%",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateMandatory": {
+    "description": "当前版本的 BaoCode 已停止支持，请更新到 {version}。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateFailed": {
+    "description": "BaoCode 更新失败：{error}",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateUnsupported": {
+    "description": "此版本的 BaoCode 不支持自动更新。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateManual": {
+    "description": "BaoCode 无法在当前位置自动更新（{reason}），请从本仓库的发布页下载新版本。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateUnfinished": {
+    "description": "BaoCode {version} 没有装上，当前仍是 {current}。可以在“设置 → 更新”里重试，或者从本仓库的发布页下载安装。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@updateModeDescription": {
+    "description": "BaoCode 是否自动检查新版本（设置项 update.mode）。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@diagnosticsDescription": {
+    "description": "把 BaoCode 的错误日志发给开发者，帮助排查问题。只有点击上传时才会发送。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@diagnosticsUploadedDetail": {
+    "description": "把这个编号告诉 BaoCode 开发者，就能找到这份日志。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@generalSettingsContextMenuDescription": {
+    "description": "在文件、文件夹及文件夹空白处的右键菜单中加入“用 BaoCode 打开”（新对话）和“用 Fast Ide 打开”（新 IDE 窗口）。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@generalSettingsContextMenuMacNote": {
+    "description": "访达的扩展开关在系统设置的“扩展”中，也可以在那里开启或关闭 BaoCode 扩展。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@tipsSetupTitle": {
+    "description": "设置 BaoCode",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@tipsUpdated": {
+    "description": "BaoCode 已更新到 {version}。新功能：{features}。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@tipContextMenuBody": {
+    "description": "在右键菜单中直接用 BaoCode 打开文件和文件夹。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@tipShellCommandBody": {
+    "description": "在终端里用 {name} <路径> 在 BaoCode 中打开文件夹。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@cmdStarOnGitHub": {
+    "description": "在 GitHub 上为 BaoCode 点 Star",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@starPromptMessage": {
+    "description": "BaoCode 用得还顺手吗？",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@starPromptDetail": {
+    "description": "BaoCode 免费开源。如果它对你有帮助，欢迎在 GitHub 上点个 Star，让更多人发现它。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@networkSettingsDescription": {
+    "description": "BaoCode 及其启动的 Claude Code 如何访问网络。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@networkProxyDescription": {
+    "description": "BaoCode 和 Claude Code 使用的代理（http.proxyMode）。跟随系统代理：使用系统设置里的代理，例如 Clash 开启的系统代理。更改对新会话生效，正在运行的会话需重新开始。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@networkProxyStatusAutoConfig": {
+    "description": "直连：系统使用自动代理配置（PAC），BaoCode 暂不支持。请在 Clash 中开启系统代理，或手动填写代理地址。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@extsCapabilityPartialDetail": {
+    "description": "主题可以使用；其余部分在 BaoCode 中不起作用。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@extsCapabilityUnsupportedDetail": {
+    "description": "它没有颜色主题或文件图标主题：BaoCode 只使用扩展中的主题。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@mobileSettingsDescription": {
+    "description": "在手机上的 BaoCode 里查看并操作这台电脑的智能体，经由局域网或公网直连。两端之间的内容端到端加密。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@mobileRelayDescription": {
+    "description": "当这台电脑的地址都无法直连时，经由 BaoCode 中转服务连接。即将推出。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@mobilePairDescription": {
+    "description": "在手机 BaoCode 上扫码（我的 → 已配对的电脑 → 配对新电脑），或在那里的「附近的电脑」中选择这台电脑。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@stashImplement": {
+    "description": "在 BaoCode 中实施",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@stashSettingsDirectoryRestart": {
+    "description": "重启 BaoCode 后生效。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@accountsSignOutDetail": {
+    "description": "会删除本机保存的令牌。要彻底撤销 BaoCode 的访问权限，还需要到 {forge} 的设置里撤销。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@accountsBrowserDetail": {
+    "description": "在 {host} 上输入下面的代码，授权 BaoCode 访问你的账号：",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@stashWelcomeAgent": {
+    "description": "点「在 BaoCode 中实施」，或在对话里 @ 它；对话和便签会自动关联。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserSettingsNotRunningDescription": {
+    "description": "打开装有 BaoCode 扩展的浏览器，会自动连接。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserSettingsSandboxedDescription": {
+    "description": "它们的沙箱不让 BaoCode 的辅助程序运行。请改用浏览器官方的 .deb 或 .rpm 安装包，例如从 google.com/chrome 下载 Google Chrome。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserSettingsAppOld": {
+    "description": "扩展比当前的 BaoCode 新，请更新 BaoCode。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserHistoryDescription": {
+    "description": "共享给 BaoCode 的标签页里打开过的页面、发出的请求、控制台的错误和警告会一直记下来，不用专门录制。你说“刚才保存时报错了”这类话时，agent 会自己翻看。记录只存在这台电脑上，不保存 Cookie 和令牌。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserWelcomeLead": {
+    "description": "装上 BaoCode 扩展，agent 就能在你自己的 Chrome 里打开网页、阅读、点击和输入，带着你的登录状态。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@browserWelcomeShared": {
+    "description": "它只在黄色的「BaoCode」标签页分组里工作，其他标签页仍然只属于你。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@modelWelcomeLead": {
+    "description": "BaoCode 用你选的模型来运行 agent。添加一个上游（提供 API Key 的服务），它的模型就能直接用了。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@claudeCoreHint": {
+    "description": "当前用的是 BaoCode 内置内核。推荐换成 Claude Code 内核，体验更完整；没安装的话会自动帮你下载。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@sshServerCoreBuiltinHint": {
+    "description": "BaoCode 自带的内核，使用“设置 → 模型”里的上游。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@channelSetupTitle": {
+    "description": "欢迎使用 BaoCode",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@channelSetupStep": {
+    "description": "BaoCode 会在浏览器里打开 baocode.dev，网页显示完成后，这里会自动继续。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@channelSetupLinkOther": {
+    "description": "这个链接属于另一个 BaoCode（别的电脑或重装前的），请用这里打开的网页。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@channelSetupPrivate": {
+    "description": "网页只告诉 BaoCode 你是从哪里知道它的，比如某个视频或网站。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
+  "@channelAccountSignOutDetail": {
+    "description": "退出后，需要重新登录 {channel} 才能继续使用 BaoCode。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  }
 }

@@ -74,7 +74,7 @@ class UpdateController {
         ? null
         : notifications.notify(
             IdeSeverity.info,
-            l10n.updateDownloading(release.version.marketing),
+            l10n.updateDownloading(productName, release.version.marketing),
           );
     final problem = await restartToUpdate();
     if (downloading != null) notifications.close(downloading);
@@ -84,7 +84,7 @@ class UpdateController {
       case ManualUpdateRequired():
         notifications.notify(
           IdeSeverity.warning,
-          l10n.updateManual(problem.reason),
+          l10n.updateManual(productName, problem.reason),
           sticky: true,
           primary: [
             IdeNotificationAction(
@@ -96,7 +96,7 @@ class UpdateController {
       default:
         notifications.notify(
           IdeSeverity.error,
-          l10n.updateFailed('$problem'),
+          l10n.updateFailed(productName, '$problem'),
           sticky: true,
         );
     }
@@ -117,10 +117,10 @@ class UpdateController {
     return notifications.notify(
       offer.mandatory ? IdeSeverity.warning : IdeSeverity.info,
       offer.mandatory
-          ? l10n.updateMandatory(version)
+          ? l10n.updateMandatory(productName, version)
           : offer.downloaded
-          ? l10n.updateReady(version)
-          : l10n.updateAvailable(version),
+          ? l10n.updateReady(productName, version)
+          : l10n.updateAvailable(productName, version),
       sticky: true,
       primary: [
         IdeNotificationAction(
@@ -155,11 +155,11 @@ class UpdateController {
       case UpdateFound(:final offer):
         showOffer(notifications, l10n, offer);
       case UpdateUpToDate():
-        notifications.notify(IdeSeverity.info, l10n.updateUpToDate);
+        notifications.notify(IdeSeverity.info, l10n.updateUpToDate(productName));
       case UpdatesDisabled():
         notifications.notify(IdeSeverity.info, l10n.updateDisabled);
       case UpdatesUnsupported():
-        notifications.notify(IdeSeverity.info, l10n.updateUnsupported);
+        notifications.notify(IdeSeverity.info, l10n.updateUnsupported(productName));
       case UpdateCheckFailed(:final error):
         notifications.notify(
           IdeSeverity.error,
@@ -179,7 +179,7 @@ class UpdateController {
     final openFile = this.openFile;
     return notifications.notify(
       IdeSeverity.warning,
-      l10n.updateUnfinished(version.marketing, service.current.marketing),
+      l10n.updateUnfinished(productName, service.current.marketing, version.marketing),
       sticky: true,
       primary: [
         IdeNotificationAction(
@@ -215,7 +215,7 @@ class UpdateController {
     final failures = service.failures.listen(
       (error) => notifications.notify(
         IdeSeverity.error,
-        l10n().updateFailed('$error'),
+        l10n().updateFailed(productName, '$error'),
         sticky: true,
       ),
     );

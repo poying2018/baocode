@@ -20,7 +20,7 @@ Future<ShellCommandOutcome?> installShellCommand(BuildContext context) async {
       if (!context.mounted) return null;
       final choice = await showIdeDialog(
         context,
-        message: l10n.shellCommandOccupied(ShellCommand.location, name),
+        message: l10n.shellCommandOccupied(productName, name, ShellCommand.location),
         buttons: [l10n.shellCommandReplace],
       );
       if (choice != 0) return null;

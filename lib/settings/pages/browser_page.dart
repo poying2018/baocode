@@ -121,7 +121,7 @@ class BrowserSettingsPage extends StatelessWidget {
           if (bridge.enabled)
             SettingsGroup(
               title: l10n.browserHistoryTitle,
-              description: l10n.browserHistoryDescription,
+              description: l10n.browserHistoryDescription(productName),
               children: [
                 SettingsSwitchRow(
                   label: l10n.browserHistoryDetailed,
@@ -195,7 +195,7 @@ class BrowserSettingsPage extends StatelessWidget {
     AppLocalizations l10n,
     BrowserBridge bridge,
   ) {
-    if (bridge.otherApp) return [(l10n.browserOtherApp, null)];
+    if (bridge.otherApp) return [(l10n.browserOtherApp(productName), null)];
     final browsers = bridge.browsers;
     final mismatched = bridge.mismatched;
     if (browsers.isEmpty && mismatched.isEmpty) {
@@ -203,7 +203,7 @@ class BrowserSettingsPage extends StatelessWidget {
         bridge.connectedBefore
             ? (
                 l10n.browserSettingsNotRunning,
-                l10n.browserSettingsNotRunningDescription,
+                l10n.browserSettingsNotRunningDescription(productName),
               )
             : (
                 l10n.browserSettingsNotInstalled,
@@ -212,7 +212,7 @@ class BrowserSettingsPage extends StatelessWidget {
         if (bridge.sandboxedBrowsers)
           (
             l10n.browserSettingsSandboxed,
-            l10n.browserSettingsSandboxedDescription,
+            l10n.browserSettingsSandboxedDescription(productName),
           ),
       ];
     }
@@ -227,7 +227,7 @@ class BrowserSettingsPage extends StatelessWidget {
           l10n.browserSettingsIncompatible(browser.browser ?? ''),
           browser.protocol < BrowserBridge.protocol
               ? l10n.browserSettingsExtensionOld
-              : l10n.browserSettingsAppOld,
+              : l10n.browserSettingsAppOld(productName),
         ),
     ];
   }

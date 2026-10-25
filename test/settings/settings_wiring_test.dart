@@ -219,7 +219,7 @@ void main() {
     final l10n = englishLocalizations;
     final card = find.descendant(
       of: find.byType(FeatureTipsCard),
-      matching: find.text(l10n.tipsSetupTitle),
+      matching: find.text(l10n.tipsSetupTitle(productName)),
     );
     await settle(tester, () => card.evaluate().isNotEmpty);
     final entry = find.descendant(

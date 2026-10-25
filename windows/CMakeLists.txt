@@ -12,7 +12,7 @@ project(baocode LANGUAGES CXX)
 #
 #   dart run tool/set_product.dart          the codex product
 #   dart run tool/set_product.dart baocode  BaoCode (the Claude Code one)
-set(BINARY_NAME "baocode-codex")
+set(BINARY_NAME "baocode")
 
 # The browsers' native messaging host and its manifest, each product's own
 # (the host's name says the product, as the app's does).

@@ -234,7 +234,7 @@ class _Row {
     if (when.error case final error?) return l10n.kbWhenNotParse(error);
     final unknown = item.unknownContextKeys(known).toList()..sort();
     if (unknown.isEmpty) return null;
-    return l10n.kbUnknownContextKeys(unknown.length, unknown.join(', '));
+    return l10n.kbUnknownContextKeys(productName, unknown.length, unknown.join(', '));
   }
 }
 
@@ -1142,7 +1142,7 @@ class _KeybindingsSettingsPageState extends State<KeybindingsSettingsPage> {
       return _cell(
         Row(
           children: [
-            _WarningIcon(message: context.l10n.kbCannotReadKey(text)),
+            _WarningIcon(message: context.l10n.kbCannotReadKey(productName, text)),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -1257,7 +1257,7 @@ class _NotSupportedTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IdeHover(
-    message: context.l10n.kbNotSupportedHover,
+    message: context.l10n.kbNotSupportedHover(productName),
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 5),
       decoration: BoxDecoration(

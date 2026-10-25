@@ -42,7 +42,7 @@ class LanguageSettingsPage extends StatelessWidget {
               children: [
                 SettingsRow(
                   label: l10n.languageSettingsDisplayLanguage,
-                  description: l10n.languageSettingsDescription,
+                  description: l10n.languageSettingsDescription(productName),
                   trailing: SettingsDropdown(
                     current: current,
                     semanticLabel: l10n.languageSettingsDisplayLanguageLabel(

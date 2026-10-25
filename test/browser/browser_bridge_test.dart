@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:baocode/browser/browser_bridge.dart';
 import 'package:baocode/l10n/app_localizations_en.dart';
+import 'package:baocode/l10n/l10n.dart';
 import 'package:baocode/settings/pages/browser_page.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -120,7 +121,7 @@ void main() {
       ),
       (
         l10n.browserSettingsIncompatible('Microsoft Edge'),
-        l10n.browserSettingsAppOld,
+        l10n.browserSettingsAppOld(productName),
       ),
     ]);
   }, skip: Platform.isWindows);
@@ -129,7 +130,7 @@ void main() {
     final l10n = AppLocalizationsEn();
     final sandboxed = (
       l10n.browserSettingsSandboxed,
-      l10n.browserSettingsSandboxedDescription,
+      l10n.browserSettingsSandboxedDescription(productName),
     );
     expect(bridge.sandboxedBrowsers, isFalse);
     expect(

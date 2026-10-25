@@ -664,7 +664,7 @@ class _WindowHeaderState extends State<WindowHeader> {
       ],
       HeaderMenu.help => [
         HeaderMenuItem(
-          withProductName(l10n.menuAboutBaoCode),
+          l10n.menuAboutBaoCode(productName),
           onSelected: () => showAboutBaoCode(context),
         ),
       ],

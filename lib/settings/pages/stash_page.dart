@@ -67,7 +67,7 @@ class _StashSettingsPageState extends State<StashSettingsPage> {
               description: [
                 current.directory ?? root ?? '~/BaoCode/Stash',
                 if (current.directory != null && current.directory != root)
-                  l10n.stashSettingsDirectoryRestart,
+                  l10n.stashSettingsDirectoryRestart(productName),
               ].join('\n'),
               trailing: SettingsButtons(
                 children: [

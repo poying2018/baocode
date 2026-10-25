@@ -19,15 +19,13 @@ export 'app_localizations.dart';
 final AppLocalizations englishLocalizations = AppLocalizationsEn();
 
 /// The product's name, as the app shows it: "BaoCode", or "BaoCode Codex".
+///
+/// The strings that name the app take it as an argument (the generator
+/// made them take it: "{product}" in the .arb files).
 String get productName => AppPaths.displayName(
   Platform.environment,
   executable: Platform.resolvedExecutable,
 );
-
-/// [text] with the app's name in it put for the product's own: the
-/// strings name "BaoCode", and the codex product says its own name.
-String withProductName(String text) =>
-    text.replaceAll('BaoCode', productName);
 
 extension AppLocalizationsContext on BuildContext {
   /// The strings of the locale in scope; English when there is none.

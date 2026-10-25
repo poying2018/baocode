@@ -264,7 +264,7 @@ class _DiagnosticsDialogState extends State<DiagnosticsDialog> {
             ),
           ),
           const SizedBox(height: 6),
-          Text(l10n.diagnosticsUploadedDetail, style: _muted()),
+          Text(l10n.diagnosticsUploadedDetail(productName), style: _muted()),
           if (omittedDumps > 0) ...[
             const SizedBox(height: 6),
             Text(l10n.diagnosticsOmittedDumps(omittedDumps), style: _muted()),

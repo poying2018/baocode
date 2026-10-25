@@ -111,7 +111,7 @@ class _UpdatesSettingsPageState extends State<UpdatesSettingsPage> {
     final notes = noted?.notesFor(l10n.localeName);
     return SettingsPage(
       title: l10n.updatesSettingsTitle,
-      description: l10n.updatesSettingsDescription,
+      description: l10n.updatesSettingsDescription(productName),
       children: [
         SettingsCard(
           children: [
@@ -122,7 +122,7 @@ class _UpdatesSettingsPageState extends State<UpdatesSettingsPage> {
                 switch (service?.lastChecked) {
                   final time? => l10n.updateLastChecked(_format(context, time)),
                   null when service != null => l10n.updateNeverChecked,
-                  null => l10n.updateUnsupported,
+                  null => l10n.updateUnsupported(productName),
                 },
               ].join(' · '),
               trailing: IdeButton(
@@ -141,7 +141,7 @@ class _UpdatesSettingsPageState extends State<UpdatesSettingsPage> {
           children: [
             SettingsRow(
               label: l10n.updateMode,
-              description: l10n.updateModeDescription,
+              description: l10n.updateModeDescription(productName),
               trailing: SettingsDropdown(
                 current: modeName,
                 semanticLabel: l10n.updateModeLabel(modeName),
@@ -162,7 +162,7 @@ class _UpdatesSettingsPageState extends State<UpdatesSettingsPage> {
             children: [
               SettingsRow(
                 label: l10n.diagnosticsTitle,
-                description: l10n.diagnosticsDescription,
+                description: l10n.diagnosticsDescription(productName),
                 trailing: SettingsButtons(
                   children: [
                     if (DataDirectoryPage.canReveal)
@@ -220,33 +220,34 @@ class _UpdatesSettingsPageState extends State<UpdatesSettingsPage> {
     final label = switch (service.status) {
       UpdateStatus.idle => null,
       UpdateStatus.checking => l10n.updateChecking,
-      UpdateStatus.upToDate => l10n.updateUpToDate,
-      UpdateStatus.available => l10n.updateAvailable(version),
+      UpdateStatus.upToDate => l10n.updateUpToDate(productName),
+      UpdateStatus.available => l10n.updateAvailable(productName, version),
       UpdateStatus.downloading => switch (service.progress) {
         final progress? => l10n.updateDownloadingProgress(
+          productName,
           version,
           (progress * 100).floor(),
         ),
-        null => l10n.updateDownloading(version),
+        null => l10n.updateDownloading(productName, version),
       },
-      UpdateStatus.ready => l10n.updateReady(version),
+      UpdateStatus.ready => l10n.updateReady(productName, version),
       UpdateStatus.failed when release == null => l10n.updateCheckFailed(
         '${service.error}',
       ),
-      UpdateStatus.failed => l10n.updateFailed('${service.error}'),
+      UpdateStatus.failed => l10n.updateFailed(productName, '${service.error}'),
     };
     if (label == null) return null;
     final problem = _problem;
     final details = [
       if (release != null && service.isMandatory(release))
-        l10n.updateMandatory(version)
+        l10n.updateMandatory(productName, version)
       else if (release != null &&
           service.skippedVersion == '${release.version}')
         l10n.updateSkippedNote,
       if (problem is ManualUpdateRequired)
-        l10n.updateManual(problem.reason)
+        l10n.updateManual(productName, problem.reason)
       else if (problem != null)
-        l10n.updateFailed('$problem'),
+        l10n.updateFailed(productName, '$problem'),
     ];
     return SettingsRow(
       label: label,

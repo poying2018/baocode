@@ -127,7 +127,7 @@ class _AccountRow extends StatelessWidget {
     final answer = await showIdeDialog(
       context,
       message: l10n.accountsSignOutTitle(account.login, forge),
-      detail: l10n.accountsSignOutDetail(forge),
+      detail: l10n.accountsSignOutDetail(productName, forge),
       buttons: [l10n.accountsSignOut, l10n.accountsRevoke(forge)],
     );
     switch (answer) {
@@ -450,7 +450,7 @@ class _ForgeDeviceDialogState extends State<ForgeDeviceDialog> {
         children: [
           if (code != null) ...[
             Text(
-              l10n.accountsBrowserDetail(code.verificationUrl.host),
+              l10n.accountsBrowserDetail(productName, code.verificationUrl.host),
               style: _text(),
             ),
             const SizedBox(height: 10),

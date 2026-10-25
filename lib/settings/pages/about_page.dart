@@ -80,7 +80,7 @@ class AboutSettingsPage extends StatelessWidget {
                   Text(l10n.aboutTagline, style: SettingsText.lead),
                   const SizedBox(height: 6),
                   Text(
-                    l10n.starPromptDetail,
+                    l10n.starPromptDetail(productName),
                     style: TextStyle(
                       color: AppColors.textMuted,
                       fontSize: 12,

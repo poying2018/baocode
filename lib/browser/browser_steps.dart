@@ -443,7 +443,7 @@ class _WatchCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 6),
-          Text(l10n.browserWatchHint, style: muted),
+          Text(l10n.browserWatchHint(productName), style: muted),
           if (shown.isNotEmpty) ...[
             const SizedBox(height: 8),
             for (final step in shown)

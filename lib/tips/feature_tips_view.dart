@@ -54,7 +54,7 @@ class FeatureTipsCard extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  withProductName(l10n.tipsSetupTitle),
+                  l10n.tipsSetupTitle(productName),
                   style: TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 13,

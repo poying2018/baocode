@@ -57,7 +57,7 @@ void main() {
     test('Check for Updates tells what it found', () async {
       make(manifest: manifestOf('1.0.0+1'));
       await controller.checkNow(notifications, l10n);
-      expect(notifications.notifications.single.message, l10n.updateUpToDate);
+      expect(notifications.notifications.single.message, l10n.updateUpToDate(productName));
 
       backend.fetchError = Exception('offline');
       await controller.checkNow(notifications, l10n);
@@ -76,7 +76,7 @@ void main() {
       make(manifest: manifestOf('1.2.0', notes: {'en': 'Fixes'}));
       await controller.checkNow(notifications, l10n);
       final offer = notifications.notifications.single;
-      expect(offer.message, l10n.updateAvailable('1.2.0'));
+      expect(offer.message, l10n.updateAvailable(productName, '1.2.0'));
       expect(offer.sticky, isTrue);
       expect(labels(offer), [
         l10n.updateRestartNow,
@@ -109,7 +109,7 @@ void main() {
       await controller.checkNow(notifications, l10n);
       final offer = notifications.notifications.single;
       expect(offer.severity, IdeSeverity.warning);
-      expect(offer.message, l10n.updateMandatory('1.2.0'));
+      expect(offer.message, l10n.updateMandatory(productName, '1.2.0'));
       expect(labels(offer), [l10n.updateRestartNow]);
       expect(offer.secondary, isEmpty, reason: 'no notes');
     });
@@ -133,7 +133,7 @@ void main() {
       notifications.clearAll();
       await controller.restart(notifications, l10n);
       final note = notifications.notifications.single;
-      expect(note.message, l10n.updateManual('read-only'));
+      expect(note.message, l10n.updateManual(productName, 'read-only'));
       expect(quits, 0);
       expect(service.armed, isFalse);
       note.primary.single.run();
@@ -167,7 +167,7 @@ void main() {
       await tester.pump();
       expect(
         notifications.notifications.single.message,
-        l10n.updateReady('1.2.0'),
+        l10n.updateReady(productName, '1.2.0'),
       );
 
       // An install that would not start as the app quit.
@@ -200,7 +200,10 @@ void main() {
       await tester.pump(Duration.zero);
       final note = notifications.notifications.single;
       expect(note.severity, IdeSeverity.warning);
-      expect(note.message, l10n.updateUnfinished('1.2.0', '1.0.0'));
+      expect(
+        note.message,
+        l10n.updateUnfinished(productName, '1.0.0', '1.2.0'),
+      );
       expect(labels(note), [l10n.updateOpenDownloadPage, l10n.updateShowLog]);
       note.primary.first.run();
       expect(opened, [ManualUpdateRequired.downloadPage]);

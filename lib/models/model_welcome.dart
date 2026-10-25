@@ -165,7 +165,7 @@ class _ModelWelcomeState extends State<ModelWelcome>
           animation: _step(.3, .7),
           child: WelcomeHeading(
             title: l10n.modelWelcomeTitle,
-            lead: l10n.modelWelcomeLead,
+            lead: l10n.modelWelcomeLead(productName),
           ),
         ),
         const SizedBox(height: 10),

@@ -167,7 +167,7 @@ void main() {
         openUrl: (url) async => opened.add(url),
       );
       await tester.pump();
-      expect(find.text(l10n.starPromptMessage), findsOneWidget);
+      expect(find.text(l10n.starPromptMessage(productName)), findsOneWidget);
       await tester.tap(find.text(button));
       await tester.pump();
       await shown;

@@ -505,7 +505,7 @@ class _SshServerFormState extends State<SshServerForm> {
                             ),
                             child: _Hint(switch (_core) {
                               SshCore.auto => l10n.sshServerCoreAutoHint,
-                              SshCore.builtin => l10n.sshServerCoreBuiltinHint,
+                              SshCore.builtin => l10n.sshServerCoreBuiltinHint(productName),
                               SshCore.cli => l10n.sshServerCoreCliHint,
                             }, top: 0),
                           ),

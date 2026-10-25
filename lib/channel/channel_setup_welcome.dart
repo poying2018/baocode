@@ -278,16 +278,16 @@ class _ChannelSetupWelcomeState extends State<ChannelSetupWelcome>
     switch (stage) {
       case ChannelStage.setup when failed:
         title = l10n.channelSetupOpenFailedTitle;
-        text = l10n.channelSetupOpenFailed;
+        text = l10n.channelSetupOpenFailed(productName);
       case ChannelStage.setup when waiting:
         title = l10n.channelSetupWaitingTitle;
-        text = l10n.channelSetupWaiting;
+        text = l10n.channelSetupWaiting(productName);
       case ChannelStage.setup:
         title = l10n.channelSetupStepTitle;
-        text = l10n.channelSetupStep;
+        text = l10n.channelSetupStep(productName);
       case ChannelStage.offline:
         title = l10n.channelSetupSiteOfflineTitle;
-        text = l10n.channelSetupSiteOffline;
+        text = l10n.channelSetupSiteOffline(productName);
       case ChannelStage.unavailable:
         title = l10n.channelSetupUnavailableTitle;
         text = l10n.channelSetupUnavailable;
@@ -314,7 +314,7 @@ class _ChannelSetupWelcomeState extends State<ChannelSetupWelcome>
         WelcomeRise(
           animation: _step(.3, .7),
           child: WelcomeHeading(
-            title: l10n.channelSetupTitle,
+            title: l10n.channelSetupTitle(productName),
             lead: l10n.channelSetupLead,
           ),
         ),
@@ -324,7 +324,7 @@ class _ChannelSetupWelcomeState extends State<ChannelSetupWelcome>
           (
             Codicons.shield,
             l10n.channelSetupPrivateTitle,
-            l10n.channelSetupPrivate,
+            l10n.channelSetupPrivate(productName),
           ),
         ].indexed)
           WelcomeRise(
@@ -534,7 +534,7 @@ class _Paste extends StatelessWidget {
     final l10n = context.l10n;
     final problem = switch (result) {
       ChannelLinkResult.invalid => l10n.channelSetupLinkInvalid,
-      ChannelLinkResult.otherInstall => l10n.channelSetupLinkOther,
+      ChannelLinkResult.otherInstall => l10n.channelSetupLinkOther(productName),
       ChannelLinkResult.accepted || null => null,
     };
     return Column(

@@ -1406,7 +1406,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
       role(
         'subagent',
         l10n.modelsRoleSubagent,
-        l10n.modelsRoleSubagentDescription,
+        l10n.modelsRoleSubagentDescription(productName),
         elsewhere: true,
       ),
     ];

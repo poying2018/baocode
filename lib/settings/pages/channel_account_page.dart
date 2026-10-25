@@ -81,7 +81,7 @@ class _AccountView extends StatelessWidget {
     final answer = await showIdeDialog(
       context,
       message: l10n.channelAccountSignOutTitle,
-      detail: l10n.channelAccountSignOutDetail(channel),
+      detail: l10n.channelAccountSignOutDetail(productName, channel),
       buttons: [l10n.channelAccountSignOut],
     );
     if (answer == 0) await account.signOut();

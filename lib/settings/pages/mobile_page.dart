@@ -84,7 +84,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
     final invalidPort = _invalidPort;
     return SettingsPage(
       title: l10n.settingsSectionMobile,
-      description: l10n.mobileSettingsDescription,
+      description: l10n.mobileSettingsDescription(productName),
       children: [
         SettingsCard(
           children: [
@@ -160,7 +160,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
             ),
             SettingsRow(
               label: l10n.mobileRelay,
-              description: l10n.mobileRelayDescription,
+              description: l10n.mobileRelayDescription(productName),
               trailing: Text(
                 l10n.mobileRelayUnavailable,
                 style: SettingsText.description,
@@ -312,7 +312,7 @@ class _MobileSettingsPageState extends State<MobileSettingsPage> {
     return SettingsRow(
       label: l10n.mobilePair,
       description: paired == null
-          ? l10n.mobilePairDescription
+          ? l10n.mobilePairDescription(productName)
           : l10n.mobilePaired(paired.name),
       trailing: IdeButton(
         label: l10n.mobilePairShow,

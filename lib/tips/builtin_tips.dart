@@ -28,7 +28,7 @@ List<FeatureTip> builtInFeatureTips(AppSettings settings) => [
     title: (l10n) => AppPlatform.isMacOS
         ? l10n.generalSettingsContextMenuFinder
         : l10n.generalSettingsContextMenuExplorer,
-    body: (l10n) => l10n.tipContextMenuBody,
+    body: (l10n) => l10n.tipContextMenuBody(productName),
     icon: Codicons.listSelection,
     settings: SettingsSection.general,
     triggers: {
@@ -54,7 +54,7 @@ List<FeatureTip> builtInFeatureTips(AppSettings settings) => [
   FeatureTip(
     id: FeatureTipIds.shellCommand,
     title: (l10n) => l10n.tipShellCommandTitle(ShellCommand.name),
-    body: (l10n) => l10n.tipShellCommandBody(ShellCommand.name),
+    body: (l10n) => l10n.tipShellCommandBody(productName, ShellCommand.name),
     icon: Codicons.terminal,
     settings: SettingsSection.general,
     triggers: {

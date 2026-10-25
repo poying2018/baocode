@@ -189,8 +189,8 @@ class _DataDirectoryPageState extends State<DataDirectoryPage> {
     final l10n = context.l10n;
     final choice = await showIdeDialog(
       context,
-      message: l10n.dataDirRestartTitle,
-      detail: l10n.dataDirRestartDetail(
+      message: l10n.dataDirRestartTitle(productName),
+      detail: l10n.dataDirRestartDetail(productName, 
         _service.current.path,
         _pending ?? l10n.dataDirTheNewFolder,
       ),
@@ -225,7 +225,7 @@ class _DataDirectoryPageState extends State<DataDirectoryPage> {
         : () => _propose(service.defaultPath, toDefault: true);
     return SettingsPage(
       title: l10n.dataDirTitle,
-      description: l10n.dataDirDescription,
+      description: l10n.dataDirDescription(productName),
       children: [
         SettingsCard(
           children: [
@@ -241,13 +241,13 @@ class _DataDirectoryPageState extends State<DataDirectoryPage> {
                 if (draft != null) ...[
                   Text(
                     draft.contents == DataDirectoryContents.baocodeData
-                        ? l10n.dataDirUseAsIsDetail
-                        : l10n.dataDirCopyDetail,
+                        ? l10n.dataDirUseAsIsDetail(productName)
+                        : l10n.dataDirCopyDetail(productName),
                     style: SettingsText.description,
                   ),
                   if (draft.contents == DataDirectoryContents.other)
                     Text(
-                      l10n.dataDirOtherFiles,
+                      l10n.dataDirOtherFiles(productName),
                       style: SettingsText.description,
                     ),
                 ] else ...[

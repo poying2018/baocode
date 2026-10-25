@@ -66,7 +66,7 @@ class _ClaudeCoreHintState extends State<ClaudeCoreHint> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    context.l10n.claudeCoreHint,
+                    context.l10n.claudeCoreHint(productName),
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 12.5,

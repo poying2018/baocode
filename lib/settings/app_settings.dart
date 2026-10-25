@@ -175,7 +175,7 @@ class AppSettings {
           final link? => MobileSettingsPage(host: link),
           null => SettingsPage(
             title: context.l10n.settingsSectionMobile,
-            description: context.l10n.mobileSettingsDescription,
+            description: context.l10n.mobileSettingsDescription(productName),
             children: const [],
           ),
         };

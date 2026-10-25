@@ -70,7 +70,7 @@ void main() {
     await show(tester, UpdatesSettingsPage(settings: settings));
     expect(find.text(l10n.updatesSettingsTitle), findsOneWidget);
     expect(
-      find.text('${currentAppVersion.marketing} · ${l10n.updateUnsupported}'),
+      find.text('${currentAppVersion.marketing} · ${l10n.updateUnsupported(productName)}'),
       findsOneWidget,
     );
     expect(
@@ -102,7 +102,7 @@ void main() {
     await tester.tap(button(l10n.updateCheckNow));
     await tester.pump();
     await tester.pump();
-    expect(find.text(l10n.updateAvailable('1.2.0')), findsOneWidget);
+    expect(find.text(l10n.updateAvailable(productName, '1.2.0')), findsOneWidget);
     expect(find.text(l10n.updateReleaseNotesFor('1.2.0')), findsOneWidget);
     expect(find.text('Faster startup.'), findsOneWidget);
     expect(find.textContaining('Last checked'), findsOneWidget);
@@ -110,7 +110,7 @@ void main() {
     await tester.tap(button(l10n.updateRestartNow));
     await tester.pump();
     await tester.pump();
-    expect(find.text(l10n.updateReady('1.2.0')), findsOneWidget);
+    expect(find.text(l10n.updateReady(productName, '1.2.0')), findsOneWidget);
     expect(service.armed, isTrue);
     expect(quits, 1);
     service.dispose();
@@ -135,7 +135,7 @@ void main() {
     await tester.tap(button(l10n.updateCheckNow));
     await tester.pump();
     await tester.pump();
-    expect(find.text(l10n.updateUpToDate), findsOneWidget);
+    expect(find.text(l10n.updateUpToDate(productName)), findsOneWidget);
     expect(find.text(l10n.updateReleaseNotesFor('1.0.0')), findsOneWidget);
     expect(find.text('First release.'), findsOneWidget);
 
@@ -144,7 +144,7 @@ void main() {
     await tester.tap(button(l10n.updateCheckNow));
     await tester.pump();
     await tester.pump();
-    expect(find.text(l10n.updateUpToDate), findsOneWidget);
+    expect(find.text(l10n.updateUpToDate(productName)), findsOneWidget);
     expect(find.textContaining('Older'), findsNothing);
     expect(find.text('First release.'), findsNothing);
     service.dispose();
@@ -170,7 +170,7 @@ void main() {
     await tester.tap(button(l10n.updateRestartNow));
     await tester.pump();
     await tester.pump();
-    expect(find.text(l10n.updateManual('read-only')), findsOneWidget);
+    expect(find.text(l10n.updateManual(productName, 'read-only')), findsOneWidget);
     expect(button(l10n.updateOpenDownloadPage), findsOneWidget);
     service.dispose();
   });

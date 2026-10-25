@@ -196,13 +196,13 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
     final invalid = _invalid;
     return SettingsPage(
       title: l10n.networkSettingsTitle,
-      description: l10n.networkSettingsDescription,
+      description: l10n.networkSettingsDescription(productName),
       children: [
         SettingsCard(
           children: [
             SettingsRow(
               label: l10n.networkProxy,
-              description: l10n.networkProxyDescription,
+              description: l10n.networkProxyDescription(productName),
               trailing: SettingsDropdown(
                 current: modeName,
                 semanticLabel: l10n.networkProxyLabel(modeName),
@@ -298,7 +298,7 @@ class _NetworkSettingsPageState extends State<NetworkSettingsPage> {
       ProxySource.manual => l10n.networkProxyStatusManual(server),
       ProxySource.off => l10n.networkProxyStatusOff,
       ProxySource.none when route.autoConfig =>
-        l10n.networkProxyStatusAutoConfig,
+        l10n.networkProxyStatusAutoConfig(productName),
       ProxySource.none => l10n.networkProxyStatusNone,
     };
   }

@@ -724,7 +724,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     final message = switch (setup.acceptLink(link)) {
       ChannelLinkResult.accepted => null,
       ChannelLinkResult.invalid => l10n.channelSetupLinkInvalid,
-      ChannelLinkResult.otherInstall => l10n.channelSetupLinkOther,
+      ChannelLinkResult.otherInstall => l10n.channelSetupLinkOther(productName),
     };
     if (message == null) return;
     await showIdeDialog(
@@ -1653,7 +1653,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   void _checkForUpdates() {
     final updates = widget.settings?.updates;
     if (updates == null) {
-      _notifications.notify(IdeSeverity.info, context.l10n.updateUnsupported);
+      _notifications.notify(IdeSeverity.info, context.l10n.updateUnsupported(productName));
       return;
     }
     unawaited(updates.checkNow(_notifications, context.l10n));
@@ -2456,7 +2456,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       await showIdeDialog(
         context,
         message: l10n.modelsImportInvalid,
-        detail: l10n.modelsImportInvalidDetail,
+        detail: l10n.modelsImportInvalidDetail(productName),
         buttons: [l10n.commonOk],
         cancel: null,
         type: IdeDialogType.error,
@@ -4549,7 +4549,7 @@ class _EmptyWorkspace extends StatelessWidget {
             l10n.workspaceOpenProjectFolder,
             // The sessions are the product's own kernel's: Claude Code's in
             // BaoCode, codex's in the codex product.
-            withProductName(l10n.workspaceOpenProjectFolderDetail).replaceAll(
+            l10n.workspaceOpenProjectFolderDetail.replaceAll(
               'Claude Code',
               KernelRegistry.all.first.label,
             ),
