@@ -8,6 +8,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+/// [folder] and what is in it, gone: on Windows a file that is still
+/// open cannot be deleted, and the font is loaded in the background.
+Future<void> deleteFolder(Directory folder) async {
+  for (var attempt = 0; attempt < 20; attempt++) {
+    try {
+      folder.deleteSync(recursive: true);
+      return;
+    } on FileSystemException {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+}
+
 void main() {
   late Directory folder;
   late IconRegistry registry;
@@ -23,9 +36,9 @@ void main() {
       ..loadFont = (family, Uint8List bytes) async => loaded.add(family);
     IconRegistry.instance = registry;
   });
-  tearDown(() {
+  tearDown(() async {
     IconRegistry.instance = kept;
-    folder.deleteSync(recursive: true);
+    await deleteFolder(folder);
   });
 
   ExtensionIconContribution gitLens(Map<String, Object?> icons) =>

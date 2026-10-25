@@ -10,6 +10,7 @@ import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/workspace/preference_store.dart';
 import 'package:baocode/workspace/project_workspace.dart';
 import 'package:baocode/workspace/workspace.dart';
+import 'package:path/path.dart' as p;
 
 /// Workspaces' folders under [root], nothing written.
 class FakeWorkspaceDirectories extends ProjectWorkspaceDirectories {
@@ -46,7 +47,9 @@ void main() {
       ])!;
       expect(made.name, 'web');
       expect(made.folders, ['/code/site', '/code/api']);
-      expect(made.path, startsWith('/data/workspaces/'));
+      // The path as the machine spells it (the fake's root is a POSIX
+      // one, and the machine joins it its own way).
+      expect(made.path, p.join('/data/workspaces', made.id));
       expect(directories.written, [made]);
       final project = workspace.sidebarProjects.first;
       expect(project.path, made.path);
@@ -78,7 +81,7 @@ void main() {
       expect(kept.id, made.id);
       expect(kept.name, 'web');
       expect(kept.folders, ['/code/site', '/code/api']);
-      expect(kept.path, '/moved/workspaces/${made.id}');
+      expect(kept.path, p.join('/moved/workspaces', made.id));
       expect(
         next.sidebarProjects.map((project) => (project.name, project.path)),
         contains(('web', kept.path)),
