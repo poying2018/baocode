@@ -120,6 +120,10 @@ double _opacity(WidgetTester tester) => tester
     )
     .opacity;
 
+/// The minimap's own state, for what it does with its tiles.
+ChatMinimapState _minimap(WidgetTester tester) =>
+    tester.state<ChatMinimapState>(find.byType(ChatMinimap));
+
 Scrollbar _scrollbar(WidgetTester tester) =>
     tester.widget<Scrollbar>(find.byType(Scrollbar).first);
 
@@ -246,5 +250,40 @@ void main() {
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, -300)));
     await tester.pumpAndSettle();
     expect(position.pixels, lessThan(before));
+  });
+
+  testWidgets('its tiles are made away from the painting', (tester) async {
+    // The tiles of the minimap are pictures of the strokes, made on the GPU
+    // as textures. Making them while painting takes the window's thread
+    // away for as long as the GPU takes (the app's hang reports: the
+    // windows' thread took no message for 6 s, in Flutter's texture
+    // initialization). So the picture is recorded while painting, and its
+    // image made afterwards: when the frame is painted, no texture of the
+    // strokes is there yet.
+    await _pump(tester, _Feed(_conversation(30)));
+    final strip = tester.getRect(_strip);
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    await tester.sendEventToBinding(pointer.hover(strip.center));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -300)));
+    // One frame: the tiles are asked for, and the frame is painted.
+    await tester.pump();
+    expect(
+      tester.takeException(),
+      isNull,
+      reason: 'the frame is painted while the tiles are being made',
+    );
+    // The strokes are shown before their textures are there: a tile drawn
+    // from its picture (the old code made the texture while painting, and
+    // the window's thread waited for the GPU).
+    expect(_minimap(tester).tilesDrawnEarly, greaterThan(0));
+    // The tiles' images are made in the background, and the minimap is
+    // painted again when they are there.
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ChatMinimap), findsOneWidget);
+    // Nothing is left being made: the tiles are all there.
+    expect(_minimap(tester).rasterizing, isFalse);
+    expect(_minimap(tester).tilesReady, greaterThan(0));
+    expect(_minimap(tester).tilesDrawn, greaterThan(0));
   });
 }

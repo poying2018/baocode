@@ -148,6 +148,11 @@ class ChatMinimap extends StatefulWidget {
     bubbles: true,
   ).sample((item: item, shown: true, foldLines: 0, gap: 0)).height;
 
+  /// Whether a tile's image is being made, for tests: the minimap shows
+  /// the picture it is made from in the meanwhile.
+  @visibleForTesting
+  static bool rasterizing(ChatMinimapState state) => state.rasterizing;
+
   /// Kept above and below it.
   static const _inset = 14.0;
 
@@ -247,10 +252,10 @@ class ChatMinimap extends StatefulWidget {
   }
 
   @override
-  State<ChatMinimap> createState() => _ChatMinimapState();
+  State<ChatMinimap> createState() => ChatMinimapState();
 }
 
-class _ChatMinimapState extends State<ChatMinimap>
+class ChatMinimapState extends State<ChatMinimap>
     with TickerProviderStateMixin {
   // --- Samples ---------------------------------------------------------------
 
@@ -588,6 +593,13 @@ class _ChatMinimapState extends State<ChatMinimap>
     _ticker.dispose();
     _conceal?.cancel();
     _dropTilesFrom(double.negativeInfinity);
+    // The pictures whose images are being made: they are not drawn, but
+    // they must be let go of.
+    for (final picture in _pictures.values) {
+      picture.dispose();
+    }
+    _pictures.clear();
+    _rasterizing.clear();
     _reveal.dispose();
     _hover.dispose();
     _repaint.dispose();
@@ -703,7 +715,19 @@ class _ChatMinimapState extends State<ChatMinimap>
   static const _tile = 256.0;
   static const _maxTiles = 24;
 
+  /// The tiles of the strokes, each a picture recorded on the CPU and
+  /// rasterized off the UI thread: the strokes' picture is what is drawn
+  /// (as long as the image is not there yet, the picture is drawn instead
+  /// of it, which is what the strokes are made of).
   final Map<int, ui.Image> _tiles = {};
+
+  /// The pictures the tiles are rasterized from, kept until their image is
+  /// there.
+  final Map<int, ui.Picture> _pictures = {};
+
+  /// The tiles whose image is being made: their picture is drawn in the
+  /// meanwhile.
+  final Set<int> _rasterizing = {};
 
   /// The screen's pixels to the minimap's, as last built.
   double _pixelRatio = 1;
@@ -738,6 +762,8 @@ class _ChatMinimapState extends State<ChatMinimap>
     _tiles.removeWhere((index, image) {
       if ((index + 1) * _tile <= y) return false;
       image.dispose();
+      _pictures.remove(index)?.dispose();
+      _rasterizing.remove(index);
       return true;
     });
   }
@@ -883,13 +909,27 @@ class _ChatMinimapState extends State<ChatMinimap>
     final first = math.max(0, ((snapped + from) / _tile).floor());
     final last = ((snapped + to) / _tile).ceil() - 1;
     for (var index = first; index <= last; index++) {
-      final image = _tiles[index] ??= _draw(index);
+      final image = _tileImage(index);
+      final top = index * _tile - snapped;
+      if (image == null) {
+        // The image is being made: the picture it is made from is drawn
+        // instead of it, which is what the strokes are.
+        final picture = _pictures[index];
+        if (picture == null) continue;
+        canvas.save();
+        canvas.translate(0, top / _pixelRatio);
+        canvas.drawPicture(picture);
+        canvas.restore();
+        _drawnEarly++;
+        continue;
+      }
       canvas.drawImageRect(
         image,
         Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-        Rect.fromLTWH(0, index * _tile - snapped, _width, _tile),
+        Rect.fromLTWH(0, top, _width, _tile),
         _tilePaint,
       );
+      _drawn++;
     }
   }
 
@@ -933,8 +973,20 @@ class _ChatMinimapState extends State<ChatMinimap>
     if (to <= from) return;
     final center = _width / 2;
     for (var index = (from / _tile).floor(); index * _tile < to; index++) {
-      final image = _tiles[index] ??= _draw(index);
+      final image = _tileImage(index);
       final tileTop = index * _tile;
+      if (image == null) {
+        // The image is being made: the picture it is made from is drawn
+        // instead of it, unswollen (the swelling waits for the image).
+        final picture = _pictures[index];
+        if (picture == null) continue;
+        canvas.save();
+        canvas.translate(0, (tileTop - snapped) / _pixelRatio);
+        canvas.drawPicture(picture);
+        canvas.restore();
+        _drawnEarly++;
+        continue;
+      }
       var count = 0;
       for (var i = 0; i < bands; i++) {
         // The band, in the strokes, and what of it is this tile's.
@@ -976,12 +1028,69 @@ class _ChatMinimapState extends State<ChatMinimap>
     final far = _tiles.keys.toList()
       ..sort((a, b) => (b - here).abs().compareTo((a - here).abs()));
     for (final index in far.take(_tiles.length - _maxTiles)) {
-      _tiles.remove(index)!.dispose();
+      _tiles.remove(index)?.dispose();
+      _pictures.remove(index)?.dispose();
     }
   }
 
-  /// Tile [index] of the strokes, drawn at the screen's pixels.
-  ui.Image _draw(int index) {
+  /// Whether a tile's image is being made: the minimap shows the picture it
+  /// is made from in the meanwhile.
+  @visibleForTesting
+  bool get rasterizing => _rasterizing.isNotEmpty;
+
+  /// How many tiles' images have been made: the textures of the strokes.
+  @visibleForTesting
+  int get tilesReady => _tiles.length;
+
+  /// How many times a tile was drawn from its image: a tile drawn from its
+  /// picture (its image not there yet) is not counted.
+  @visibleForTesting
+  int get tilesDrawn => _drawn;
+  int _drawn = 0;
+
+  /// How many times a tile was drawn from its picture, its image not being
+  /// there yet: the strokes are shown before their textures are made.
+  @visibleForTesting
+  int get tilesDrawnEarly => _drawnEarly;
+  int _drawnEarly = 0;
+
+  /// Tile [index] of the strokes: its image, made off the UI thread (the
+  /// picture it is made from is drawn in the meanwhile), null while it is
+  /// being made.
+  ///
+  /// The image is made away from the UI thread on purpose: a texture is
+  /// made on the GPU, and making it here would take the thread away from
+  /// the window for as long as the GPU takes (the app's hang reports: the
+  /// windows' thread took no message for 6 s, in Flutter's texture
+  /// initialization).
+  ui.Image? _tileImage(int index) {
+    final image = _tiles[index];
+    if (image != null) return image;
+    if (_rasterizing.contains(index)) return null;
+    final picture = _record(index);
+    _rasterizing.add(index);
+    picture.toImage(
+      (_width * _pixelRatio).ceil(),
+      (_tile * _pixelRatio).ceil(),
+    ).then((image) {
+      _rasterizing.remove(index);
+      // The tile may have been dropped in the meantime.
+      if (_pictures.remove(index) == null) {
+        image.dispose();
+        return;
+      }
+      _tiles[index] = image;
+      if (mounted) setState(() {});
+    }, onError: (Object error) {
+      _rasterizing.remove(index);
+      _pictures.remove(index)?.dispose();
+    });
+    return null;
+  }
+
+  /// The strokes of tile [index], recorded as a picture: what the image is
+  /// made from.
+  ui.Picture _record(int index) {
     final recorder = ui.PictureRecorder();
     final canvas = Canvas(recorder)..scale(_pixelRatio);
     final top = index * _tile;
@@ -1015,12 +1124,8 @@ class _ChatMinimapState extends State<ChatMinimap>
       }
     }
     final picture = recorder.endRecording();
-    final image = picture.toImageSync(
-      (_width * _pixelRatio).ceil(),
-      (_tile * _pixelRatio).ceil(),
-    );
-    picture.dispose();
-    return image;
+    _pictures[index] = picture;
+    return picture;
   }
 
   /// Each [_Tone]'s paint, as strong as under the pointer.
@@ -1216,7 +1321,7 @@ class _Repaint extends ChangeNotifier {
 class _MinimapPainter extends CustomPainter {
   _MinimapPainter(this.state, Listenable repaint) : super(repaint: repaint);
 
-  final _ChatMinimapState state;
+  final ChatMinimapState state;
 
   @override
   void paint(Canvas canvas, Size size) => state._paint(canvas, size);
