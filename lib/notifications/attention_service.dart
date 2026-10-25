@@ -89,7 +89,13 @@ class AttentionService {
 
   /// Brings the badge and the tray up to date, e.g. in a new language.
   void refresh() {
-    if (_lifecycle != null) _update();
+    if (_lifecycle == null) return;
+    // The tray is asked for anew: the host may have lost the icon (the
+    // tray was restarted, or refused it), and the state it has here is
+    // what it had then, not what it has now.
+    _trayShown = false;
+    _tray = null;
+    _update();
   }
 
   void _focusChanged() {

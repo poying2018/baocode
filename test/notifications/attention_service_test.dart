@@ -234,4 +234,57 @@ void main() {
       isFalse,
     );
   });
+
+  test('the tray icon is put up as the app starts, with no agent in it', () {
+    // The tray icon is how the user finds the app when its window is
+    // closed (app_windows.dart's _quitIfNoneShows: with a tray, the app
+    // stays; without one, it goes with its last window). It must not wait
+    // for an agent to change something, or the app has no way back for as
+    // long as none does.
+    workspace = Workspace();
+    host = _FakeHost();
+    service = AttentionService(
+      workspace: workspace,
+      host: host,
+      settings: () => settings,
+      l10n: () => englishLocalizations,
+      onOpen: opened.add,
+      focused: () => focused,
+    )..start();
+
+    expect(workspace.threads, isEmpty);
+    expect(host.trays, hasLength(1));
+    expect(host.trays.single, isNotNull);
+    expect(host.trays.single!.dot, isFalse);
+    expect(host.trays.single!.tooltip, 'BaoCode');
+    expect(host.trays.single!.labels['show'], isNotEmpty);
+    expect(host.trays.single!.labels['quit'], isNotEmpty);
+  });
+
+  test('the tray icon is put up again after the app lost it', () {
+    // The host may have refused it (the tray was not there yet): the
+    // service asks again, so the icon comes back rather than the app
+    // losing its way back to itself.
+    workspace = Workspace.mock();
+    host = _FakeHost();
+    service = AttentionService(
+      workspace: workspace,
+      host: host,
+      settings: () => settings,
+      l10n: () => englishLocalizations,
+      onOpen: opened.add,
+      focused: () => focused,
+    )..start();
+    expect(host.trays, hasLength(1));
+
+    // The settings change (the language, say): the tray is asked for
+    // again, with the new words.
+    settings = const AttentionSettings(
+      when: NotifyWhen.always,
+      events: {AttentionEvent.finished},
+    );
+    service.refresh();
+    expect(host.trays, hasLength(2));
+    expect(host.trays.last, isNotNull);
+  });
 }

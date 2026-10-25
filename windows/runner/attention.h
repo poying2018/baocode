@@ -59,6 +59,11 @@ class Attention {
   // The count, over |window|'s taskbar button just made.
   void BadgeWindow(HWND window);
 
+  // The tray icon is not up, and Flutter wants it: it is put up again, a
+  // few seconds later, and as often as it takes (Explorer may be starting,
+  // or the icon refused for a while). The window's timer (WM_TIMER).
+  void RetryIcon();
+
   // The app's windows are going: none to ask about from now on.
   void DetachWindows() { windows_ = nullptr; }
 
@@ -116,10 +121,16 @@ class Attention {
   AppWindows* windows_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 
-  // Whether the tray icon is up, and whether Flutter asked for it (it is up
+  // The tray icon is up, and whether Flutter asked for it (it is up
   // without, for a notification's sake, until the notification goes).
   bool icon_added_ = false;
   std::optional<TrayState> tray_;
+
+  // Flutter wants the tray icon, and it is not up: the window's timer
+  // puts it up again, every kRetryMilliseconds, until it is (or Flutter
+  // asks for none). The id of that timer, 0 when none is running.
+  UINT retry_timer_ = 0;
+  int retry_count_ = 0;
   HICON icon_ = nullptr;
 
   // The agent the notification shown last is about.
