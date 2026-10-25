@@ -83,11 +83,12 @@ class Shell {
     final drive = slash < 0 ? rest : rest.substring(0, slash);
     if (drive.length != 1) return null;
     final tail = slash < 0 ? '' : rest.substring(slash);
-    return p.windows.joinAll([
-      '${drive.toUpperCase()}:',
+    final parts = [
       for (final part in tail.split('/'))
         if (part.isNotEmpty) part,
-    ]);
+    ];
+    if (parts.isEmpty) return '${drive.toUpperCase()}:\\';
+    return p.windows.joinAll(['${drive.toUpperCase()}:', ...parts]);
   }
 
   /// The shell for [environment]'s user, on Windows when [windows] (where

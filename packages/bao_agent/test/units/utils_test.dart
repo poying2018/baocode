@@ -383,6 +383,24 @@ void main() {
       expect(windows({}, {}).executable, 'cmd.exe');
     });
 
+    test('the paths of a shell that says them its own way', () {
+      final bash = windows(
+        {'CLAUDE_CODE_GIT_BASH_PATH': r'D:\git\bash.exe'},
+        {r'D:\git\bash.exe'},
+      );
+      expect(bash.msys, isTrue);
+      expect(bash.nativePath(r'/c/Users/me'), r'C:\Users\me');
+      expect(bash.nativePath(r'/c/Users/me/notes.md'), r'C:\Users\me\notes.md');
+      expect(bash.nativePath('/c'), r'C:\');
+      // A path that is not a drive is left as it is.
+      expect(bash.nativePath('/usr/bin'), isNull);
+      expect(bash.nativePath(r'C:\Users\me'), isNull);
+      // A shell that says its paths as they are: nothing to translate.
+      const sh = Shell('/bin/sh');
+      expect(sh.msys, isFalse);
+      expect(sh.nativePath('/usr/bin'), isNull);
+    });
+
     test('elsewhere: the user\'s bash or zsh, else bash, else sh', () {
       Shell find(Map<String, String> env, Set<String> files) =>
           Shell.find(env, windows: false, exists: files.contains);
