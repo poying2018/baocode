@@ -174,7 +174,13 @@ class CodexKernel
         message: 'The project folder is gone',
         missingFolder: folder,
       );
-      emitInfoChanged();
+      // A view attaches while it is being built. Saying so now would make
+      // the workspace notify its listeners during that build.
+      unawaited(
+        Future<void>.microtask(() {
+          emitInfoChanged();
+        }).catchError((Object _) {}),
+      );
       return;
     }
     // A view attaches while it is being built. Reporting "starting" now
