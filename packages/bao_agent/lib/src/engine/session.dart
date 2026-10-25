@@ -571,7 +571,11 @@ class AgentSession {
         _suggestionIndexAt == null ||
         now.difference(_suggestionIndexAt!) > const Duration(seconds: 30)) {
       final files = await fileIndex.list(cwd);
-      final relative = [for (final f in files) p.relative(f, from: cwd)];
+      // The paths as the model reads them: with a slash, the way of the
+      // mentions (`@lib/main.dart`).
+      final relative = [
+        for (final f in files) p.relative(f, from: cwd).replaceAll(r'\', '/'),
+      ];
       final folders = <String>{
         for (final f in relative)
           for (var dir = p.dirname(f); dir != '.'; dir = p.dirname(dir))

@@ -124,7 +124,8 @@ void main() {
     final request = h.model.turns.single;
     final system = jsonEncode(request.body['system']);
     expect(system, contains('You are the coding agent of'));
-    expect(system, contains(h.cwd));
+    // The path as the JSON has it.
+    expect(system, contains(jsonEncode(h.cwd).substring(1, jsonEncode(h.cwd).length - 1)));
     final messages = request.body['messages'] as List;
     final first = jsonEncode(messages.first);
     expect(first, contains('Always answer in French.'));

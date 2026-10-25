@@ -254,7 +254,7 @@ void main() {
           File(p.join(bin, 'rg'))
             ..writeAsStringSync('#!/bin/sh\nexec "$rg" "\$@"\n')
             ..setLastModifiedSync(DateTime.now());
-          Process.runSync('chmod', ['+x', p.join(bin, 'rg')]);
+          if (!Platform.isWindows) Process.runSync('chmod', ['+x', p.join(bin, 'rg')]);
         }
       });
 

@@ -10,6 +10,12 @@ import 'package:path/path.dart' as p;
 
 import '../support/harness.dart';
 
+/// The hook at [path] as a command the shell runs: on Windows a script is
+/// not run of itself, so the shell is told to run it.
+String _hookCommand(String path) => Platform.isWindows
+    ? 'bash "${path.replaceAll(r'\', '/')}"'
+    : path;
+
 /// The less travelled ways: plans approved, agents that fail, compaction
 /// under pressure, notebooks with outputs, inputs not quite right.
 void main() {
@@ -23,8 +29,10 @@ void main() {
     h = await Harness.start(permissionMode: 'plan');
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
-    final plan = RegExp(r'write it to ([^ ]+\.md)')
+    final escaped = RegExp(r'write it to ([^ ]+\.md)')
         .firstMatch(sentIn(h.model.turns.first))![1]!;
+    // The path as it is, not as the JSON has it.
+    final plan = jsonDecode('"$escaped"') as String;
     h.model.script.addAll([
       Reply.tool('Write', {
         'file_path': plan,
@@ -188,14 +196,14 @@ void main() {
         ..writeAsStringSync(
           '#!/bin/sh\necho \'{"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": "Mind the tests."}}\'\n',
         );
-      Process.runSync('chmod', ['+x', hook.path]);
+      if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
       h = await Harness.start(
         settings: {
           'hooks': {
             'SubagentStart': [
               {
                 'hooks': [
-                  {'type': 'command', 'command': hook.path},
+                  {'type': 'command', 'command': _hookCommand(hook.path)},
                 ],
               },
             ],
@@ -265,7 +273,7 @@ void main() {
       addTearDown(() => Directory(bin).deleteSync(recursive: true));
       final hook = File(p.join(bin, 'pre.sh'))
         ..writeAsStringSync('#!/bin/sh\necho "Keep the API notes."\n');
-      Process.runSync('chmod', ['+x', hook.path]);
+      if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
       h = await Harness.start(
         permissionMode: 'plan',
         settings: {
@@ -274,7 +282,7 @@ void main() {
               {
                 'matcher': 'manual',
                 'hooks': [
-                  {'type': 'command', 'command': hook.path},
+                  {'type': 'command', 'command': _hookCommand(hook.path)},
                 ],
               },
             ],

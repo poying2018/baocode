@@ -273,7 +273,7 @@ void main() {
       ]);
       expect(
         sentIn(h.model.turns.single),
-        contains('Say hello to Ada from $plugin.'),
+        contains(jsonEncode('Say hello to Ada from $plugin.')),
       );
       final listing = await h.request('get_hooks_listing');
       expect(
@@ -408,7 +408,7 @@ void main() {
     String script(String name, String body) {
       final file = File(p.join(bin, name))
         ..writeAsStringSync('#!/bin/sh\n$body\n');
-      Process.runSync('chmod', ['+x', file.path]);
+      if (!Platform.isWindows) Process.runSync('chmod', ['+x', file.path]);
       return file.path;
     }
 

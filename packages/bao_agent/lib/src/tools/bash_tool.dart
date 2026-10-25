@@ -238,7 +238,14 @@ End with the pull request's URL, for the user to open.''';
         final task = running.task!;
         unawaited(() async {
           final code = await process.exitCode;
-          await streams.catchError((_) => <void>[]);
+          // A pipe that stays open (a child that outlived its shell) does
+          // not hold the task's end back.
+          await streams
+              .catchError((_) => <void>[])
+              .timeout(
+                const Duration(seconds: 2),
+                onTimeout: () => <void>[],
+              );
           await running.closeSink();
           task.exitCode = code;
           session.tasks.finish(
@@ -280,7 +287,7 @@ End with the pull request's URL, for the user to open.''';
             : TaskStatus.failed,
       );
     }
-    final cwdNote = _followCwd(cwdFile, context);
+    final cwdNote = _followCwd(cwdFile, context, shell);
     final maxOutput =
         asInt(session.environment['BASH_MAX_OUTPUT_LENGTH']) ??
         defaultMaxOutput;
@@ -360,7 +367,7 @@ End with the pull request's URL, for the user to open.''';
 
   /// Moves the agent's shell to where the command left it, inside the
   /// working folders; elsewhere, back to the project, and says so.
-  static String? _followCwd(String cwdFile, ToolContext context) {
+  static String? _followCwd(String cwdFile, ToolContext context, Shell shell) {
     final file = File(cwdFile);
     String? ended;
     try {
@@ -374,10 +381,12 @@ End with the pull request's URL, for the user to open.''';
       // Left in the temp folder.
     }
     if (ended == null || ended.isEmpty) return null;
+    // The shell may say its paths its own way (Git's bash on Windows).
+    final native = shell.nativePath(ended) ?? ended;
     final permissions = context.session.permissions;
-    if (permissions.inWorkingDirectories(ended) ||
-        _sameDirectory(ended, context.cwd)) {
-      context.run.cwd = ended;
+    if (permissions.inWorkingDirectories(native) ||
+        _sameDirectory(native, context.cwd)) {
+      context.run.cwd = native;
       return null;
     }
     final project = context.session.cwd;

@@ -244,7 +244,9 @@ void main() {
         expect(h.permissionRequests.single['tool_name'], 'Write');
         final sent = jsonEncode(h.model.turns.first.body['messages']);
         expect(sent, contains('You are in plan mode'));
-        final plan = RegExp(r'write it to ([^ ]+\.md)').firstMatch(sent)![1]!;
+        final escaped = RegExp(r'write it to ([^ ]+\.md)').firstMatch(sent)![1]!;
+        // The path as it is, not as the JSON has it.
+        final plan = jsonDecode('"$escaped"') as String;
         h.model.script.addAll([
           Reply.tool('Write', {
             'file_path': plan,
@@ -470,7 +472,7 @@ void main() {
     File(hook).writeAsStringSync(
       '#!/bin/sh\necho \'{"hookSpecificOutput": {"hookEventName": "PermissionRequest", "decision": {"behavior": "allow"}}}\'\n',
     );
-    await Process.run('chmod', ['+x', hook]);
+    if (!Platform.isWindows) await Process.run('chmod', ['+x', hook]);
     h = await Harness.start(
       settings: {
         'hooks': {

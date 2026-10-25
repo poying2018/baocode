@@ -165,7 +165,9 @@ void main() {
       write('work/app/self.md', 'Loops @self.md');
       final files = MemoryLoader(paths).load(p.join(root.path, 'work', 'app'));
       final byName = {
-        for (final f in files) p.relative(f.path, from: root.path): f,
+        for (final f in files)
+          // The paths as they are written, with a slash.
+          p.relative(f.path, from: root.path).replaceAll(r'\', '/'): f,
       };
       expect(byName.keys, [
         'home/.claude/CLAUDE.md',
@@ -262,9 +264,9 @@ void main() {
       expect(settings.rules.last.source, SettingsSource.session);
       settings.applyFlag({'model': 'haiku'});
       expect(settings.model, 'haiku');
-      settings.addDirectories(['/extra'], SettingsSource.local);
+      settings.addDirectories([p.join(root.path, 'extra')], SettingsSource.local);
       settings.reload();
-      expect(settings.additionalDirectories, contains('/extra'));
+      expect(settings.additionalDirectories, contains(p.join(root.path, 'extra')));
       expect(SettingsSource.parse('localSettings'), SettingsSource.local);
       expect(SettingsSource.parse('nope'), isNull);
     });

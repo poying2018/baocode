@@ -63,12 +63,32 @@ Future<List<int>> _descendants(int pid) async {
 /// The shell commands are run in: the user's, when it is bash or zsh;
 /// else bash; on Windows, Git's bash where it is installed.
 class Shell {
-  const Shell(this.executable, {this.posix = true});
+  const Shell(this.executable, {this.posix = true, this.msys = false});
 
   final String executable;
 
   /// Whether it takes POSIX shell commands (not cmd.exe).
   final bool posix;
+
+  /// Whether it says its paths the MSYS way (Git's bash on Windows:
+  /// `/c/Users/me` where the machine has `C:\Users\me`).
+  final bool msys;
+
+  /// [path] as the machine spells it, when the shell does not: null for
+  /// a shell that says its paths as they are.
+  String? nativePath(String path) {
+    if (!msys || !path.startsWith('/')) return null;
+    final rest = path.substring(1);
+    final slash = rest.indexOf('/');
+    final drive = slash < 0 ? rest : rest.substring(0, slash);
+    if (drive.length != 1) return null;
+    final tail = slash < 0 ? '' : rest.substring(slash);
+    return p.windows.joinAll([
+      '${drive.toUpperCase()}:',
+      for (final part in tail.split('/'))
+        if (part.isNotEmpty) part,
+    ]);
+  }
 
   /// The shell for [environment]'s user, on Windows when [windows] (where
   /// this runs, when not given); [exists] says whether a file is there.
@@ -93,7 +113,8 @@ class Shell {
           path.join(local, 'Programs', 'Git', 'bin', 'bash.exe'),
       ];
       for (final candidate in candidates.whereType<String>()) {
-        if (exists(candidate)) return Shell(candidate);
+        // Git's bash says its paths the MSYS way.
+        if (exists(candidate)) return Shell(candidate, msys: true);
       }
       return Shell(environment['COMSPEC'] ?? 'cmd.exe', posix: false);
     }

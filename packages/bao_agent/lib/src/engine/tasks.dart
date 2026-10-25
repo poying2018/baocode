@@ -188,9 +188,21 @@ class TaskManager {
     _started(task);
     unawaited(() async {
       final code = await process.exitCode;
-      await written.catchError((_) => <void>[]);
-      await sink.flush();
-      await sink.close();
+      try {
+        // The output is written as it comes; a pipe that stays open (a
+        // child that outlived its shell) does not hold the task's end
+        // back.
+        await written
+            .catchError((_) => <void>[])
+            .timeout(
+              const Duration(seconds: 2),
+              onTimeout: () => <void>[],
+            );
+        await sink.flush().catchError((_) {});
+        await sink.close().catchError((_) {});
+      } catch (_) {
+        // The output is not written; the task is done all the same.
+      }
       task.exitCode = code;
       finish(
         task,
@@ -294,7 +306,6 @@ class TaskManager {
     task.status = status;
     task.ended = DateTime.now();
     if (result != null) task.result = result;
-    if (!task._done.isCompleted) task._done.complete();
     final summary = _summary(task);
     session.emitSystem('task_notification', {
       'task_id': task.id,
@@ -308,6 +319,8 @@ class TaskManager {
         'duration_ms': task.ended!.difference(task.started).inMilliseconds,
       },
     });
+    // Told, the task is done: one that waits for it hears of it too.
+    if (!task._done.isCompleted) task._done.complete();
     // A subagent in the foreground answers its call; one stopped on
     // purpose needs no telling.
     if (task.backgrounded && status != TaskStatus.killed) {

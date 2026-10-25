@@ -153,6 +153,8 @@ List<String> byModified(List<String> paths) {
   });
 }
 
-/// [path] as the model is shown it: from [cwd] when inside it.
+/// [path] as the model is shown it: from [cwd] when inside it, with a
+/// slash, the way the model reads the paths it is given.
 String shownPath(String path, String cwd) =>
-    p.isWithin(cwd, path) ? p.relative(path, from: cwd) : path;
+    (p.isWithin(cwd, path) ? p.relative(path, from: cwd) : path)
+        .replaceAll(r'\', '/');
