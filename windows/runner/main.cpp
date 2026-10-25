@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "app_identity.h"
 #include "flutter_window.h"
 #include "hang_watchdog.h"
 #include "open_requests.h"
@@ -134,7 +135,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Size size(kDefaultWidth, kDefaultHeight);
   Win32Window::Point placed = origin;
   PlaceOnMonitor(origin, &size, &placed);
-  if (!window.Create(L"BaoCode", placed, size)) {
+  // The window's title: the app's name, with the id of this copy of it
+  // when it has one (see app_identity.h), so that a development build
+  // and the installed one are told apart in the taskbar.
+  const std::wstring title = AppWindowTitle(L"BaoCode");
+  if (!window.Create(title.c_str(), placed, size)) {
     return EXIT_FAILURE;
   }
   window.SetMinimumSize(Win32Window::Size(kMinClientWidth, kMinClientHeight));

@@ -193,9 +193,18 @@ class DataDirectoryPointer {
   final String? dataDir;
   final String? previousDataDir;
 
-  /// Where it is, under [home].
-  static String fileIn(String home) =>
-      p.join(home, '.baocode', 'config-dir.json');
+  /// Where it is, under [home]. A copy of the app with an id of its own
+  /// (see [AppPaths.appIdVariable]) keeps its pointer apart: the
+  /// installed one's says where *its* data went. [environment] is the
+  /// process's, or the one the caller works with.
+  static String fileIn(
+    String home, [
+    Map<String, String>? environment,
+  ]) => p.join(
+    home,
+    '.${AppPaths.appName(environment ?? Platform.environment)}',
+    'config-dir.json',
+  );
 
   /// What [file] says; null when there is no such file. Throws a
   /// [FormatException] when it is not a pointer (or cannot be read).
@@ -324,7 +333,7 @@ DataDirectoryResolution resolveDataDirectory({
   environment ??= Platform.environment;
   home ??= AppPaths.home(environment);
   final defaultPath = DataDirectory.defaultPath(environment);
-  final pointerFile = DataDirectoryPointer.fileIn(home);
+  final pointerFile = DataDirectoryPointer.fileIn(home, environment);
 
   DataDirectoryResolution resolved(
     String path,

@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <string>
 
+#include "app_identity.h"
 #include "log_folder.h"
 #include "resource.h"
 
@@ -130,7 +131,12 @@ LONG HeightOf(const RECT& rect) {
 constexpr DWORD kWindows11Build = 22000;
 constexpr DWORD kSystemBackdropBuild = 22523;
 
-constexpr const wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+// The window class the runner's windows have: the app's own, or one of
+// its own for a copy of the app that has an id (see app_identity.h), so
+// that it does not meet the installed one.
+static const wchar_t* WindowClassName() {
+  return AppWindowClass();
+}
 
 /// Registry key for app theme preference.
 ///
@@ -308,7 +314,7 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
     WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    window_class.lpszClassName = kWindowClassName;
+    window_class.lpszClassName = WindowClassName();
     window_class.style = CS_HREDRAW | CS_VREDRAW;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
@@ -321,11 +327,11 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     RegisterClass(&window_class);
     class_registered_ = true;
   }
-  return kWindowClassName;
+  return WindowClassName();
 }
 
 void WindowClassRegistrar::UnregisterWindowClass() {
-  UnregisterClass(kWindowClassName, nullptr);
+  UnregisterClass(WindowClassName(), nullptr);
   class_registered_ = false;
 }
 

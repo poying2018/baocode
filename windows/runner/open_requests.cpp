@@ -7,14 +7,15 @@
 
 #include <utility>
 
+#include "app_identity.h"
 #include "utils.h"
 
 namespace {
 
 // The window class the runner's window has: win32_window.cpp's
-// kWindowClassName (other Flutter apps' windows have it too, hence the mark
-// below).
-constexpr wchar_t kWindowClassName[] = L"FLUTTER_RUNNER_WIN32_WINDOW";
+// WindowClassName (other Flutter apps' windows have it too, hence the mark
+// below). A copy of the app with an id of its own (see app_identity.h)
+// has one of its own, and does not find the installed one.
 
 // The property MarkOpenRequestWindow puts on the window.
 constexpr wchar_t kOpenRequestProperty[] = L"BaoCode.OpenRequests";
@@ -31,7 +32,7 @@ constexpr UINT kSendTimeoutMilliseconds = 5000;
 // the runner's class that carries the mark. Null when there is none (yet).
 HWND RunningWindow() {
   HWND window = nullptr;
-  while ((window = ::FindWindowExW(nullptr, window, kWindowClassName,
+  while ((window = ::FindWindowExW(nullptr, window, AppWindowClass(),
                                    nullptr)) != nullptr) {
     if (::GetPropW(window, kOpenRequestProperty) != nullptr) {
       return window;
