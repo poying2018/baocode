@@ -117,13 +117,24 @@ void main() {
       await _snapshot(tester, 'ide_$name');
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pumpWidget(const SizedBox());
+      await _drain(tester);
 
       await tester.pumpWidget(BaoCodeApp(workspace: Workspace.mock()));
       await tester.pump();
       expect(tester.takeException(), isNull, reason: theme.settingsId);
       await _snapshot(tester, 'chat_$name');
       await tester.pumpWidget(const SizedBox());
-      await tester.pump();
+      await _drain(tester);
     }
   });
+}
+
+/// Lets the work an editor left behind finish: tokenization is time-sliced
+/// and one slice may still be queued as a zero-duration timer when the tree
+/// goes. It runs, sees its editor is gone and stops; the test framework
+/// objects to a timer that is still pending when the test ends.
+Future<void> _drain(WidgetTester tester) async {
+  for (var i = 0; i < 4; i++) {
+    await tester.pump(const Duration(milliseconds: 10));
+  }
 }
