@@ -169,8 +169,15 @@ class NetworkProxy {
 /// [error], from asking a site, as why it was not reached.
 @visibleForTesting
 ProbeFailure probeFailure(Object error) {
-  const refused = {61, 111, 10061};
-  const reset = {54, 104, 10054};
+  // The codes of the systems: POSIX' (61, 111) and Windows' (10061 for a
+  // WSAECONNREFUSED, 1225 for the ERROR_CONNECTION_REFUSED Dart says of
+  // it, 54, 104 and 10054 for a reset, 10060 for a timeout, 11001 for a
+  // host that is not there). They are what tells the failures apart: the
+  // words are in the system's own language.
+  const refused = {61, 111, 10061, 1225};
+  const reset = {54, 104, 10052, 10054};
+  const timedOut = {110, 10060};
+  const noHost = {11001, 11004};
   switch (error) {
     case TimeoutException():
       return const ProbeFailure(ProbeFailureKind.timeout);
@@ -184,10 +191,12 @@ ProbeFailure probeFailure(Object error) {
       if (reset.contains(code) || text.contains('reset')) {
         return ProbeFailure(ProbeFailureKind.reset, detail);
       }
-      if (text.contains('host lookup') || text.contains('nodename')) {
+      if (noHost.contains(code) ||
+          text.contains('host lookup') ||
+          text.contains('nodename')) {
         return ProbeFailure(ProbeFailureKind.dns, detail);
       }
-      if (text.contains('timed out')) {
+      if (timedOut.contains(code) || text.contains('timed out')) {
         return ProbeFailure(ProbeFailureKind.timeout, detail);
       }
       return ProbeFailure(ProbeFailureKind.other, detail);
