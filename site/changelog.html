@@ -30,6 +30,33 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.6.2">
+    <h2 class="plain"><a href="#v1.6.2">1.6.2</a></h2>
+    <h1>1.6.2</h1>
+    <p>Fixed</p>
+    <ul>
+    <li>The tray icon was there and not there: the system took the icon and said it had not, so the app believed it had none. Closing the window hid it to the tray, but that icon was dead — clicking it did not bring the window back, and all the user saw was the app gone. The icon is now really in the tray, and clicking it brings the window back; should the tray refuse it for a while, it is put up again every few seconds until it takes.</li>
+    <li>The window is no longer hidden when the tray icon cannot be put up: a window hidden with no icon to click is the app gone as far as the user is concerned.</li>
+    </ul>
+    <p>Changes</p>
+    <ul>
+    <li>The tray icon is in the notification area, not over the taskbar (Windows 11 folds it into the hidden icons: the <code>^</code> at the right of the taskbar shows it).</li>
+    <li>What the tray did is written to the data folder's <code>logs\tray.log</code>: when the icon cannot be found, that file says what happened to it.</li>
+    <li>The macOS application is not built and not published any more (this fork develops the Windows version only); the remote server is still there for macOS, it runs on the SSH host.</li>
+    </ul>
+    <p>What this fork does differently from the upstream</p>
+    <ul>
+    <li>Every address the app gives out is this repository's own (the repository, the releases, the issues, the website); see Settings → About.</li>
+    <li>No usage statistics are reported and no logs are uploaded: there is no server of its own, so there is nowhere to send them.</li>
+    <li>The diagnostics say plainly that there is no server, rather than failing quietly.</li>
+    <li>The channel build's activation page still points at the upstream (there is no replacement).</li>
+    <li>The featured upstreams (ymeng / ifruit) are all gone: the list is empty and those pictures are no longer published with the site.</li>
+    <li>notanthropic.com is not given the Anthropic key.</li>
+    <li>A stash's path cannot leave its own folder.</li>
+    <li>A very large version number does not crash the app.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.6.1">
     <h2 class="plain"><a href="#v1.6.1">1.6.1</a></h2>
     <h1>1.6.1</h1>
