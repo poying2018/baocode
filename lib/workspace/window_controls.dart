@@ -9,6 +9,7 @@ import '../chat/composer/composer_files.dart';
 import '../chat/composer/file_drop.dart';
 import '../platform/app_platform.dart';
 import '../platform/event_log.dart';
+import '../theme/app_theme.dart' show AppMetrics;
 
 /// One of the window's own buttons, over a header the app draws itself: the
 /// system hit-tests and acts on those pixels, so the header only paints them
@@ -65,6 +66,13 @@ abstract final class WindowControls {
   /// macOS with its traffic lights over a title bar Flutter paints under
   /// them.
   static bool get drawsHeader => AppPlatform.isWindows;
+
+  /// How far from the window's top what shows over everything (menus,
+  /// popovers, dialogs, quick picks) starts: below the header Windows draws,
+  /// whose strip the window drags itself by (see [setHitTestAreas]), so
+  /// nothing over it could be clicked (#198). In the overlay's own pixels,
+  /// as the header's height: the interface's zoom is outside both.
+  static double get headerInset => drawsHeader ? AppMetrics.headerHeight : 0;
 
   /// Whether the window can be kept on top.
   static bool get canKeepOnTop => isDesktop;

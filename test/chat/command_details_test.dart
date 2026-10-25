@@ -1,5 +1,5 @@
-// A /command's whole description and its file (#220): under the menu's
-// rows for the one highlighted, and on a tag of it.
+// A /command's whole description and its file (#220): on a tag of it (the
+// menu shows it in its row only, for it not to change height).
 
 import 'package:baocode/chat/composer/command_details.dart';
 import 'package:baocode/chat/composer/composer_embeds.dart';
@@ -56,20 +56,14 @@ Widget _menu(int highlighted) => SuggestionMenu(
 );
 
 void main() {
-  testWidgets('the menu shows the highlighted command whole, and opens its '
-      'file', (tester) async {
-    final opened = <String>[];
-    await _pump(tester, _menu(0), opened);
-    // In its row, cut short; under the rows, whole.
-    expect(find.text(_long), findsNWidgets(2));
-    await tester.tap(find.text('Open details'));
-    expect(opened, ['/home/me/.claude/skills/review/SKILL.md']);
-  });
-
-  testWidgets('a command built in has no file to open', (tester) async {
-    await _pump(tester, _menu(1), []);
-    expect(find.text('Clear'), findsNWidgets(2));
+  testWidgets('the menu keeps its height as another command is highlighted: '
+      'a description only in its row', (tester) async {
+    await _pump(tester, _menu(0), []);
+    final height = tester.getSize(find.byType(SuggestionMenu)).height;
+    expect(find.text(_long), findsOneWidget);
     expect(find.text('Open details'), findsNothing);
+    await _pump(tester, _menu(1), []);
+    expect(tester.getSize(find.byType(SuggestionMenu)).height, height);
   });
 
   testWidgets("a command's tag shows it whole on hover, and a click opens "

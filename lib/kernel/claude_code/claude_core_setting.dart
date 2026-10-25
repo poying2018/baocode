@@ -10,13 +10,19 @@ enum ClaudeCore {
   builtin,
 
   /// The Claude Code CLI, as a process: downloaded the first time where
-  /// the machine has none (see LocalClaude).
+  /// the machine has none (see LocalClaude), once picked.
   cli;
 
   static const settingKey = 'claudeCode.core';
 
-  /// When the setting is unset, or not one of these.
-  static const fallback = cli;
+  /// When the setting is unset, or not one of these: the CLI where Claude
+  /// Code is on this machine, else the built-in core (which suggests the
+  /// CLI, see ClaudeCoreHint): nothing is downloaded unasked.
+  static ClaudeCore get fallback => cliInstalled() ? cli : builtin;
+
+  /// Whether Claude Code is on this machine, as last looked; main() points
+  /// it at `LocalClaude.installed`.
+  static bool Function() cliInstalled = () => false;
 
   static ClaudeCore parse(Object? setting) =>
       values.where((value) => value.name == setting).firstOrNull ?? fallback;

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/ide_menu.dart';
+import 'package:baocode/theme/app_theme.dart' show AppMetrics;
 import 'package:baocode/theme/codicons.dart';
 
 final _panels = find.byWidgetPredicate(
@@ -101,6 +102,33 @@ void main() {
     expect(_panels, findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  // #198: the window drags itself by the header Windows draws, so a first
+  // item over it could not be chosen.
+  testWidgets('long dropdown stays below the window\'s own header on Windows', (
+    tester,
+  ) async {
+    var chosen = false;
+    await _open(
+      tester,
+      size: size,
+      anchor: const Rect.fromLTWH(400, 300, 100, 26),
+      entries: [
+        IdeMenuAction('First', onSelected: () => chosen = true),
+        for (var i = 0; i < 50; i++) IdeMenuAction('Sound $i'),
+      ],
+    );
+    final panel = tester.getRect(_panels);
+    expect(panel.top, AppMetrics.headerHeight);
+    expect(panel.bottom, size.height - 8);
+    expect(
+      tester.getRect(find.text('First')).top,
+      greaterThan(AppMetrics.headerHeight),
+    );
+    await tester.tap(find.text('First'));
+    await tester.pumpAndSettle();
+    expect(chosen, isTrue);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('wide right-aligned dropdown stays inside the inset', (
     tester,

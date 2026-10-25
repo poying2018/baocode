@@ -107,10 +107,7 @@ TextSpan _messageSpan(
   ).toList();
   final tagged = {
     for (final piece in pieces)
-      if (piece case ComposerEmbed(
-        type: ComposerImageEmbed.type,
-        :final data,
-      ))
+      if (piece case ComposerEmbed(type: ComposerImageEmbed.type, :final data))
         ComposerImageEmbed.decode(data),
   };
   // Numbered as they would be in the text; one sent before images were
@@ -257,6 +254,57 @@ class _UserMessageBubbleState extends State<UserMessageBubble> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A sent message as its bubble shows it, cut to [maxLines] and nothing in
+/// it to press: a glimpse of it elsewhere (the conversation's minimap). As
+/// wide as its text at the right, or as the room, as
+/// [UserMessageStyle.current] lays the bubbles out.
+class UserMessagePreview extends StatelessWidget {
+  const UserMessagePreview({
+    super.key,
+    required this.text,
+    this.images = const [],
+    this.maxLines = 4,
+  });
+
+  final String text;
+  final List<ImageAttachment> images;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final fitted = UserMessageStyle.current.value == UserMessageStyle.bubble;
+    final bubble = Container(
+      constraints: fitted
+          ? const BoxConstraints()
+          : const BoxConstraints.tightFor(width: double.infinity),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 11),
+      decoration: fitted
+          ? ShapeDecoration(
+              color: AppColors.bubbleFill,
+              shape: _MessageShape(
+                side: BorderSide(color: AppColors.bubbleBorder()),
+              ),
+            )
+          : BoxDecoration(
+              color: AppColors.bubbleFill,
+              borderRadius: BorderRadius.circular(UserMessageBubble.radius),
+              border: Border.all(color: AppColors.bubbleBorder()),
+            ),
+      child: InlineCodeText(
+        _messageSpan(text, ComposerVocabulary.of(context), images),
+        maxLines: maxLines,
+      ),
+    );
+    return Align(
+      alignment: Alignment.centerRight,
+      child: _WidthFactor(
+        maxWidthFactor: fitted ? _UserMessageBubbleState._fittedWidth : 1,
+        child: bubble,
       ),
     );
   }

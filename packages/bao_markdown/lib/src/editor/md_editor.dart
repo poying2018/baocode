@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show precisionErrorTolerance;
 import 'package:flutter/gestures.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
@@ -256,6 +258,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
     _ownFocus?.dispose();
     _ownScroll?.dispose();
     _paint.dispose();
+    _tableCellChanges.dispose();
     super.dispose();
   }
 
@@ -326,6 +329,32 @@ class MarkdownEditorState extends State<MarkdownEditor>
 
   void detachTable(int lineId, MdTableEditing table) {
     if (identical(_tables[lineId], table)) _tables.remove(lineId);
+  }
+
+  /// The editor of a table's cell being typed in (or held open, see
+  /// [holdTableCell]); none while none is.
+  MarkdownEditorState? get tableCell {
+    for (final table in _tables.values) {
+      if (table.cellEditor case final editor?) return editor;
+    }
+    return null;
+  }
+
+  /// Told as a table's cell is opened or closed, focused or left, and as
+  /// its text or its caret changes: what is over it (a link's bar) goes
+  /// with it.
+  Listenable get tableCellChanges => _tableCellChanges;
+  final _tableCellChanges = ValueNotifier(0);
+
+  /// What a table tells of its cell (see [tableCellChanges]).
+  void tableCellChanged() => _tableCellChanges.value++;
+
+  /// While [held], the cell being typed in stays open without the keyboard
+  /// (a link's address typed in a bar over it, say).
+  void holdTableCell(bool held) {
+    for (final table in _tables.values) {
+      table.cellHeld = held;
+    }
   }
 
   bool _tableEntryScheduled = false;
@@ -1464,9 +1493,21 @@ class MarkdownEditorState extends State<MarkdownEditor>
     if (!_hasInput || _applyingRemote) return;
     final start = _remoteStart;
     final value = _windowValue();
-    if (value == _remote && start == _remoteStart) return;
+    if (start == _remoteStart && _sameAsRemote(value)) return;
     _remote = value;
     _connection!.setEditingState(value);
+  }
+
+  /// Whether [value] is what the platform has: a composing region of no
+  /// length (Windows starts composing with one) is none. Told it again as
+  /// it composes, Windows ends what it composes, and what it composes next
+  /// goes in before it, not over it.
+  bool _sameAsRemote(TextEditingValue value) {
+    bool none(TextRange range) => !range.isValid || range.isCollapsed;
+    return value.text == _remote.text &&
+        value.selection == _remote.selection &&
+        (value.composing == _remote.composing ||
+            (none(value.composing) && none(_remote.composing)));
   }
 
   bool _applyingRemote = false;
@@ -2298,14 +2339,16 @@ class MarkdownEditorState extends State<MarkdownEditor>
           padding: widget.padding,
           // A jump far off (to the caret, by the scrollbar) lays out the
           // lines it lands on, not all those before them.
-          sliver: SuperSliverList(
-            listController: _list,
-            extentEstimation: _estimate,
-            delegate: SliverChildBuilderDelegate(
-              _row,
-              childCount: lines.lineCount,
-              findChildIndexCallback: _indexOfKey,
-              addAutomaticKeepAlives: false,
+          sliver: _KeepTopLine(
+            sliver: SuperSliverList(
+              listController: _list,
+              extentEstimation: _estimate,
+              delegate: SliverChildBuilderDelegate(
+                _row,
+                childCount: lines.lineCount,
+                findChildIndexCallback: _indexOfKey,
+                addAutomaticKeepAlives: false,
+              ),
             ),
           ),
         ),
@@ -2384,6 +2427,50 @@ class MarkdownEditorState extends State<MarkdownEditor>
         ),
       ),
     );
+  }
+}
+
+/// Keeps the line at the top of the view where it is when lines above it
+/// change height after they were laid out (an image shown once it is
+/// read, a diagram once drawn): the list moves the view only for lines it
+/// lays out anew, and the lines under them would jump down.
+class _KeepTopLine extends SingleChildRenderObjectWidget {
+  const _KeepTopLine({required Widget sliver}) : super(child: sliver);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderKeepTopLine();
+}
+
+class _RenderKeepTopLine extends RenderProxySliver {
+  @override
+  void performLayout() {
+    final list = child;
+    if (list is! RenderSliverMultiBoxAdaptor) return super.performLayout();
+    final top = constraints.scrollOffset;
+    // The first line in view (the last to start above its top), and where
+    // it was.
+    RenderBox? anchor;
+    double? was;
+    for (var box = list.firstChild; box != null; box = list.childAfter(box)) {
+      final offset = list.childScrollOffset(box);
+      if (offset == null) continue;
+      if (offset > top && anchor != null) break;
+      anchor = box;
+      was = offset;
+      if (offset > top) break;
+    }
+    list.layout(constraints, parentUsesSize: true);
+    geometry = list.geometry;
+    // At the top the lines are where they are; the list's own correction
+    // first.
+    if (anchor == null || top <= 0 || anchor.parent != list) return;
+    if (geometry!.scrollOffsetCorrection != null) return;
+    final now = list.childScrollOffset(anchor);
+    if (now == null) return;
+    final shift = math.max(now - was!, -top);
+    if (shift.abs() > precisionErrorTolerance) {
+      geometry = SliverGeometry(scrollOffsetCorrection: shift);
+    }
   }
 }
 

@@ -812,6 +812,7 @@ class _ChatScreenState extends State<ChatScreen>
             inPanel: links.inPanel,
             onOpenInIde: links.openInIde,
             onShowBrowserTab: links.showBrowserTab,
+            onOpenFolder: links.openFolder,
             roots: links.roots?.call() ?? const [],
             seen: _session.filesSeen,
             local: switch (_session.kernelContext.cwd) {

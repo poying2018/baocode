@@ -15,6 +15,7 @@ import '../../models/upstream.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/codicons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
+import 'models_page.dart' show ModelsSettingsPage;
 import 'settings_dropdown.dart';
 
 /// Asks [provider]'s upstream for its models, with [key].
@@ -650,6 +651,9 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
     return kind == guessModelKind(_id.text.trim()) ? null : kind;
   }
 
+  /// The endpoint it is spoken to at, as picked; null for its upstream's.
+  late ProviderProtocol? _protocol = _start?.protocol;
+
   /// The model's own efforts and contexts; null for the defaults.
   late List<String>? _efforts = _start?.efforts;
   late List<int>? _contexts = _start?.contexts;
@@ -678,6 +682,21 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
   }
 
   bool get _adding => widget.model == null;
+
+  /// [_protocol] as kept: none for a picture's model, or on an upstream
+  /// signed in to (Codex), whose models all go as it does.
+  ProviderProtocol? get _keptProtocol =>
+      _shownKind.generatesImages || widget.provider.protocol.usesAccounts
+      ? null
+      : _protocol;
+
+  /// What the Endpoint choice shows [protocol] as; the upstream's for
+  /// null.
+  String _endpointName(ProviderProtocol? protocol) => protocol == null
+      ? context.l10n.modelsEndpointUpstream(
+          ModelsSettingsPage.protocolName(context, widget.provider.protocol),
+        )
+      : ModelsSettingsPage.protocolName(context, protocol);
 
   /// [options], or null when they are [defaults]: the model then follows
   /// the defaults as they change.
@@ -731,6 +750,7 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
               images: _images,
               custom: true,
               kind: _keptKind,
+              protocol: _keptProtocol,
             )
           : model.copyWith(
               label: () => label.isEmpty ? null : label,
@@ -739,6 +759,7 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
               contexts: () => _contexts,
               images: _images,
               kind: () => _keptKind,
+              protocol: () => _keptProtocol,
             ),
     );
   }
@@ -862,6 +883,43 @@ class _ModelEditDialogState extends State<ModelEditDialog> {
                 ),
               )
             else ...[
+              if (!widget.provider.protocol.usesAccounts)
+                _field(
+                  l10n.modelsEndpoint,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SettingsDropdown(
+                        current: _endpointName(_protocol),
+                        semanticLabel:
+                            '${l10n.modelsEndpoint}: ${_endpointName(_protocol)}',
+                        entries: () => [
+                          IdeMenuAction(
+                            _endpointName(null),
+                            checked: _protocol == null,
+                            onSelected: () => setState(() => _protocol = null),
+                          ),
+                          const IdeMenuSeparator(),
+                          for (final protocol in ProviderProtocol.forModels)
+                            IdeMenuAction(
+                              _endpointName(protocol),
+                              checked: protocol == _protocol,
+                              onSelected: () =>
+                                  setState(() => _protocol = protocol),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l10n.modelsEndpointDescription,
+                        style: _text(
+                          context,
+                          size: 12,
+                        ).copyWith(color: AppColors.textMuted),
+                      ),
+                    ],
+                  ),
+                ),
               _field(
                 l10n.modelsContextWindow,
                 IdeInputBox(

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:bao_markdown/bao_markdown.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -17,6 +18,7 @@ Future<MarkdownEditorState> _pump(
   double height = 400,
   ScrollController? scroll,
   MarkdownEditorStyle style = _style,
+  MarkdownEmbeds embeds = const MarkdownEmbeds(),
 }) async {
   await tester.pumpWidget(
     WidgetsApp(
@@ -30,6 +32,7 @@ Future<MarkdownEditorState> _pump(
             controller: controller,
             style: style,
             scrollController: scroll,
+            embeds: embeds,
             padding: const EdgeInsets.all(10),
           ),
         ),
@@ -380,6 +383,61 @@ void main() {
     expect(configuration['viewId'], tester.view.viewId);
   });
 
+  testWidgets('what Windows composes is not told back to it as it composes', (
+    tester,
+  ) async {
+    final controller = MarkdownController();
+    final state = await _pump(tester, controller);
+    state.requestFocus();
+    await tester.pump();
+    tester.testTextInput.log.clear();
+    // As Windows' input method sends it: composing starts with a region of
+    // no length, grows, is committed, and the next word starts after it.
+    void compose(String old, int at, List<String> steps, String done) {
+      state.updateEditingValueWithDeltas([
+        TextEditingDeltaNonTextUpdate(
+          oldText: old,
+          selection: TextSelection.collapsed(offset: at),
+          composing: TextRange.collapsed(at),
+        ),
+      ]);
+      var text = old;
+      var end = at;
+      for (final step in [...steps, done]) {
+        state.updateEditingValueWithDeltas([
+          TextEditingDeltaReplacement(
+            oldText: text,
+            replacementText: step,
+            replacedRange: TextRange(start: at, end: end),
+            selection: TextSelection.collapsed(offset: at + step.length),
+            composing: TextRange(start: at, end: at + step.length),
+          ),
+        ]);
+        text = text.replaceRange(at, end, step);
+        end = at + step.length;
+      }
+      state.updateEditingValueWithDeltas([
+        TextEditingDeltaNonTextUpdate(
+          oldText: text,
+          selection: TextSelection.collapsed(offset: end),
+          composing: TextRange.empty,
+        ),
+      ]);
+    }
+
+    compose('', 0, ['z', 'zh', 'zhi', "zhi'j", "zhi'jie"], '直接');
+    compose('直接', 2, ['z', 'zu', 'zuo'], '做');
+    await tester.pump();
+    expect(controller.text, '直接做');
+    expect(controller.selection, const TextSelection.collapsed(offset: 3));
+    expect(
+      tester.testTextInput.log.where(
+        (call) => call.method == 'TextInput.setEditingState',
+      ),
+      isEmpty,
+    );
+  });
+
   testWidgets('copied as it shows, pasted back as its markdown', (
     tester,
   ) async {
@@ -506,5 +564,58 @@ void main() {
       }
     },
     skip: !File(latin).existsSync() || !File(han).existsSync(),
+  );
+
+  testWidgets(
+    'a line above the view growing (an image read) leaves the view still',
+    (tester) async {
+      final height = ValueNotifier(10.0);
+      final controller = MarkdownController(
+        text: [
+          'a',
+          '',
+          '![x](x.png)',
+          '',
+          for (var i = 0; i < 60; i++) 'line $i',
+        ].join('\n'),
+      );
+      final scroll = ScrollController();
+      final state = await _pump(
+        tester,
+        controller,
+        scroll: scroll,
+        embeds: _GrowingImage(height),
+      );
+      scroll.jumpTo(80);
+      await tester.pump();
+      final line = controller.lineStart(12);
+      final before = state.caretRect(line)!.top;
+      final image = state.caretRect(controller.lineStart(2));
+      // In the cache area above the view, laid out.
+      expect(image, isNotNull);
+      expect(image!.top, lessThan(0));
+
+      height.value = 300;
+      await tester.pump();
+      expect(state.caretRect(line)!.top, moreOrLessEquals(before));
+      // By as much as the line grew.
+      expect(scroll.offset, greaterThan(80 + 250));
+      scroll.dispose();
+    },
+  );
+}
+
+/// Images as tall as [height] says.
+class _GrowingImage extends MarkdownEmbeds {
+  const _GrowingImage(this.height);
+
+  final ValueListenable<double> height;
+
+  @override
+  InlineSpan inline(BuildContext context, MdEmbed embed) => WidgetSpan(
+    child: ValueListenableBuilder<double>(
+      valueListenable: height,
+      builder: (context, height, _) => SizedBox(width: 50, height: height),
+    ),
   );
 }

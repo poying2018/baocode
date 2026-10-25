@@ -142,14 +142,16 @@ abstract final class UpstreamUrls {
 }
 
 /// Whether [provider]'s key goes as `x-api-key`: asked for, or left to
-/// [ProviderAuth.auto] on Anthropic's own API.
-bool sendsApiKeyHeader(ModelProvider provider) => switch (provider.auth) {
-  ProviderAuth.apiKey => true,
-  ProviderAuth.bearer => false,
-  ProviderAuth.auto =>
+/// [ProviderAuth.auto] on Anthropic's own API. Only ever to its Messages
+/// API: OpenAI's take a bearer token (a model of a relay spoken to there,
+/// its upstream's auth set for its Claude).
+bool sendsApiKeyHeader(ModelProvider provider) =>
     provider.protocol == ProviderProtocol.anthropic &&
-        _isAnthropic(provider.host),
-};
+    switch (provider.auth) {
+      ProviderAuth.apiKey => true,
+      ProviderAuth.bearer => false,
+      ProviderAuth.auto => _isAnthropic(provider.host),
+    };
 
 /// Whether [host] is Anthropic's own: the domain itself or one of its
 /// subdomains. A host that only ends with it (`notanthropic.com`) is

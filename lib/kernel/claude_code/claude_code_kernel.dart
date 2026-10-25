@@ -529,7 +529,7 @@ class ClaudeCodeKernel
       final (:model, :effort, provider: _) = target;
       // Through the proxy, the effort goes with the model's name; to
       // Anthropic's API, as Claude Code's own, if it is one of its.
-      final direct = custom == null || !custom.$1.protocol.proxied;
+      final direct = custom == null || !custom.$1.protocolOf(custom.$2).proxied;
       Map<String, String>? env;
       if ((custom, model) case ((final provider, _), final model?)) {
         try {
@@ -2892,7 +2892,7 @@ class ClaudeCodeKernel
             ),
           },
         ),
-        if (!provider.protocol.proxied) ?_thinkingSettings(effort),
+        if (!provider.protocolOf(info).proxied) ?_thinkingSettings(effort),
       ]);
       return;
     }
@@ -2929,11 +2929,11 @@ class ClaudeCodeKernel
   static List<String> _requestedModels(ModelProvider provider) => {
     for (final info in provider.enabledModels) ...[
       requestedModel(provider, info),
-      if (provider.protocol.proxied)
+      if (provider.protocolOf(info).proxied)
         for (final effort in info.effortLevels)
           requestedModel(provider, info, effort: effort),
-      if (provider.protocol == ProviderProtocol.openaiResponses ||
-          provider.protocol == ProviderProtocol.codex) ...[
+      if (provider.protocolOf(info)
+          case ProviderProtocol.openaiResponses || ProviderProtocol.codex) ...[
         requestedModel(provider, info, fast: true),
         for (final effort in info.effortLevels)
           requestedModel(provider, info, effort: effort, fast: true),
@@ -3373,7 +3373,7 @@ class ClaudeCodeKernel
         // Through the proxy, the effort goes with the model's name;
         // to Anthropic's API, as Claude Code's own setting.
         _change([
-          if (provider.protocol.proxied)
+          if (provider.protocolOf(info).proxied)
             (
               'set_model',
               {
@@ -3416,9 +3416,9 @@ class ClaudeCodeKernel
   late final ModelSetting fast = _ModelSetting(
     toggle: true,
     optionsFor: (model) => switch (_providers.resolve(model)) {
-      (final provider, _)
-          when provider.protocol == ProviderProtocol.openaiResponses ||
-              provider.protocol == ProviderProtocol.codex =>
+      (final provider, final info)
+          when provider.protocolOf(info) == ProviderProtocol.openaiResponses ||
+              provider.protocolOf(info) == ProviderProtocol.codex =>
         const [KernelOption('fast', 'Fast', Icons.bolt_rounded, '')],
       _ => const [],
     },

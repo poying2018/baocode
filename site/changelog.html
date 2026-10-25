@@ -30,141 +30,48 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
-  <section class="release" id="v1.5.3">
-    <h2 class="plain"><a href="#v1.5.3">1.5.3</a></h2>
-    <p>Every address is this build's own, and typing works on Windows again</p>
-    <p>This release brings the upstream's 27 commits since 1.5.2 (Windows input, Skia
-    drawing, the side panel by the traffic lights, a long conversation's speed),
-    and points every address the app gives out at this repository instead: the
-    repository, the releases and the issues on the About page, the repository the
-    star prompt opens, the address in a commit's credit, the site's own files
-    (the channels' list, the featured upstreams), and the list of hosts a
-    download may come from.</p>
-    <p>Two of the upstream's services are not used any more: the usage statistics
-    are not reported (nor are the logs uploaded), as this build has no server of
-    its own; a channel build's activate page still points at the upstream, as
-    there is no counterpart here.</p>
+  <section class="release" id="v1.6.0">
+    <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
+    <p>Performance</p>
+    <p>This release is about speed and memory: in a long conversation, a reply streaming in, scrolling and dragging the minimap all keep up with you; the app holds much less memory as it runs; and on Windows the interface draws several times faster. Besides, Stash keeps in step with your projects' GitHub / GitLab issues, and an SSH connection that drops picks up the same session again, with nothing running there lost.</p>
+    <p>Performance</p>
+    <ul>
+    <li>Windows draws with Skia, as macOS does, not Flutter's new default Impeller: measured, a frame of the chat takes a fraction of the time to draw, in about half the memory.</li>
+    <li>Long conversations stream more smoothly: each file path in a reply is no longer looked up in every file the session has read. On a real 92-turn conversation, a frame went from 6.8 ms to 4.5 ms, and janky frames from 18 to none.</li>
+    <li>Very long replies and thoughts let go of what is far out of view, keeping only its height, and show it again as it comes back; a thought draws only what is in view; code, tables and math scrolled sideways are kept as pictures. Select All and copying still get all of the text.</li>
+    <li>Dragging the minimap or the scrollbar fast no longer builds what is out of view meanwhile, catching up over a few frames after; a reply scrolled away and back is not parsed again. Dragged back and forth fast, a frame went from 12.9 ms to 2.5 ms.</li>
+    <li>Less memory: Skia's texture cache is held to 32 MB rather than 150 to 300 MB, and decoded images to 48 MB; on macOS large blocks freed go back to the system, some 180 MB while a long thought streams.</li>
+    <li>Leaner editors: files of the same language share one syntax highlighting worker, its patterns compiled once (TypeScript's 334 were compiled in some 3,500 places), and line layouts are held to about 32 MB.</li>
+    <li>In plan mode the prompt cache is read again: each turn wrote the whole conversation to it anew, slower and dearer.</li>
+    <li>A trackpad flings the editors on as it does lists; on macOS lists no longer bounce at their ends.</li>
+    </ul>
     <p>New</p>
     <ul>
-    <li>The side panel's preview takes dropped files; a right click reveals one.</li>
-    <li>A /command in the composer shows its whole description, and the file it is
-    in opens.</li>
-    <li>A changed file's menu opens it as a file: in the browser, with its default
-    app, or in an editor.</li>
-    <li>Enter in the empty composer while the agent works sends the queued message
-    now.</li>
-    <li>An upstream or a model is duplicated in a click.</li>
-    <li>The Claude Code CLI is the core by default; the built-in one suggests it.</li>
-    </ul>
-    <p>Improved</p>
-    <ul>
-    <li>The paths in a long conversation's text are looked up by index, not from
-    the start each time; a hang report is readable.</li>
-    <li>The editors share one tokenizer, Skia's and the image cache are kept
-    small, and large blocks are handed back sooner.</li>
-    <li>The focused input no longer draws on every frame.</li>
-    <li>The side panel's edge follows the pointer; a trackpad flings the editors
-    as it does lists, and nothing bounces at their ends.</li>
+    <li>Stash and issues, both ways: in a project that is a GitHub / GitLab repository, open issues become stashes, one row each with its status, title, conversation and issue. Kept in step: changed there, taken here; changed here, pushed once you confirm; changed on both sides, yours to pick; an issue closed, its stash is done. Every open issue by default; Settings → Stash → Issues as stashes keeps it to yours, or off.</li>
+    <li>Stash news: new comments on an issue, one closed or reopened, a linked pull request's checks failing, changes asked for, merged: each marked on its row, and those about you counted beside Stash in the sidebar. A pull request failing or asked for changes is fixed in its conversation in a click; a merged one asks whether the stash is done.</li>
+    <li>A stash can be published as an issue: what goes is shown first, local paths and secrets pointed out, local pictures uploaded with it. Merging stashes can close a merged one's issue as a duplicate.</li>
+    <li>A new markdown editor: stashes, markdown previews in the side panel and the chat's input are edited as they read, the marks showing only where the caret is. Tables are edited in their cells: rows and columns added and removed, cells picked, copied and pasted as in a spreadsheet; a link shows a bubble to open, copy, edit or remove it.</li>
+    <li>Customize: skills, rules, commands and subagents open in the markdown editor, edited as they read or as their source; front matter shows as properties, edited as a form.</li>
+    <li>SSH drops lose nothing: after a network hiccup the connection goes back to the same session, its terminals, Claude Code and language servers still running there (kept up to three hours while disconnected), no output lost or repeated; a silent network is noticed within 30 seconds.</li>
+    <li>Going on after the usage limit: on Claude's own account, the model picker has Continue After Limit Reset. On, a conversation stopped at the limit goes on once it resets, even with the computer asleep past it; one due while the app was closed goes on as it opens.</li>
+    <li>The Claude Code CLI, recommended: where Claude Code is installed it is the core by default; a conversation on the built-in core suggests switching, above its input, downloading the CLI in a click, or Not Now.</li>
+    <li>Models: subagents and the Opus / Sonnet / Haiku tiers can use another upstream's models; a model can have its own endpoint (Anthropic, Chat Completions, Responses); an upstream or a model is duplicated in a click; models an upstream no longer lists are removed at once.</li>
+    <li>The minimap: each of your messages is a clear mark on it. The pointer near one snaps to it and shows at once the message and the replies around it; a click goes there.</li>
+    <li>The input: a / starting any word opens the command menu; a command's tag shows its whole description on hover, and Open details opens its file in the side panel. @ finds folders too. File, folder and code chips in the input open what they name.</li>
+    <li>While the agent works, Enter in the empty input sends the first queued message now; background tasks (subagents among them) keep going.</li>
+    <li>A changed file's right click opens it in the browser (HTML), its default app or another editor, shows it in the file manager, or copies its path.</li>
+    <li>The side panel's markdown preview takes pictures and files dropped or pasted in, copied beside the document and linked; a right click shows a link's file in the file manager.</li>
     </ul>
     <p>Fixed</p>
     <ul>
-    <li>Stashes and the chat's input take typing on Windows again.</li>
-    <li>At the window's top left, the sidebar's toggle and its tabs are clear of
-    the traffic lights.</li>
-    <li>A conversation shown again is where it was left.</li>
-    <li>@ finds folders too, by their names, among the files.</li>
-    <li>Drawn by Skia, as on macOS, not Impeller.</li>
-    <li>A conversation renamed in Claude Code (/rename) is named so in the list.</li>
-    <li>In plan mode the cache ends before the reminder, so the next turn reads
-    it.</li>
-    <li>A quick question's answer is read from verbose output's array, not taken
-    from stderr.</li>
-    <li>An SSH connection lost is made again to the same session; nothing there
-    ended or was lost.</li>
-    <li>A host that only ends with anthropic.com (notanthropic.com) is another
-    party's, and gets no key of ours.</li>
-    <li>A stash's file name is a name, not a path: the path in it is dropped, and
-    <code>..</code> stays in the folder too.</li>
-    <li>A version number too big to be one is not a version, not a crash.</li>
-    <li>A tool call that failed is said so in the text the model reads.</li>
-    </ul>
-  </section>
-
-  <section class="release" id="v1.5.2">
-    <h2 class="plain"><a href="#v1.5.2">1.5.2</a></h2>
-    <p>Markdown, edited where it shows</p>
-    <p>The stashes, a markdown file's preview and the chat's input are now one editor
-    of markdown: it shows the text as markdown, the marks it carries are the ones
-    the caret is in, and it is edited where it is written rather than in a
-    separate box.</p>
-    <p>New</p>
-    <ul>
-    <li>One markdown editor for the stashes, a markdown file's preview and the chat's input: the text is shown as markdown, and the formatting bar follows the caret, offering the marks that make sense there.</li>
-    <li>A markdown file's preview is edited in place: the text under the caret changes as you type, with no separate editing window.</li>
-    <li>The stashes keep their formatting bar in a preview too, in code as well: only the proofreading marks are offered there.</li>
-    <li>The formatting bar follows the selection as the text scrolls, and goes away while the selection is out of view. A whole styling of the text is one Undo.</li>
-    <li>Tables are edited in their cells: rows and columns get handles and menus of their own, bars add them, a cell's text is picked from the first press, and cells dragged across are picked as a spreadsheet's (copied, cut, cleared, pasted). The outline follows the lines and is round at the table's corners, and a wide table gets a scrollbar while the mouse is over it.</li>
-    <li>Links show as they do when clicked, with a bubble over them to open, copy, edit or remove them; a link opened with the keyboard's command key stays where it went. A right click has the clipboard's, the Undo's, the link's and the selection's marks.</li>
-    <li>Inline code's ground is painted under the selection, an emptied line keeps its height, and the caret is as high as its line.</li>
-    </ul>
-    <p>Improved</p>
-    <ul>
-    <li>The editor of the chat's input is quicker to draw: it no longer redraws what the text behind the caret does not change.</li>
-    <li>A selection made across lines keeps its marks as the text is edited around it.</li>
-    </ul>
-  </section>
-
-  <section class="release" id="v1.5.1">
-    <h2 class="plain"><a href="#v1.5.1">1.5.1</a></h2>
-    <p>Linux, and the SSH that does not need a terminal</p>
-    <p>This release brings the upstream's 1.4 and 1.5 to this repository's own line of
-    releases: the app now runs on Linux, and a server to work on is set up in the
-    app rather than in a terminal first. The updates keep coming from this
-    repository's releases, as they have since 1.2.0.</p>
-    <p>New</p>
-    <ul>
-    <li>Linux: a package for Ubuntu and other Debian-based distributions, x64 and arm64, that keeps itself up to date as the Mac and Windows apps do. It opens folders and files with the system's own dialogs, has the system's right-click menus, and pastes text, files and pictures.</li>
-    <li>Linux updates itself: a new version is downloaded and checked as on the other systems, then installed once you enter your password, and BaoCode opens again.</li>
-    <li>Add SSH Server: the address, the port, the user and how to sign in (a password, a private key, or Automatic, as ssh does in a terminal) are asked in the app, and a pasted user@host:port is split up for you. The keys in ~/.ssh are offered, and a password is kept in the system keychain.</li>
-    <li>Jump hosts: a saved server can be picked to connect through, each asking for its own password.</li>
-    <li>A server met for the first time has its key remembered by itself. One whose key changed is told as such, and its old key can be removed to connect again.</li>
-    <li>Settings -&gt; SSH Servers: the servers added in the app and the hosts the sidebar has used, to edit, connect, disconnect or remove.</li>
-    <li>A core for each server: Automatic (the server's Claude Code CLI if it has one, else the built-in core), the built-in core, or the Claude Code CLI (installed there if missing). Remote hosts no longer follow this machine's core setting.</li>
-    <li>Setting up a model: with no model to run on yet, a welcome explains what an upstream is and adds one in a click, and the conversation starts by itself as soon as a model is there.</li>
-    <li>Agents use the user's own Chrome, through BaoCode's extension: the pages open, click and type, with the sign-ins already there, and every step of it in view in the side panel.</li>
-    <li>DevTools' debugging for the agents: sources and breakpoints, elements, requests, site data and memory.</li>
-    <li>Pictures show in the conversation: a tool's, and a message's own.</li>
-    <li>Checkpoints keep only the files the agents edited, not snapshots of the whole project, and an agent's changes can be reviewed part by part beside the chat.</li>
-    <li>A long conversation is read from its end, the earlier turns as the list is scrolled to its top; a phone may follow it so too.</li>
-    <li>The Windows installer carries a recent OpenSSH, used where the system's is too old or missing.</li>
-    </ul>
-    <p>Improved</p>
-    <ul>
-    <li>Typing in the IDE is smoother: an edit goes through only the lines it changed, the input method is given only the lines around the caret, and typing no longer redraws the whole IDE.</li>
-    <li>Switching chat tabs in the IDE is faster: the chats seen last are kept, shown again at once where you left them.</li>
-    <li>Changes in the side panel open in the IDE's diff editor: the deleted code in the text where it is narrow, side by side once wide enough.</li>
-    <li>The live time, speed and tokens under a reply while the agent works are one switch now (Settings -&gt; General).</li>
-    <li>Through OpenCode's gateway, the requests of a conversation hit its prompt cache: faster, and cheaper.</li>
-    <li>Long replies and thoughts let go of what is far out of view; the editors share one tokenizer, and Skia's and the image cache are kept small.</li>
-    <li>The model menu opens scrolled to the model in use, and an upstream's models are listed by name in its settings page.</li>
-    </ul>
-    <p>Fixed</p>
-    <ul>
-    <li>A picture zoomed in the preview grows over the window, not clipped to the box it first fitted to.</li>
-    <li>Zoomed in, the window's title bar buttons are clickable to their right edge: their size rides the interface's zoom as their corner does, so a button's right no longer drags the window.</li>
-    <li>On Windows, a language server installs with npm.cmd's own script (node running npm-cli.js), and only PATHEXT's extensions answer for a bare name on PATH: the Bash script nvm-windows keeps beside npm.cmd is no longer started as a Win32 program, which said it was not a valid Win32 application. A server started by a .cmd is killed with its tree, so its node does not go on serving under the cmd.exe that was killed.</li>
-    <li>Another upstream picked while a turn runs takes the next message, not the process on the one before; a message sent while the agent works waits for the turn running, or joins it when set to.</li>
-    <li>A turn stopped at the usage limit goes on once it resets, and an agent set to go on after the reset does.</li>
-    <li>Generated images, screenshots and pictures read stay in a conversation switched away from and back to.</li>
-    <li>Go to Definition (F12) centers its target, even one already on screen.</li>
-    <li>A mouse wheel scrolls the conversation as Chrome does, and moves it smoothly, each notch eased over a few frames.</li>
-    <li>A computer waking from sleep is no hang: the watchdog's clock leaves the sleep out.</li>
-    <li>The main window opens where it was left, as big, maximized if it was.</li>
-    <li>A NO_PROXY network is passed on to Claude Code too, and an address in one (100.64.0.0/10, Tailscale's) goes around the proxy, as curl reads it.</li>
-    <li>Queued messages are taken up one at a time, and one sent now goes alone.</li>
-    <li>The earlier turns come in before what is shown, which stays where it is, the spinner on till they are read.</li>
-    <li>Back in the window after an Alt+Tab, its first key types and its frames go on, no click needed.</li>
-    <li>A stash moved in place (an agent's write on Windows) shows without a restart, and a symbolic link is listed in the explorer as what it leads to.</li>
+    <li>A conversation switched away from and back to is where you left it, its steps still open.</li>
+    <li>A conversation renamed in Claude Code (/rename) is renamed in the list.</li>
+    <li>With &quot;viewMode&quot;: &quot;verbose&quot; in Claude's settings, Stash's polish, the input's polish and commit messages no longer fail.</li>
+    <li>A single ~ (a range such as 10-12~10-16) no longer strikes text out.</li>
+    <li>The markdown preview fills the view, wide tables no longer cut off; zoomed in, a drag in it selects under the pointer.</li>
+    <li>With the side panel at the left and the sidebar hidden, its tabs keep clear of the traffic lights on macOS, and the sidebar's toggle is there too; dragging its edge follows the pointer from the width shown.</li>
+    <li>Go to Definition in a remote project opens the right file on its host.</li>
+    <li>Windows: updating or uninstalling ends the browser extension's host first, no longer failing with &quot;DeleteFile failed; code 5&quot;.</li>
     </ul>
   </section>
 
@@ -218,17 +125,6 @@
     <p>Improved</p>
     <ul>
     <li>An upstream's models are listed by name, in its settings page, the fetched list and the model picker.</li>
-    </ul>
-  </section>
-
-  <section class="release" id="v1.3.1">
-    <h2 class="plain"><a href="#v1.3.1">1.3.1</a></h2>
-    <p>Remote projects work again</p>
-    <p>The app used to download a remote host's server from upstream's dl.baocode.dev, which never had a build of ours: a server's version is a hash of what it carries, so only the machine that made it has that one. Every SSH connection asked for a file that was not there.</p>
-    <ul>
-    <li>The builds are now published in this repository's releases, named by their version, so an app built months ago still downloads the one it was built with. The first connection to a host downloads that platform's server, checks its size and SHA-256 against servers.json, and pushes it over ssh as before.</li>
-    <li>The installer carries the build made from these sources (Linux x64 and arm64): nothing to compile by hand.</li>
-    <li>Coming straight from 1.3.0+15, this also includes 1.3.0+16: BaoCode's own core reminds the model when its to-do list has gone unwritten, so the panel no longer sits still for half an hour, and such notes to the model no longer show as a tool's output.</li>
     </ul>
   </section>
 

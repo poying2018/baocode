@@ -4246,8 +4246,6 @@
   "generalSettingsMainWindowLast": "Where you left off",
   "generalSettingsWindows": "Windows",
   "generalSettingsIde": "Fast IDE",
-  "generalSettingsAutoOpenChanges": "Show agent changes as diffs",
-  "generalSettingsAutoOpenChangesDescription": "While the IDE shows, a file the agent changes opens as a diff of it against its text before, as the agent edits it.",
   "explorerExcludeSetting": "Hidden files and folders",
   "explorerExcludeSettingDescription": "Files and folders the explorer does not show, comma separated: a name (`node_modules`, `*.log`) matches anywhere, a path (`build/**`, `src/generated`) matches within the folder.",
   "explorerExcludeSettingPlaceholder": "e.g. .git, node_modules, *.log",
@@ -4748,6 +4746,22 @@
   "modelsNoMatch": "No model matches.",
   "modelsMissing": "Gone upstream",
   "modelsMissingTooltip": "No longer listed by the upstream; kept until you remove it.",
+  "modelsRemoveMissing": "Remove Gone ({count})",
+  "@modelsRemoveMissing": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "modelsRemoveMissingConfirm": "Remove {count} models the upstream no longer lists?",
+  "@modelsRemoveMissingConfirm": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "modelsCustom": "Manual",
   "modelsShowAll": "Show All ({count})",
   "@modelsShowAll": {
@@ -4791,7 +4805,7 @@
     }
   },
   "modelsRoles": "Roles",
-  "modelsRolesDescription": "Which model Claude Code uses for each part of its work. Unset, the model picked stands in.",
+  "modelsRolesDescription": "Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream's: BaoCode's local proxy sends their requests there.",
   "modelsRoleUnset": "Unset",
   "modelsRoleMain": "Main Model",
   "modelsRoleMainDescription": "Used when the model a session picked of this upstream is gone.",
@@ -4803,8 +4817,8 @@
   "modelsRoleHaikuDescription": "ANTHROPIC_DEFAULT_HAIKU_MODEL: Claude Code's background work, and agents' titles.",
   "modelsRoleHaikuWarning": "Unset, background work runs on the model picked, which may be slower and cost more. Pick a small, fast model.",
   "modelsRoleSubagent": "Subagents",
-  "modelsRoleSubagentDescription": "CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent's call names (but inherit). It may be another upstream's: BaoCode's local proxy sends its requests there.",
-  "modelsRoleMissing": "This model is no longer one of its upstream's: subagents' requests to it will fail.",
+  "modelsRoleSubagentDescription": "CLAUDE_CODE_SUBAGENT_MODEL: the model every subagent runs on, over the one its definition or the agent's call names (but inherit).",
+  "modelsRoleMissing": "This model is no longer one of its upstream's: requests to it will fail.",
   "@modelsRoleMissing": {
     "description": "Under a role that picks another upstream's model, once that upstream or model is gone."
   },
@@ -4914,6 +4928,17 @@
   "modelsKindImage": "Image generation (Images API)",
   "modelsKindImageChat": "Image generation (in a conversation)",
   "modelsKindDescription": "Image models are not offered in the model picker: agents make pictures with them through the generate_image tool.",
+  "modelsEndpoint": "Endpoint",
+  "modelsEndpointUpstream": "As the upstream ({protocol})",
+  "@modelsEndpointUpstream": {
+    "description": "The endpoint choice of a model that follows its upstream's protocol, that protocol's name in it.",
+    "placeholders": {
+      "protocol": {
+        "type": "String"
+      }
+    }
+  },
+  "modelsEndpointDescription": "Which API this model's requests go to, at the upstream's base URL and with its key: on a relay that serves several, its Claude models at the Anthropic one and its GPT at Responses, say.",
   "modelsImageBadge": "Image",
   "modelsImage": "Image model",
   "modelsImageDescription": "What agents make pictures with (the generate_image tool), unless you ask them for another; asked each time, you pick it in the conversation. Turn on image models in an upstream's list.",
@@ -7167,5 +7192,338 @@
   "aboutChangelogDetail": "What each version changed",
   "aboutFeedback": "Report an Issue",
   "aboutFeedbackDetail": "Open an issue on GitHub, or see those others opened",
-  "aboutOpen": "Open"
+  "aboutOpen": "Open",
+  "stashSettingsIssueSync": "Issues as stashes",
+  "stashSettingsIssueSyncDescription": "A project that is a Git repository on GitHub or GitLab (signed in under Accounts): its open issues are stashes, each once, kept in step both ways. A stash deleted, or unlinked from its issue, does not come back.",
+    "stashIssueSyncMine": "Only those assigned to or opened by me",
+  "stashIssueSyncOff": "Off: imported or published ones only",
+  "stashIssueLocal": "Local only",
+  "stashIssueAllow": "Allow publishing as an issue",
+  "stashIssueNotPublished": "Not an issue yet",
+  "stashIssuePublishTo": "Publish as an issue of {repo}…",
+  "@stashIssuePublishTo": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueKeepLocal": "Keep it local",
+  "stashIssuePush": "Push changes to the issue…",
+  "stashIssuePushShort": "Push",
+  "stashIssueTakeRemote": "Discard local changes, use the issue's",
+  "stashIssueUnlinkOwn": "Unlink, keep it local",
+  "stashIssueConflict": "{tag} was changed on the forge too. Which version to keep?",
+  "@stashIssueConflict": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueKeepMine": "Keep mine (push)",
+  "stashIssueKeepTheirs": "Use the issue's",
+  "stashIssueChangedHere": "Changes here are not on {tag} yet.",
+  "@stashIssueChangedHere": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueDiscard": "Discard",
+  "stashIssuePublishTitle": "Publish as an issue of {repo}",
+  "@stashIssuePublishTitle": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePushTitle": "Push changes to {tag}",
+  "@stashIssuePushTitle": {
+    "placeholders": {
+      "tag": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePublish": "Publish",
+  "stashIssueNoText": "(no description)",
+  "stashIssuePicturesGitHub": "{count, plural, =1{1 picture is uploaded to the repository's {branch} branch, for the issue to show it.} other{{count} pictures are uploaded to the repository's {branch} branch, for the issue to show them.}}",
+  "@stashIssuePicturesGitHub": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "branch": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssuePicturesGitLab": "{count, plural, =1{1 picture is uploaded to the project, for the issue to show it.} other{{count} pictures are uploaded to the project, for the issue to show them.}}",
+  "@stashIssuePicturesGitLab": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashImplementShort": "Implement",
+  "stashImplementIssue": "It is issue {issue}: the pull request should say it fixes it.",
+  "@stashImplementIssue": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueSyncAll": "All open issues",
+  "stashIssueChecking": "Looking for its repository…",
+  "stashIssueRefresh": "Refresh now",
+  "stashIssuePublishButton": "Publish as Issue",
+  "stashIssuePushButton": "Push to Issue",
+  "stashIssueLoading": "Loading…",
+  "stashSyncing": "Syncing issues…",
+  "stashSyncingRepo": "Syncing the issues of {repo} ({index}/{total})…",
+  "@stashSyncingRepo": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      },
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "stashSyncTooltip": "Sync issues now",
+  "stashSyncTooltipLast": "Sync issues now · last at {time}",
+  "@stashSyncTooltipLast": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "stashSyncFailed": "Could not sync the issues of {repo}: {error}",
+  "@stashSyncFailed": {
+    "placeholders": {
+      "repo": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "stashSyncSignIn": "{count, plural, =1{Sign in to {forge} for the issues of {repo} to be stashes.} other{Sign in to {forge} for the issues of {repo} and {count} more repositories to be stashes.}}",
+  "@stashSyncSignIn": {
+    "placeholders": {
+      "forge": {
+        "type": "String"
+      },
+      "repo": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashSyncingEmpty": "Syncing the projects' issues…",
+  "stashFilterAnyIssue": "Any source",
+  "stashFilterIssue": "Issues",
+  "stashFilterNotIssue": "Local only",
+  "stashImplementEmpty": "Write something first, then implement it in BaoCode",
+  "stashIssueDuplicateBanner": "{issue}, of stash {stash} merged into this one, is still open. Close it as a duplicate?",
+  "@stashIssueDuplicateBanner": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      },
+      "stash": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueCloseDuplicate": "Close as duplicate…",
+  "stashIssueDuplicateNoIssue": "Merged into another note; closing as a duplicate.",
+  "stashNewsOpened": "New issue",
+  "stashNewsChanged": "Changed on the forge",
+  "stashNewsCommented": "New comments",
+  "stashNewsClosed": "Closed on the forge",
+  "stashNewsReopened": "Reopened on the forge",
+  "stashNewsCount": "{count, plural, =1{1 update} other{{count} updates}}",
+  "@stashNewsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashNewsCountTooltip": "Show only the updates about you: your issues and pull requests, those assigned to you or naming you",
+  "stashNewsCountTooltipOn": "Showing only the updates about you; click for all",
+  "stashFilterNews": "About you",
+  "stashMarkAllSeen": "Mark all as seen",
+  "stashIssueComments": "{count, plural, =1{1 comment} other{{count} comments}}",
+  "@stashIssueComments": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashIssueDiscussion": "Discussion",
+  "stashIssueDiscussionAll": "See all {count} on {forge}",
+  "@stashIssueDiscussionAll": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "forge": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueDiscussionFailed": "Couldn't load the comments.",
+  "stashIssueDiscussionLoading": "Loading the comments…",
+  "stashDeleteAndClose": "Delete and close {issue}…",
+  "@stashDeleteAndClose": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "stashDeleteOpenIssue": "Its issue {issue} stays open on the forge unless closed too.",
+  "@stashDeleteOpenIssue": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueInSync": "Same as {issue}",
+  "@stashIssueInSync": {
+    "placeholders": {
+      "issue": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueSyncedAt": "synced {time}",
+  "@stashIssueSyncedAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "stashIssueNotPushed": "Changed here, not pushed yet",
+  "stashIssueRemoteNewer": "Changed on the forge",
+  "stashIssueBothChanged": "Changed both here and on the forge",
+  "stashIssueDiscussionEmpty": "No comments yet",
+  "stashNewsMerged": "Pull request merged",
+  "stashNewsChangesRequested": "Changes requested",
+  "stashNewsChecksFailed": "Checks failed",
+  "stashNewsMarked": "Marked as unread",
+  "stashNewsOther": "{news} (not about you)",
+  "@stashNewsOther": {
+    "placeholders": {
+      "news": {
+        "type": "String"
+      }
+    }
+  },
+  "stashNewsSidebar": "{count, plural, =1{1 update about you} other{{count} updates about you}}",
+  "@stashNewsSidebar": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashFilterAllNews": "Any updates",
+  "stashMarkSeen": "Mark as Read",
+  "stashMarkUnseen": "Mark as Unread",
+  "stashPullChecksFailedBanner": "The checks of {pull} failed.",
+  "@stashPullChecksFailedBanner": {
+    "placeholders": {
+      "pull": {
+        "type": "String"
+      }
+    }
+  },
+  "stashPullChangesBanner": "Changes were requested on {pull}.",
+  "@stashPullChangesBanner": {
+    "placeholders": {
+      "pull": {
+        "type": "String"
+      }
+    }
+  },
+  "stashPullMergedBanner": "{pull} was merged. Is this done too?",
+  "@stashPullMergedBanner": {
+    "placeholders": {
+      "pull": {
+        "type": "String"
+      }
+    }
+  },
+  "stashPullFix": "Fix in Its Conversation",
+  "stashPullView": "View",
+  "stashPullFixChecks": "The checks of {pull} failed. Find out what failed and fix it.",
+  "@stashPullFixChecks": {
+    "placeholders": {
+      "pull": {
+        "type": "String"
+      }
+    }
+  },
+  "stashPullFixChanges": "Changes were requested on {pull}. Read the review and make them.",
+  "@stashPullFixChanges": {
+    "placeholders": {
+      "pull": {
+        "type": "String"
+      }
+    }
+  },
+  "stashWriteManyTitle": "Comment on {count} issues",
+  "@stashWriteManyTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashWriteCloseManyTitle": "Close {count} issues",
+  "@stashWriteCloseManyTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "stashDeleteOpenIssues": "Their issues {issues} stay open on the forge unless closed too.",
+  "@stashDeleteOpenIssues": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "issues": {
+        "type": "String"
+      }
+    }
+  },
+  "stashDeleteAndCloseMany": "Delete and close {count} issues…",
+  "@stashDeleteAndCloseMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

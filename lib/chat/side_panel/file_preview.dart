@@ -186,7 +186,11 @@ class _FilePreviewState extends State<FilePreview> {
 
   /// An image shows as it is, its changes too: there is no text to compare.
   bool get _image => ideIsImagePath(_request.path);
-  bool get _isMarkdown => !_request.diff && isMarkdownPath(_request.path);
+
+  /// A markdown file rendered: its changes not, unless the text before is
+  /// not known and the file shows as it is.
+  bool get _isMarkdown =>
+      isMarkdownPath(_request.path) && (!_request.diff || _loaded is _Text);
 
   /// The file's own text shows, to edit: not its changes, nor the index's,
   /// nor what is only shown ([FileOpenRequest.readOnly]).
@@ -1018,7 +1022,12 @@ class _LinesSelection extends StaticSelectionContainerDelegate {
     if (content == null || _rows.isEmpty) return content;
     final rows = [..._rows]..sort((a, b) => a.$1.compareTo(b.$1));
     _rows.clear();
-    final text = [for (final (_, text) in rows) text].join('\n');
+    // An empty line selects nothing of its own: kept, between the others.
+    final byRow = {for (final (row, text) in rows) row: text};
+    final text = [
+      for (var row = rows.first.$1; row <= rows.last.$1; row++)
+        byRow[row] ?? '',
+    ].join('\n');
     onCopy(rows.first.$1, rows.last.$1, text);
     return SelectedContent(plainText: text);
   }

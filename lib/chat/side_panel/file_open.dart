@@ -109,9 +109,14 @@ class FileLinkTarget {
     this.inPanel = false,
     this.openInIde,
     this.showBrowserTab,
+    this.openFolder,
   });
 
   final ValueChanged<FileOpenRequest> open;
+
+  /// Shows a folder the chat names (absolute, on the project's host) in
+  /// the side panel's tree; none where there is no such tree.
+  final ValueChanged<String>? openFolder;
 
   /// Shows a tab of the user's browser (its id, as the agents' tools have
   /// it) beside the conversation: on the side panel's browser page.
@@ -240,8 +245,12 @@ class FileOpenScope extends InheritedWidget {
     this.inPanel = false,
     this.onOpenInIde,
     this.onShowBrowserTab,
+    this.onOpenFolder,
     required super.child,
   });
+
+  /// See [FileLinkTarget.openFolder].
+  final ValueChanged<String>? onOpenFolder;
 
   /// See [FileLinkTarget.showBrowserTab].
   final ValueChanged<int>? onShowBrowserTab;
@@ -534,6 +543,7 @@ class FileOpenScope extends InheritedWidget {
       readBytes != oldWidget.readBytes ||
       inPanel != oldWidget.inPanel ||
       onOpenInIde != oldWidget.onOpenInIde ||
+      onOpenFolder != oldWidget.onOpenFolder ||
       !listEquals(roots, oldWidget.roots) ||
       !listEquals(seen, oldWidget.seen);
 }

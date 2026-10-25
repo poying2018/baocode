@@ -253,12 +253,32 @@ class ModelProviders extends ChangeNotifier {
     return copy;
   }
 
-  /// Removes provider [id], and its key (its accounts' tokens).
+  /// Unsets the other providers' roles that pick a model of provider
+  /// [id] ([ProviderRoles.without]), of its [models] only when given:
+  /// they, or it, gone.
+  Future<void> forgetRoles(String id, [Set<String>? models]) async {
+    final list = providers;
+    final kept = [
+      for (final provider in list)
+        provider.id == id
+            ? provider
+            : provider.copyWith(roles: provider.roles.without(id, models)),
+    ];
+    if (Iterable<int>.generate(list.length)
+        .every((i) => kept[i].roles == list[i].roles)) {
+      return;
+    }
+    await _writeProviders(kept);
+  }
+
+  /// Removes provider [id], and its key (its accounts' tokens); the other
+  /// providers' roles on its models with it.
   Future<void> remove(String id) async {
     final accounts = provider(id)?.accounts ?? const [];
     await _writeProviders([
       for (final provider in providers)
-        if (provider.id != id) provider,
+        if (provider.id != id)
+          provider.copyWith(roles: provider.roles.without(id)),
     ]);
     if (parseModelRef(defaultModel)?.provider == id) {
       await setDefaultModel(null);

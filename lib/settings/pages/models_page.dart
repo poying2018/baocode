@@ -830,21 +830,47 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
     if (edited != null) await _save(_providerNow.withModel(edited));
   }
 
-  Future<void> _removeModel(ProviderModel model) async {
+  Future<void> _removeModel(ProviderModel model) => _removeModels({model.id});
+
+  /// Removes the models [ids] name, and the roles they had, here and on
+  /// the other upstreams.
+  Future<void> _removeModels(Set<String> ids) async {
     final provider = _providerNow;
-    var roles = provider.roles;
-    for (final role in const ['main', 'opus', 'sonnet', 'haiku', 'subagent']) {
-      if (roles[role] == model.id) roles = roles.copyWith(role, null);
+    var roles = provider.roles.without(provider.id, ids);
+    for (final role in ProviderRoles.keys) {
+      if (ids.contains(roles[role])) roles = roles.copyWith(role, null);
     }
     await _save(
       provider.copyWith(
         models: [
           for (final m in provider.models)
-            if (m.id != model.id) m,
+            if (!ids.contains(m.id)) m,
         ],
         roles: roles,
       ),
     );
+    await _providers.forgetRoles(provider.id, ids);
+  }
+
+  /// Removes, once confirmed, the models the upstream no longer lists.
+  Future<void> _removeMissing() async {
+    final l10n = context.l10n;
+    final missing = [
+      for (final model in _providerNow.sortedModels)
+        if (model.missing) model,
+    ];
+    if (missing.isEmpty) return;
+    final choice = await showIdeDialog(
+      context,
+      message: l10n.modelsRemoveMissingConfirm(missing.length),
+      detail: [
+        for (final model in missing.take(12)) model.displayName,
+        if (missing.length > 12) '…',
+      ].join('\n'),
+      buttons: [l10n.modelsRemove],
+    );
+    if (choice != 0 || !mounted) return;
+    await _removeModels({for (final model in missing) model.id});
   }
 
   /// A copy of it, its key with it, opened in its place.
@@ -1208,6 +1234,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
                 model.displayName.toLowerCase().contains(query)))
           model,
     ];
+    final missing = provider.models.where((model) => model.missing).length;
     return SettingsGroup(
       title: l10n.modelsModelsGroup,
       description: l10n.modelsModelsDescription,
@@ -1251,6 +1278,12 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
                       secondary: true,
                       onPressed: () => setState(() => _showAll = !_showAll),
                     ),
+                  if (missing > 0)
+                    IdeButton(
+                      label: l10n.modelsRemoveMissing(missing),
+                      secondary: true,
+                      onPressed: () => unawaited(_removeMissing()),
+                    ),
                   IdeButton(
                     label: l10n.modelsFetch,
                     icon: Codicons.cloudDownload,
@@ -1277,6 +1310,10 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
           for (final model in shown)
             _ModelRow(
               model: model,
+              endpoint: switch (provider.protocolOf(model)) {
+                final protocol when protocol != provider.protocol => protocol,
+                _ => null,
+              },
               test: _modelTests[model.id],
               onEnabled: (value) => unawaited(
                 _save(_providerNow.withModel(model.copyWith(enabled: value))),
@@ -1293,9 +1330,9 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
   List<Widget> _roles(BuildContext context) {
     final l10n = context.l10n;
     final provider = _provider;
-    // The other upstreams whose models subagents may run on: through the
-    // proxy, any that can be reached (not Claude Code's own, whose key is
-    // not the app's).
+    // The other upstreams whose models a role may pick (all but the main
+    // model): through the proxy, any that can be reached (not Claude
+    // Code's own, whose key is not the app's).
     final others = [
       for (final other in _providers.enabled)
         if (other.id != provider.id && other.connected) other,
@@ -1305,8 +1342,8 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
       String label,
       String description, {
       String? warning,
-      bool elsewhere = false,
     }) {
+      final elsewhere = ProviderRoles.crossUpstream.contains(role);
       final current = provider.roles[role];
       final picked = parseModelRef(current);
       final pickedProvider = picked == null
@@ -1407,7 +1444,6 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         'subagent',
         l10n.modelsRoleSubagent,
         l10n.modelsRoleSubagentDescription,
-        elsewhere: true,
       ),
     ];
   }
@@ -1425,8 +1461,9 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
     final l10n = context.l10n;
     final provider = _provider;
     final auth = _authName(context, provider.auth);
+    final protocols = provider.protocols;
     return [
-      if (!provider.protocol.proxied)
+      if (protocols.contains(ProviderProtocol.anthropic))
         SettingsRow(
           label: l10n.modelsAuth,
           description: l10n.modelsAuthDescription,
@@ -1452,7 +1489,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
           _save(_providerNow.copyWith(disableNonessentialTraffic: value)),
         ),
       ),
-      if (provider.protocol == ProviderProtocol.openaiChat)
+      if (protocols.contains(ProviderProtocol.openaiChat))
         SettingsSwitchRow(
           label: l10n.modelsPreserveThinking,
           description: l10n.modelsPreserveThinkingDescription,
@@ -1460,7 +1497,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
           onChanged: (value) =>
               unawaited(_save(_providerNow.copyWith(preserveThinking: value))),
         ),
-      if (provider.protocol.proxied)
+      if (protocols.any((protocol) => protocol.proxied))
         SettingsSwitchRow(
           label: l10n.modelsPromptCacheKey,
           description: l10n.modelsPromptCacheKeyDescription,
@@ -1587,6 +1624,7 @@ Map<String, String> parseHeaders(String text) => {
 class _ModelRow extends StatelessWidget {
   const _ModelRow({
     required this.model,
+    this.endpoint,
     required this.test,
     required this.onEnabled,
     required this.onTest,
@@ -1596,6 +1634,9 @@ class _ModelRow extends StatelessWidget {
   });
 
   final ProviderModel model;
+
+  /// The endpoint it is spoken to at, when not its upstream's.
+  final ProviderProtocol? endpoint;
   final _ModelTest? test;
   final ValueChanged<bool> onEnabled;
   final VoidCallback onTest;
@@ -1645,6 +1686,19 @@ class _ModelRow extends StatelessWidget {
                     if (model.custom) ...[
                       const SizedBox(width: 6),
                       ModelBadge(l10n.modelsCustom),
+                    ],
+                    if (endpoint case final endpoint?) ...[
+                      const SizedBox(width: 6),
+                      ModelBadge(
+                        switch (endpoint) {
+                          ProviderProtocol.openaiChat => 'Chat Completions',
+                          ProviderProtocol.openaiResponses => 'Responses',
+                          _ => 'Anthropic',
+                        },
+                        tooltip:
+                            '${l10n.modelsEndpoint}: '
+                            '${ModelsSettingsPage.protocolName(context, endpoint)}',
+                      ),
                     ],
                     if (model.kind.generatesImages) ...[
                       const SizedBox(width: 6),

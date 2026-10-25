@@ -454,6 +454,38 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// The press went to the minimap, beside the list.
   bool _pressOnMinimap = false;
 
+  // --- Scrubbing ---------------------------------------------------------------
+  //
+  // The minimap's glass or the bar's thumb dragged: each frame a jump to rows
+  // not built yet. The list builds none ahead of the view meanwhile (it
+  // would build three views' worth a frame, for nothing: the next frame is
+  // somewhere else); after, it builds them again by steps.
+
+  /// How far past the view, either side, the list builds rows ahead.
+  static const _cacheExtent = 900.0;
+  double _cache = _cacheExtent;
+  bool _scrubbing = false;
+  Timer? _scrubEnded;
+
+  void _scrub(bool on) {
+    _scrubEnded?.cancel();
+    if (on) {
+      _scrubbing = true;
+      if (_cache != 0) setState(() => _cache = 0);
+      return;
+    }
+    if (!_scrubbing) return;
+    _scrubbing = false;
+    _scrubEnded = Timer(const Duration(milliseconds: 150), _buildAhead);
+  }
+
+  /// A third of [_cacheExtent] more each frame, until all of it.
+  void _buildAhead() {
+    if (!mounted || _scrubbing || _cache >= _cacheExtent) return;
+    setState(() => _cache = math.min(_cacheExtent, _cache + _cacheExtent / 3));
+    SchedulerBinding.instance.addPostFrameCallback((_) => _buildAhead());
+  }
+
   /// Where a drag on the list's text began, to check what it selected.
   Offset? _dragFrom;
   bool _isPointerInside = false;
@@ -696,6 +728,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       ..dispose();
     UserMessageStyle.current.removeListener(_handleStyleChanged);
     _reselectTimer?.cancel();
+    _scrubEnded?.cancel();
     _autoScroller?.stopAutoScroll();
     _editorMoved.dispose();
     _editorReveal.dispose();
@@ -1133,10 +1166,14 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     // A press beside the bar, just missing it, neither starts a selection
     // nor clears one (as a browser's scrollbar).
     final list = _listKey.currentContext?.findRenderObject() as RenderBox?;
+    var onBar = false;
     if (list != null && list.hasSize) {
       final right = list.localToGlobal(Offset(list.size.width, 0)).dx;
-      _selectionDelegate.suspended =
-          !_minimapShown && event.position.dx >= right - _scrollbarGutter;
+      onBar = !_minimapShown && event.position.dx >= right - _scrollbarGutter;
+      _selectionDelegate.suspended = onBar;
+    }
+    if ((_pressOnMinimap || onBar) && event.buttons == kPrimaryMouseButton) {
+      _scrub(true);
     }
     _dragFrom =
         _pressInEditor ||
@@ -1183,6 +1220,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       });
     }
     if (_pointersDown <= 0) {
+      _scrub(false);
       _autoScroller?.stopAutoScroll();
       _selectionDelegate
         ..endDrag()
@@ -2417,7 +2455,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                           listController: _listController,
                                           itemCount: _feed.itemCount,
                                           extentEstimation: _estimateExtent,
-                                          cacheExtent: 900,
+                                          cacheExtent: _cache,
                                           padding: EdgeInsets.fromLTRB(
                                             _gutter,
                                             _chatTopPadding +

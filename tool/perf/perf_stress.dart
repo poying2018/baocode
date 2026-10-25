@@ -7,7 +7,7 @@
 
 import 'dart:math';
 
-import 'package:flutter/widgets.dart' show Offset;
+import 'package:flutter/widgets.dart' show CustomPaint, Offset;
 
 import 'package:baocode/chat/widgets/chat_minimap.dart';
 import 'package:baocode/workspace/chat_grid.dart';
@@ -83,8 +83,9 @@ final List<PerfScenario> stressScenarios = [
         await c.input.spin(at, 200, 200, every: _fast);
         await c.settle(const Duration(milliseconds: 500));
       });
+      // Its track: the minimap's own box is the history's.
       if (c.find<ChatMinimap>() case final minimap?) {
-        final rect = c.rectOf(minimap);
+        final rect = c.rectOf(c.findIn<CustomPaint>(minimap)!);
         final random = Random(3);
         await c.phase('jumps', (r) async {
           for (var i = 0; i < 40; i++) {
@@ -97,6 +98,23 @@ final List<PerfScenario> stressScenarios = [
             );
             await Future<void>.delayed(const Duration(milliseconds: 120));
           }
+          await c.settle(const Duration(milliseconds: 500));
+        });
+        // Its glass dragged from end to end and back as fast as a hand
+        // goes: a quarter of a second a way.
+        await c.phase('scrub', (r) async {
+          final x = rect.center.dx;
+          final top = rect.top + 4;
+          final bottom = rect.bottom - 4;
+          final points = [
+            for (var trip = 0; trip < 3; trip++) ...[
+              for (var i = 0; i <= 30; i++)
+                Offset(x, top + (bottom - top) * i / 30),
+              for (var i = 29; i >= 0; i--)
+                Offset(x, top + (bottom - top) * i / 30),
+            ],
+          ];
+          await c.input.dragAlong(points);
           await c.settle(const Duration(milliseconds: 500));
         });
       }

@@ -584,6 +584,53 @@ void main() {
     expect(controller.position.maxScrollExtent, 0);
   });
 
+  testWidgets('lines selected and copied keep the empty ones between', (
+    tester,
+  ) async {
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String?;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    addTearDown(CopiedCode.clear);
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/a.dart', diff: true),
+          files: _Files({'/p/a.dart': 'one\n\ntwo\n\n\nthree'}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final from = tester.getTopLeft(find.text('one')) - const Offset(1, -4);
+    final to = tester.getTopRight(find.text('three')) + const Offset(1, 4);
+    final drag = await tester.startGesture(
+      from,
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(to);
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+    await tester.pump();
+    expect(copied, 'one\n\ntwo\n\n\nthree');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
   testWidgets('a diff shows in the IDE\'s diff editor; its lines copied '
       'paste into the composer as a reference to them', (tester) async {
     addTearDown(CopiedCode.clear);
@@ -2320,6 +2367,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.widget<MarkdownEditor>(preview).readOnly, isTrue);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a markdown file\'s changes, the text before not known, show '
+      'it rendered as it is', (tester) async {
+    _bigWindow(tester);
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/notes.md', diff: true),
+          files: _Files({'/p/notes.md': '# Notes\n\nhello\n'}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(MarkdownEditor);
+    expect(preview, findsOneWidget);
+    expect(tester.widget<MarkdownEditor>(preview).readOnly, isTrue);
+
+    // Its source a click away.
+    await tester.tap(find.text('Source'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkdownEditor), findsNothing);
+  });
 
   testWidgets('files dropped on a markdown file\'s preview are copied '
       'beside it and linked to, where they are let go', (tester) async {

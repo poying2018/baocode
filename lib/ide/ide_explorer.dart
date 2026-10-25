@@ -2135,7 +2135,6 @@ class IdeExplorerState extends State<IdeExplorer>
                     },
                     builder: (context, _, _) => inDrop
                         ? DecoratedBox(
-                            position: DecorationPosition.foreground,
                             decoration: BoxDecoration(
                               color: themeColors['list.dropBackground'],
                             ),
@@ -2176,7 +2175,6 @@ class IdeExplorerState extends State<IdeExplorer>
       },
       builder: (context, _, _) => _dropFolder == root
           ? DecoratedBox(
-              position: DecorationPosition.foreground,
               decoration: BoxDecoration(
                 color: themeColors['list.dropBackground'],
               ),

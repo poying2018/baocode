@@ -56,13 +56,31 @@ class MarkdownView extends StatefulWidget {
   /// read (see the IDE's markdown preview). The chat's has [tags] too: a
   /// block between tags as a section that folds ([TagBlockSyntax]).
   static md.Document document({bool tags = false}) => md.Document(
-    extensionSet: md.ExtensionSet.gitHubFlavored,
+    extensionSet: _extensions,
     blockSyntaxes: [...blockSyntaxes, if (tags) const TagBlockSyntax()],
     inlineSyntaxes: inlineSyntaxes,
     encodeHtml: false,
   );
 
   static final _document = document(tags: true);
+
+  /// GitHub's, but struck through only between `~~`: a single `~` is how
+  /// a range is written (`10-12~10-16`), and two of them on a line would
+  /// strike out what is between.
+  static final _extensions = md.ExtensionSet(
+    md.ExtensionSet.gitHubFlavored.blockSyntaxes,
+    [
+      for (final syntax in md.ExtensionSet.gitHubFlavored.inlineSyntaxes)
+        if (syntax is! md.StrikethroughSyntax) syntax,
+      md.DelimiterSyntax(
+        '~+',
+        requiresDelimiterRun: true,
+        allowIntraWord: true,
+        startCharacter: 0x7E, // ~
+        tags: [md.DelimiterTag('del', 2)],
+      ),
+    ],
+  );
 
   @override
   State<MarkdownView> createState() => _MarkdownViewState();
@@ -117,7 +135,7 @@ class _MarkdownViewState extends State<MarkdownView> {
       for (final (i, text) in texts.indexed)
         i < old.length && old[i].text == text
             ? old[i]
-            : _Segment(text, MarkdownView._document.parse(text)),
+            : _Segment(text, _parse(text, keep: old.isEmpty)),
     ];
     _gallery.clear();
     final options = MarkdownOptions();
@@ -155,6 +173,24 @@ class _MarkdownViewState extends State<MarkdownView> {
       mainAxisSize: MainAxisSize.min,
       children: children,
     );
+  }
+
+  /// Segments parsed lately, by their text, the latest last: a message
+  /// scrolled out of the history and back (the minimap scrubbed through
+  /// it, back and forth) is not parsed again. Its nodes are only read.
+  static final Map<String, List<md.Node>> _parsed = {};
+  static const _parsedKept = 160;
+
+  /// [text] parsed, as lately if it was; kept for later if [keep] (not as a
+  /// reply streams in: each would be kept a moment, the others pushed out).
+  static List<md.Node> _parse(String text, {required bool keep}) {
+    if (_parsed.remove(text) case final nodes?) return _parsed[text] = nodes;
+    final nodes = MarkdownView._document.parse(text);
+    if (keep) {
+      _parsed[text] = nodes;
+      if (_parsed.length > _parsedKept) _parsed.remove(_parsed.keys.first);
+    }
+    return nodes;
   }
 
   Widget _buildBlocks(BuildContext context, _Segment segment) {

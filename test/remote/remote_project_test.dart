@@ -495,6 +495,7 @@ printf '%s\n' "$line"
       expect(read('events'), '1');
       expect(jsonDecode(read('settings')), {
         'env': {
+          ...ClaudeLaunch.unsetEnvironment,
           'ANTHROPIC_API_KEY': 'sk-secret',
           'ANTHROPIC_BASE_URL': 'https://api.example.com',
         },

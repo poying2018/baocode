@@ -351,6 +351,18 @@ void main() {
     await mouse.moveTo(tester.getCenter(find.text('x')));
     await tester.pumpAndSettle();
     expect(tester.widget<RawScrollbar>(bar).thumbVisibility, isTrue);
+
+    // The bar that puts a row in, in view as wide as it, not scrolled.
+    final addRow = find
+        .byWidgetPredicate((widget) => '${widget.runtimeType}' == '_AddBar')
+        .last;
+    final view = tester.getRect(find.byType(SingleChildScrollView));
+    final before = tester.getRect(addRow);
+    expect(before.right, moreOrLessEquals(view.right));
+    position.jumpTo(position.maxScrollExtent);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(addRow), before);
+
     await mouse.moveTo(const Offset(5, 395));
     await tester.pumpAndSettle();
     expect(tester.widget<RawScrollbar>(bar).thumbVisibility, isFalse);
