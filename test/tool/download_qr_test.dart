@@ -11,8 +11,10 @@ void main() {
       expect(made.keys, containsAll(['site/qr/android.svg', 'site/qr/ios.svg']));
       for (final MapEntry(key: path, value: svg) in made.entries) {
         expect(
-          File(path).readAsStringSync(),
-          svg,
+          // The line ends are the machine's own (Git writes CRLF on
+          // Windows); the codes are the same.
+          File(path).readAsStringSync().replaceAll('\r\n', '\n'),
+          svg.replaceAll('\r\n', '\n'),
           reason: '$path: run dart run tool/make_download_qr.dart',
         );
       }

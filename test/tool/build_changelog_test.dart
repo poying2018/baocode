@@ -12,8 +12,10 @@ void main() {
       final pages = changelogPages(readReleaseNotes(Directory.current));
       for (final MapEntry(key: path, value: html) in pages.entries) {
         expect(
-          File(path).readAsStringSync(),
-          html,
+          // The line ends are the machine's own (Git writes CRLF on
+          // Windows); the pages are the same.
+          File(path).readAsStringSync().replaceAll('\r\n', '\n'),
+          html.replaceAll('\r\n', '\n'),
           reason: '$path: run dart run tool/build_changelog.dart',
         );
       }

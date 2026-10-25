@@ -23,7 +23,8 @@ void main() {
         expect(license.readAsStringSync(), contains('MIT License'), reason: id);
       }
       expect(
-        File('pubspec.yaml').readAsStringSync(),
+        // The line ends are the machine's own (Git writes CRLF on Windows).
+        File('pubspec.yaml').readAsStringSync().replaceAll('\r\n', '\n'),
         allOf(
           contains('- assets/keymaps/\n'),
           contains('- assets/keymaps/LICENSES/\n'),
