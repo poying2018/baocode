@@ -174,10 +174,10 @@ class AttentionService {
           ? 'BaoCode'
           : 'BaoCode · ${l10n.trayWaitingCount(waiting.length)}',
       labels: {
-        'show': l10n.trayShow,
+        'show': withProductName(l10n.trayShow),
         'waiting': l10n.trayWaiting,
         if (running > 0) 'running': l10n.trayRunning(running),
-        'quit': l10n.trayQuit,
+        'quit': withProductName(l10n.trayQuit),
       },
     );
     if (_trayShown && tray == _tray) return;

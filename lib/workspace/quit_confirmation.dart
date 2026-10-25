@@ -30,7 +30,7 @@ abstract final class QuitConfirmation {
       final l10n = context.l10n;
       final choice = await showIdeDialog(
         context,
-        message: l10n.quitConfirmMessage,
+        message: withProductName(l10n.quitConfirmMessage),
         detail: remote > 0
             ? '${l10n.quitConfirmDetail}\n${l10n.quitConfirmRemote(remote)}'
             : l10n.quitConfirmDetail,

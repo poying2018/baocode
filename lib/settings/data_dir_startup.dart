@@ -55,7 +55,7 @@ class DataDirectoryRecoveryApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'BaoCode',
+    title: productName,
     debugShowCheckedModeBanner: false,
     theme: buildAppTheme(),
     // The display language setting is in the folder that is not there:
@@ -190,6 +190,8 @@ class _DataDirectoryRecoveryState extends State<DataDirectoryRecovery> {
       DataDirectoryProblem.notWritable => l10n.dataDirCannotWrite,
       _ => l10n.dataDirUnavailable,
     };
+    // The product's own name, not the one the strings were written with.
+    final productTitle = withProductName(title);
     final where = fromEnvironment
         ? l10n.dataDirWhereEnv(DataDirectory.environmentVariable)
         : problem.problem == DataDirectoryProblem.invalidPointer
@@ -249,7 +251,7 @@ class _DataDirectoryRecoveryState extends State<DataDirectoryRecovery> {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        title,
+                        productTitle,
                         style: text(
                           color: AppColors.textPrimary,
                           size: 15,

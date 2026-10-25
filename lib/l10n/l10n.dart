@@ -3,8 +3,11 @@
 // Widgets read them with `context.l10n`, which falls back to English where
 // no AppLocalizations is in scope (a bare MaterialApp in a widget test, a
 // dialog built above the app's Localizations).
+import 'dart:io' show Platform;
+
 import 'package:flutter/widgets.dart';
 
+import '../platform/app_paths.dart';
 import '../platform/app_platform.dart';
 import 'app_localizations.dart';
 import 'app_localizations_en.dart';
@@ -14,6 +17,17 @@ export 'app_localizations.dart';
 /// The English strings: the template's, and what [AppLocalizationsContext.l10n]
 /// falls back to.
 final AppLocalizations englishLocalizations = AppLocalizationsEn();
+
+/// The product's name, as the app shows it: "BaoCode", or "BaoCode Codex".
+String get productName => AppPaths.displayName(
+  Platform.environment,
+  executable: Platform.resolvedExecutable,
+);
+
+/// [text] with the app's name in it put for the product's own: the
+/// strings name "BaoCode", and the codex product says its own name.
+String withProductName(String text) =>
+    text.replaceAll('BaoCode', productName);
 
 extension AppLocalizationsContext on BuildContext {
   /// The strings of the locale in scope; English when there is none.
