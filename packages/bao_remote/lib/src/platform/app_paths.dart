@@ -27,7 +27,12 @@ abstract final class AppPaths {
     final name = p
         .basenameWithoutExtension(executable ?? Platform.resolvedExecutable)
         .toLowerCase();
-    return name.startsWith('baocode') ? name : 'baocode';
+    // The name is the product's, with no space in it: "baocode" (BaoCode,
+    // the Claude Code one) or "baocode-codex" (the codex one). A name
+    // belonging to no product (a test host, a build named otherwise) is
+    // BaoCode's.
+    if (!name.startsWith('baocode')) return 'baocode';
+    return name.contains(' ') ? 'baocode' : name;
   }
 
   /// The name [product]'s folders carry, with this copy's id (see

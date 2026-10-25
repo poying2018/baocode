@@ -240,6 +240,10 @@ Future<void> main(List<String> arguments) async {
     await _run(Platform.resolvedExecutable, [
       'run',
       '${root.path}\\tool\\build_remote_server.dart',
+      // The server is the product's own: the codex product's has no Claude
+      // Code in it.
+      '--product',
+      product,
       '--out',
       remote.path,
     ], root.path);

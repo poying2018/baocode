@@ -78,6 +78,10 @@ void main() {
       AppPaths.displayName(withId, executable: 'baocode'),
       'BaoCode Dev',
     );
+    // A name with a space in it is no product's: BaoCode's is.
+    expect(AppPaths.product('BaoCode Codex'), 'baocode');
+    expect(AppPaths.product('BaoCode Codex.app/Contents/MacOS/BaoCode'),
+        'baocode');
   });
 
   test('the pointer of the codex product is its own', () {
