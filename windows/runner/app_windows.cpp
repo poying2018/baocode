@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "app_identity.h"
 #include "attention.h"
 #include "utils.h"
 
@@ -50,8 +51,9 @@ constexpr int kStashHeight = 420;
 constexpr unsigned int kStashMinWidth = 380;
 constexpr unsigned int kStashMinHeight = 220;
 
-// Where the main window's word on showing at launch is kept.
-constexpr wchar_t kSettingsKey[] = L"Software\\BaoCode";
+// Where the main window's word on showing at launch is kept. The key is
+// the product's own (app_identity.h): the two products keep their windows'
+// places apart.
 constexpr wchar_t kMainShownValue[] = L"MainShownAtLaunch";
 // Where the stash's panel was left, and how big (a RECT, in physical
 // pixels of the virtual screen).
@@ -389,7 +391,8 @@ void AppWindows::RequestReopen() {
 bool AppWindows::MainShownAtLaunch() {
   DWORD shown = 1;
   DWORD size = sizeof(shown);
-  if (::RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kMainShownValue,
+  if (::RegGetValueW(HKEY_CURRENT_USER, SettingsKey().c_str(),
+                     kMainShownValue,
                      RRF_RT_REG_DWORD, nullptr, &shown,
                      &size) != ERROR_SUCCESS) {
     return true;
@@ -419,7 +422,7 @@ void CALLBACK AppWindows::HoldBackTimer(HWND window, UINT message,
 void AppWindows::PlaceMain() {
   KeptFrame kept = {};
   DWORD size = sizeof(kept);
-  if (::RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kMainFrameValue,
+  if (::RegGetValueW(HKEY_CURRENT_USER, SettingsKey().c_str(), kMainFrameValue,
                      RRF_RT_REG_BINARY, nullptr, &kept,
                      &size) != ERROR_SUCCESS ||
       size != sizeof(kept) || kept.bounds.right <= kept.bounds.left ||
@@ -459,7 +462,7 @@ void AppWindows::KeepMainFrame() {
     return;
   }
   kept.maximized = maximized ? 1 : 0;
-  ::RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kMainFrameValue,
+  ::RegSetKeyValueW(HKEY_CURRENT_USER, SettingsKey().c_str(), kMainFrameValue,
                     REG_BINARY, &kept, sizeof(kept));
 }
 
@@ -627,7 +630,8 @@ void AppWindows::HandleMethodCall(
   }
   if (method == "setMainShownAtLaunch") {
     const DWORD shown = BoolOf(argument) ? 1 : 0;
-    ::RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kMainShownValue,
+    ::RegSetKeyValueW(HKEY_CURRENT_USER, SettingsKey().c_str(),
+                      kMainShownValue,
                       REG_DWORD, &shown, sizeof(shown));
     result->Success();
     return;
@@ -649,7 +653,7 @@ std::optional<int64_t> AppWindows::Create(
   // Made hidden, at the default size, then put in place (in physical
   // pixels, which Create does not take); shown when Flutter focuses it,
   // once it has drawn.
-  if (!window->Create(title.empty() ? L"BaoCode" : title,
+  if (!window->Create(title.empty() ? AppWindowTitle() : title,
                       Win32Window::Point(10, 10),
                       Win32Window::Size(kDefaultWidth, kDefaultHeight))) {
     return std::nullopt;
@@ -753,7 +757,7 @@ std::optional<int64_t> AppWindows::CreateStash(
   // monitor still.
   RECT kept = {};
   DWORD size = sizeof(kept);
-  if (::RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kStashFrameValue,
+  if (::RegGetValueW(HKEY_CURRENT_USER, SettingsKey().c_str(), kStashFrameValue,
                      RRF_RT_REG_BINARY, nullptr, &kept,
                      &size) == ERROR_SUCCESS &&
       size == sizeof(kept) && kept.right > kept.left &&
@@ -823,7 +827,7 @@ void AppWindows::HideStash() {
   // Kept for the next launch: where it is, and how big.
   RECT bounds = {};
   if (::IsWindowVisible(panel) && ::GetWindowRect(panel, &bounds)) {
-    ::RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kStashFrameValue,
+    ::RegSetKeyValueW(HKEY_CURRENT_USER, SettingsKey().c_str(), kStashFrameValue,
                       REG_BINARY, &bounds, sizeof(bounds));
   }
   ::ShowWindow(panel, SW_HIDE);

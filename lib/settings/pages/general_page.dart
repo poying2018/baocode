@@ -82,7 +82,7 @@ class GeneralSettingsPage extends StatelessWidget {
   static String attributionName(BuildContext context, CommitAttribution value) {
     final l10n = context.l10n;
     return switch (value) {
-      CommitAttribution.baocode => 'BaoCode',
+      CommitAttribution.baocode => productName,
       CommitAttribution.agent => l10n.generalSettingsAttributionAgent,
       CommitAttribution.none => l10n.generalSettingsAttributionNone,
     };
@@ -682,7 +682,7 @@ class _ContextMenuSettingState extends State<_ContextMenuSetting> {
                 ? () => unawaited(
                     _run(
                       () => ContextMenu.install((
-                        agent: l10n.contextMenuOpenWith('BaoCode'),
+                        agent: l10n.contextMenuOpenWith(productName),
                         ide: l10n.contextMenuOpenWith('Fast Ide'),
                       )),
                     ),
@@ -739,7 +739,7 @@ class _ClaudePathSettingState extends State<_ClaudePathSetting> {
     final l10n = context.l10n;
     return SettingsRow(
       label: l10n.claudePathSetting,
-      description: l10n.claudePathSettingDescription,
+      description: l10n.claudePathSettingDescription(productName),
       below: [
         FutureBuilder(
           future: _status,
@@ -751,6 +751,10 @@ class _ClaudePathSettingState extends State<_ClaudePathSetting> {
               ),
               LocalClaudeFound(:final version?, downloaded: true) => (
                 l10n.claudePathInUseDownloaded(productName, version),
+                false,
+              ),
+              LocalClaudeFound(:final version?, bundled: true) => (
+                l10n.claudePathInUseBundled(productName, version),
                 false,
               ),
               LocalClaudeFound(:final path, :final version?) => (

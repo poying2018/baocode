@@ -10,6 +10,18 @@ import 'version.dart';
 const defaultManifestUrl =
     'https://github.com/poying2018/baocode/releases/latest/download/latest.json';
 
+/// Where the app of [product] looks for its next version: the manifest
+/// of that product.
+///
+/// The two products are separate programs, and a release of one is not an
+/// update of the other: each has its own manifest, in the same release.
+String manifestUrlFor(String product) => switch (product) {
+  'baocode-codex' =>
+    'https://github.com/poying2018/baocode/releases/latest/download/'
+        'latest-codex.json',
+  _ => defaultManifestUrl,
+};
+
 /// The environment variable that points the app at another manifest, to
 /// try a release before it is published (a local server's, say).
 const manifestUrlVariable = 'BAOCODE_UPDATE_URL';

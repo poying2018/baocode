@@ -44,6 +44,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:baocode/platform/app_paths.dart';
 import 'package:baocode/update/update_manifest.dart';
 import 'package:baocode/update/update_signature.dart';
 import 'package:baocode/update/version.dart';
@@ -140,7 +141,8 @@ Future<void> main(List<String> arguments) async {
   // The product the release is for: the two products are separate programs,
   // and each is offered only its own releases.
   final product = options['product'] ?? 'baocode';
-  if (product != 'baocode' && product != 'baocode-codex') {
+  final spec = Product.byId(product);
+  if (spec == null) {
     _fail(
       'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
       'one) or baocode-codex (the codex one).',
@@ -165,8 +167,11 @@ Future<void> main(List<String> arguments) async {
       '$_usage',
     );
   }
+  // Each product's manifest is its own file: they are separate programs,
+  // and a release of one is not an update of the other.
   final manifestFile = File(
-    options['manifest'] ?? '${root.path}/build/installers/latest.json',
+    options['manifest'] ??
+        '${root.path}/build/installers/${spec.manifestName}',
   );
 
   // The other platform's entry, signed before for the same version.
@@ -303,7 +308,7 @@ Future<void> main(List<String> arguments) async {
     final file = edition == _channel ? entry['channel'] as Map : entry;
     stdout.writeln('  ${dmg.path}\n    -> ${file['url']}');
   }
-  stdout.writeln('  ${manifestFile.path}\n    -> $defaultManifestUrl');
+  stdout.writeln('  ${manifestFile.path}\n    -> ${manifestUrlFor(spec.id)}');
   // The channel build's too, once there is one.
   final missing = {
     for (final edition in _editions)

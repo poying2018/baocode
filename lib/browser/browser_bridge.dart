@@ -27,11 +27,15 @@ class BrowserBridge extends ChangeNotifier {
 
   /// The native messaging host's name, as the extension asks for it.
   ///
-  /// The extension is one, so it asks for one name; each product's host
-  /// answers under it and reads the port file of the product it belongs to
-  /// (see [portPath]). So the browser talks to the product that is running,
-  /// and not to the other one.
+  /// The extension is one, so it asks for the names it knows (the codex
+  /// product's and BaoCode's) and keeps the one that answers; each
+  /// product's host answers under its own name and reads the port file of
+  /// the product it belongs to (see [portPath]). So the browser talks to
+  /// the product that is running, and not to the other one.
   static const hostName = 'dev.baocode.browser';
+
+  /// The names the extension asks for, in the order it tries them.
+  static const hostNames = ['dev.baocode-codex.browser', hostName];
 
   /// The extension's id: the Chrome Web Store's, and the zip's to load
   /// unpacked (its manifest's key), the same (docs/release.md, 11).
@@ -424,12 +428,8 @@ class BrowserBridge extends ChangeNotifier {
 
   /// The host's name, as the file it is registered under: the product's
   /// own ("dev.baocode.browser", "dev.baocode-codex.browser").
-  static String _hostName() {
-    final product = _product();
-    return product == 'baocode'
-        ? hostName
-        : 'dev.${product.replaceFirst('baocode', 'baocode')}.browser';
-  }
+  static String _hostName() =>
+      Product.byId(_product())?.browserHost ?? hostName;
 
   /// The host's executable: beside the app's, and named for the product as
   /// the app's is (baocode-browser-host, baocode-codex-browser-host).

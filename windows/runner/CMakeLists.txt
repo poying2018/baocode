@@ -50,6 +50,13 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTT
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
+# The product's name and its file's name, for the version information in
+# the executable's properties (Runner.rc): the codex product's file says
+# "BaoCode Codex", and not the other one's name.
+target_compile_definitions(${BINARY_NAME} PRIVATE
+  "APP_PRODUCT_NAME=\"${APP_PRODUCT_NAME}\""
+  "APP_ORIGINAL_FILENAME=\"${BINARY_NAME}.exe\"")
+
 # Add dependency libraries and include directories. Add any application-specific
 # dependencies here.
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)

@@ -153,7 +153,7 @@ class AppWindow {
   };
 
   /// The title the system shows: `folder — BaoCode`.
-  String title(AppLocalizations l10n) => '${label(l10n)} — BaoCode';
+  String title(AppLocalizations l10n) => '${label(l10n)} — $productName';
 
   /// The folder's name; a remote one's with its host, as VS Code shows
   /// one (`app [SSH: dev]`).

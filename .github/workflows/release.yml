@@ -144,25 +144,48 @@ jobs:
           if key(this) == key(published):
               print(f'::warning::{this} is published already: publishing it again')
           EOF
+      - uses: dart-lang/setup-dart@v1
+        if: steps.version.outputs.publish == 'true'
+        with:
+          version: stable
+      - name: Carry a Claude Code that is not out
+        if: steps.version.outputs.publish == 'true'
+        run: |
+          # The bundle carries Claude Code itself, pinned by version and
+          # SHA-256 in tool/build_windows.dart: a machine with none of its
+          # own needs no install and no download. It cannot update itself,
+          # so the pin is what the release carries — a release with an old
+          # one ships an old agent. The pin is kept current by the Claude
+          # Code version workflow (.github/workflows/claude-version.yml);
+          # this is the backstop.
+          dart tool/bump_claude_version.dart
 
-  # Once, for both apps: they carry its servers.json, and download the
+  # Once for each product: they carry its servers.json, and download the
   # build a host needs (docs/ssh-remote.md, 9.3). Its
   # artifacts: remote (VERSION, servers.json, the .gz), remote-linux.
   remote:
-    name: Remote server
+    name: Remote server (${{ matrix.product }})
     needs: check
+    strategy:
+      # One product failing leaves the other building, to be re-run alone.
+      fail-fast: false
+      matrix:
+        product: [baocode, baocode-codex]
     uses: ./.github/workflows/remote.yml
+    with:
+      product: ${{ matrix.product }}
 
-  # Each build once per edition (check's editions): the channel build's
-  # files and artifacts end in -channel.
+  # Each build once per edition (check's editions) and per product: the
+  # channel build's files and artifacts end in -channel.
   windows:
-    name: Build for Windows (${{ matrix.edition }})
+    name: Build for Windows (${{ matrix.product }}, ${{ matrix.edition }})
     needs: [check, remote]
     runs-on: windows-latest
     strategy:
       # One edition failing leaves the other building, to be re-run alone.
       fail-fast: false
       matrix:
+        product: [baocode, baocode-codex]
         edition: ${{ fromJSON(needs.check.outputs.editions) }}
     env:
       SUFFIX: ${{ matrix.edition == 'channel' && '-channel' || '' }}
@@ -177,20 +200,20 @@ jobs:
         run: choco install innosetup --no-progress -y
       - uses: actions/download-artifact@v4
         with:
-          name: remote
+          name: remote-${{ matrix.product }}
           path: build/remote
       - name: Build
-        run: dart run tool/build_windows.dart --remote-built ${{ matrix.edition == 'channel' && '--channel' || '' }}
+        run: dart run tool/build_windows.dart --remote-built --product ${{ matrix.product }} ${{ matrix.edition == 'channel' && '--channel' || '' }}
       - uses: actions/upload-artifact@v4
         with:
-          name: windows${{ env.SUFFIX }}
+          name: windows-${{ matrix.product }}${{ env.SUFFIX }}
           if-no-files-found: error
-          path: build/installers/BaoCode-*-setup${{ env.SUFFIX }}.exe
+          path: build/installers/*-setup${{ env.SUFFIX }}.exe
       # The Dart code's symbols, for a hang report's app.so+0x… frames
       # (tool/build_windows.dart). Not released: kept with the run.
       - uses: actions/upload-artifact@v4
         with:
-          name: symbols-windows${{ env.SUFFIX }}
+          name: symbols-windows-${{ matrix.product }}${{ env.SUFFIX }}
           if-no-files-found: error
           retention-days: 90
           path: build/symbols/app.windows-x64.symbols
@@ -228,17 +251,25 @@ jobs:
           # and Linux ones are built by hand when they are wanted.
           editions=('' -channel)
           [ "$CHANNEL_ONLY" = true ] && editions=(-channel)
-          for edition in "${editions[@]}"; do
-            cp dist/windows$edition/BaoCode-$MARKETING-setup$edition.exe out/
+          # Both products: the two are separate programs, and each is
+          # published in its own name.
+          for product in baocode baocode-codex; do
+            for edition in "${editions[@]}"; do
+              for file in dist/windows-$product$edition/*-setup$edition.exe; do
+                cp "$file" out/
+              done
+            done
           done
           # The remote server's builds too: an app packaged before them (or
           # one built on another machine) downloads them from the release,
-          # by the version it was built with.
-          for file in dist/remote/*.gz dist/remote/servers.json; do
-            cp "$file" out/
+          # by the version it was built with. Each product's own.
+          for product in baocode baocode-codex; do
+            for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
+              cp "$file" out/
+            done
           done
           find out -type f | sort
-      - name: Sign the release into latest.json
+      - name: Sign the release into the manifests
         env:
           SIGNING_KEY: ${{ secrets.BAOCODE_UPDATE_SIGNING_KEY }}
         run: |
@@ -264,17 +295,31 @@ jobs:
               echo "::warning::No $file: the update notification and the changelog say nothing of $MARKETING"
             fi
           done
-          files=()
-          for edition in "${editions[@]}"; do
-            files+=(
-              --windows$edition out/BaoCode-$MARKETING-setup$edition.exe
-            )
+          # Each product's own manifest, in its own file: a release of one
+          # is not an update of the other.
+          for product in baocode baocode-codex; do
+            manifest=latest.json
+            [ "$product" = baocode-codex ] && manifest=latest-codex.json
+            files=()
+            for edition in "${editions[@]}"; do
+              for file in out/*-setup$edition.exe; do
+                case "$(basename "$file")" in
+                  BaoCodeCodex-*) [ "$product" = baocode-codex ] && files+=(--windows$edition "$file") ;;
+                  *) [ "$product" = baocode ] && files+=(--windows$edition "$file") ;;
+                esac
+              done
+            done
+            if [ ${#files[@]} -eq 0 ]; then
+              echo "::warning::No installer for $product: no manifest is written for it"
+              continue
+            fi
+            BAOCODE_UPDATE_SIGNING_KEY="$key" dart run tool/release_manifest.dart \
+              --version "$VERSION" \
+              --product "$product" \
+              "${files[@]}" \
+              --manifest "out/$manifest" \
+              "${notes[@]}"
           done
-          BAOCODE_UPDATE_SIGNING_KEY="$key" dart run tool/release_manifest.dart \
-            --version "$VERSION" \
-            "${files[@]}" \
-            --manifest out/latest.json \
-            "${notes[@]}"
           rm "$key"
       - name: Make the GitHub release, with its assets
         if: env.CHANNEL_ONLY != 'true'
@@ -287,9 +332,9 @@ jobs:
           gh release delete "v$MARKETING" --yes 2>/dev/null || true
           gh release create "v$MARKETING" --title "BaoCode $MARKETING" "${notes[@]}"
           # Every build gathered: the standard one and the channel build's,
-          # whose files end in -channel. The manifest names both, so both
-          # are here.
-          for file in out/BaoCode-*; do
+          # whose files end in -channel, of each product. The manifests
+          # name them, so both are here.
+          for file in out/BaoCode*; do
             gh release upload "v$MARKETING" "$file" --clobber
           done
       - name: Upload the remote server, beside the release
@@ -299,19 +344,25 @@ jobs:
         run: |
           # The remote server's builds are published here too, so an app
           # built months ago still downloads the one it was built with.
-          version=$(cat dist/remote/VERSION)
-          for file in dist/remote/*.gz dist/remote/servers.json; do
-            gh release upload "v$MARKETING" "$file" --clobber
+          # Each product's own.
+          for product in baocode baocode-codex; do
+            for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
+              gh release upload "v$MARKETING" "$file" --clobber
+            done
+            version=$(cat dist/remote-$product/VERSION)
+            jq -n --arg version "$version" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
+              '{version: $version, tag: $tag, commit: $commit}' > "remote-latest-$product.json"
+            gh release upload "v$MARKETING" "remote-latest-$product.json" --clobber
           done
-          jq -n --arg version "$version" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
-            '{version: $version, tag: $tag, commit: $commit}' > remote-latest.json
-          gh release upload "v$MARKETING" remote-latest.json --clobber
-      - name: Upload latest.json, last
+      - name: Upload the manifests, last
         if: env.CHANNEL_ONLY != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The app reads this from the release beside the installers; it
-          # is uploaded last, so an app that sees it finds the files it
+          # The app reads these from the release beside the installers; they
+          # are uploaded last, so an app that sees one finds the files it
           # names.
-          gh release upload "v$MARKETING" out/latest.json --clobber
+          for manifest in out/latest.json out/latest-codex.json; do
+            [ -f "$manifest" ] || continue
+            gh release upload "v$MARKETING" "$manifest" --clobber
+          done

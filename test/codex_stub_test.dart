@@ -16,7 +16,6 @@ import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/codex/codex_kernel.dart';
 import 'package:baocode/kernel/codex/codex_process_transport_io.dart';
 import 'package:baocode/kernel/codex/codex_transport.dart';
-import 'package:baocode/kernel/codex/codex_transport_factory.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/kernel/kernel_types.dart';

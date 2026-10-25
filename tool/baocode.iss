@@ -56,6 +56,12 @@
 #ifndef ProductBrowserManifest
   #define ProductBrowserManifest "dev.baocode.browser.json"
 #endif
+; The installer's file name: the product's own, without a space in it (the
+; release's assets are named after it, and a space in a file name is a
+; nuisance in a command line).
+#ifndef ProductFileName
+  #define ProductFileName "BaoCode"
+#endif
 
 ; The part of the version Windows records, without the build number pubspec
 ; adds after "+".
@@ -79,7 +85,7 @@ DefaultDirName={autopf}\{#ProductDir}
 DefaultGroupName={#ProductName}
 UninstallDisplayName={#ProductName}
 UninstallDisplayIcon={app}\{#ProductExe}
-OutputBaseFilename={#ProductName}-{#VersionNumber}-setup{#Edition}
+OutputBaseFilename={#ProductFileName}-{#VersionNumber}-setup{#Edition}
 OutputDir={#OutDir}
 ; What Explorer shows for the installer itself. Windows wants four numbers,
 ; where pubspec's version has three.
@@ -116,10 +122,10 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; \
   GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
-Name: "addtopath"; Description: "Add BaoCode to the PATH"; \
+Name: "addtopath"; Description: "Add {#ProductName} to the PATH"; \
   GroupDescription: "Other:"; Flags: unchecked
 Name: "contextmenu"; \
-  Description: "Add ""Open with BaoCode"" and ""Open with Fast Ide"" to Explorer's context menu"; \
+  Description: "Add ""Open with {#ProductName}"" and ""Open with Fast Ide"" to Explorer's context menu"; \
   GroupDescription: "Other:"
 
 [Files]
@@ -127,8 +133,10 @@ Name: "contextmenu"; \
 ; AOT app.so and flutter_assets) which sit beside the executable, and
 ; remote\ (VERSION and servers.json: which baocode-server remote projects
 ; run on their host, and where the app downloads it; tool/build_windows.dart
-; puts them there), and openssh\ (OpenSSH for Windows, for remote projects
-; where the system's ssh is too old to ask for a password).
+; puts them there), openssh\ (OpenSSH for Windows, for remote projects
+; where the system's ssh is too old to ask for a password), and claude\
+; (Claude Code itself, so that a machine with none of its own needs no
+; install and no download; tool/build_windows.dart puts it there).
 Source: "{#BundleDir}\*"; DestDir: "{app}"; \
   Flags: ignoreversion recursesubdirs createallsubdirs
 
@@ -275,7 +283,7 @@ Root: HKA; Subkey: "Software\Classes\Directory\Background\shell\{#ProductKey}Fas
   ValueType: none; Tasks: not contextmenu; Flags: deletekey
 
 [Run]
-Filename: "{app}\{#ProductExe}"; Description: "{cm:LaunchProgram,BaoCode}"; \
+Filename: "{app}\{#ProductExe}"; Description: "{cm:LaunchProgram,{#ProductName}}"; \
   Flags: nowait postinstall skipifsilent
 ; An update the app ran (lib/update/installer_io.dart) is silent, which
 ; skips the entry above: /RELAUNCH opens the app again once it is in place,

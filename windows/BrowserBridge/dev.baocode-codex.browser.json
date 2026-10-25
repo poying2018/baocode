@@ -1,5 +1,5 @@
 {
-  "name": "dev.baocode.browser",
+  "name": "dev.baocode-codex.browser",
   "description": "BaoCode Codex",
   "path": "baocode-codex-browser-host.exe",
   "type": "stdio",

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../kernel/claude_code/claude_environment.dart';
 import '../window/code_args.dart';
+import 'app_paths.dart';
 import 'app_platform.dart';
 import 'shell_command.dart';
 
@@ -38,8 +39,10 @@ Future<ProcessResult> _runProcess(
 );
 
 /// The line a script of ours carries, by which it is told from another
-/// app's `code`.
-const shellCommandMarker = 'BaoCode shell command';
+/// app's `code` — and from the other product's, which installs a command
+/// of its own.
+String get shellCommandMarker =>
+    '${AppPaths.displayName(Platform.environment)} shell command';
 
 /// Whether the file at [path] is a script of ours: the marker in its first
 /// lines (another app's may be a large binary, so only those are read).
@@ -307,7 +310,12 @@ class WindowsShellCommand implements ShellCommandInstaller {
 
   static String _defaultBinDirectory(Map<String, String> environment) {
     final local = environment['LOCALAPPDATA'] ?? '';
-    return local.isEmpty ? '' : p.join(local, 'BaoCode', 'bin');
+    // The product's own folder: the two products install the command
+    // side by side, and one must not overwrite the other's.
+    final product = AppPaths.product();
+    return local.isEmpty
+        ? ''
+        : p.join(local, product == 'baocode-codex' ? 'BaoCode Codex' : 'BaoCode', 'bin');
   }
 
   /// The folder the command goes in; empty when there is no

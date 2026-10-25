@@ -6,12 +6,12 @@
 
 #include <vector>
 
+#include "app_identity.h"
 #include "utils.h"
 
 namespace log_folder {
 namespace {
 
-constexpr wchar_t kSettingsKey[] = L"Software\\BaoCode";
 constexpr wchar_t kFolderValue[] = L"LogsFolder";
 
 // Windows' own lock, not std::mutex: built with MSVC 14.40 or later, a
@@ -36,8 +36,10 @@ std::wstring g_folder;
 
 // The folder kept by the run before; empty if none.
 std::wstring KeptFolder() {
+  // The product's own key: the two products keep their logs apart.
+  const std::wstring key = SettingsKey();
   DWORD size = 0;
-  if (::RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kFolderValue,
+  if (::RegGetValueW(HKEY_CURRENT_USER, key.c_str(), kFolderValue,
                      RRF_RT_REG_SZ, nullptr, nullptr,
                      &size) != ERROR_SUCCESS ||
       size < sizeof(wchar_t)) {
@@ -45,7 +47,7 @@ std::wstring KeptFolder() {
   }
   std::vector<wchar_t> folder(size / sizeof(wchar_t) + 1, L'\0');
   size = static_cast<DWORD>(folder.size() * sizeof(wchar_t));
-  if (::RegGetValueW(HKEY_CURRENT_USER, kSettingsKey, kFolderValue,
+  if (::RegGetValueW(HKEY_CURRENT_USER, key.c_str(), kFolderValue,
                      RRF_RT_REG_SZ, nullptr, folder.data(),
                      &size) != ERROR_SUCCESS) {
     return std::wstring();
@@ -53,7 +55,8 @@ std::wstring KeptFolder() {
   return std::wstring(folder.data());
 }
 
-// %APPDATA%\baocode\logs; empty if there is no %APPDATA%.
+// %APPDATA%\baocode\logs (the codex product's own folder); empty if there
+// is no %APPDATA%.
 std::wstring DefaultFolder() {
   wchar_t app_data[MAX_PATH];
   const DWORD length =
@@ -61,7 +64,9 @@ std::wstring DefaultFolder() {
   if (length == 0 || length >= MAX_PATH) {
     return std::wstring();
   }
-  return std::wstring(app_data) + L"\\baocode\\logs";
+  const std::wstring product = ProductSuffix();
+  return std::wstring(app_data) + L"\\baocode" +
+         (product.empty() ? L"" : L"-" + product) + L"\\logs";
 }
 
 // Whether |folder| is there, made if need be — with the folders above it:
@@ -77,7 +82,8 @@ void SetFolder(const std::wstring& folder) {
     Locked locked;
     g_folder = folder;
   }
-  ::RegSetKeyValueW(HKEY_CURRENT_USER, kSettingsKey, kFolderValue, REG_SZ,
+  const std::wstring key = SettingsKey();
+  ::RegSetKeyValueW(HKEY_CURRENT_USER, key.c_str(), kFolderValue, REG_SZ,
                     folder.c_str(),
                     static_cast<DWORD>((folder.size() + 1) * sizeof(wchar_t)));
 }

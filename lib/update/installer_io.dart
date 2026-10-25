@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../channel/channel_setup.dart' show ChannelSetup;
+import '../platform/app_paths.dart';
 import 'update_io.dart';
 import 'update_manifest.dart';
 import 'update_service.dart';
@@ -18,11 +19,12 @@ PlatformUpdates? platformUpdates({required String updatesDirectory}) {
   final environment = Platform.environment;
   final override = environment[manifestUrlVariable]?.trim() ?? '';
   if (!kReleaseMode && override.isEmpty) return null;
+  final executable = Platform.resolvedExecutable;
+  final product = AppPaths.product(executable);
   final manifestUrl = Uri.tryParse(
-    override.isEmpty ? defaultManifestUrl : override,
+    override.isEmpty ? manifestUrlFor(product) : override,
   );
   if (manifestUrl == null) return null;
-  final executable = Platform.resolvedExecutable;
   final UpdateInstaller installer;
   final String platform;
   if (Platform.isMacOS) {
@@ -160,6 +162,12 @@ class WindowsUpdateInstaller implements UpdateInstaller {
   final String updatesDirectory;
   final UpdateProcesses processes;
 
+  /// The key Setup registered this app's uninstaller under: the one of
+  /// the product this build is.
+  late final String uninstallKey = windowsUninstallKey(
+    AppPaths.product(executable),
+  );
+
   /// Setup's log of the last update.
   @override
   String get log => p.join(updatesDirectory, 'install.log');
@@ -172,7 +180,7 @@ class WindowsUpdateInstaller implements UpdateInstaller {
       try {
         final result = await processes.run('reg.exe', [
           'query',
-          '$hive\\$windowsUninstallKey',
+          '$hive\\$uninstallKey',
           '/reg:64',
         ]);
         return result.exitCode == 0;
@@ -208,10 +216,11 @@ class WindowsUpdateInstaller implements UpdateInstaller {
 }
 
 /// The key Setup registers the app's uninstaller under, in HKLM or HKCU:
-/// tool/baocode.iss's AppId, which never changes.
-const windowsUninstallKey =
+/// tool/baocode.iss's AppId, which never changes. Each product has one of
+/// its own, so that one does not read the other's install.
+String windowsUninstallKey(String product) =>
     r'Software\Microsoft\Windows\CurrentVersion\Uninstall\'
-    '{6fdd732b-95c6-4c37-af6f-ff574358deb5}_is1';
+    '${Product.byId(product)?.appId ?? Product.baocode.appId}_is1';
 
 /// Whether [executable] is under one of the Program Files folders, where
 /// a per-machine install puts it.

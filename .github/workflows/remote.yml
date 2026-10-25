@@ -19,7 +19,19 @@ on:
   push:
     tags: ['server-*']
   workflow_dispatch:
+    inputs:
+      product:
+        description: The product the server is for
+        type: choice
+        default: baocode
+        options: [baocode, baocode-codex]
   workflow_call:
+    inputs:
+      product:
+        description: The product the server is for
+        type: choice
+        default: baocode
+        options: [baocode, baocode-codex]
 
 permissions:
   contents: read
@@ -29,12 +41,16 @@ env:
 
 jobs:
   build:
-    name: Build the remote server
+    name: Build the remote server (${{ inputs.product || 'baocode' }})
     # A Mac, as only one builds for macOS: the Linux builds are
     # cross-compiled, the macOS x64 one by an x64 Dart SDK under Rosetta.
     runs-on: macos-15
     outputs:
       version: ${{ steps.version.outputs.version }}
+    env:
+      # The product the server is for: the codex product's server has no
+      # Claude Code in it (the two products are separate programs).
+      PRODUCT: ${{ inputs.product || 'baocode' }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -57,6 +73,7 @@ jobs:
       - name: Build for Linux and macOS, x64 and arm64
         run: |
           dart run tool/build_remote_server.dart --out build/remote --all \
+            --product "$PRODUCT" \
             --macos-x64-dart "$RUNNER_TEMP/dart-x64/dart-sdk/bin/dart"
       - id: version
         run: echo "version=$(cat build/remote/VERSION)" >> "$GITHUB_OUTPUT"
@@ -64,30 +81,32 @@ jobs:
         run: tool/test_remote_server_macos.sh build/remote
       - uses: actions/upload-artifact@v4
         with:
-          name: remote
+          name: remote-${{ env.PRODUCT }}
           if-no-files-found: error
           path: |
             build/remote/VERSION
-            build/remote/servers.json
+            build/remote/servers*.json
             build/remote/*.gz
       - uses: actions/upload-artifact@v4
         with:
-          name: remote-linux
+          name: remote-linux-${{ env.PRODUCT }}
           if-no-files-found: error
           path: |
             build/remote/VERSION
-            build/remote/baocode-server-linux-*
+            build/remote/baocode*-server-linux-*
             !build/remote/*.gz
 
   linux:
     name: Run the remote server on Linux
     needs: build
     runs-on: ubuntu-latest
+    env:
+      PRODUCT: ${{ inputs.product || 'baocode' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          name: remote-linux
+          name: remote-linux-${{ env.PRODUCT }}
           path: build/remote
       - uses: docker/setup-qemu-action@v3
         with:
@@ -95,7 +114,7 @@ jobs:
       - name: Run it on Linux distributions, in Docker
         run: |
           # Artifacts keep no modes.
-          chmod 755 build/remote/baocode-server-linux-*
+          chmod 755 build/remote/baocode*-server-linux-*
           tool/test_remote_server.sh build/remote
 
   publish:
@@ -112,10 +131,11 @@ jobs:
       cancel-in-progress: false
     env:
       VERSION: ${{ needs.build.outputs.version }}
+      PRODUCT: ${{ inputs.product || 'baocode' }}
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: remote
+          name: remote-${{ env.PRODUCT }}
           path: dist/remote
       - name: Upload the builds and their servers.json
         env:
@@ -124,7 +144,7 @@ jobs:
           # Named by what was built, so never changed once there. The
           # release of this repository carries them, not a CDN of
           # upstream's: the app downloads them from here.
-          for file in dist/remote/*.gz dist/remote/servers.json; do
+          for file in dist/remote/*.gz dist/remote/servers*.json; do
             gh release upload "$GITHUB_REF_NAME" "$file" --clobber
           done
       - name: Name them in latest.json, last
@@ -132,15 +152,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           jq -n --arg version "$VERSION" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
-            '{version: $version, tag: $tag, commit: $commit}' > latest.json
-          gh release upload "$GITHUB_REF_NAME" latest.json --clobber
+            '{version: $version, tag: $tag, commit: $commit}' > "remote-latest-$PRODUCT.json"
+          gh release upload "$GITHUB_REF_NAME" "remote-latest-$PRODUCT.json" --clobber
           {
             echo "## Remote server \`$VERSION\` (\`$GITHUB_REF_NAME\`, ${GITHUB_SHA::7})"
             echo
             echo "Package an app that downloads it:"
             echo
             echo '```'
-            echo "dart run tool/build_windows.dart --remote-release $VERSION"
-            echo "dart run tool/build_macos.dart --remote-release $VERSION"
+            echo "dart run tool/build_windows.dart --remote-release $VERSION --product $PRODUCT"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY

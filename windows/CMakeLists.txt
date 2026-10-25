@@ -14,6 +14,18 @@ project(baocode LANGUAGES CXX)
 #   dart run tool/set_product.dart baocode  BaoCode (the Claude Code one)
 set(BINARY_NAME "baocode")
 
+# The product's name, as it shows: the one the executable's name says.
+# The version information in the executable's properties (runner/Runner.rc)
+# carries it, so that Explorer and the Task Manager name the product the
+# file is, and not the other one.
+if("${BINARY_NAME}" STREQUAL "baocode")
+  set(APP_PRODUCT_NAME "BaoCode")
+elseif("${BINARY_NAME}" STREQUAL "baocode-codex")
+  set(APP_PRODUCT_NAME "BaoCode Codex")
+else()
+  set(APP_PRODUCT_NAME "${BINARY_NAME}")
+endif()
+
 # The browsers' native messaging host and its manifest, each product's own
 # (the host's name says the product, as the app's does).
 if("${BINARY_NAME}" STREQUAL "baocode")

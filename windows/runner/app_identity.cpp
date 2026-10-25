@@ -127,3 +127,28 @@ std::wstring AppWindowTitle() {
   }
   return title;
 }
+
+std::wstring SettingsKey() {
+  // The product's own key: the codex product keeps its settings under
+  // Software\BaoCodeCodex, so that the two do not write over each
+  // other's (the window's frame, the folder the logs go in).
+  std::wstring key = L"Software\\BaoCode";
+  if (const std::wstring product = ProductSuffix(); !product.empty()) {
+    key += Capitalised(product);
+  }
+  return key;
+}
+
+std::wstring SingleInstanceName() {
+  // The mutex is the product's own: a copy of BaoCode running must not
+  // keep the codex product from starting (each has windows of its own
+  // class, so neither hands its paths to the other).
+  std::wstring name = L"Local\\BaoCode.SingleInstance";
+  if (const std::wstring product = ProductSuffix(); !product.empty()) {
+    name += L"." + product;
+  }
+  if (const std::wstring id = AppId(); !id.empty()) {
+    name += L"." + id;
+  }
+  return name;
+}

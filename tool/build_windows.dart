@@ -28,6 +28,11 @@
 // remote projects where the system's ssh is too old to ask for a password
 // (Windows 10's 8.1): downloaded once into build\openssh\ and checked.
 //
+// It carries Claude Code too (claude\): Anthropic's own program, pinned by
+// version and checked by its SHA-256, so that a machine with no Claude Code
+// of its own needs no install and no download. The codex product carries
+// none of it.
+//
 // The Dart code's symbols are saved as it is built, to build\symbols\
 // app.windows-x64.symbols: the hang reports name its frames by their
 // offsets in app.so (windows/runner/hang_watchdog.cpp), which
@@ -41,6 +46,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:baocode/platform/app_paths.dart';
 import 'package:crypto/crypto.dart';
 
 /// Where the bundle flutter leaves behind goes, and where the installer is
@@ -81,6 +87,21 @@ const _openSshFiles = [
   'LICENSE.txt',
   'NOTICE.txt',
 ];
+
+/// The Claude Code the bundle carries (Anthropic's own program, the one
+/// downloads.claude.ai publishes), its version and its SHA-256.
+///
+/// The app runs it as it is, so that a machine with no Claude Code of its
+/// own needs no install and no download. The version is pinned here, and
+/// the build checked against its SHA-256, so that a build carries that one
+/// build and no other: after choosing another version, update these two.
+const _claudeVersion = '2.1.308';
+const _claudeSha256 =
+    'c9796ba22a9221586b36371b36f5b66198d66eb4badf6a4cf4a5f7b07becea53';
+
+/// Where that build is: the release's own file for Windows x64.
+const _claudeUrl =
+    'https://downloads.claude.ai/claude-code-releases/$_claudeVersion/win32-x64/claude.exe';
 
 /// SHA-256 of Flutter's own release flutter_windows.dll that
 /// tool/engine/flutter_windows.dll was built to replace (3.47.5), and of that
@@ -128,32 +149,33 @@ Future<void> main(List<String> arguments) async {
             !arguments[productAt + 1].startsWith('--')
       ? arguments[productAt + 1]
       : 'baocode';
-  if (product != 'baocode' && product != 'codex') {
+  final spec = Product.byId(product);
+  if (spec == null) {
     _fail(
       'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
       'one) or codex (the codex one).',
     );
   }
-  final binaryName = product == 'codex' ? 'baocode-codex' : 'baocode';
-  final productName = product == 'codex' ? 'BaoCode Codex' : 'BaoCode';
+  // The remote server's manifest, as the product's build writes it: the
+  // codex product's has another name, so that the two products' servers do
+  // not take each other's place in a release.
+  final serversFile = spec.id == 'baocode-codex'
+      ? 'servers-codex.json'
+      : 'servers.json';
+  final binaryName = spec.binary;
+  final productName = spec.displayName;
   // The identity Windows keeps for the installed app: it must not change
   // between versions (an upgrade installs over the old one) and must differ
   // between the products (so that one does not install over the other).
   // The codex product's is a new one of its own.
-  final productId = product == 'codex'
-      ? '{{3c9e2b14-7f56-4d1a-9b2e-6d5f8a71c40}'
-      : '{{6fdd732b-95c6-4c37-af6f-ff574358deb5}';
+  final productId = spec.appId;
   // The context menu's key, the URL scheme and the browsers' native
   // messaging host: each product has one of its own, so that one does not
   // take the other's away.
-  final productKey = product == 'codex' ? 'BaoCodeCodex' : 'BaoCode';
-  final productScheme = product == 'codex' ? 'baocode-codex' : 'baocode';
-  final productBrowserHost = product == 'codex'
-      ? 'dev.baocode.codex.browser'
-      : 'dev.baocode.browser';
-  final productBrowserManifest = product == 'codex'
-      ? 'dev.baocode-codex.browser.json'
-      : 'dev.baocode.browser.json';
+  final productKey = spec.id == 'baocode-codex' ? 'BaoCodeCodex' : 'BaoCode';
+  final productScheme = spec.scheme;
+  final productBrowserHost = spec.browserHost;
+  final productBrowserManifest = spec.browserManifest;
 
   // The script lives in tool/, so the repository is one level above it.
   final root = File.fromUri(Platform.script).parent.parent.absolute;
@@ -164,7 +186,7 @@ Future<void> main(List<String> arguments) async {
   if (!skipBuild) {
     _step(
       'Building the Release bundle${channel ? ' (the channel build)' : ''}'
-      '${product == 'codex' ? ' (the codex product)' : ''}',
+      '${spec.id == 'baocode-codex' ? ' (the codex product)' : ''}',
     );
     // The product names the executable (windows/CMakeLists.txt), and the
     // executable names the product (windows/runner/app_identity.cpp).
@@ -232,7 +254,7 @@ Future<void> main(List<String> arguments) async {
     ], root.path);
   } else if (remoteBuilt) {
     _step('Using the remote server already built');
-    if (!File('${remote.path}\\servers.json').existsSync()) {
+    if (!File('${remote.path}\\$serversFile').existsSync()) {
       _fail('No remote server built in ${remote.path}.');
     }
   } else {
@@ -243,7 +265,7 @@ Future<void> main(List<String> arguments) async {
       // The server is the product's own: the codex product's has no Claude
       // Code in it.
       '--product',
-      product,
+      spec.id,
       '--out',
       remote.path,
     ], root.path);
@@ -252,9 +274,12 @@ Future<void> main(List<String> arguments) async {
   // The builds an older run put there go.
   if (bundleRemote.existsSync()) bundleRemote.deleteSync(recursive: true);
   bundleRemote.createSync(recursive: true);
-  for (final name in ['VERSION', 'servers.json']) {
-    File('${remote.path}\\$name').copySync('${bundleRemote.path}\\$name');
-  }
+  // The bundle carries the product's own manifest, under the name the app
+  // reads it by.
+  File('${remote.path}\\VERSION').copySync('${bundleRemote.path}\\VERSION');
+  File(
+    '${remote.path}\\$serversFile',
+  ).copySync('${bundleRemote.path}\\servers.json');
   _checkBundle(bundle, [r'remote\VERSION', r'remote\servers.json']);
   final remoteVersion = File('${remote.path}\\VERSION')
       .readAsStringSync()
@@ -263,6 +288,17 @@ Future<void> main(List<String> arguments) async {
   _step('Putting in OpenSSH for Windows $_openSshRelease');
   await _putOpenSsh(root, bundle);
   _checkBundle(bundle, [for (final name in _openSshFiles) 'openssh\\$name']);
+
+  // Claude Code itself, so that a machine with none of its own needs no
+  // install and no download. The codex product carries none of it: it has
+  // no Claude Code to carry.
+  if (spec.hasClaudeCode) {
+    _step('Putting in Claude Code $_claudeVersion');
+    await _putClaude(root, bundle);
+    _checkBundle(bundle, [r'claude\claude.exe', r'claude\VERSION']);
+  } else {
+    _step('Leaving Claude Code out (the codex product carries none)');
+  }
 
   _step('Compiling the installer');
   final iscc = _findIscc();
@@ -279,6 +315,8 @@ Future<void> main(List<String> arguments) async {
     '/DProductId=$productId',
     '/DProductExe=$binaryName.exe',
     '/DProductDir=$productName',
+    // The installer's file name: the product's own, without a space.
+    '/DProductFileName=${spec.installerName}',
     // The context menu's key, the URL scheme and the browsers' native
     // messaging host: each product has one of its own, so that one does not
     // take the other's away.
@@ -306,7 +344,7 @@ Future<void> main(List<String> arguments) async {
 
   _step('Done');
   final installer = File(
-    '${installers.path}\\BaoCode-${version.marketing}-setup'
+    '${installers.path}\\${spec.installerName}-${version.marketing}-setup'
     '${channel ? '-channel' : ''}.exe',
   );
   for (final file in [installer, ...servers]) {
@@ -463,6 +501,50 @@ Future<void> _putOpenSsh(Directory root, Directory bundle) async {
     file.copySync('${target.path}\\$name');
   }
 }
+
+/// Puts the Claude Code the bundle carries in `claude\`: downloaded into
+/// build\claude\ once, and checked against [_claudeSha256] each time. The
+/// `VERSION` file beside it names the build, as the app reads it to know
+/// what it carries, and how old it is.
+Future<void> _putClaude(Directory root, Directory bundle) async {
+  final cache = Directory('${root.path}\\build\\claude');
+  final file = File('${cache.path}\\claude-$_claudeVersion.exe');
+  if (!file.existsSync() || await _sha256Of(file) != _claudeSha256) {
+    final url = Uri.parse(_claudeUrl);
+    stdout.writeln('  Downloading $url');
+    cache.createSync(recursive: true);
+    final part = File('${file.path}.part');
+    final client = HttpClient();
+    try {
+      final response = await (await client.getUrl(url)).close();
+      if (response.statusCode != 200) {
+        _fail('$url answered ${response.statusCode}.');
+      }
+      await response.pipe(part.openWrite());
+    } finally {
+      client.close();
+    }
+    if (await _sha256Of(part) != _claudeSha256) {
+      part.deleteSync();
+      _fail(
+        'The Claude Code download is not the one this script expects.\n'
+        'After choosing another version, update _claudeVersion and\n'
+        '_claudeSha256 in this script.',
+      );
+    }
+    part.renameSync(file.path);
+  }
+  final target = Directory('${bundle.path}\\claude');
+  if (target.existsSync()) target.deleteSync(recursive: true);
+  target.createSync(recursive: true);
+  file.copySync('${target.path}\\claude.exe');
+  File('${target.path}\\VERSION').writeAsStringSync('$_claudeVersion\n');
+}
+
+/// The file's SHA-256, in hex: read in pieces, so that a file of a few
+/// hundred megabytes does not have to fit in memory at once.
+Future<String> _sha256Of(File file) async =>
+    '${await sha256.bind(file.openRead()).first}';
 
 /// Clears CMake's cache when it was made for another product: it keeps the
 /// target's name, and a build of the other product fails on it ("No target

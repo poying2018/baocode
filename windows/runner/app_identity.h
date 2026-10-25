@@ -37,4 +37,13 @@ const wchar_t* AppWindowClass();
 // ("BaoCode (dev)").
 std::wstring AppWindowTitle();
 
+// The key Windows keeps this product's own settings under: the window's
+// frame, the folder the logs go in. Each product has one of its own, so
+// that the two do not write over each other's.
+std::wstring SettingsKey();
+
+// The mutex a running copy holds, so that a second one hands its paths to
+// the first: each product's own, for the same reason.
+std::wstring SingleInstanceName();
+
 #endif  // BAOCODE_APP_IDENTITY_H_

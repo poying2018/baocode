@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
+import '../platform/app_paths.dart';
 import '../platform/data_dir.dart';
 import 'secret_store.dart';
 
@@ -60,7 +61,9 @@ class KeychainSecretStore implements SecretStore {
 
   final SecretCommand _command;
 
-  static const service = 'BaoCode';
+  /// The keychain's service: the product's own, so that the two products'
+  /// secrets are apart, and re-keying in one does not touch the other.
+  static String get service => AppPaths.displayName(Platform.environment);
 
   /// `security`'s "not found".
   static const _notFound = 44;
@@ -188,7 +191,12 @@ class SecretServiceStore implements SecretStore {
     'secret-tool',
   ]).then((result) => result.exitCode == 0, onError: (_) => false);
 
-  List<String> _attributes(String id) => ['service', 'baocode', 'account', id];
+  List<String> _attributes(String id) => [
+    'service',
+    AppPaths.displayName(Platform.environment).toLowerCase(),
+    'account',
+    id,
+  ];
 
   @override
   Future<String?> read(String id) async {
@@ -211,7 +219,7 @@ class SecretServiceStore implements SecretStore {
     if (!await _hasTool) return fallback.write(id, value);
     final result = await _command('secret-tool', [
       'store',
-      '--label=BaoCode: $id',
+      '--label=${AppPaths.displayName(Platform.environment)}: $id',
       ..._attributes(id),
     ], input: value);
     if (result.exitCode != 0) throw _failed('kept', result);

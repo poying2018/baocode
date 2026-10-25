@@ -34,6 +34,7 @@ import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
 
+import 'package:baocode/platform/app_paths.dart';
 import 'package:crypto/crypto.dart';
 
 const _platforms = ['linux-x64', 'linux-arm64', 'darwin-x64', 'darwin-arm64'];
@@ -73,7 +74,8 @@ Future<void> main(List<String> arguments) async {
   // The product the server is for: the codex product's server has no Claude
   // Code in it (the two products are separate programs).
   final product = option('--product') ?? 'baocode';
-  if (product != 'baocode' && product != 'baocode-codex') {
+  final spec = Product.byId(product);
+  if (spec == null) {
     _fail(
       'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
       'one) or baocode-codex (the codex one).',
@@ -81,7 +83,11 @@ Future<void> main(List<String> arguments) async {
   }
   for (final platform in _platforms) {
     final [os, arch] = platform.split('-');
-    final output = '${out.path}/baocode-server-$platform';
+    // The build's name says the product it is for: the two products'
+    // servers are published beside each other in one release, and one must
+    // not take the other's place.
+    final name = '${_serverPrefix(spec)}-$platform';
+    final output = '${out.path}/$name';
     // Not left from an earlier run: servers.json names only those built.
     File(output).deleteIfExists();
     final dart = os == 'linux' || platform == host
@@ -106,7 +112,7 @@ Future<void> main(List<String> arguments) async {
       arch,
       '-Dbaocode.version=$version',
       // The product the server is for: the codex one has no Claude Code.
-      if (product == 'baocode-codex') '-Dbaocode.product=baocode-codex',
+      if (!spec.hasClaudeCode) '-Dbaocode.product=${spec.id}',
       '-o',
       output,
       source,
@@ -129,11 +135,11 @@ Future<void> main(List<String> arguments) async {
   _step('Compressing the builds for download');
   final files = <String, Object?>{};
   for (final platform in _platforms) {
-    final file = 'baocode-server-$platform.gz';
+    final file = '${_serverPrefix(spec)}-$platform.gz';
     File('${out.path}/$file').deleteIfExists();
     if (!built.contains(platform)) continue;
     final bytes = GZipCodec(level: 9)
-        .encode(File('${out.path}/baocode-server-$platform').readAsBytesSync());
+        .encode(File('${out.path}/${_serverPrefix(spec)}-$platform').readAsBytesSync());
     File('${out.path}/$file').writeAsBytesSync(bytes);
     files[platform] = {
       'url': '$_downloadsBase/$name/$file',
@@ -144,7 +150,7 @@ Future<void> main(List<String> arguments) async {
       '  $file (${(bytes.length / 1048576).toStringAsFixed(1)} MB)',
     );
   }
-  File('${out.path}/servers.json').writeAsStringSync(
+  File('${out.path}/$_serversFile').writeAsStringSync(
     '${const JsonEncoder.withIndent('  ').convert({'version': name, 'files': files})}\n',
   );
   _step('Done: ${out.path} ($name)');
@@ -155,10 +161,20 @@ Future<void> main(List<String> arguments) async {
     ..writeln('  gh release create $name --repo $_repository \\')
     ..writeln('    --title "$name" --notes "" --latest=false \\')
     ..writeln(
-      '    ${out.path}/baocode-server-*.gz ${out.path}/servers.json '
+      '    ${out.path}/${_serverPrefix(spec)}-*.gz ${out.path}/$_serversFile '
       '${out.path}/VERSION',
     );
 }
+
+/// The name the builds of [spec] have: the product's own, so that the two
+/// products' servers do not take each other's place in a release.
+String _serverPrefix(Product spec) =>
+    spec.id == 'baocode-codex' ? 'baocode-codex-server' : 'baocode-server';
+
+/// The name the manifest of the builds has: the product's own, for the
+/// same reason (the app reads its own copy out of its bundle).
+String _serversFile(Product spec) =>
+    spec.id == 'baocode-codex' ? 'servers-codex.json' : 'servers.json';
 
 /// [platform] for people: `Linux x64`, `macOS arm64`.
 String _describe(String platform) {

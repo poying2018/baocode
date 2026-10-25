@@ -16,7 +16,15 @@
 // new method here is said in CAPABILITIES; BRIDGE goes up only for a change
 // an older BaoCode would get wrong.
 
-const HOST = 'dev.baocode.browser';
+// The hosts the app may be behind: BaoCode's, and the codex product's.
+// Each product registers its own (the host's name says the product), and
+// only one of them is running at a time, so the extension tries them in
+// turn: the one that is not installed is refused at once, and the one
+// whose app is not running ends by itself.
+const HOSTS = ['dev.baocode-codex.browser', 'dev.baocode.browser'];
+// Which host to try first: the one that worked last, so that the product
+// the user is working in keeps the browser.
+let hostIndex = 0;
 const GROUP = 'BaoCode';
 const PROTOCOL = '1.3';
 // What BaoCode and this extension say to each other: one more with each
@@ -41,10 +49,20 @@ const subscribed = new Set(); // The browser's events BaoCode is told of.
 
 function connect() {
   if (port) return;
-  try {
-    port = chrome.runtime.connectNative(HOST);
-  } catch (error) {
-    port = null;
+  for (let attempt = 0; attempt < HOSTS.length; attempt++) {
+    const index = (hostIndex + attempt) % HOSTS.length;
+    try {
+      port = chrome.runtime.connectNative(HOSTS[index]);
+      // The next try starts after this one: a host whose app is not
+      // running ends by itself, and the other one is then tried.
+      hostIndex = (index + 1) % HOSTS.length;
+      break;
+    } catch (error) {
+      port = null;
+    }
+  }
+  if (!port) {
+    setConnected(false);
     return;
   }
   port.onMessage.addListener(received);

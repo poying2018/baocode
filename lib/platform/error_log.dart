@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../l10n/l10n.dart';
 import '../update/version.dart';
 import 'app_platform.dart';
 import 'event_log.dart';
@@ -151,7 +152,7 @@ class ErrorLog {
         file.renameSync(previousPath);
       }
       _append(
-        '--- BaoCode $appVersionString · ${Platform.operatingSystem} '
+        '--- $productName $appVersionString · ${Platform.operatingSystem} '
         '${Platform.operatingSystemVersion} · '
         '${_clock().toIso8601String()} ---\n',
       );

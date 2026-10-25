@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../l10n/l10n.dart';
 import '../update/version.dart';
 
 /// What the app went through, one line each, in `logs/events.log`
@@ -67,7 +68,7 @@ class EventLog {
       _size = file.existsSync() ? file.lengthSync() : 0;
       _rollIfFull(0);
       _append(
-        '--- BaoCode $appVersionString · ${Platform.operatingSystem} '
+        '--- $productName $appVersionString · ${Platform.operatingSystem} '
         '${Platform.operatingSystemVersion} · pid $pid ---\n',
       );
     }

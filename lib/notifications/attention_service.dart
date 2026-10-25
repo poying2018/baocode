@@ -171,8 +171,8 @@ class AttentionService {
           (id: _id(thread), title: thread.localizedTitle(l10n)),
       ],
       tooltip: waiting.isEmpty
-          ? 'BaoCode'
-          : 'BaoCode · ${l10n.trayWaitingCount(waiting.length)}',
+          ? productName
+          : '$productName · ${l10n.trayWaitingCount(waiting.length)}',
       labels: {
         'show': l10n.trayShow(productName),
         'waiting': l10n.trayWaiting,

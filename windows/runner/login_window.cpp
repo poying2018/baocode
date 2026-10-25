@@ -6,6 +6,7 @@
 #include <optional>
 #include <utility>
 
+#include "app_identity.h"
 #include "utils.h"
 
 using Microsoft::WRL::Callback;
@@ -14,6 +15,16 @@ using Microsoft::WRL::ComPtr;
 namespace {
 
 constexpr wchar_t kWindowClass[] = L"BAOCODE_LOGIN_WINDOW";
+
+// The window's class: the product's own, so that the two products' login
+// windows are told apart.
+std::wstring WindowClass() {
+  std::wstring name = kWindowClass;
+  if (const std::wstring product = ProductSuffix(); !product.empty()) {
+    name += L"_" + product;
+  }
+  return name;
+}
 
 // Its size at 100%, as the macOS app's.
 constexpr int kWidth = 480;
@@ -83,7 +94,11 @@ std::wstring TemporaryFolder() {
   wchar_t path[MAX_PATH + 1];
   const DWORD length = ::GetTempPathW(MAX_PATH + 1, path);
   std::wstring folder(path, length);
-  return folder + L"BaoCode-Login";
+  // The product's own folder: the two products sign in side by side, and
+  // one WebView2 profile must not be the other's.
+  const std::wstring product = ProductSuffix();
+  return folder + L"BaoCode" +
+         (product.empty() ? L"" : L"-" + product) + L"-Login";
 }
 
 }  // namespace
@@ -146,6 +161,7 @@ void LoginWindow::Open(const std::wstring& url, const std::wstring& title,
     ::DestroyWindow(before);
   }
   static bool registered = false;
+  const std::wstring window_class_name = WindowClass();
   if (!registered) {
     WNDCLASSEXW window_class{};
     window_class.cbSize = sizeof(window_class);
@@ -153,7 +169,7 @@ void LoginWindow::Open(const std::wstring& url, const std::wstring& title,
     window_class.hInstance = ::GetModuleHandle(nullptr);
     window_class.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
     window_class.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    window_class.lpszClassName = kWindowClass;
+    window_class.lpszClassName = window_class_name.c_str();
     window_class.hIcon = reinterpret_cast<HICON>(::GetClassLongPtr(owner_, GCLP_HICON));
     ::RegisterClassExW(&window_class);
     registered = true;
@@ -166,7 +182,7 @@ void LoginWindow::Open(const std::wstring& url, const std::wstring& title,
   ::GetWindowRect(owner_, &frame);
   const int x = frame.left + (frame.right - frame.left - width) / 2;
   const int y = frame.top + (frame.bottom - frame.top - height) / 2;
-  window_ = ::CreateWindowExW(0, kWindowClass, title.c_str(),
+  window_ = ::CreateWindowExW(0, window_class_name.c_str(), title.c_str(),
                               WS_OVERLAPPEDWINDOW, x, y, width, height, owner_,
                               nullptr, ::GetModuleHandle(nullptr), nullptr);
   if (window_ == nullptr) {

@@ -170,7 +170,7 @@ void main() {
         expect(executable, 'reg.exe');
         expect(arguments.last, '/reg:64');
         final key = arguments[1];
-        expect(key, endsWith(windowsUninstallKey));
+        expect(key, endsWith(windowsUninstallKey('baocode')));
         return _result(registered(key.split(r'\').first) ? 0 : 1);
       });
       final installer = installerIn(app, processes);

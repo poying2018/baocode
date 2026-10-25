@@ -7,6 +7,7 @@ import 'package:bao_remote/local.dart' show ClaudeEnvironment;
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:path/path.dart' as p;
 
+import '../platform/app_paths.dart';
 import '../platform/data_dir.dart';
 import 'mac_host_platform.dart'
     if (dart.library.ffi) 'mac_host_platform_ffi.dart';
@@ -14,8 +15,19 @@ import 'mac_host_platform.dart'
 /// The server builds in [directory] (tool/build_remote_server.dart writes
 /// them): `baocode-server-<platform>` (`linux-x64`, `darwin-arm64`, …), and
 /// `VERSION`, which names them.
+///
+/// The codex product's own builds are named after it
+/// (`baocode-codex-server-<platform>`): the two products' servers are
+/// published beside each other in one release, and one must not take the
+/// other's place.
 class DirectoryServerBinaries implements RemoteServerBinaries {
   DirectoryServerBinaries(this.directory, this.version);
+
+  /// The name the builds of this product have: the product's own.
+  static String serverPrefix([String? product]) =>
+      (product ?? AppPaths.product()) == 'baocode-codex'
+      ? 'baocode-codex-server'
+      : 'baocode-server';
 
   /// Those in [directory], if it has a `VERSION` and a build.
   static DirectoryServerBinaries? at(String directory) {
@@ -44,7 +56,7 @@ class DirectoryServerBinaries implements RemoteServerBinaries {
   @override
   final String version;
 
-  static String fileName(String platform) => 'baocode-server-$platform';
+  static String fileName(String platform) => '${serverPrefix()}-$platform';
 
   /// Those there are builds for.
   static const platforms = [
@@ -167,7 +179,9 @@ class DownloadedServerBinaries implements RemoteServerBinaries {
   }
 
   Future<List<int>> _fetch(String platform, ServerDownload download) async {
-    final file = File(p.join(cacheDir, version, 'baocode-server-$platform.gz'));
+    final file = File(
+      p.join(cacheDir, version, '${DirectoryServerBinaries.serverPrefix()}-$platform.gz'),
+    );
     final name = SshLauncher.describe(platform);
     if (await file.exists()) {
       final kept = await file.readAsBytes();

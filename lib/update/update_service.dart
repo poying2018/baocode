@@ -203,14 +203,17 @@ class UpdateService extends ChangeNotifier {
     required this.backend,
     required this.installer,
     Uri? manifestUrl,
-    this.product = 'baocode',
+    String product = 'baocode',
     UpdateMode Function()? mode,
     this.settingsChanges,
     UpdateStore? store,
     DateTime Function()? now,
     this.firstCheckDelay = const Duration(seconds: 10),
     this.checkInterval = const Duration(minutes: 5),
-  }) : manifestUrl = manifestUrl ?? Uri.parse(defaultManifestUrl),
+  }) : product = product,
+       // The manifest of this product: the two products are separate
+       // programs, and a release of one is not an update of the other.
+       manifestUrl = manifestUrl ?? Uri.parse(manifestUrlFor(product)),
        _mode = mode ?? (() => UpdateMode.defaultMode),
        store = store ?? MemoryUpdateStore(),
        _now = now ?? DateTime.now;

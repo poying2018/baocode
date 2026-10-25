@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../platform/app_paths.dart';
 import '../platform/event_log.dart';
 import '../settings/user_settings.dart';
 
@@ -462,11 +463,14 @@ class ChannelSetup extends ChangeNotifier {
   }
 
   /// Whether [link] is the page's (`baocode://activate…`), not another
-  /// `baocode://` link.
-  static bool isLink(String link) => switch (Uri.tryParse(link.trim())) {
-    Uri(scheme: 'baocode', host: 'activate') => true,
-    _ => false,
-  };
+  /// link of this product's scheme.
+  static bool isLink(String link) {
+    final uri = Uri.tryParse(link.trim());
+    if (uri == null) return false;
+    // The product's own scheme: the codex product's links open it, and
+    // BaoCode's links open BaoCode.
+    return uri.scheme == AppPaths.scheme() && uri.host == 'activate';
+  }
 
   /// A `baocode://activate?i=…&s=…&c=…` link, as the page hands it over
   /// (opened, or pasted): set up with what it says, which the telemetry
