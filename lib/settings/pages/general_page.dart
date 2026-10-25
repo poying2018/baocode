@@ -9,6 +9,7 @@ import '../../ide/ide_button.dart';
 import '../../ide/ide_menu.dart';
 import '../../ide/ide_notifications.dart' show IdeSeverity;
 import '../../kernel/claude_code/claude_core_setting.dart';
+import '../../kernel/kernel_registry.dart';
 import '../../kernel/claude_code/claude_path_setting.dart';
 import '../../kernel/commit_attribution.dart';
 import '../../kernel/prompt_suggestions.dart';
@@ -65,6 +66,15 @@ class GeneralSettingsPage extends StatelessWidget {
 
   /// Whether Claude Code is in this product: the codex one has none of it.
   bool get _hasClaudeCode => hasClaudeCode ?? AppPaths.hasClaudeCode();
+
+  /// The product's own kernel's name, for the strings that name Claude
+  /// Code: the codex product's kernel is codex, and the strings say so.
+  static String get _kernelName => KernelRegistry.all.first.label;
+
+  /// [text] with the kernel's name in it, where the strings name Claude
+  /// Code.
+  static String _withKernel(String text) =>
+      text.replaceAll('Claude Code', _kernelName);
 
   /// The feature tips: those not on yet are listed first.
   final FeatureTipsController? tips;
@@ -326,7 +336,9 @@ class GeneralSettingsPage extends StatelessWidget {
                 ),
                 SettingsRow(
                   label: l10n.generalSettingsCommitAttribution,
-                  description: l10n.generalSettingsCommitAttributionDescription,
+                  description: _withKernel(
+                    l10n.generalSettingsCommitAttributionDescription,
+                  ),
                   below: [
                     SelectableText(
                       detail,
@@ -354,7 +366,7 @@ class GeneralSettingsPage extends StatelessWidget {
                   context,
                   key: QueuedMessages.settingKey,
                   label: l10n.generalSettingsQueuedMessages,
-                  description: l10n.generalSettingsQueuedMessagesDescription,
+                  description: _withKernel(l10n.generalSettingsQueuedMessagesDescription),
                   values: {
                     QueuedMessages.afterTurn.name:
                         l10n.generalSettingsQueuedAfterTurn,
@@ -364,7 +376,7 @@ class GeneralSettingsPage extends StatelessWidget {
                 ),
                 SettingsSwitchRow(
                   label: l10n.generalSettingsPromptSuggestions,
-                  description: l10n.generalSettingsPromptSuggestionsDescription,
+                  description: _withKernel(l10n.generalSettingsPromptSuggestionsDescription),
                   value: PromptSuggestions.enabled(
                     settings?[PromptSuggestions.settingKey],
                   ),

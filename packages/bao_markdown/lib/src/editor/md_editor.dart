@@ -1469,6 +1469,16 @@ class MarkdownEditorState extends State<MarkdownEditor>
     _connection!.setEditingState(value);
   }
 
+  /// The platform is told of the text as it is now, whatever the platform
+  /// has: what it types next is told against what it has, and a platform
+  /// that is not told types against a text that is not there.
+  void _tellPlatform() {
+    if (!_hasInput) return;
+    final value = _windowValue();
+    _remote = value;
+    _connection!.setEditingState(value);
+  }
+
   bool _applyingRemote = false;
 
   @override
@@ -1482,7 +1492,11 @@ class MarkdownEditorState extends State<MarkdownEditor>
     for (final delta in deltas) {
       _applyDelta(delta);
     }
-    _syncRemote();
+    // The platform is told of the text as it is now: what it types next is
+    // told against what it has, and a platform that is not told types
+    // against a text that is not there (the characters come out in the
+    // wrong order).
+    _tellPlatform();
   }
 
   @override
@@ -1521,7 +1535,9 @@ class MarkdownEditorState extends State<MarkdownEditor>
         ),
       );
     }
-    _syncRemote();
+    // The platform is told of the text as it is now (see
+    // [updateEditingValueWithDeltas]).
+    _tellPlatform();
   }
 
   void _applyDelta(TextEditingDelta delta) {
