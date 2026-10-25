@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -32,6 +33,13 @@ class StashStore extends ChangeNotifier {
   bool get loaded => _loaded;
   Future<void>? _loading;
   StreamSubscription<void>? _watching;
+
+  /// Why the folder could not be read, when it could not; null when it
+  /// could. The Stash is empty then, and the app says so.
+  String? _problem;
+
+  /// Why the stashes could not be read, when they could not be.
+  String? get problem => _problem;
 
   /// All of them, newest first.
   List<StashNote> get notes =>
@@ -121,7 +129,16 @@ class StashStore extends ChangeNotifier {
   Future<void> reload() => _read();
 
   Future<void> _read() async {
-    final listed = await disk.list();
+    // The folder may not be there, and may not be made (a disk that is
+    // read-only, a folder the user may not write in): the Stash is a
+    // convenience, and the app carries on without it.
+    Map<int, DateTime> listed;
+    try {
+      listed = await disk.list();
+    } on FileSystemException catch (error) {
+      listed = const {};
+      _problem = error.message;
+    }
     final meta = await disk.readMeta();
     _redirects
       ..clear()

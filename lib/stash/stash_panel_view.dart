@@ -1248,7 +1248,9 @@ class _AllStashesState extends State<_AllStashes> {
             child: notes.isEmpty
                 ? Center(
                     child: Text(
-                      l10n.stashNoMatch,
+                      // The folder could not be read: say why, rather than
+                      // saying there is nothing there.
+                      _controller.store.problem ?? l10n.stashNoMatch,
                       style: TextStyle(
                         color: AppColors.textFaint,
                         fontSize: 12,
