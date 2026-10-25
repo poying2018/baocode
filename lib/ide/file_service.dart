@@ -229,11 +229,9 @@ Future<IdeFileListing> listProjectFiles(
   }
   if (files is IdeHostFiles) return files.listProject(root, limit: limit);
   // The spelling of the paths is the root's own: a remote host's are
-  // POSIX, a local one's this machine's.
+  // POSIX, a local one's this machine's (a drive, or a UNC path).
   final paths = p.Context(
-    style: RegExp(r'^[A-Za-z]:').hasMatch(root)
-        ? p.Style.windows
-        : p.Style.posix,
+    style: root.contains(r'\') ? p.Style.windows : p.Style.posix,
   );
   final pathsTo = <String>[];
   final pending = <String>[root];
