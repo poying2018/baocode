@@ -38,6 +38,7 @@
 // the remote server's gzipped builds, which the app downloads instead of
 // carrying them (tool/build_remote_server.dart), to upload with the
 // release.
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -422,6 +423,11 @@ Future<void> _run(
     arguments,
     workingDirectory: workingDirectory,
     runInShell: executable == 'flutter',
+    // The build's own output is UTF-8 (the compiler says it in the
+    // system's language, in UTF-8); the system's code page would garble
+    // it on a machine that speaks another.
+    stdoutEncoding: const Utf8Codec(allowMalformed: true),
+    stderrEncoding: const Utf8Codec(allowMalformed: true),
   );
   final output = '${result.stdout}'.trim();
   if (output.isNotEmpty) stdout.writeln(output);
