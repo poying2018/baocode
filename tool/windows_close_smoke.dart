@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:baocode/l10n/l10n.dart';
@@ -12,6 +11,8 @@ import 'package:baocode/kernel/claude_code/process_transport_io.dart';
 import 'package:baocode/platform/data_dir.dart';
 import 'package:baocode/window/app_windows.dart';
 import 'package:baocode/window/window_host.dart';
+import 'package:baocode/window/window_settings.dart';
+import 'package:baocode/workspace/window_controls.dart';
 import 'package:baocode/workspace/workspace.dart';
 
 // Runs against the real Windows embedder, not FakeWindowHost:
@@ -28,6 +29,11 @@ Future<void> main() async {
     workspace: workspace,
     l10n: () => englishLocalizations,
     hasTray: () => true,
+    // The IDE in windows of its own: what this is about (closing one
+    // window leaves the others). With the IDE in the main window there is
+    // one window, and closing it ends the app.
+    settings: () =>
+        const WindowSettings(ideWindows: IdeWindows.separate),
   );
   if (!await windows.start()) throw StateError('Windows host unavailable');
   runWidget(BaoCodeApp(workspace: workspace, windows: windows));
@@ -38,6 +44,10 @@ Future<void> main() async {
     stdout.writeln('WINDOW_SMOKE $cycle: opening agent');
     final agent = await windows.openAgent([folder.path]);
     if (agent == null) throw StateError('Agent window unavailable');
+    stdout.writeln(
+      'WINDOW_SMOKE $cycle: multi ${windows.multi} ide ${ide.viewId} '
+      'agent ${windows.agentWindows.map((w) => w.viewId).toList()}',
+    );
     if (const bool.fromEnvironment('WINDOW_SMOKE_INSTALLER')) {
       final shell =
           '${Platform.environment['SystemRoot']}\\System32\\'
@@ -86,8 +96,12 @@ Future<void> main() async {
     }
     await Future<void>.delayed(const Duration(milliseconds: 500));
     stdout.writeln('WINDOW_SMOKE $cycle: closing IDE ${ide.viewId}');
-    await MethodChannel('baocode/window.${ide.viewId}')
-        .invokeMethod<void>('windowCommand', 'close');
+    // The window's own channel: the main window's is `baocode/window`, an
+    // IDE window's is `baocode/window.<its view's id>` (see
+    // lib/workspace/window_controls.dart).
+    await WindowControls.channelFor(
+      ide.viewId,
+    ).invokeMethod<void>('windowCommand', 'close');
     final deadline = DateTime.now().add(const Duration(seconds: 10));
     while (host.viewOf(ide.viewId) != null) {
       if (DateTime.now().isAfter(deadline)) {
