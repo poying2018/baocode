@@ -64,6 +64,27 @@ gh api repos/baocode-dev/baocode/releases/tags/v1.5.0 --jq .body
 | 放大后标题栏按钮右缘点不到 | `_rect()` 的角点过了 zoom、尺寸没过（`box.size`）⇒ 上报的盒子比画的窄，右缘被系统当拖窗区 | 整矩形同过变换：`MatrixUtils.transformRect(box.getTransformTo(null), Offset.zero & box.size)` |
 | Windows 装语言服务器报"不是有效的 Win32 应用" | `which()` 把无扩展名候选排在 PATHEXT 前 ⇒ 命中 nvm 目录里 npm 的 Bash 脚本；`.cmd` 起的 node 在 cmd.exe 被杀后存活 | 只按 PATHEXT 匹配；npm 由 node 直跑 `npm-cli.js`；杀进程用 `taskkill /T` 收整棵树 |
 
+#### 怎么核对"上游日志里的每一条，在 fork 里都实现了"
+
+合并后别只看"提交合进来了" —— **fork 自己的改动可能盖掉了上游的实现**。用这个办法逐条查：
+
+```powershell
+# 1. fork 相对上游 main 的所有差异（只删不改的量 = 上游可能丢的东西）
+git diff --numstat upstream/main HEAD -- lib/ packages/ tool/
+# 2. 那些删除行，逐行看：地址替换、等价重构、自己的增强，还是真丢了实现
+git diff upstream/main HEAD -- lib/ packages/ tool/ | Select-String '^-' | Where-Object { $_.Line -notmatch '^---' }
+# 3. 上游 v1.6.0 之后又改过的文件（我们的合并也包含了，但要确认合并结果与 upstream/main 一致）
+git diff --name-only v1.6.0 upstream/main
+# 4. 某处两边同题（各自有修法）时，看合并后的代码是不是把两边的修法都保住了
+git diff v1.6.0 HEAD -- <那个文件>
+```
+
+判读：`+` 多于 `-`，且删除行里没有"上游的功能逻辑"，就是**没丢**；反过来（有实质逻辑被删）
+要逐条查清是被上游有意删掉的（如上游自己删了一个特性），还是合并出错。
+
+**上游的日志不一定涵盖 tag 之后的提交** —— `git log v<上游tag>..upstream/main` 里的那些修复
+也要写进自己的发布说明，否则用户看不到。
+
 ### 3. 合并上游，保留 fork 特性
 
 ```powershell
@@ -199,6 +220,22 @@ curl.exe -sIL --max-time 60 'https://github.com/poying2018/baocode/releases/down
   账户的额度与预算在 `https://github.com/settings/billing/usage` 与
   `https://github.com/settings/billing/budgets` —— 后者里每个产品的预算若是 $0，会显示
   "Usage blocked"，那就会把用量整个卡住（改预算需要有效的支付方式，GitHub Free 账户改不了）。
+- **只发标准版时，渠道版的资产要一起清**：`release.yml` 对普通 tag（`v1.6.0`）默认
+  `editions='["standard","channel"]'`，**两个版本都会建、都上传**。只删渠道版的安装包资产
+  是不够的 —— `latest.json` 里还留着 `windows-x64-channel` 条目，它指向被删掉的资产，
+  用户点了就是 404。要用本地工具重新生成再覆盖上传：
+  ```powershell
+  # 只传 --windows（不带 -channel），就只会有 windows-x64 一个 key
+  dart run tool/release_manifest.dart --windows <安装包> --version <版本> `
+      --notes-zh release-notes\<版本>.zh.md --notes-en release-notes\<版本>.en.md `
+      --manifest latest.json
+  gh release upload v<版本> latest.json --repo poying2018/baocode --clobber
+  ```
+  （渠道版的 `remote-latest.json` 一并删掉。）下次若只要标准版，用
+  `workflow_dispatch` 传 `editions: standard`，省掉这一步善后。
+- **CI 某个 job 因网络失败**（`curl: (56) Recv failure: Connection reset by peer` 之类），
+  下游的 job 会全变 skipped、一个 release 都没发。`gh run rerun <run-id> --failed` 重跑那个
+  job 即可，不必重来整条流水线。
 - **tag push 报 `startup_failure`**：多半是 reusable workflow 的权限写法（`permissions:` 替了
   `environment: release`）。先看 job 是否一个都没创建；再对比"同 commit 打不同 tag 名"排除
   tag 状态问题
