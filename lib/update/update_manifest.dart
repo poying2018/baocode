@@ -112,6 +112,7 @@ class UpdateManifest {
     this.pubDate,
     this.notes = const {},
     this.minimumVersion,
+    this.product,
     this._platforms = const {},
     this._invalidPlatforms = const {},
   });
@@ -124,6 +125,14 @@ class UpdateManifest {
 
   /// Older than this, the update is not one the user may put off.
   final AppVersion? minimumVersion;
+
+  /// The product the release is for ("baocode", "baocode-codex"); null
+  /// when the manifest does not say, which is a release of BaoCode (the
+  /// one that came first).
+  ///
+  /// The two products are separate programs: one must not offer the
+  /// other's versions, which are not its own.
+  final String? product;
 
   final Map<String, UpdateAsset> _platforms;
 
@@ -190,6 +199,13 @@ class UpdateManifest {
             (throw const UpdateManifestException('"minimumVersion" is wrong')),
       _ => throw const UpdateManifestException('"minimumVersion" is wrong'),
     };
+    final product = switch (json['product']) {
+      null => null,
+      final String text => text.isEmpty
+          ? null
+          : text,
+      _ => throw const UpdateManifestException('"product" is wrong'),
+    };
     final notes = switch (json['notes']) {
       null => const <String, String>{},
       final String text => {'en': text},
@@ -217,6 +233,7 @@ class UpdateManifest {
       pubDate: pubDate,
       notes: notes,
       minimumVersion: minimumVersion,
+      product: product,
       platforms: platforms,
       invalidPlatforms: invalid,
     );
@@ -271,9 +288,15 @@ class UpdateManifest {
     if (pubDate case final date?) 'pubDate': date.toUtc().toIso8601String(),
     if (notes.isNotEmpty) 'notes': notes,
     if (minimumVersion case final minimum?) 'minimumVersion': '$minimum',
+    if (product != null) 'product': product,
     'platforms': {
       for (final MapEntry(:key, :value) in _platforms.entries)
         key: value.toJson(),
     },
   };
+
+  /// Whether this release is for [name] (the product asking): a manifest
+  /// that names no product is BaoCode's (the one that came first), and so
+  /// is not the codex product's.
+  bool isFor(String name) => product == null ? name == 'baocode' : product == name;
 }

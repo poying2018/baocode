@@ -23,11 +23,13 @@ String _manifest({
   Map<String, Object?>? platforms,
   Object? notes,
   Object? minimumVersion,
+  Object? product,
 }) => jsonEncode({
   'version': ?version,
   'pubDate': '2026-10-04T00:00:00Z',
   'notes': ?notes,
   'minimumVersion': ?minimumVersion,
+  'product': ?product,
   'platforms':
       platforms ??
       {
@@ -62,6 +64,23 @@ void main() {
       expect(asset.sha256, 'a' * 64);
       expect(asset.fileName, 'BaoCode-1.2.0-setup.exe');
       expect(manifest.platforms, containsAll(['windows-x64', 'macos-arm64']));
+    });
+
+    test('a release is for the product it names', () {
+      // The two products (BaoCode, the Claude Code one, and the codex one)
+      // are separate programs: one must not offer the other's versions,
+      // which are not its own.
+      final codex = UpdateManifest.parse(_manifest(product: 'baocode-codex'));
+      expect(codex.product, 'baocode-codex');
+      expect(codex.isFor('baocode-codex'), isTrue);
+      expect(codex.isFor('baocode'), isFalse);
+
+      // A manifest that names no product is BaoCode's (the one that came
+      // first).
+      final baocode = UpdateManifest.parse(_manifest());
+      expect(baocode.product, isNull);
+      expect(baocode.isFor('baocode'), isTrue);
+      expect(baocode.isFor('baocode-codex'), isFalse);
     });
 
     test('names a download by its path, whatever its query', () {

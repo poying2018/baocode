@@ -12,10 +12,12 @@ String manifestOf(
   String? minimumVersion,
   Map<String, String>? notes,
   List<String> platforms = const ['windows-x64', 'macos-arm64'],
+  String? product,
 }) => jsonEncode({
   'version': version,
   'minimumVersion': ?minimumVersion,
   'notes': ?notes,
+  'product': ?product,
   'platforms': {
     for (final platform in platforms)
       platform: {
@@ -115,6 +117,7 @@ UpdateService serviceOf(
   UpdateStore? store,
   String current = '1.0.0+1',
   String? platform = 'windows-x64',
+  String product = 'baocode',
 }) {
   final setting = mode ?? FakeModeSetting();
   return UpdateService(
@@ -122,6 +125,7 @@ UpdateService serviceOf(
     platform: platform,
     backend: backend,
     installer: installer ?? FakeInstaller(),
+    product: product,
     mode: () => setting.mode,
     settingsChanges: setting,
     store: store,

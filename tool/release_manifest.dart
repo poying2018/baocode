@@ -91,10 +91,15 @@ Usage:
       [--notes-en <text|file>] [--notes-zh <text|file>]
       [--minimum-version <version>] [--version <version>]
       [--manifest <latest.json>]
+      [--product <baocode|baocode-codex>]
   dart run tool/release_manifest.dart --generate-key <file>
   dart run tool/release_manifest.dart --public-key
   dart run tool/release_manifest.dart --encrypt-key <file> --out <file>
   dart run tool/release_manifest.dart --decrypt-key <file> --out <file>
+
+The product is the one the release is for: the two products (BaoCode, the
+Claude Code one, and the codex one) are separate programs, and each is
+offered only its own releases. It is baocode unless said otherwise.
 
 The private key's path is read from \$$_keyVariable. It may be encrypted
 with Windows DPAPI (CurrentUser), which is read in memory: only the
@@ -132,6 +137,15 @@ Future<void> main(List<String> arguments) async {
   final version = AppVersion.parse(
     options['version'] ?? _pubspecVersion(File('${root.path}/pubspec.yaml')),
   );
+  // The product the release is for: the two products are separate programs,
+  // and each is offered only its own releases.
+  final product = options['product'] ?? 'baocode';
+  if (product != 'baocode' && product != 'baocode-codex') {
+    _fail(
+      'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
+      'one) or baocode-codex (the codex one).',
+    );
+  }
   final files = {
     for (final edition in _editions) ...{
       if (options['windows$edition'] case final path?)
@@ -261,6 +275,9 @@ Future<void> main(List<String> arguments) async {
     pubDate: DateTime.now().toUtc(),
     notes: notes,
     minimumVersion: minimum,
+    // The product the release is for: the two products are separate
+    // programs, and each is offered only its own releases.
+    product: product,
     platforms: assets,
   );
   final json = {
@@ -451,6 +468,7 @@ Map<String, String?> parseReleaseManifestArguments(List<String> arguments) {
     'minimum-version',
     'version',
     'manifest',
+    'product',
     'generate-key',
     // The DPAPI ones: the private key may be kept encrypted, and read
     // in memory (see _readKey). The upstream's version of this tool

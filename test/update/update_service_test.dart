@@ -39,6 +39,24 @@ void main() {
       expect(backend.downloads, isEmpty);
     });
 
+    test('a release of the other product is not an update of this one', () async {
+      // The two products (BaoCode, the Claude Code one, and the codex one)
+      // are separate programs: each is offered only its own releases.
+      final codex = serviceOf(
+        FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
+        product: 'baocode-codex',
+      );
+      expect(await codex.check(manual: true), isA<UpdateFound>());
+
+      // The same release, asked for by BaoCode: not its own.
+      final baocode = serviceOf(
+        FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
+      );
+      expect(await baocode.check(manual: true), isA<UpdateUpToDate>());
+      expect(baocode.release, isNull);
+      expect(baocode.status, UpdateStatus.upToDate);
+    });
+
     test('is up to date with the same, an older, or no download', () async {
       for (final manifest in [
         manifestOf('1.0.0+1'),

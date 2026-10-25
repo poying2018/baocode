@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
 
 import '../../ide/ide_button.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_links.dart';
+import '../../platform/app_paths.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/codicons.dart';
 import '../../update/version.dart';
@@ -48,7 +50,11 @@ class AboutSettingsPage extends StatelessWidget {
                     textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text(
-                        'BaoCode',
+                        // The product's name: BaoCode, or the codex one.
+                        AppPaths.displayName(
+                          Platform.environment,
+                          executable: Platform.resolvedExecutable,
+                        ),
                         style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 17,

@@ -203,6 +203,7 @@ class UpdateService extends ChangeNotifier {
     required this.backend,
     required this.installer,
     Uri? manifestUrl,
+    this.product = 'baocode',
     UpdateMode Function()? mode,
     this.settingsChanges,
     UpdateStore? store,
@@ -220,6 +221,10 @@ class UpdateService extends ChangeNotifier {
   /// This build's platform key; null where there are no updates (a debug
   /// build, the web, Linux).
   final String? platform;
+
+  /// The product this build is: a release of another one is not an update
+  /// of it.
+  final String product;
 
   final Uri manifestUrl;
   final UpdateBackend backend;
@@ -399,6 +404,14 @@ class UpdateService extends ChangeNotifier {
         text,
         policy: UpdateUrlPolicy.forManifest(manifestUrl),
       );
+      // The two products are separate programs: a release of one is not an
+      // update of the other, and is not offered as one.
+      if (!manifest.isFor(product)) {
+        _release = null;
+        _file = null;
+        _setStatus(UpdateStatus.upToDate);
+        return const UpdateUpToDate();
+      }
       store.lastChecked = _now();
       _installed = manifest.version.marketing == current.marketing
           ? manifest

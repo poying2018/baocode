@@ -67,6 +67,7 @@ import 'network/network_proxy.dart';
 import 'notifications/attention_host.dart';
 import 'notifications/attention_settings.dart';
 import 'platform/memory_budget.dart';
+import 'platform/app_paths.dart';
 import 'platform/app_platform.dart';
 import 'platform/data_dir.dart';
 import 'platform/error_log.dart';
@@ -522,6 +523,9 @@ UpdateController? _startUpdates(SettingsFiles files) {
     manifestUrl: platform.manifestUrl,
     backend: platform.backend,
     installer: platform.installer,
+    // The two products are separate programs: each watches its own
+    // releases, and is offered none of the other's.
+    product: AppPaths.product(Platform.resolvedExecutable),
     mode: () => UpdateMode.parse(files.settings[UpdateMode.settingKey]),
     settingsChanges: files.settings,
     store: GlobalUpdateStore(files.storage),
@@ -832,7 +836,11 @@ class _BaoCodeAppState extends State<BaoCodeApp> {
   /// A window's app: its own navigator, dialogs, overlay and focus; what
   /// it shows built anew as its folder changes.
   Widget _app(AppWindow window) => MaterialApp(
-    title: 'BaoCode',
+    // The product's name: BaoCode, or the codex one.
+    title: AppPaths.displayName(
+      Platform.environment,
+      executable: Platform.resolvedExecutable,
+    ),
     debugShowCheckedModeBanner: false,
     theme: buildAppTheme(),
     scrollBehavior: const BaoScrollBehavior(),
