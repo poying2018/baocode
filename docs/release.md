@@ -2,10 +2,18 @@
 
 BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已安装的应用怎么拿到它，以及第一次发布前要准备什么。应用这一侧怎么检查、下载、校验、安装，见 [auto-update.md](auto-update.md)。
 
+> **这个 fork 只发 Windows 版。** 下面的流程是上游的（`dl.baocode.dev`、Cloudflare R2、
+> macOS 与 Linux 的构建、官网在 `baocode.dev`）；这个仓库改成了用自己的 GitHub Release
+> 发 Windows 安装包，更新源是本仓库的 `releases/latest/download/latest.json`。
+> 文中讲 macOS 构建、签名、公证的部分**在这里不做**：`macos/` 目录与
+> `tool/build_macos.dart` 已删掉，`tool/release_manifest.dart` 也不再收 `--macos-*` 与
+> `--dmg-*` 选项。远程服务端的 macOS 版仍在（`remote.yml` 在 Mac 上编译）—— 那是装在
+> SSH 主机上的服务端，与应用的平台无关。
+
 - 下载与更新：`https://dl.baocode.dev`（Cloudflare R2）
 - 官网：`https://baocode.dev`（Cloudflare Worker `baocode` 的静态资源，`site/`；Workers Builds 从 GitHub 部署）
 - 构建与发布：GitHub Actions，`.github/workflows/release.yml`
-- 工具：`tool/bump_version.dart`、`tool/build_macos.dart`、`tool/build_windows.dart`、`tool/build_remote_server.dart`、`tool/release_manifest.dart`
+- 工具：`tool/bump_version.dart`、`tool/build_windows.dart`、`tool/build_remote_server.dart`、`tool/release_manifest.dart`
 
 ## 目录
 
@@ -151,7 +159,6 @@ git tag server-1.0.7-ssh-fix && git push origin server-1.0.7-ssh-fix
 ```sh
 dart run tool/build_windows.dart --remote-release            # 最新发布的服务端
 dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
-dart run tool/build_macos.dart --remote-release              # macOS 同理
 ```
 
 脚本用 `tool/fetch_remote_server.dart` 取 `servers.json`、确认每个 `.gz` 都能下载，放进 `build/remote-release/` 再打包。应用和服务端是严格一一对应的内部协议（docs/ssh-remote.md），**服务端要从和应用相同（至少 `packages/bao_remote` 相同）的提交发布**，否则连上后可能出错。正式发版（`v*`）也会传 `servers.json`、更新 `releases/remote/latest.json`。
@@ -193,10 +200,6 @@ releases/
   latest.json                            应用和下载页读的清单          max-age=300
   1.2.0/
     BaoCode-1.2.0-setup.exe              Windows：首次安装和自动更新   immutable，一年
-    BaoCode-1.2.0-mac-arm64.zip          macOS Apple silicon：自动更新 immutable，一年
-    BaoCode-1.2.0-mac-x64.zip            macOS Intel：自动更新         immutable，一年
-    BaoCode-1.2.0-arm64.dmg              macOS Apple silicon：首次安装 immutable，一年
-    BaoCode-1.2.0-x64.dmg                macOS Intel：首次安装         immutable，一年
   remote/
     latest.json                          最新发布的服务端（--remote-release 用） max-age=60
     <VERSION>/                           远程服务端，应用连远程主机时按需下载

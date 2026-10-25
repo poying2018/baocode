@@ -224,8 +224,9 @@ jobs:
         run: |
           mkdir -p out
           # The standard build, then the channel build's, ending in -channel.
-          # This fork publishes the Windows build only for now; the macOS
-          # and Linux ones are built by hand when they are wanted.
+          # This fork publishes the Windows build only: the macOS one is not
+          # built or published any more, and the Linux one is built by hand
+          # when it is wanted.
           editions=('' -channel)
           [ "$CHANNEL_ONLY" = true ] && editions=(-channel)
           for edition in "${editions[@]}"; do

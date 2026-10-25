@@ -102,8 +102,7 @@ const _remoteBase = 'https://github.com/$_remoteRepo/releases/download';
 Future<void> main(List<String> arguments) async {
   if (!Platform.isWindows) {
     _fail(
-      'This builds the Windows installer, and only runs on Windows.\n'
-      'On macOS, use tool/build_macos.dart.',
+      'This builds the Windows installer, and only runs on Windows.',
     );
   }
   final skipBuild = arguments.contains('--skip-build');

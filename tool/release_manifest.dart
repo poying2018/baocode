@@ -4,10 +4,6 @@
 //
 //   dart run tool/release_manifest.dart \
 //     --windows build/installers/BaoCode-1.2.0-setup.exe \
-//     --macos-arm64 build/installers/BaoCode-1.2.0-mac-arm64.zip \
-//     --macos-x64 build/installers/BaoCode-1.2.0-mac-x64.zip \
-//     [--dmg-arm64 build/installers/BaoCode-1.2.0-arm64.dmg] \
-//     [--dmg-x64 build/installers/BaoCode-1.2.0-x64.dmg] \
 //     [--linux-x64 build/installers/BaoCode-1.2.0-linux-amd64.deb] \
 //     [--linux-arm64 build/installers/BaoCode-1.2.0-linux-arm64.deb] \
 //     [--notes-en <text or file>] [--notes-zh <text or file>] \
@@ -15,11 +11,11 @@
 //     [--manifest build/installers/latest.json]
 //
 // The channel build's (lib/channel/) beside them, each option with
-// -channel after it (--windows-channel, --macos-arm64-channel,
-// --dmg-arm64-channel, --linux-x64-channel…): signed for its own platform
-// keys (`windows-x64-channel`…), which the channel build alone updates from
-// (each edition updates to itself), and given to the download page as
-// `downloads.<os>.channel`, for whoever came through the site.
+// -channel after it (--windows-channel, --linux-x64-channel…): signed for
+// its own platform keys (`windows-x64-channel`…), which the channel build
+// alone updates from (each edition updates to itself), and given to the
+// download page as `downloads.<os>.channel`, for whoever came through the
+// site.
 //
 //   dart run tool/release_manifest.dart --generate-key <file>
 //   dart run tool/release_manifest.dart --public-key
@@ -29,8 +25,8 @@
 // can make every installed BaoCode run their program.
 //
 // The version is pubspec.yaml's unless given. A manifest already there for
-// the same version keeps the other platforms' entries, so the Windows and the
-// macOS installers can be signed on their own machines one after the other.
+// the same version keeps the other platforms' entries, so the Windows and
+// the Linux builds can be signed on their own machines one after the other.
 //
 // Each link ends in `?sha256=<the file's first 16 hex digits>`: a file
 // published again under the same name (a release redone) is another address
@@ -38,8 +34,7 @@
 // one. The app names a download by the path alone.
 //
 // Besides what the app reads, `downloads` gives the download page
-// (site/site.js) what it offers: the disk images (--dmg-arm64, --dmg-x64),
-// which the app does not update from, the Windows installer, and the Linux
+// (site/site.js) what it offers: the Windows installer, and the Linux
 // packages (which the app updates from too).
 import 'dart:convert';
 import 'dart:io';
@@ -62,10 +57,6 @@ Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
   '$_releasesBase/v${version.marketing}/$name',
 );
 
-/// The Macs built for, each its own download (tool/build_macos.dart), and
-/// the app takes its processor's (lib/update/installer_io.dart).
-const _macArchitectures = ['arm64', 'x64'];
-
 /// The Linux packages built (tool/package_linux_deb.sh), the same.
 const _linuxArchitectures = ['x64', 'arm64'];
 
@@ -84,8 +75,6 @@ const _dpapiPrefix = 'dpapi:';
 const _usage = '''
 Usage:
   dart run tool/release_manifest.dart [--windows <setup.exe>]
-      [--macos-arm64 <mac-arm64.zip>] [--macos-x64 <mac-x64.zip>]
-      [--dmg-arm64 <arm64.dmg>] [--dmg-x64 <x64.dmg>]
       [--linux-x64 <amd64.deb>] [--linux-arm64 <arm64.deb>]
       [each of those with -channel after it: the channel build's]
       [--notes-en <text|file>] [--notes-zh <text|file>]
@@ -136,9 +125,6 @@ Future<void> main(List<String> arguments) async {
     for (final edition in _editions) ...{
       if (options['windows$edition'] case final path?)
         'windows-x64$edition': File(path),
-      for (final arch in _macArchitectures)
-        if (options['macos-$arch$edition'] case final path?)
-          'macos-$arch$edition': File(path),
       for (final arch in _linuxArchitectures)
         if (options['linux-$arch$edition'] case final path?)
           'linux-$arch$edition': File(path),
@@ -146,8 +132,7 @@ Future<void> main(List<String> arguments) async {
   };
   if (files.isEmpty) {
     _fail(
-      'Nothing to sign: give --windows, --macos-arm64, --macos-x64, '
-      '--linux-x64 or --linux-arm64.\n\n'
+      'Nothing to sign: give --windows, --linux-x64 or --linux-arm64.\n\n'
       '$_usage',
     );
   }
@@ -240,22 +225,6 @@ Future<void> main(List<String> arguments) async {
       }
     }
   }
-  final dmgs = {
-    for (final edition in _editions)
-      for (final arch in _macArchitectures)
-        if (options['dmg-$arch$edition'] case final path?)
-          (os: 'macos-$arch', edition: edition): File(path),
-  };
-  for (final MapEntry(key: (:os, :edition), value: dmg) in dmgs.entries) {
-    if (!dmg.existsSync()) _fail('No such file: ${dmg.path}');
-    final sha256 = '${await crypto.sha256.bind(dmg.openRead()).first}';
-    offer(os, edition, {
-      'url': '${_link(version, dmg.uri.pathSegments.last, sha256)}',
-      'size': dmg.lengthSync(),
-      'sha256': sha256,
-    });
-  }
-
   final manifest = UpdateManifest(
     version: version,
     pubDate: DateTime.now().toUtc(),
@@ -281,11 +250,6 @@ Future<void> main(List<String> arguments) async {
   for (final MapEntry(key: platform, value: file) in files.entries) {
     stdout.writeln('  ${file.path}\n    -> ${assets[platform]!.url}');
   }
-  for (final MapEntry(key: (:os, :edition), value: dmg) in dmgs.entries) {
-    final entry = downloads[os] as Map;
-    final file = edition == _channel ? entry['channel'] as Map : entry;
-    stdout.writeln('  ${dmg.path}\n    -> ${file['url']}');
-  }
   stdout.writeln('  ${manifestFile.path}\n    -> $defaultManifestUrl');
   // The channel build's too, once there is one.
   final missing = {
@@ -293,7 +257,6 @@ Future<void> main(List<String> arguments) async {
       if (edition.isEmpty ||
           assets.keys.any((key) => key.endsWith(edition))) ...{
         'windows-x64$edition',
-        for (final arch in _macArchitectures) 'macos-$arch$edition',
         for (final arch in _linuxArchitectures) 'linux-$arch$edition',
       },
   }.difference(assets.keys.toSet());
@@ -436,10 +399,6 @@ Map<String, String?> parseReleaseManifestArguments(List<String> arguments) {
   const flags = {'public-key', 'help'};
   const files = {
     'windows',
-    'macos-arm64',
-    'macos-x64',
-    'dmg-arm64',
-    'dmg-x64',
     'linux-x64',
     'linux-arm64',
   };

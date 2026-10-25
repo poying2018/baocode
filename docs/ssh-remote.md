@@ -39,7 +39,7 @@
 | 本机模型代理转发到远端 | 已完成 |
 | 打开入口、状态栏、侧栏徽标、退出确认、中英文 | 已完成 |
 | Windows 打包带上服务端 | 已完成：`tool/build_windows.dart` |
-| macOS 打包带上服务端 | 写在 `tool/build_macos.dart` 里，**还没实际跑过** |
+| macOS 打包带上服务端 | 上游的做法（`tool/build_macos.dart`）**在这个 fork 里没有**：应用只发 Windows 版 |
 | macOS 远端主机 | 已完成：服务端编成 macOS arm64 / x64 两份（只能在 Mac 上编，见 9.1），探测到 `Darwin` 就推送对应那份；有假 ssh 的测试，**还没在真 Mac 主机上验证** |
 | Windows 客户端打开远程项目 | **有已知问题**：见第 15 节 |
 | 真实主机端到端验证 | 连接部分已自动化：`tool/ssh_e2e.sh`（Docker sshd，macOS 和 Windows 都跑过）；其余见第 13 节 |
@@ -403,7 +403,7 @@ dart run tool/build_remote_server.dart --all        # 四份没编全就失败�
 
 安装包**不带服务端二进制**，只带 `VERSION` 和 `servers.json`。四个二进制原本占 30 多 MB，大多数用户不连远程，而每台主机只需要其中一个平台。
 
-- **打包**：`tool/build_macos.dart` 和 `tool/build_windows.dart` 先编译到 `build/remote/`（CI 里由单独的 `remote` 任务在 macOS 机器上把四份都编一次，在那台 Mac 上直接跑一遍两份 macOS 版（`tool/test_remote_server_macos.sh`，Intel 版经 Rosetta），再由 `remote-linux` 任务在 Docker 里的几个 Linux 发行版上各跑一遍 `tool/test_remote_server.sh`，两个打包脚本带 `--remote-built` 直接用它），再只把 `VERSION`、`servers.json` 放进 `BaoCode.app/Contents/Resources/remote/`（Windows 是 `<bundle>\remote\`），`.gz` 放到 `build/installers/remote/<VERSION>/`。
+- **打包**：`tool/build_windows.dart` 先编译到 `build/remote/`（CI 里由单独的 `remote` 任务在 macOS 机器上把四份都编一次，在那台 Mac 上直接跑一遍两份 macOS 版（`tool/test_remote_server_macos.sh`，Intel 版经 Rosetta），再由 `remote-linux` 任务在 Docker 里的几个 Linux 发行版上各跑一遍 `tool/test_remote_server.sh`，打包脚本带 `--remote-built` 直接用它），再只把 `VERSION`、`servers.json` 放进 `<bundle>\remote\`，`.gz` 放到 `build/installers/remote/<VERSION>/`。
 - **单独发布**：把 `build/remote/` 下发到本仓库一个以 `<VERSION>` 为标签的 release（`dart run tool/build_remote_server.dart` 会打印那条 `gh release create`；要带 `--latest=false`，应用的更新清单从 `releases/latest` 读，不能被服务端的 release 顶掉）；本机打包时用 `--remote-release [VERSION]` 取回已发布的那份 `servers.json`，不在本机编译（docs/release.md 第 3 节）。
 - **发布**：`.gz`、`servers.json` 和 `VERSION` 一起传上去——**要在安装包发出去之前传**，否则这个版本连不了远程。发布用的是构建自己的 `VERSION`（内容定名，同一个版本不会写出两次），所以旧版本的 release 一直保留：装着旧版的用户还要从那儿下载。
 - **下载**：第一次连某个平台的主机时，应用下载对应的 `.gz`，按 `servers.json` 校验大小和 SHA-256，存到数据目录的 `cache/remote-server/<VERSION>/`，之后照旧经 ssh 推送到主机（第 4 节第 4 步）。远端主机不需要能上网。下载完会删掉其他版本的缓存；同时连多台同平台的主机只下载一次。
@@ -508,7 +508,7 @@ flutter analyze
    - 会话列表、删除会话、自动标题、Keep/Undo、提交信息都正常。
 8. **语言服务器**：在远程项目里打开 `.dart`、`.ts` 文件，缺的语言服务器会装到远端；诊断、悬停、跳转都正常。
 9. **退出**：远端有对话或终端在运行时退出应用，确认框里有远程的那一句；退出后远端没有残留的 `baocode-server` 和 claude 进程。
-10. **打包**：用 `tool/build_windows.dart` / `tool/build_macos.dart` 打包，确认包里有 `remote/VERSION`，安装后不需要源码目录也能连接。
+10. **打包**：用 `tool/build_windows.dart` 打包，确认包里有 `remote/VERSION`，安装后不需要源码目录也能连接。
 11. **Windows 客户端**：打开远程项目，重点检查文件树、标签页、搜索、Git 的路径（见第 15 节）。
 12. **Mac 主机**：Apple silicon 和 Intel 各连一次，确认推送的是 `darwin-arm64` / `darwin-x64`；终端是 zsh、shell 集成正常；文件监听（FSEvents）在远端另开 shell 改文件时会刷新；没装 Xcode 命令行工具的 Mac 上 Git 面板的表现；远端自动安装的是 `darwin-<arch>` 的 Claude Code。
 
@@ -546,7 +546,7 @@ flutter analyze
 5. **自动安装没有开关**：远端没有 claude 时总是自动装。如果有用户不希望自动下载，需要加一个设置项。
 6. **Windows 客户端的密码登录还没在 Windows 上实测**：`askpass.cmd` 经 PowerShell 回传密码，依赖 Win32-OpenSSH 8.4 及以上按 `SSH_ASKPASS_REQUIRE=force` 调用它；系统的低于 8.4 时用安装包自带的 OpenSSH。要确认的有：能否运行 `.cmd`、用户名带空格的临时目录、运行时是否闪出控制台窗口、自带 ssh 的跳板机 `ProxyCommand`（带引号的路径）能否运行。
 7. **启动时会连接所有远程项目的主机**（因为要读会话列表）。主机很多或很慢时，可以改成在展开项目时再连接。
-8. **macOS 打包这一步还没实际跑过**，签名和公证也还没做（见 `tool/build_macos.dart` 里的 TODO）。
+8. **macOS 打包这一步在这个 fork 里没有**（应用只发 Windows 版）；上游那边也还没实际跑过，签名和公证也还没做。
 9. **会话守护进程会被 `KillUserProcesses=yes` 杀掉**：少数发行版的 systemd-logind 在用户最后一个登录会话结束时杀掉他的所有进程，断线就等于会话失效（退回到旧的“重建会话”行为）。需要的话在主机上 `loginctl enable-linger <用户>`。
 10. **应用崩溃或被强退时**，远端会话等满 3 小时才结束，期间终端和 Claude 继续跑。应用重启后用的是新会话，不会接回旧的。
 11. **单条很大的消息**（几十 MB 的文件）在频繁断线的网络上可能总传不完：断线后整条重发。

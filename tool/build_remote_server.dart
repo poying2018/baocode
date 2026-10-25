@@ -25,7 +25,7 @@
 // Besides, each build gzipped (baocode-server-<platform>.gz) and
 // servers.json, which says where each is downloaded from and its size and
 // SHA-256. The installers carry VERSION and servers.json only, not the
-// builds (tool/build_macos.dart, tool/build_windows.dart): the app
+// builds (tool/build_windows.dart): the app
 // downloads the one a host needs the first time, checks it against
 // servers.json, and keeps it (lib/remote/remote_binaries.dart). The .gz
 // files go to a release of this repository tagged with VERSION, which the
