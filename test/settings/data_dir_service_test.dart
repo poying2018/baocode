@@ -1,4 +1,4 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
 import 'dart:convert';
@@ -58,11 +58,19 @@ void main() {
         ..writeAsStringSync(text);
     }
     // A server's link into its own folder, as installers make.
-    Link(p.join(current, 'servers', 'tool-link'))
-        .createSync(p.join(current, 'servers', 'tool', 'bin', 'tool'));
+    try {
+      Link(p.join(current, 'servers', 'tool-link'))
+          .createSync(p.join(current, 'servers', 'tool', 'bin', 'tool'));
+    } on FileSystemException {
+      // Windows needs a privilege to make a link; without it, there is
+      // no link to move.
+    }
   });
   tearDown(() {
-    Process.runSync('chmod', ['-R', 'u+rwX', root.path]);
+    // The folder is made writable again, so that it can go.
+    if (!Platform.isWindows) {
+      Process.runSync('chmod', ['-R', 'u+rwX', root.path]);
+    }
     root.deleteSync(recursive: true);
   });
 
@@ -87,7 +95,8 @@ void main() {
     for (final entity in Directory(
       path,
     ).listSync(recursive: true, followLinks: false))
-      p.relative(entity.path, from: path),
+      // The paths as they are written, with a slash.
+      p.relative(entity.path, from: path).replaceAll(r'\', '/'),
   ]..sort();
 
   File pointer() => File(p.join(home, '.baocode', 'config-dir.json'));
@@ -141,17 +150,27 @@ void main() {
       }
       // A link to it is it.
       final link = p.join(root.path, 'link');
-      Link(link).createSync(current);
+      try {
+        Link(link).createSync(current);
+      } on FileSystemException {
+        // Windows needs a privilege to make a link; without it, there is
+        // no link to check.
+        return;
+      }
       expect((await service().check(link)).ok, isFalse);
     });
 
     test('a folder that is missing, relative or read-only', () async {
       expect((await service().check(p.join(root.path, 'gone'))).ok, isFalse);
       expect((await service().check('relative/path')).ok, isFalse);
-      final readOnly = folder('read-only');
-      Process.runSync('chmod', ['555', readOnly]);
-      final target = await service().check(readOnly);
-      expect(target.error, contains('cannot be written'));
+      if (!Platform.isWindows) {
+        // A folder that cannot be written to: the permissions of one are
+        // the machine's, and Windows' are of another kind.
+        final readOnly = folder('read-only');
+        Process.runSync('chmod', ['555', readOnly]);
+        final target = await service().check(readOnly);
+        expect(target.error, contains('cannot be written'));
+      }
       // Made when asked (the default place may not be there yet).
       final made = p.join(root.path, 'made', 'baocode');
       expect((await service().check(made, create: true)).ok, isTrue);
@@ -201,7 +220,9 @@ void main() {
       'secrets/provider.abc123',
       'servers',
       'servers/tool',
-      'servers/tool-link',
+      // The link is there when the machine can make one.
+      if (Link(p.join(current, 'servers', 'tool-link')).existsSync())
+        'servers/tool-link',
       'servers/tool/bin',
       'servers/tool/bin/tool',
       'state',
@@ -216,10 +237,12 @@ void main() {
       '{"workbench.colorTheme": "Abyss"}',
     );
     // The link points into the copy.
-    expect(
-      Link(p.join(target, 'servers', 'tool-link')).targetSync(),
-      p.join(target, 'servers', 'tool', 'bin', 'tool'),
-    );
+    if (!Platform.isWindows) {
+      expect(
+        Link(p.join(target, 'servers', 'tool-link')).targetSync(),
+        p.join(target, 'servers', 'tool', 'bin', 'tool'),
+      );
+    }
     expect(progress.first, (0, 18));
     expect(progress.last, (18, 18));
     // The old folder is as it was: the web view's files included.
@@ -238,6 +261,7 @@ void main() {
   test(
     'a copy that fails is taken back, and the pointer not written',
     () async {
+      if (Platform.isWindows) return;
       final target = folder('target');
       final unreadable = File(
         p.join(current, 'servers', 'tool', 'bin', 'tool'),
@@ -392,9 +416,12 @@ void main() {
       'sk-kept',
     );
     expect(DataDirectoryService.leftoverItems(current), contains('secrets'));
-    // Only the user may read the copy, as where they were first written.
-    expect(modeOf(p.join(target, 'secrets')), '700');
-    expect(modeOf(p.join(target, 'secrets', 'provider.abc123')), '600');
+    if (!Platform.isWindows) {
+      // Only the user may read the copy, as where they were first written.
+      // The permissions of a file are of the machine's kind.
+      expect(modeOf(p.join(target, 'secrets')), '700');
+      expect(modeOf(p.join(target, 'secrets', 'provider.abc123')), '600');
+    }
   });
 
   test('the old folder loses only the app\'s entries', () async {
@@ -423,6 +450,7 @@ void main() {
 
   test('what cannot be removed of the old data is offered again; the rest '
       'goes', () async {
+    if (Platform.isWindows) return;
     final target = folder('target');
     await service().migrate(target);
     // A file that cannot go, beside one that can.

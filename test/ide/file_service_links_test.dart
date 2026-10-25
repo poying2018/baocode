@@ -1,4 +1,4 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
 import 'dart:io';
@@ -30,9 +30,15 @@ void main() {
     Directory(p.join(outside.path, 'data')).createSync();
     File(p.join(outside.path, 'data', 'a.txt')).writeAsStringSync('a');
     File(p.join(outside.path, 'notes.txt')).writeAsStringSync('n');
-    Link(at('data')).createSync(p.join(outside.path, 'data'));
-    Link(at('notes.txt')).createSync(p.join(outside.path, 'notes.txt'));
-    Link(at('gone')).createSync(p.join(outside.path, 'nowhere'));
+    try {
+      Link(at('data')).createSync(p.join(outside.path, 'data'));
+      Link(at('notes.txt')).createSync(p.join(outside.path, 'notes.txt'));
+      Link(at('gone')).createSync(p.join(outside.path, 'nowhere'));
+    } on FileSystemException {
+      // Windows needs a privilege to make a link; without it, there is
+      // no link to list.
+      return;
+    }
 
     final listed = {
       for (final file in await files.list(project.path))
