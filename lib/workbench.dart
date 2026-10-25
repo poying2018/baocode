@@ -77,6 +77,7 @@ import 'keybindings/default_keybindings.dart';
 import 'keybindings/key_chord.dart';
 import 'keybindings/keybinding_service.dart';
 import 'keybindings/window_keybindings.dart';
+import 'kernel/kernel_registry.dart';
 import 'kernel/kernel_types.dart' show KernelTask;
 import 'l10n/command_titles.dart';
 import 'l10n/l10n.dart';
@@ -4546,7 +4547,12 @@ class _EmptyWorkspace extends StatelessWidget {
         ? (l10n.workspaceDesktopOnly, l10n.workspaceDesktopOnlyDetail)
         : (
             l10n.workspaceOpenProjectFolder,
-            l10n.workspaceOpenProjectFolderDetail,
+            // The sessions are the product's own kernel's: Claude Code's in
+            // BaoCode, codex's in the codex product.
+            withProductName(l10n.workspaceOpenProjectFolderDetail).replaceAll(
+              'Claude Code',
+              KernelRegistry.all.first.label,
+            ),
           );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
