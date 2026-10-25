@@ -6,7 +6,10 @@
 // object stands for all of them, and every member has a harmless default
 // so tests and the glue override only what they have.
 
+import 'dart:io' show Platform;
+
 import '../../base/uri.dart' show VsUri;
+import '../../platform/app_paths.dart';
 
 import '../common/debug_model.dart';
 import '../common/debug_types.dart';
@@ -113,7 +116,11 @@ final class DebugPickItem<T> {
 
 /// The IDE, as the debug service sees it.
 class DebugServiceHost {
-  String get productName => 'BaoCode';
+  /// The product's name: BaoCode, or the codex one.
+  String get productName => AppPaths.displayName(
+    Platform.environment,
+    executable: Platform.resolvedExecutable,
+  );
 
   String get locale => 'en';
 

@@ -1,4 +1,8 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+
+import '../../platform/app_paths.dart';
 
 /// BaoCode's mark and name, side by side, drawn in pixels on one grid: every
 /// stroke, the mark's and the letters', is one [cell] wide. Drawn rather than
@@ -11,10 +15,22 @@ class BaoWordmark extends StatelessWidget {
   /// One dot of the grid, in logical pixels.
   final double cell;
 
+  /// The name the mark says: the product's, in capitals ("BAOCODE",
+  /// "BAOCODE CODEX").
+  static String get word => AppPaths.displayName(
+    Platform.environment,
+    executable: Platform.resolvedExecutable,
+  )
+      .replaceAll(' ', '')
+      .toUpperCase();
+
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      label: 'BaoCode',
+      label: AppPaths.displayName(
+        Platform.environment,
+        executable: Platform.resolvedExecutable,
+      ),
       child: CustomPaint(
         size: _WordmarkPainter.sizeFor(cell),
         painter: _WordmarkPainter(color: color, cell: cell),
@@ -48,8 +64,9 @@ class _WordmarkPainter extends CustomPainter {
     'C': ['.####', '#....', '#....', '#....', '.####'],
     'D': ['####.', '#...#', '#...#', '#...#', '####.'],
     'E': ['#####', '#....', '####.', '#....', '#####'],
+    'X': ['#...#', '#...#', '.###.', '#...#', '#...#'],
   };
-  static const _word = 'BAOCODE';
+
   static const _glyphW = 5, _glyphH = 5, _tracking = 2;
 
   /// Between the mark and the name.
@@ -58,10 +75,13 @@ class _WordmarkPainter extends CustomPainter {
   static int get _markW => _mark.first.length;
   static int get _markH => _mark.length;
 
-  static Size sizeFor(double cell) => Size(
-    (_markW + _gap + _word.length * (_glyphW + _tracking) - _tracking) * cell,
-    _markH * cell,
-  );
+  static Size sizeFor(double cell) {
+    final word = BaoWordmark.word;
+    return Size(
+      (_markW + _gap + word.length * (_glyphW + _tracking) - _tracking) * cell,
+      _markH * cell,
+    );
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -81,8 +101,10 @@ class _WordmarkPainter extends CustomPainter {
     dots(_mark, 0, 0);
     final row = _markH - _glyphH;
     var col = _markW + _gap;
-    for (final letter in _word.split('')) {
-      dots(_glyphs[letter]!, col, row);
+    for (final letter in BaoWordmark.word.split('')) {
+      final glyph = _glyphs[letter];
+      if (glyph == null) continue;
+      dots(glyph, col, row);
       col += _glyphW + _tracking;
     }
   }
