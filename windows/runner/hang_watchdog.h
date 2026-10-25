@@ -35,6 +35,14 @@ void Start(HWND window);
 // kPingMessage dispatched: the thread is there.
 void Answer();
 
+// The thread is in a modal menu of its own (a context menu, the tray's):
+// it does not take the pings while the menu is up, and is not hung. The
+// watchdog does not report a hang while this is said.
+void ModalMenuStarted();
+
+// The modal menu is gone.
+void ModalMenuEnded();
+
 // The message loop is over: the app is to be gone shortly.
 void LoopEnded();
 

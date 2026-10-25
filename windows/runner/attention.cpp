@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "app_windows.h"
+#include "hang_watchdog.h"
 #include "resource.h"
 #include "utils.h"
 
@@ -602,10 +603,14 @@ void Attention::ShowMenu() {
   const UINT align = ::GetSystemMetrics(SM_MENUDROPALIGNMENT) != 0
                          ? TPM_RIGHTALIGN
                          : TPM_LEFTALIGN;
+  // The menu has a loop of its own, in which the thread takes no messages:
+  // the watchdog is told, so that it does not take it for a hang.
+  hang_watchdog::ModalMenuStarted();
   const UINT command = static_cast<UINT>(::TrackPopupMenuEx(
       menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON | TPM_BOTTOMALIGN |
                 align,
       at.x, at.y, window_, nullptr));
+  hang_watchdog::ModalMenuEnded();
   ::PostMessageW(window_, WM_NULL, 0, 0);
   ::DestroyMenu(menu);
 

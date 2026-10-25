@@ -51,6 +51,9 @@ ULONGLONG Now() {
 std::atomic<HWND> g_window{nullptr};
 std::atomic<ULONGLONG> g_answered{0};
 std::atomic<ULONGLONG> g_loop_ended{0};
+// How many modal menus of the app's are up: while one is, the thread does
+// not take the pings (the menu's own loop has it), and is not hung.
+std::atomic<int> g_modal_menus{0};
 DWORD g_windows_thread = 0;
 
 // The data folder's logs\hangs (see log_folder.h), made if need be; empty
@@ -326,6 +329,11 @@ DWORD WINAPI Watch(LPVOID) {
   // Whether the hang under way was written: once until the thread answers
   // again.
   bool written = false;
+  // Whether a ping is waiting for its answer: one at a time, so that a
+  // thread that is stuck is not left with a queue of them.
+  bool pinged = false;
+  // When the thread last answered: a change is the thread being there.
+  ULONGLONG last_answer = g_answered.load();
   ULONGLONG last_round = Now();
   while (reports < kMaxReports) {
     ::Sleep(1000);
@@ -350,10 +358,32 @@ DWORD WINAPI Watch(LPVOID) {
     // the watch's own, it has had no turn to.
     if (resumed || ::IsDebuggerPresent()) {
       g_answered.store(now);
+      pinged = false;
       continue;
     }
-    ::PostMessageW(window, kPingMessage, 0, 0);
-    if (now - g_answered.load() < kHangMilliseconds) {
+    // A modal menu of the app's is up: the thread is in the menu's own
+    // loop, and takes no messages. It is not hung, and not reported as one.
+    if (g_modal_menus.load() > 0) {
+      g_answered.store(now);
+      pinged = false;
+      written = false;
+      continue;
+    }
+    // One ping at a time: the thread answers it (Answer) or it does not,
+    // and a second one would only queue behind the first.
+    if (!pinged) {
+      ::PostMessageW(window, kPingMessage, 0, 0);
+      pinged = true;
+    }
+    const ULONGLONG answered = g_answered.load();
+    if (answered != last_answer) {
+      // The thread answered the last ping: it is there.
+      last_answer = answered;
+      pinged = false;
+      written = false;
+      continue;
+    }
+    if (now - answered < kHangMilliseconds) {
       written = false;
       continue;
     }
@@ -390,6 +420,19 @@ void Start(HWND window) {
 }
 
 void Answer() {
+  g_answered.store(Now());
+}
+
+void ModalMenuStarted() {
+  g_modal_menus.fetch_add(1);
+  // The thread is there, in the menu's own loop: not a hang.
+  g_answered.store(Now());
+}
+
+void ModalMenuEnded() {
+  int menus = g_modal_menus.load() - 1;
+  if (menus < 0) menus = 0;
+  g_modal_menus.store(menus);
   g_answered.store(Now());
 }
 

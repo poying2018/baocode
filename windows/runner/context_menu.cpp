@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 
+#include "hang_watchdog.h"
 #include "utils.h"
 
 namespace {
@@ -56,9 +57,13 @@ std::optional<std::string> ShowContextMenu(
   // away (and the popup's coordinates are screen ones, which is what |at|
   // already is).
   ::SetForegroundWindow(window);
+  // The menu has a loop of its own, in which the thread takes no messages:
+  // the watchdog is told, so that it does not take it for a hang.
+  hang_watchdog::ModalMenuStarted();
   const int chosen = ::TrackPopupMenuEx(
       menu, TPM_RETURNCMD | TPM_NONOTIFY | TPM_LEFTALIGN | TPM_TOPALIGN, at.x,
       at.y, window, nullptr);
+  hang_watchdog::ModalMenuEnded();
   ::DestroyMenu(menu);
 
   if (chosen <= 0 || static_cast<size_t>(chosen) > ids.size()) {
