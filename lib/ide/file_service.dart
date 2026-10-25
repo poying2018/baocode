@@ -228,7 +228,13 @@ Future<IdeFileListing> listProjectFiles(
     return platform.walkProjectFiles(root, ideIndexExcludedDirectories, limit);
   }
   if (files is IdeHostFiles) return files.listProject(root, limit: limit);
-  final paths = files is IdeHostFiles ? p.posix : p.context;
+  // The spelling of the paths is the root's own: a remote host's are
+  // POSIX, a local one's this machine's.
+  final paths = p.Context(
+    style: RegExp(r'^[A-Za-z]:').hasMatch(root)
+        ? p.Style.windows
+        : p.Style.posix,
+  );
   final pathsTo = <String>[];
   final pending = <String>[root];
   while (pending.isNotEmpty) {
