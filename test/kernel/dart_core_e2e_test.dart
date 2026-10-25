@@ -115,6 +115,11 @@ void main() {
     // As the app makes it: the core picked in settings, on this machine.
     final kernel =
         KernelRegistry.claudeCode.create(context) as ClaudeCodeKernel;
+    // Released before the folder goes: the core runs in an isolate of its
+    // own, and on Windows a file that is still open cannot be deleted.
+    // The teardowns run in the reverse order they are added in.
+    addTearDown(() => kernel.stopped);
+    addTearDown(kernel.dispose);
     final transcript = Transcript();
     final asked = <String>[];
     kernel.events.listen((event) {

@@ -273,7 +273,10 @@ class VsCodeInstalls {
   /// A stored profile's `location`: relative to `User/profiles` as VS Code
   /// keeps it, or a URI (a string, or revived from its JSON).
   String? _profileDir(String profilesHome, Object? location) {
-    final windows = platform == KeybindingPlatform.windows;
+    // The machine's own spelling: an absolute path is the one the machine
+    // that wrote it has, and the host is the one that opens it. (The
+    // places themselves are the platform's: where VS Code keeps them.)
+    final windows = Platform.isWindows;
     try {
       return switch (location) {
         final String location when location.contains('://') => path.normalize(
@@ -282,8 +285,8 @@ class VsCodeInstalls {
         final String location when location.isNotEmpty => path.normalize(
           path.join(profilesHome, location),
         ),
-        {'fsPath': final String fsPath} => path.normalize(fsPath),
-        {'path': final String uriPath} => path.normalize(
+        {'fsPath': final String fsPath} => p.normalize(fsPath),
+        {'path': final String uriPath} => p.normalize(
           Uri(scheme: 'file', path: uriPath).toFilePath(windows: windows),
         ),
         _ => null,
@@ -310,7 +313,7 @@ class VsCodeInstalls {
       final obsolete = await _obsolete(dir.path);
       for (final entry in entries) {
         if (entry is! Directory) continue;
-        if (obsolete.contains(path.basename(entry.path))) continue;
+        if (obsolete.contains(p.basename(entry.path))) continue;
         final extension = await _keymapExtension(entry.path);
         if (extension == null) continue;
         (products[extension.id] ??= {}).add(product);

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -29,6 +30,11 @@ void main() {
 
   bool isSupported(String command) => supportedCommands.contains(command);
 
+  /// [path] as the machine spells it, whatever the platform's context
+  /// spells it in: the tests fake a platform, and the paths come out of
+  /// it (a mac's on a Windows machine).
+  String local(String path) => p.normalize(path);
+
   group('detection', () {
     test("finds each editor's keybindings and its profiles' own", () async {
       final sources = await installs.keybindingsSources();
@@ -44,18 +50,20 @@ void main() {
         ],
       );
       expect(
-        sources[0].path,
-        p.join(support, 'Code', 'User', 'keybindings.json'),
+        local(sources[0].path),
+        local(p.join(support, 'Code', 'User', 'keybindings.json')),
       );
       expect(
-        sources[1].path,
-        p.join(
-          support,
-          'Code',
-          'User',
-          'profiles',
-          '-5f3e2a1',
-          'keybindings.json',
+        local(sources[1].path),
+        local(
+          p.join(
+            support,
+            'Code',
+            'User',
+            'profiles',
+            '-5f3e2a1',
+            'keybindings.json',
+          ),
         ),
       );
       expect(sources[1].label, 'Visual Studio Code (Work)');
@@ -68,20 +76,30 @@ void main() {
       await Directory(dir).create(recursive: true);
       await File(p.join(dir, 'keybindings.json')).writeAsString('[]');
       await File(p.join(user, 'globalStorage', 'storage.json')).writeAsString(
-        '{"userDataProfiles": ['
-        '{"location": {"\$mid": 1, "path": "$dir", "scheme": "file"}, '
-        '"name": "Moved"},'
-        '{"location": "${Uri.file(dir)}", "name": "As string"}]}',
+        // Encoded, so that a path with backslashes in it is still JSON.
+        jsonEncode({
+          'userDataProfiles': [
+            {
+              'location': {
+                r'$mid': 1,
+                'path': dir,
+                'scheme': 'file',
+              },
+              'name': 'Moved',
+            },
+            {'location': Uri.file(dir).toString(), 'name': 'As string'},
+          ],
+        }),
       );
       final profiles = [
         for (final source in await installs.keybindingsSources())
           if (source.product == VsCodeProduct.code)
-            (source.profile, source.path),
+            (source.profile, local(source.path)),
       ];
       expect(profiles, [
-        (null, p.join(user, 'keybindings.json')),
-        ('Moved', p.join(dir, 'keybindings.json')),
-        ('As string', p.join(dir, 'keybindings.json')),
+        (null, local(p.join(user, 'keybindings.json'))),
+        ('Moved', local(p.join(dir, 'keybindings.json'))),
+        ('As string', local(p.join(dir, 'keybindings.json'))),
       ]);
     });
 
@@ -145,7 +163,7 @@ void main() {
         platform: KeybindingPlatform.linux,
       );
       final sources = await linux.keybindingsSources();
-      expect(sources.single.path, p.join(config, 'keybindings.json'));
+      expect(local(sources.single.path), local(p.join(config, 'keybindings.json')));
       expect(sources.single.entryCount, 5);
     });
 
