@@ -302,8 +302,8 @@ void main() {
       expect(find.textContaining('tokens', findRichText: true), findsNothing);
     });
 
-    testWidgets('a summarized thought is headed by its bold title alone, and '
-        'opens to the rest', (tester) async {
+    testWidgets('a summarized thought is headed by its latest part\'s title, '
+        'and opens to the rest', (tester) async {
       await pumpStep(
         tester,
         const ThinkingItem(
@@ -313,12 +313,19 @@ void main() {
           seconds: 4,
         ),
       );
-      expect(header('Planning the fix'), findsOneWidget);
+      // A thought of many parts, each titled, is one step: its latest part
+      // names it (fix(chat): thoughts one after another show as one).
+      expect(header('Checking tests'), findsOneWidget);
+      expect(header('Planning the fix'), findsNothing);
       expect(find.textContaining('Thought'), findsNothing);
-      await tester.tap(header('Planning the fix'));
+      await tester.tap(header('Checking tests'));
       await tester.pump();
+      // Every part's title reads as a line of its body.
       expect(
-        find.text('First read the kernel.\n\nChecking tests\n\nThen run them.'),
+        find.text(
+          'Planning the fix\n\nFirst read the kernel.\n\n'
+          'Checking tests\n\nThen run them.',
+        ),
         findsOneWidget,
       );
     });
