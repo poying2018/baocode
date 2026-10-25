@@ -164,9 +164,12 @@ class DataDirectory {
 
   /// The platform's place for it: `%APPDATA%\baocode` on Windows,
   /// `~/Library/Application Support/baocode` on macOS, `~/.config/baocode`
-  /// elsewhere.
-  static String defaultPath(Map<String, String> environment) =>
-      AppPaths.dataDir(environment);
+  /// elsewhere. Each product keeps its own (see [AppPaths.product]): the
+  /// codex one, `baocode-codex`, beside BaoCode's.
+  static String defaultPath(
+    Map<String, String> environment, {
+    String? executable,
+  }) => AppPaths.dataDir(environment, executable: executable);
 
   /// The environment variable that overrides everything else.
   static const environmentVariable = 'BAOCODE_DATA_DIR';
@@ -195,14 +198,17 @@ class DataDirectoryPointer {
 
   /// Where it is, under [home]. A copy of the app with an id of its own
   /// (see [AppPaths.appIdVariable]) keeps its pointer apart: the
-  /// installed one's says where *its* data went. [environment] is the
-  /// process's, or the one the caller works with.
+  /// installed one's says where *its* data went. So does each product (see
+  /// [AppPaths.product]): the codex product's pointer says where the codex
+  /// product's data went, not BaoCode's. [environment] is the process's,
+  /// or the one the caller works with.
   static String fileIn(
     String home, [
     Map<String, String>? environment,
+    String? executable,
   ]) => p.join(
     home,
-    '.${AppPaths.appName(environment ?? Platform.environment)}',
+    '.${AppPaths.appName(environment ?? Platform.environment, executable: executable)}',
     'config-dir.json',
   );
 
@@ -325,15 +331,24 @@ class DataDirectoryResolution {
 /// platform's default. One set by either must exist and take files; one
 /// that does not is reported, never replaced by the default unasked (a
 /// drive may just be gone for now). [environment] is the process's and
-/// [home] the user's home folder by default.
+/// [home] the user's home folder by default. [executable] is the program's
+/// own, which says the product (and so the folder) it keeps its data in.
 DataDirectoryResolution resolveDataDirectory({
   Map<String, String>? environment,
   String? home,
+  String? executable,
 }) {
   environment ??= Platform.environment;
   home ??= AppPaths.home(environment);
-  final defaultPath = DataDirectory.defaultPath(environment);
-  final pointerFile = DataDirectoryPointer.fileIn(home, environment);
+  final defaultPath = DataDirectory.defaultPath(
+    environment,
+    executable: executable,
+  );
+  final pointerFile = DataDirectoryPointer.fileIn(
+    home,
+    environment,
+    executable,
+  );
 
   DataDirectoryResolution resolved(
     String path,

@@ -4,7 +4,25 @@ project(baocode LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
+#
+# It also names the product: baocode.exe is BaoCode (the Claude Code one),
+# baocode-codex.exe is the codex one, which keeps its own data folder, its own
+# windows and its own registration (see runner/app_identity.cpp). The name is
+# written by tool/set_product.dart, which knows both products:
+#
+#   dart run tool/set_product.dart          the codex product
+#   dart run tool/set_product.dart baocode  BaoCode (the Claude Code one)
 set(BINARY_NAME "baocode")
+
+# The browsers' native messaging host and its manifest, each product's own
+# (the host's name says the product, as the app's does).
+if("${BINARY_NAME}" STREQUAL "baocode")
+  set(BROWSER_HOST_NAME "baocode-browser-host")
+  set(BROWSER_HOST_MANIFEST "dev.baocode.browser.json")
+else()
+  set(BROWSER_HOST_NAME "${BINARY_NAME}-browser-host")
+  set(BROWSER_HOST_MANIFEST "dev.${BINARY_NAME}.browser.json")
+endif()
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -84,9 +102,9 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
 
 # The browsers' native messaging host and its manifest, beside the app.
-install(TARGETS baocode-browser-host RUNTIME
+install(TARGETS ${BROWSER_HOST_NAME} RUNTIME
   DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
-install(FILES "BrowserBridge/dev.baocode.browser.json"
+install(FILES "BrowserBridge/${BROWSER_HOST_MANIFEST}"
   DESTINATION "${CMAKE_INSTALL_PREFIX}" COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"

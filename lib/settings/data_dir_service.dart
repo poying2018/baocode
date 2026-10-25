@@ -119,9 +119,11 @@ class DataDirectoryService {
     DataDirectory? current,
     Map<String, String>? environment,
     String? home,
+    String? executable,
   }) : current = current ?? DataDirectory.current,
        environment = environment ?? Platform.environment,
-       home = home ?? _defaultHome(environment);
+       home = home ?? _defaultHome(environment),
+       executable = executable ?? Platform.resolvedExecutable;
 
   /// The user's home; under `flutter test` (and no [environment] given) a
   /// temporary folder instead, as [DataDirectory.current] is, so no test
@@ -139,11 +141,19 @@ class DataDirectoryService {
   final Map<String, String> environment;
   final String home;
 
-  /// `~/.baocode/config-dir.json`.
-  String get pointerFile => DataDirectoryPointer.fileIn(home);
+  /// The program's own, which says the product (and so the folder) it keeps
+  /// its data in: BaoCode's, or the codex product's.
+  final String executable;
 
-  /// The platform's place for the data.
-  String get defaultPath => DataDirectory.defaultPath(environment);
+  /// `~/.baocode/config-dir.json` (the product's own, see
+  /// [DataDirectoryPointer.fileIn]).
+  String get pointerFile =>
+      DataDirectoryPointer.fileIn(home, environment, executable);
+
+  /// The platform's place for the data (the product's own, see
+  /// [DataDirectory.defaultPath]).
+  String get defaultPath =>
+      DataDirectory.defaultPath(environment, executable: executable);
 
   /// Whether `BAOCODE_DATA_DIR` decides the folder, whatever is chosen here.
   bool get setByEnvironment =>

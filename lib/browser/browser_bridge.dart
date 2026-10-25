@@ -7,6 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../platform/app_paths.dart';
 import '../platform/data_dir.dart';
 
 /// The user's own browsers, reached through BaoCode's extension in them
@@ -24,7 +25,10 @@ class BrowserBridge extends ChangeNotifier {
 
   static final instance = BrowserBridge._();
 
-  /// The native messaging host's name, as the extension asks for it.
+  /// The native messaging host's name, as the extension asks for it. Both
+  /// products' hosts have this one name (the extension is one), and each
+  /// answers for its own product: the host of a product reads the port file
+  /// of that product (see [portPath]).
   static const hostName = 'dev.baocode.browser';
 
   /// The extension's id: the Chrome Web Store's, and the zip's to load
@@ -49,15 +53,28 @@ class BrowserBridge extends ChangeNotifier {
 
   /// Where the host finds the app: the same folder for both, the user's
   /// temporary one ([socketFolder] in a test).
-  static String get socketPath => p.join(_folder, 'baocode-browser.sock');
+  static String get socketPath => p.join(_folder, _prefix('browser.sock'));
 
   /// Over [loopback], what the host finds the app by instead: the port on
   /// 127.0.0.1 and the token it says first, `<port> <token>`.
-  static String get portPath => p.join(_folder, 'baocode-browser.port');
+  static String get portPath => p.join(_folder, _prefix('browser.port'));
 
   /// Over [loopback], held while this BaoCode has the browsers: another
   /// that cannot have it leaves them to it.
-  static String get _lockPath => p.join(_folder, 'baocode-browser.lock');
+  static String get _lockPath => p.join(_folder, _prefix('browser.lock'));
+
+  /// The files' names carry the product's own (see [AppPaths.product]), so
+  /// that the two products do not take the browsers from each other: each
+  /// has its own socket, port and lock.
+  static String _prefix(String name) {
+    final product = _product();
+    return product == 'baocode' ? 'baocode-$name' : '$product-$name';
+  }
+
+  /// The port file's name for [product] (see [portPath]).
+  @visibleForTesting
+  static String portPathFor(String product) =>
+      product == 'baocode' ? 'baocode-browser.port' : '$product-browser.port';
 
   /// The user's own temporary folder. On Linux, `$XDG_RUNTIME_DIR` (the
   /// user's alone) before `$TMPDIR` or /tmp (shared with every user): as
@@ -396,9 +413,17 @@ class BrowserBridge extends ChangeNotifier {
   static File _hostManifest(String folder) =>
       File(p.join(folder, 'NativeMessagingHosts', '$hostName.json'));
 
-  /// The host's executable: beside the app's.
-  static String get hostExecutable =>
-      p.join(p.dirname(Platform.resolvedExecutable), 'baocode-browser-host');
+  /// The host's executable: beside the app's, and named for the product as
+  /// the app's is (baocode-browser-host, baocode-codex-browser-host).
+  static String get hostExecutable => p.join(
+    p.dirname(Platform.resolvedExecutable),
+    '${_product()}-browser-host',
+  );
+
+  /// The product this build is, as the app's own name says (see
+  /// [AppPaths.product]).
+  static String _product() =>
+      AppPaths.product(Platform.resolvedExecutable);
 
   /// Writes the host's manifest for each browser installed: the browsers
   /// then start it for the extension.

@@ -55,7 +55,6 @@ const _symbolsRelative = r'build\symbols';
 /// leaves a baocode.exe behind — but data\ is written by the install step that
 /// failure skipped, and the executable cannot start without it.
 const _required = [
-  'baocode.exe',
   'flutter_windows.dll',
   // The browsers' native messaging host and its manifest, which the
   // installer's keys point the browsers to (windows/BrowserBridge).
@@ -119,6 +118,47 @@ Future<void> main(List<String> arguments) async {
   final stockEngine = arguments.contains('--stock-engine');
   final channel = arguments.contains('--channel');
 
+  // Which product this build is: BaoCode (the Claude Code one) or the codex
+  // one, whose executable is baocode-codex.exe. The product names the
+  // executable, and so the folder its data goes in, the window it has and
+  // the registration Windows keeps for it: the two install side by side and
+  // neither disturbs the other.
+  //
+  //   dart run tool/build_windows.dart --product codex
+  final productAt = arguments.indexOf('--product');
+  final product = productAt < 0
+      ? 'baocode'
+      : productAt + 1 < arguments.length &&
+            !arguments[productAt + 1].startsWith('--')
+      ? arguments[productAt + 1]
+      : 'baocode';
+  if (product != 'baocode' && product != 'codex') {
+    _fail(
+      'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
+      'one) or codex (the codex one).',
+    );
+  }
+  final binaryName = product == 'codex' ? 'baocode-codex' : 'baocode';
+  final productName = product == 'codex' ? 'BaoCode Codex' : 'BaoCode';
+  // The identity Windows keeps for the installed app: it must not change
+  // between versions (an upgrade installs over the old one) and must differ
+  // between the products (so that one does not install over the other).
+  // The codex product's is a new one of its own.
+  final productId = product == 'codex'
+      ? '{{3c9e2b14-7f56-4d1a-9b2e-6d5f8a71c40}'
+      : '{{6fdd732b-95c6-4c37-af6f-ff574358deb5}';
+  // The context menu's key, the URL scheme and the browsers' native
+  // messaging host: each product has one of its own, so that one does not
+  // take the other's away.
+  final productKey = product == 'codex' ? 'BaoCodeCodex' : 'BaoCode';
+  final productScheme = product == 'codex' ? 'baocode-codex' : 'baocode';
+  final productBrowserHost = product == 'codex'
+      ? 'dev.baocode.codex.browser'
+      : 'dev.baocode.browser';
+  final productBrowserManifest = product == 'codex'
+      ? 'dev.baocode.codex.browser.json'
+      : 'dev.baocode.browser.json';
+
   // The script lives in tool/, so the repository is one level above it.
   final root = File.fromUri(Platform.script).parent.parent.absolute;
   final bundle = Directory('${root.path}\\$_bundleRelative');
@@ -127,7 +167,15 @@ Future<void> main(List<String> arguments) async {
 
   if (!skipBuild) {
     _step(
-      'Building the Release bundle${channel ? ' (the channel build)' : ''}',
+      'Building the Release bundle${channel ? ' (the channel build)' : ''}'
+      '${product == 'codex' ? ' (the codex product)' : ''}',
+    );
+    // The product names the executable (windows/CMakeLists.txt), and the
+    // executable names the product (windows/runner/app_identity.cpp).
+    await _run(
+      Platform.resolvedExecutable,
+      ['run', '${root.path}\\tool\\set_product.dart', product],
+      root.path,
     );
     final symbols = Directory('${root.path}\\$_symbolsRelative')
       ..createSync(recursive: true);
@@ -146,7 +194,7 @@ Future<void> main(List<String> arguments) async {
   }
 
   _step('Checking the bundle');
-  _checkBundle(bundle, _required);
+  _checkBundle(bundle, ['$binaryName.exe', ..._required]);
 
   if (stockEngine) {
     _step('Keeping Flutter\'s own engine');
@@ -210,6 +258,20 @@ Future<void> main(List<String> arguments) async {
     '/DAppVersion=${version.full}',
     '/DOutDir=${installers.path}',
     if (channel) '/DEdition=-channel',
+    // The product's own identity: the name it shows, the one Windows keeps
+    // for it (so that the two do not install over each other), its
+    // executable and the folder it lives in.
+    '/DProductName=$productName',
+    '/DProductId=$productId',
+    '/DProductExe=$binaryName.exe',
+    '/DProductDir=$productName',
+    // The context menu's key, the URL scheme and the browsers' native
+    // messaging host: each product has one of its own, so that one does not
+    // take the other's away.
+    '/DProductKey=$productKey',
+    '/DProductScheme=$productScheme',
+    '/DProductBrowserHost=$productBrowserHost',
+    '/DProductBrowserManifest=$productBrowserManifest',
     '${root.path}\\tool\\baocode.iss',
   ], root.path);
 
@@ -415,14 +477,16 @@ String _findIscc() {
 Future<void> _run(
   String executable,
   List<String> arguments,
-  String workingDirectory,
-) async {
+  String workingDirectory, {
+  Map<String, String>? environment,
+}) async {
   stdout.writeln('  \$ $executable ${arguments.join(' ')}');
   final result = await Process.run(
     executable,
     arguments,
     workingDirectory: workingDirectory,
     runInShell: executable == 'flutter',
+    environment: environment,
     // The build's own output is UTF-8 (the compiler says it in the
     // system's language, in UTF-8); the system's code page would garble
     // it on a machine that speaks another.

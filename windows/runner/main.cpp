@@ -135,10 +135,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Size size(kDefaultWidth, kDefaultHeight);
   Win32Window::Point placed = origin;
   PlaceOnMonitor(origin, &size, &placed);
-  // The window's title: the app's name, with the id of this copy of it
-  // when it has one (see app_identity.h), so that a development build
-  // and the installed one are told apart in the taskbar.
-  const std::wstring title = AppWindowTitle(L"BaoCode");
+  // The window's title: the product's name, and the id of this copy of it
+  // when it has one (see app_identity.h), so that a development build, the
+  // two products and the installed copy are told apart in the taskbar.
+  const std::wstring title = AppWindowTitle();
   if (!window.Create(title.c_str(), placed, size)) {
     return EXIT_FAILURE;
   }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import '../window/code_args.dart';
+import 'app_paths.dart';
 import 'app_platform.dart';
 import 'context_menu.dart';
 import 'shell_command_io.dart'
@@ -118,12 +119,26 @@ class WindowsContextMenu implements ContextMenuInstaller {
   final ShellCommandRunner _run;
 
   /// The key whose command tells the menu is there.
-  static const _probeKey = r'Software\Classes\Directory\shell\BaoCode\command';
+  static String _probeKeyFor(String product) =>
+      r'Software\Classes\Directory\shell\' + _keyName(product) + r'\command';
+
+  /// The name the menu's keys carry: the product's own ("BaoCode",
+  /// "BaoCodeCodex"), so that the two products' menus do not take each
+  /// other's away.
+  static String _keyName(String product) =>
+      product == 'baocode' ? 'BaoCode' : 'BaoCodeCodex';
+
+  /// The product this copy of the app is (see [AppPaths.product]).
+  String get _product => AppPaths.product(executable);
+
+  /// The key whose command tells the menu is there.
+  String get _probeKey => _probeKeyFor(_product);
 
   /// The keys, named [labels]: a file's item takes the file (`%1`), a
   /// folder's and its background's the folder (`%V`).
   List<WindowsContextMenuEntry> entries(ContextMenuLabels labels) {
     final app = '"$executable"';
+    final key = _keyName(_product);
     return [
       for (final (kind, target) in [
         ('*', '%1'),
@@ -131,12 +146,12 @@ class WindowsContextMenu implements ContextMenuInstaller {
         (r'Directory\Background', '%V'),
       ]) ...[
         (
-          key: 'Software\\Classes\\$kind\\shell\\BaoCode',
+          key: 'Software\\Classes\\$kind\\shell\\$key',
           label: labels.agent,
           command: '$app ${CodeArgs.windowsAgentFlag} "$target"',
         ),
         (
-          key: 'Software\\Classes\\$kind\\shell\\BaoCodeFastIde',
+          key: 'Software\\Classes\\$kind\\shell\\${key}FastIde',
           label: labels.ide,
           command: '$app ${CodeArgs.windowsRequestFlag} "$target" -n "$target"',
         ),

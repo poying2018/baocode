@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui' show AppExitResponse, AppExitType;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
@@ -130,7 +131,11 @@ Future<void> main(List<String> arguments) async {
   // shows, never swapped for the default unasked.
   ErrorLog? errors;
   if (!kIsWeb) {
-    final resolution = resolveDataDirectory();
+    // The program's own name says the product it is (BaoCode, or the codex
+    // one), and so the folder its data goes in: the two keep apart.
+    final resolution = resolveDataDirectory(
+      executable: Platform.resolvedExecutable,
+    );
     if (resolution.ok) {
       DataDirectory.current = resolution.directory;
     } else {

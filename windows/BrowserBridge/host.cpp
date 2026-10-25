@@ -112,13 +112,44 @@ static void tell_browser(bool connected) {
   to_browser(text, static_cast<uint32_t>(strlen(text)));
 }
 
+// The name of the file the app writes its port and token in: the product's
+// own, so that the host of one product does not talk to the other. The
+// host's own name says the product, as the app's does: the host of
+// baocode-codex-browser-host.exe is the codex product's, and its file is
+// baocode-codex-browser.port.
+static bool port_file_name(wchar_t* name, size_t size) {
+  static const wchar_t kHostSuffix[] = L"-browser-host";
+  wchar_t path[MAX_PATH];
+  const DWORD n = GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) return false;
+  wchar_t* slash = wcsrchr(path, L'\\');
+  wchar_t* base = slash == nullptr ? path : slash + 1;
+  // Without its extension.
+  wchar_t* dot = wcsrchr(base, L'.');
+  if (dot != nullptr) *dot = 0;
+  // Without the "-browser-host" the name ends in, the product's own name is
+  // what is left.
+  const size_t base_length = wcslen(base);
+  const size_t suffix_length = wcslen(kHostSuffix);
+  if (base_length <= suffix_length ||
+      wcscmp(base + base_length - suffix_length, kHostSuffix) != 0) {
+    // A name of no product: BaoCode's file.
+    return wcscpy_s(name, size, L"baocode-browser.port") == 0;
+  }
+  base[base_length - suffix_length] = 0;
+  return wcscpy_s(name, size, base) == 0 &&
+         wcscat_s(name, size, L"-browser.port") == 0;
+}
+
 // BaoCode's port and token, from its file: false while there is none
 // (BaoCode is not running) or it is not whole yet.
 static bool find_bao(unsigned* port, char* token, size_t size) {
   wchar_t path[MAX_PATH + 32];
   const DWORD n = GetTempPathW(MAX_PATH + 1, path);
   if (n == 0 || n > MAX_PATH) return false;
-  if (wcscat_s(path, L"baocode-browser.port") != 0) return false;
+  wchar_t name[64];
+  if (!port_file_name(name, 64)) return false;
+  if (wcscat_s(path, name) != 0) return false;
   HANDLE file = CreateFileW(
       path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
       nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);

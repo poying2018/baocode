@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
+import '../platform/app_paths.dart';
 import 'agent_kernel.dart';
 import 'claude_code/claude_code_kernel.dart';
 import 'codex/codex_catalog.dart';
@@ -43,7 +46,18 @@ abstract final class KernelRegistry {
     ),
   );
 
-  static List<KernelDescriptor> _all = [codex, claudeCode];
+  /// The kernels on offer, in the order they are offered: the product's own
+  /// first, so that a new agent runs on it. The codex product
+  /// (`baocode-codex.exe`) runs on codex, BaoCode (the Claude Code one) on
+  /// Claude Code; the other is there in both, for a user who wants it.
+  static List<KernelDescriptor> _all = _byProduct();
+
+  static List<KernelDescriptor> _byProduct() {
+    final product = AppPaths.product(Platform.resolvedExecutable);
+    final own = product == 'baocode-codex' ? codex : claudeCode;
+    final other = product == 'baocode-codex' ? claudeCode : codex;
+    return [own, other];
+  }
 
   static List<KernelDescriptor> get all => _all;
 
