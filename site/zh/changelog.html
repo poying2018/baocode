@@ -30,6 +30,34 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.6.1">
+    <h2 class="plain"><a href="#v1.6.1">1.6.1</a></h2>
+    <h1>1.6.1</h1>
+    <p>这个 fork 从此只做 Windows 版：macOS 的应用不再构建、不再发布。已有的 Windows 用户不受影响，照常自动更新。</p>
+    <p>变化</p>
+    <ul>
+    <li>macOS 的应用不再构建，也不再发布。下载页和首页去掉了 macOS 的部分，指向它的链接也去掉了（那些链接会指向一个不存在的文件）。</li>
+    <li>发布工具不再接受 macOS 与 dmg 的选项，写出来的更新清单里不会有 macOS 的条目。</li>
+    <li>macOS 远程服务端仍然提供（那是装在 SSH 主机上的服务端，与桌面应用无关）。</li>
+    <li>应用代码里 macOS 的分支留着：应用在 Mac 上跑时会走到那里，只是不再从这边发布。</li>
+    </ul>
+    <p>本 fork 与上游不同的地方</p>
+    <ul>
+    <li>应用里给出的所有地址都指向这个仓库（仓库、发行版、问题、官网），见 设置 → 关于。</li>
+    <li>不报告使用统计，也不上传日志：没有自己的服务器，所以没有地方可去。</li>
+    <li>诊断在无服务器时明确说&quot;没有服务器&quot;，而不是静默失败。</li>
+    <li>渠道版的激活页仍指向上游（没有替代）。</li>
+    <li>推广位（ymeng / ifruit）已全部移除：列表是空的，那些图片也不再随站点发布。</li>
+    <li>notanthropic.com 不会收到 Anthropic 的密钥。</li>
+    <li>stash 的路径不能逃出自己的目录。</li>
+    <li>超大的版本号不会让应用崩溃。</li>
+    </ul>
+    <p>修复</p>
+    <ul>
+    <li>见 1.6.0 的日志；这一版没有别的修复。</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.6.0">
     <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
     <p>性能优化，Windows 上快了好几倍</p>
