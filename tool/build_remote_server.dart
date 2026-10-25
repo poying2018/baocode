@@ -70,6 +70,15 @@ Future<void> main(List<String> arguments) async {
   };
   final digests = <int>[];
   final built = <String>[];
+  // The product the server is for: the codex product's server has no Claude
+  // Code in it (the two products are separate programs).
+  final product = option('--product') ?? 'baocode';
+  if (product != 'baocode' && product != 'baocode-codex') {
+    _fail(
+      'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
+      'one) or baocode-codex (the codex one).',
+    );
+  }
   for (final platform in _platforms) {
     final [os, arch] = platform.split('-');
     final output = '${out.path}/baocode-server-$platform';
@@ -96,6 +105,8 @@ Future<void> main(List<String> arguments) async {
       '--target-arch',
       arch,
       '-Dbaocode.version=$version',
+      // The product the server is for: the codex one has no Claude Code.
+      if (product == 'baocode-codex') '-Dbaocode.product=baocode-codex',
       '-o',
       output,
       source,

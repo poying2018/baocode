@@ -21,10 +21,21 @@ import 'package:bao_remote/server.dart';
 /// The app's version the server came with (`-Dbaocode.version=…`).
 const _version = String.fromEnvironment('baocode.version');
 
+/// The product the server is for (`-Dbaocode.product=…`): the codex one has
+/// no Claude Code in it, and runs no agent but codex.
+const _product = String.fromEnvironment(
+  'baocode.product',
+  defaultValue: 'baocode',
+);
+
+/// Whether this server carries Claude Code.
+bool get _hasClaudeCode => _product != 'baocode-codex';
+
 Future<void> main(List<String> arguments) async {
   // `agent <claude's arguments>`: BaoCode's own core, run here as the CLI
-  // would be (see ServerClaude.startBuiltin).
-  if (arguments.firstOrNull == ServerClaude.agentCommand) {
+  // would be (see ServerClaude.startBuiltin). The codex product's server
+  // has no Claude Code, and runs no agent of its own.
+  if (_hasClaudeCode && arguments.firstOrNull == ServerClaude.agentCommand) {
     exit(
       await runAgentCommandLine(
         arguments.sublist(1),

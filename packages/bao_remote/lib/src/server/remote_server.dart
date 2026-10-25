@@ -30,6 +30,16 @@ Map<String, Object?> paramsOf(Object? params) => switch (params) {
   _ => const {},
 };
 
+/// Whether this server carries Claude Code: the codex product's server does
+/// not (the product it is built for is named at build time:
+/// `-Dbaocode.product=baocode-codex`).
+bool get hasClaudeCode =>
+    const String.fromEnvironment(
+      'baocode.product',
+      defaultValue: 'baocode',
+    ) !=
+    'baocode-codex';
+
 /// The server's side of a connection: everything a remote project needs
 /// of this machine, answered over [peer]. Each process it starts (Claude
 /// Code, language servers, terminals, commands) is its own to end: all of
@@ -47,7 +57,7 @@ class RemoteServer {
     _pty = ServerPty(
       peer,
       log: _log,
-      claudeDirectory: () => _claude.commandDirectory(),
+      claudeDirectory: hasClaudeCode ? () => _claude.commandDirectory() : null,
     );
     _tcp = ServerTcp(peer);
     _lsp = ServerLsp(
@@ -55,12 +65,14 @@ class RemoteServer {
       _streams,
       installRoot: p.join(dataDir, 'lsp', 'servers'),
     );
-    _claude = ServerClaude(
-      peer,
-      _streams,
-      managed: ManagedClaude(p.join(dataDir, 'claude')),
-      platform: ClaudeRelease.platformOf(currentPlatform()),
-    );
+    if (hasClaudeCode) {
+      _claude = ServerClaude(
+        peer,
+        _streams,
+        managed: ManagedClaude(p.join(dataDir, 'claude')),
+        platform: ClaudeRelease.platformOf(currentPlatform()),
+      );
+    }
     _register();
     unawaited(peer.done.then((_) => shutdown()));
   }
@@ -77,6 +89,9 @@ class RemoteServer {
   late final ServerPty _pty;
   late final ServerTcp _tcp;
   late final ServerLsp _lsp;
+
+  /// Claude Code, when this server carries it (the codex product's does
+  /// not).
   late final ServerClaude _claude;
   final Map<String, LocalFiles> _files = {};
   final Map<int, _ServerProcess> _processes = {};
@@ -297,113 +312,118 @@ class RemoteServer {
       return null;
     };
 
-    // Claude Code.
-    handlers[RemoteProtocol.claudeLocate] = (_, _) async =>
-        (await _claude.locate()).executable;
-    handlers[RemoteProtocol.claudeStart] = (params, _) async {
-      final args = paramsOf(params);
-      final cwd = args['cwd'] as String;
-      if (args['core'] == 'builtin') {
+    // Claude Code. The codex product's server has none of it: the two
+    // products are separate programs, and one does not carry the
+    // other's agent.
+    if (hasClaudeCode) {
+      // Claude Code.
+      handlers[RemoteProtocol.claudeLocate] = (_, _) async =>
+          (await _claude.locate()).executable;
+      handlers[RemoteProtocol.claudeStart] = (params, _) async {
+        final args = paramsOf(params);
+        final cwd = args['cwd'] as String;
+        if (args['core'] == 'builtin') {
+          if (!Directory(cwd).existsSync()) {
+            throw IdeFileNotFoundException(cwd);
+          }
+          return _track(
+            await ServerClaude.startBuiltin(
+              cwd: cwd,
+              arguments: (args['arguments'] as List).cast<String>(),
+              settings: (args['settings'] as Map?)?.cast<String, Object?>(),
+              cleared: (args['cleared'] as List? ?? const []).cast<String>(),
+              environment:
+                  (args['environment'] as Map?)?.cast<String, String>() ??
+                  const {},
+            ),
+          );
+        }
+        final cli = await _claude.locate();
         if (!Directory(cwd).existsSync()) {
           throw IdeFileNotFoundException(cwd);
         }
-        return _track(
-          await ServerClaude.startBuiltin(
-            cwd: cwd,
-            arguments: (args['arguments'] as List).cast<String>(),
-            settings: (args['settings'] as Map?)?.cast<String, Object?>(),
-            cleared: (args['cleared'] as List? ?? const []).cast<String>(),
-            environment:
-                (args['environment'] as Map?)?.cast<String, String>() ??
-                const {},
-          ),
-        );
-      }
-      final cli = await _claude.locate();
-      if (!Directory(cwd).existsSync()) {
-        throw IdeFileNotFoundException(cwd);
-      }
-      // A key goes in a file only the user reads (in memory where there is
-      // a place for it), never the command line.
-      final environment = {
-        ...cli.environment,
-        for (final name in (args['cleared'] as List? ?? const []))
-          name as String: '',
-        ...?(args['environment'] as Map?)?.cast<String, String>(),
-        ...ClaudeEnvironment.stateDirectory(cli.environment),
-      };
-      final arguments = ServerClaude.argumentsFor(
-        (args['arguments'] as List).cast<String>(),
-        root: ServerClaude.runsAsRoot,
-        environment: environment,
-      );
-      final settings = switch (args['settings']) {
-        final Map settings => await ClaudeSettingsFile.write(
-          settings.cast<String, Object?>(),
-        ),
-        _ => null,
-      };
-      final Process process;
-      try {
-        process = await Process.start(
-          cli.executable,
-          [
-            ...arguments,
-            if (settings != null) ...['--settings', settings],
-          ],
-          workingDirectory: cwd,
+        // A key goes in a file only the user reads (in memory where there is
+        // a place for it), never the command line.
+        final environment = {
+          ...cli.environment,
+          for (final name in (args['cleared'] as List? ?? const []))
+            name as String: '',
+          ...?(args['environment'] as Map?)?.cast<String, String>(),
+          ...ClaudeEnvironment.stateDirectory(cli.environment),
+        };
+        final arguments = ServerClaude.argumentsFor(
+          (args['arguments'] as List).cast<String>(),
+          root: ServerClaude.runsAsRoot,
           environment: environment,
-          includeParentEnvironment: false,
         );
-      } on Object {
-        if (settings != null) await ClaudeSettingsFile.delete(settings);
-        rethrow;
-      }
-      if (settings != null) {
-        unawaited(
-          process.exitCode.then((_) => ClaudeSettingsFile.delete(settings)),
-        );
-      }
-      return _track(process);
-    };
-    handlers[RemoteProtocol.claudeProjects] = (_, _) async => [
-      for (final project in await _sessions.projects()) project.toJson(),
-    ];
-    handlers[RemoteProtocol.claudeRead] = (params, _) async {
-      final args = paramsOf(params);
-      final path = args['path'] as String;
-      // Whole, as to a client before pages.
-      if (args['turns'] case final int turns) {
-        final page = await ClaudeSessions.readPage(
-          path,
-          turns: turns,
+        final settings = switch (args['settings']) {
+          final Map settings => await ClaudeSettingsFile.write(
+            settings.cast<String, Object?>(),
+          ),
+          _ => null,
+        };
+        final Process process;
+        try {
+          process = await Process.start(
+            cli.executable,
+            [
+              ...arguments,
+              if (settings != null) ...['--settings', settings],
+            ],
+            workingDirectory: cwd,
+            environment: environment,
+            includeParentEnvironment: false,
+          );
+        } on Object {
+          if (settings != null) await ClaudeSettingsFile.delete(settings);
+          rethrow;
+        }
+        if (settings != null) {
+          unawaited(
+            process.exitCode.then((_) => ClaudeSettingsFile.delete(settings)),
+          );
+        }
+        return _track(process);
+      };
+      handlers[RemoteProtocol.claudeProjects] = (_, _) async => [
+        for (final project in await _sessions.projects()) project.toJson(),
+      ];
+      handlers[RemoteProtocol.claudeRead] = (params, _) async {
+        final args = paramsOf(params);
+        final path = args['path'] as String;
+        // Whole, as to a client before pages.
+        if (args['turns'] case final int turns) {
+          final page = await ClaudeSessions.readPage(
+            path,
+            turns: turns,
+            before: args['before'] as String?,
+            bytes: args['bytes'] as int? ?? ClaudeSessions.pageBytes,
+          );
+          return page.toJson();
+        }
+        return ClaudeSessions.read(path);
+      };
+      handlers[RemoteProtocol.claudeGoal] = (params, _) =>
+          _sessions.goal(paramsOf(params)['id'] as String);
+      handlers[RemoteProtocol.claudeDelete] = (params, _) async {
+        await _sessions.delete(paramsOf(params)['id'] as String);
+        return null;
+      };
+      handlers[RemoteProtocol.claudeFork] = (params, _) {
+        final args = paramsOf(params);
+        return _sessions.fork(
+          args['id'] as String,
+          args['into'] as String,
           before: args['before'] as String?,
-          bytes: args['bytes'] as int? ?? ClaudeSessions.pageBytes,
+          title: args['title'] as String?,
         );
-        return page.toJson();
-      }
-      return ClaudeSessions.read(path);
-    };
-    handlers[RemoteProtocol.claudeGoal] = (params, _) =>
-        _sessions.goal(paramsOf(params)['id'] as String);
-    handlers[RemoteProtocol.claudeDelete] = (params, _) async {
-      await _sessions.delete(paramsOf(params)['id'] as String);
-      return null;
-    };
-    handlers[RemoteProtocol.claudeFork] = (params, _) {
-      final args = paramsOf(params);
-      return _sessions.fork(
-        args['id'] as String,
-        args['into'] as String,
-        before: args['before'] as String?,
-        title: args['title'] as String?,
-      );
-    };
-    handlers[RemoteProtocol.claudeUsageOffBy] = (_, _) async {
-      const setting = ClaudeEnvironment.essentialTrafficVariable;
-      final value = (await ClaudeEnvironment.of())[setting];
-      return value == null || value.isEmpty ? null : setting;
-    };
+      };
+      handlers[RemoteProtocol.claudeUsageOffBy] = (_, _) async {
+        const setting = ClaudeEnvironment.essentialTrafficVariable;
+        final value = (await ClaudeEnvironment.of())[setting];
+        return value == null || value.isEmpty ? null : setting;
+      };
+    }
   }
 
   ClaudeSessions get _sessions =>
