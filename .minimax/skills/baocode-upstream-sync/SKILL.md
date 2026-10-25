@@ -50,6 +50,9 @@ gh api repos/baocode-dev/baocode/releases/tags/v1.5.0 --jq .body
 不能凭条目文字猜 —— 同一句描述在不同代码里根因常不同。定位不到就记为"该版本此条不适用"，
 写清依据，不要硬凑一个改动。
 
+**上游的 tag 与我们的同名不同提交**（见第 2 步末尾的说明）—— 所以本地核对上游的某个
+版本时用 `upstream/v<版本>`，别用 `v<版本>`（那个是我们的）。
+
 ### 2. 自己实现修复（不 cherry-pick 上游）
 
 上游的修法只是参考。做法：读懂上游为何这样改，再在本 fork 的对应位置用**自己的实现**落地，
@@ -74,21 +77,48 @@ git diff --numstat upstream/main HEAD -- lib/ packages/ tool/
 # 2. 那些删除行，逐行看：地址替换、等价重构、自己的增强，还是真丢了实现
 git diff upstream/main HEAD -- lib/ packages/ tool/ | Select-String '^-' | Where-Object { $_.Line -notmatch '^---' }
 # 3. 上游 v1.6.0 之后又改过的文件（我们的合并也包含了，但要确认合并结果与 upstream/main 一致）
-git diff --name-only v1.6.0 upstream/main
+git diff --name-only upstream/v1.6.0 upstream/main
 # 4. 某处两边同题（各自有修法）时，看合并后的代码是不是把两边的修法都保住了
-git diff v1.6.0 HEAD -- <那个文件>
+git diff upstream/v1.6.0 HEAD -- <那个文件>
+# 5. 最硬的一条：逐个文件比内容（提交 hash 会不同，合并是我们手改的，内容才作数）
+git diff --stat upstream/main HEAD -- <上游改过的那个文件>
 ```
 
 判读：`+` 多于 `-`，且删除行里没有"上游的功能逻辑"，就是**没丢**；反过来（有实质逻辑被删）
 要逐条查清是被上游有意删掉的（如上游自己删了一个特性），还是合并出错。
 
-**上游的日志不一定涵盖 tag 之后的提交** —— `git log v<上游tag>..upstream/main` 里的那些修复
+**用第 5 条核对"上游的修复都在我们这儿"**：`git merge-base --is-ancestor <上游提交> HEAD`
+会说"不在"（我们的合并是手改的，hash 不同），**别被它骗了** —— 比内容。
+
+**上游的日志不一定涵盖 tag 之后的提交** —— `git log <上游tag>..upstream/main` 里的那些修复
 也要写进自己的发布说明，否则用户看不到。
+
+**tag 撞名怎么办（2026-10-25 实测）**：这个 fork 的版本号与上游各走各的，但**同名的 tag
+指向不同的提交**（我们的 `v1.6.0` 是 `2c03071a`，上游的 `v1.6.0` 是 `f8e1bcfd`）。于是
+`git fetch upstream --tags` 会拒绝：
+
+```
+! [rejected] v1.6.0 -> v1.6.0  (would clobber existing tag)
+```
+
+**不要改我们已发布的 tag**（改了 release 页面上的下载链接就变了）。改成把上游的 tag 取到
+另一个名字下：
+
+```powershell
+# 同步前：上游的 tag 取到 upstream/ 下，不碰我们自己的
+git fetch upstream --no-tags
+git fetch upstream 'refs/tags/v*':refs/tags/upstream/v*
+# 之后，上游的某个版本就是 upstream/v1.6.0（我们的仍是 v1.6.0）
+git log upstream/v1.6.0..upstream/main
+```
+
+**核对上游是否已实现时，命令里要用 `upstream/v<版本>`**，不是 `v<版本>`。
 
 ### 3. 合并上游，保留 fork 特性
 
 ```powershell
-git fetch upstream
+git fetch upstream --no-tags
+git fetch upstream 'refs/tags/v*':refs/tags/upstream/v*
 git checkout dev
 git merge upstream/main --no-edit --no-verify
 ```
