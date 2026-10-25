@@ -1,4 +1,4 @@
-@TestOn('mac-os || linux')
+@TestOn('mac-os || linux || windows')
 library;
 
 import 'dart:io';
@@ -19,7 +19,9 @@ void main() {
   tearDown(() {
     // Undo a read-only folder's mode, so it can go.
     for (final entity in root.listSync(recursive: true, followLinks: false)) {
-      if (entity is Directory) Process.runSync('chmod', ['755', entity.path]);
+      if (entity is Directory && !Platform.isWindows) {
+        Process.runSync('chmod', ['755', entity.path]);
+      }
     }
     root.deleteSync(recursive: true);
   });
@@ -304,7 +306,7 @@ void main() {
         File(openedWith().last).deleteSync();
       });
     });
-  });
+  }, skip: Platform.isWindows ? 'macOS only' : false);
 
   group('Windows', () {
     late String bin;
@@ -423,7 +425,7 @@ void main() {
       expect(await shell.status(), ShellCommandStatus.unsupported);
       await expectLater(shell.install(), throwsA(isA<ShellCommandException>()));
     });
-  });
+  }, skip: Platform.isWindows ? false : 'Windows only');
 
   group('ShellCommand', () {
     // The tests' own stand-in (flutter_test_config.dart) put aside.
@@ -442,6 +444,11 @@ void main() {
     });
 
     test('goes to the platform\'s installer', () async {
+      if (Platform.isWindows) {
+        // The macOS installer is not on this machine; the Windows one is
+        // told of in the group above.
+        return;
+      }
       final target = p.join(root.path, 'bin', 'code');
       ShellCommand.debugInstaller = MacShellCommand(
         target: target,
