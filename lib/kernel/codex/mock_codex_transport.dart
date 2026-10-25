@@ -93,7 +93,6 @@ class MockCodexTransport implements CodexTransport {
           'thread': {'id': _threadId},
         });
       case 'thread/name/set':
-      case 'thread/settings/update':
         _respond(id, {});
       case 'thread/fork':
         _respond(id, {
@@ -118,13 +117,6 @@ class MockCodexTransport implements CodexTransport {
               ],
               'serviceTiers': <Object?>[],
             },
-          ],
-        });
-      case 'collaborationMode/list':
-        _respond(id, {
-          'data': [
-            {'name': 'Plan', 'mode': 'plan'},
-            {'name': 'Default', 'mode': 'default'},
           ],
         });
       case 'mcpServerStatus/list':

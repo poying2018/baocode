@@ -2,6 +2,10 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import 'product.dart';
+
+export 'product.dart';
+
 /// Where the app and the user keep their files: what the platforms call
 /// the same three places.
 abstract final class AppPaths {
@@ -23,17 +27,17 @@ abstract final class AppPaths {
   ///
   /// The name is the one source of it: the native side reads the same name
   /// (windows/runner/app_identity.cpp), so the two cannot disagree.
-  static String product([String? executable]) {
-    final name = p
-        .basenameWithoutExtension(executable ?? Platform.resolvedExecutable)
-        .toLowerCase();
-    // The name is the product's, with no space in it: "baocode" (BaoCode,
-    // the Claude Code one) or "baocode-codex" (the codex one). A name
-    // belonging to no product (a test host, a build named otherwise) is
-    // BaoCode's.
-    if (!name.startsWith('baocode')) return 'baocode';
-    return name.contains(' ') ? 'baocode' : name;
-  }
+  static String product([String? executable]) =>
+      productOf(executable).id;
+
+  /// The product a build of the app is, with what tells it apart: its
+  /// name, its links, its registration, its update channel.
+  static Product productOf([String? executable]) =>
+      Product.byExecutable(executable ?? Platform.resolvedExecutable);
+
+  /// The URL scheme this product answers to: a link with it opens this
+  /// product, and no other.
+  static String scheme([String? executable]) => productOf(executable).scheme;
 
   /// The name [product]'s folders carry, with this copy's id (see
   /// [appIdVariable]) when it has one: "baocode", "baocode-codex", or
@@ -67,7 +71,7 @@ abstract final class AppPaths {
   /// Whether this product carries Claude Code: BaoCode does, the codex one
   /// does not — it has no Claude Code to carry, and says nothing of it.
   static bool hasClaudeCode([String? executable]) =>
-      product(executable) != 'baocode-codex';
+      productOf(executable).hasClaudeCode;
 
   /// The user's home directory as [environment] says: `USERPROFILE` on
   /// Windows, `HOME` elsewhere.

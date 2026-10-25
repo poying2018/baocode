@@ -137,7 +137,6 @@ class CodexKernel
   final Map<String, String> _tiersByModel = {};
   final Map<String, _ModelInfo> _models = {};
   bool _modelsLoaded = false;
-  bool _collaborationModes = false;
 
   @override
   KernelHealth get health => _health;
@@ -344,6 +343,10 @@ class CodexKernel
 
   final Map<String, int> _textLength = {};
   final Map<String, StringBuffer> _reasoning = {};
+
+  /// The reasoning itself, where the model gives it and not only a summary
+  /// of it: a card of its own, so that the two do not mix.
+  final Map<String, StringBuffer> _reasoningContent = {};
   final Map<String, Stopwatch> _reasoningClock = {};
 
   /// The part of each summary streaming in.
@@ -420,7 +423,6 @@ class CodexKernel
     emitInfoChanged();
     try {
       await _loadModels();
-      await _loadCollaborationModes();
       _health = KernelHealth.ready;
       emitInfoChanged();
     } on Object catch (error) {
@@ -441,27 +443,41 @@ class CodexKernel
       emitInfoChanged();
     }
     if (_awaitingPlanId != null) _markPlanSentBack(turn.text);
+    // The plan was started: the agent is told to build it, not to plan it
+    // again.
+    var sent = turn;
+    if (_startsPlan) {
+      _startsPlan = false;
+      sent = KernelTurn(
+        id: turn.id,
+        text: turn.text,
+        mentions: turn.mentions,
+        images: turn.images,
+        now: turn.now,
+        notes: [...turn.notes, _buildNote],
+      );
+    }
     if (_turn != null || _cancelPending) {
-      if (turn.now) {
-        _queuedTurns.insert(0, turn);
+      if (sent.now) {
+        _queuedTurns.insert(0, sent);
       } else {
-        _queuedTurns.add(turn);
+        _queuedTurns.add(sent);
       }
       emit(
         ItemUpserted(
           nextSeq,
-          turn.id,
-          UserMessageItem(text: turn.text, images: turn.images, queued: true),
+          sent.id,
+          UserMessageItem(text: sent.text, images: sent.images, queued: true),
         ),
       );
-      if (turn.now) {
+      if (sent.now) {
         cancel();
       } else if (_cancelPending) {
         _waitForCancelledTurn();
       }
       return;
     }
-    _begin(turn);
+    _begin(sent);
   }
 
   void _begin(KernelTurn turn) {
@@ -565,18 +581,19 @@ class CodexKernel
                   'data:${image.mediaType};base64,'
                   '${base64Encode(image.bytes)}',
             },
+          // The app-server has no mode of its own to plan in (there is no
+          // such parameter), so the way of working travels with the
+          // message: the agent is told to plan, and the sandbox keeps it
+          // from changing anything while it does.
+          if (_work == 'plan')
+            {
+              'type': 'text',
+              'text': _planNote,
+            },
         ],
         'model': model.selected,
         'effort': ?_effortFor(model.selected ?? ''),
         'serviceTierForTurn': ?_tierFor(model.selected ?? ''),
-        if (_collaborationModes || _work == 'plan')
-          'collaborationMode': {
-            'mode': _work == 'plan' ? 'plan' : 'default',
-            'settings': {
-              'model': model.selected,
-              'reasoning_effort': ?_effortFor(model.selected ?? ''),
-            },
-          },
         'approvalPolicy': readOnly
             ? 'never'
             : switch (_permission) {
@@ -599,6 +616,17 @@ class CodexKernel
     );
   }
 
+  /// What the agent is told when the user asked it to plan: a plan, and
+  /// nothing changed yet.
+  static const _planNote =
+      'Work out the plan for this, and stop there: do not change any file '
+      'yet. Say what you would do, step by step.';
+
+  /// What the agent is told when the user started the plan it made: build
+  /// it, rather than plan it again.
+  static const _buildNote =
+      'The plan above is approved. Carry it out now, step by step.';
+
   Future<void> _ensureThread() async {
     if (_threadId != null && !_resumePending) return;
     await _startThread();
@@ -613,6 +641,9 @@ class CodexKernel
       try {
         final answer = await _request('thread/resume', {
           'threadId': resumed.id,
+          // The history is read from the server's own turns afterwards:
+          // hydrating it here as well would read it twice.
+          'excludeTurns': true,
           ..._threadParameters(),
         });
         if (_applyThreadResult(answer)) {
@@ -640,8 +671,6 @@ class CodexKernel
     'model': model.selected,
     'serviceTier': ?_tierFor(model.selected ?? ''),
     'developerInstructions': ?_developerInstructions,
-    if (_extraProtocolFolders case final folders when folders.isNotEmpty)
-      'runtimeWorkspaceRoots': folders,
   };
 
   List<String> get _workspaceFolders => [
@@ -814,16 +843,9 @@ class CodexKernel
     emitInfoChanged();
   }
 
-  Future<void> _loadCollaborationModes() async {
-    _collaborationModes = false;
-    try {
-      await _request('collaborationMode/list', {});
-      _collaborationModes = true;
-    } on Object {
-      // It is an experimental catalog: the fixed Plan and Default modes
-      // still work when an older server does not answer it.
-    }
-  }
+  /// Set by [startBuilding]: the next message carries the plan out, rather
+  /// than the agent planning it again.
+  bool _startsPlan = false;
 
   static String _titleCase(String value) =>
       value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
@@ -1222,34 +1244,12 @@ class CodexKernel
 
   @override
   void startBuilding() {
+    _startsPlan = true;
     _work = 'agent';
     mode.reported = 'agent';
     _approveAwaitingPlan();
-    final threadId = _threadId;
-    if (threadId != null && _collaborationModes) {
-      unawaited(
-        _request('thread/settings/update', {
-          'threadId': threadId,
-          'collaborationMode': _collaborationMode(defaultMode: true),
-        }).catchError((Object error) {
-          _notice(
-            'Could not leave Plan mode: $error',
-            kind: NoticeKind.warning,
-          );
-          return <String, Object?>{};
-        }),
-      );
-    }
     emitInfoChanged();
   }
-
-  Map<String, Object?> _collaborationMode({required bool defaultMode}) => {
-    'mode': defaultMode ? 'default' : 'plan',
-    'settings': {
-      'model': model.selected,
-      'reasoning_effort': ?_effortFor(model.selected ?? ''),
-    },
-  };
 
   void _approveAwaitingPlan() {
     final id = _awaitingPlanId;
@@ -1434,7 +1434,11 @@ class CodexKernel
 
   Future<void> _loadMcpServers() async {
     try {
-      final answer = await _request('mcpServerStatus/list', {});
+      // The thread, when there is one: without it the server reports the
+      // state of no runtime, and every server looks like it is waiting.
+      final answer = await _request('mcpServerStatus/list', {
+        if (_threadId != null) 'threadId': _threadId,
+      });
       _servers = [
         for (final raw in answer['data'] as List? ?? const [])
           if (raw is Map) _mcpServer(raw.cast<String, Object?>()),
@@ -1454,6 +1458,7 @@ class CodexKernel
       'connected' => McpServerStatus.connected,
       'disabled' => McpServerStatus.disabled,
       'failed' || 'cancelled' => McpServerStatus.failed,
+      'authenticationRequired' => McpServerStatus.needsAuth,
       _ when auth == 'notLoggedIn' => McpServerStatus.needsAuth,
       _ => error == null ? McpServerStatus.pending : McpServerStatus.failed,
     };
@@ -1762,6 +1767,17 @@ class CodexKernel
         if (title is String && title.isNotEmpty) {
           emit(SessionRenamed(nextSeq, title));
         }
+      case 'serverRequest/resolved':
+        // The server settled a request of its own (an approval it gave
+        // itself): the card is closed, and nothing is answered — it is
+        // answered already, and answering again would be noise.
+        _resolveServerRequest(params?['requestId']);
+      case 'thread/deleted' || 'thread/closed':
+        _failed(
+          'The conversation is gone',
+          'Codex closed or deleted this conversation.',
+        );
+        if (_turn case final turn?) _failTurn(turn, 'The conversation is gone');
       case 'thread/settings/updated':
         if (params!['threadSettings'] case final Map settings) {
           _applyThreadSettings(settings.cast<String, Object?>());
@@ -1830,6 +1846,16 @@ class CodexKernel
         final offset = buffer.length;
         buffer.write(delta);
         emit(TextDelta(nextSeq, id, offset, delta, tokens: buffer.length));
+      case 'item/reasoning/textDelta':
+        // The reasoning itself, where the model gives it (not only a
+        // summary of it): it is the same item, and the card shows it.
+        final id = params!['itemId'] as String;
+        final buffer = _reasoningContent[id];
+        if (buffer == null) return;
+        final delta = params['delta'] as String;
+        final offset = buffer.length;
+        buffer.write(delta);
+        emit(TextDelta(nextSeq, id, offset, delta));
       case 'item/agentMessage/delta':
         final id = params!['itemId'] as String;
         final offset = _textLength[id];
@@ -1857,9 +1883,74 @@ class CodexKernel
           ),
         );
         _reportStats();
+      case 'account/rateLimits/updated':
+        // The server says what the account may do now: the numbers are
+        // read as they are, rather than waited for.
+        _applyLimits(_parseLimits(params ?? const {}));
+      case 'warning' || 'guardianWarning' || 'deprecationNotice':
+        final warning = params?['message'] ?? params?['warning'];
+        if (warning != null) {
+          _notice(
+            '$warning',
+            kind: method == 'deprecationNotice'
+                ? NoticeKind.warning
+                : NoticeKind.error,
+          );
+        }
       case 'mcpServer/startupStatus/updated' || 'mcpServerStatus/updated':
-        refreshMcpServers();
+        _mcpServerUpdated(params);
     }
+  }
+
+  /// The server told what the account may do now: the windows are read as
+  /// they are, and the ones that are gone go.
+  void _applyLimits(List<RateLimitWindow> limits) {
+    if (limits.isEmpty) return;
+    final byLabel = {for (final limit in limits) limit.label: limit};
+    _accountLimits = [
+      for (final old in _accountLimits) byLabel.remove(old.label) ?? old,
+      ...byLabel.values,
+    ];
+    _reportAllStats();
+  }
+
+  /// One MCP server changed its state: the list is told, and nothing is
+  /// asked for again — every conversation sharing the app-server would ask
+  /// for the whole list, each of them.
+  void _mcpServerUpdated(Map<String, Object?>? params) {
+    final name = params?['name'];
+    final status = params?['status'];
+    final servers = _servers;
+    if (name is! String || status is! String || servers == null) {
+      refreshMcpServers();
+      return;
+    }
+    final known = switch (status) {
+      'connected' => McpServerStatus.connected,
+      'starting' => McpServerStatus.pending,
+      'failed' || 'cancelled' => McpServerStatus.failed,
+      'authenticationRequired' => McpServerStatus.needsAuth,
+      'disabled' => McpServerStatus.disabled,
+      _ => null,
+    };
+    if (known == null) {
+      refreshMcpServers();
+      return;
+    }
+    _servers = [
+      for (final server in servers)
+        if (server.name == name)
+          McpServer(
+            name: server.name,
+            status: known,
+            error: server.error,
+            version: server.version,
+            tools: server.tools,
+          )
+        else
+          server,
+    ];
+    emitInfoChanged();
   }
 
   bool _forThisThread(Map<String, Object?>? params) {
@@ -2073,6 +2164,33 @@ class CodexKernel
         );
       case 'mcpServer/elicitation/request':
         _mcpElicitation(rpcId, params);
+      case 'item/tool/call':
+        // A tool the server wants this client to run. This app runs none
+        // of its own for the server, so it says so — as an answer, which
+        // the model reads, rather than as a protocol error, which ends
+        // the turn.
+        _respond(rpcId, {
+          'success': false,
+          'contentItems': [
+            {
+              'type': 'text',
+              'text':
+                  'This client runs no tools of its own for the server; '
+                  '${params['tool'] ?? 'the tool'} was not run.',
+            },
+          ],
+        });
+      case 'account/chatgptAuthTokens/refresh':
+        // The server asks the client for ChatGPT tokens to refresh. This
+        // app holds none: the server keeps its own account in its own
+        // folder. It is told so, and the turn goes on.
+        _transport.write({
+          'id': rpcId,
+          'error': {
+            'code': -32601,
+            'message': 'This client holds no ChatGPT tokens',
+          },
+        });
       default:
         // One it does not know: told, so the server is not left waiting
         // for an answer that will not come.
@@ -2113,6 +2231,18 @@ class CodexKernel
     );
   }
 
+  /// The server settled a request of its own: the card is closed, and
+  /// nothing is answered — it is answered already, and answering again
+  /// would be a second answer to a request nobody waits for.
+  void _resolveServerRequest(Object? requestId) {
+    if (requestId == null) return;
+    for (final entry in _interactions.entries.toList()) {
+      if (entry.value.rpcId != requestId) continue;
+      _interactions.remove(entry.key);
+      emit(InteractionResolved(nextSeq, entry.key));
+    }
+  }
+
   void _mcpElicitation(Object? rpcId, Map<String, Object?> params) {
     final server = params['serverName'] as String? ?? 'MCP';
     final message = params['message'] as String? ?? 'MCP needs input';
@@ -2141,7 +2271,38 @@ class CodexKernel
     final schema = params['requestedSchema'];
     final properties = schema is Map ? schema['properties'] : null;
     if (properties is! Map || properties.isEmpty) {
-      _respond(rpcId, {'action': 'accept', 'content': const {}});
+      // The schema is not one this app can put fields on (some servers
+      // send only "there is a form"). Asking the user with a free text
+      // field is better than answering for them: an empty answer is
+      // accepted by the server as if the user had said yes to nothing.
+      final id = 'elicitation:$rpcId';
+      final field = _ElicitationField(
+        id: 'answer',
+        type: 'string',
+        multiple: false,
+        values: const {},
+        question: Question(
+          prompt: message,
+          header: server,
+          options: const [],
+        ),
+      );
+      _interactions[id] = _PendingInteraction(
+        rpcId: rpcId,
+        kind: _InteractionKind.elicitation,
+        params: params,
+        fields: [field],
+      );
+      emit(
+        InteractionRequested(
+          nextSeq,
+          QuestionRequest(
+            id: id,
+            title: '$server: $message',
+            questions: [field.question],
+          ),
+        ),
+      );
       return;
     }
     final fields = <_ElicitationField>[];
@@ -2188,6 +2349,7 @@ class CodexKernel
     switch (item['type']) {
       case 'reasoning':
         _reasoning[id] = StringBuffer();
+        _reasoningContent[id] = StringBuffer();
         _reasoningClock[id] = Stopwatch()..start();
         emit(
           ItemUpserted(
@@ -2253,11 +2415,24 @@ class CodexKernel
     switch (item['type']) {
       case 'reasoning':
         final buffer = _reasoning.remove(id);
+        final streamed = _reasoningContent.remove(id);
         final clock = _reasoningClock.remove(id)?..stop();
         _reasoningPart.remove(id);
-        final text =
-            buffer?.toString() ??
-            (item['summary'] as List<Object?>? ?? const []).join('\n\n');
+        // The summary, where the model gave one; the reasoning itself,
+        // where it gave that instead.
+        final summary = (item['summary'] as List<Object?>? ?? const [])
+            .join('\n\n');
+        final given = switch (item['content']) {
+          final String text => text,
+          final List<Object?> parts => parts.join('\n\n'),
+          _ => '',
+        };
+        final live = buffer?.toString() ?? streamed?.toString() ?? '';
+        final text = live.isNotEmpty
+            ? live
+            : summary.isNotEmpty
+            ? summary
+            : given;
         emit(
           ItemCompleted(
             nextSeq,
@@ -2463,7 +2638,13 @@ class CodexKernel
         (action as Map).cast<String, Object?>(),
     ];
     final output = item['aggregatedOutput'] as String?;
-    final done = item['status'] == 'completed' || item['status'] == 'failed';
+    // A command the user declined is over: it never runs, and the card
+    // must not go on showing it as running.
+    final declined = item['status'] == 'declined';
+    final done =
+        declined ||
+        item['status'] == 'completed' ||
+        item['status'] == 'failed';
     if (actions.isNotEmpty && actions.every((a) => a['type'] == 'read')) {
       final path = actions.first['path'] as String? ?? '';
       return ToolCallItem(
@@ -2486,9 +2667,15 @@ class CodexKernel
     }
     return TerminalItem(
       command: item['command'] as String,
-      output: output ?? '',
+      // A command the user declined never ran: it says so, rather than
+      // showing an empty result as if it had.
+      output: declined && (output == null || output.isEmpty)
+          ? 'Declined'
+          : output ?? '',
       description: item['description'] as String?,
-      status: !done
+      status: declined
+          ? CommandStatus.failed
+          : !done
           ? CommandStatus.running
           : item['exitCode'] == 0
           ? CommandStatus.succeeded
@@ -2553,6 +2740,13 @@ class CodexKernel
     _turn = null;
     for (final id in [..._reasoning.keys]) {
       _itemCompleted({'type': 'reasoning', 'id': id});
+    }
+    // A plan still streaming when the turn ended: it is closed with what
+    // it said, not with nothing.
+    for (final id in [..._planText.keys]) {
+      final text = _planText.remove(id)?.toString() ?? '';
+      _textLength.remove(id);
+      emit(ItemCompleted(nextSeq, id, item: AssistantTextItem(text)));
     }
     for (final id in [..._textLength.keys]) {
       _textLength.remove(id);

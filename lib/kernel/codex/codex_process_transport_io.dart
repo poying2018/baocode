@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
 import 'codex_transport.dart';
@@ -85,7 +86,7 @@ class ProcessCodexTransport implements CodexTransport {
     try {
       final process = await Process.start(
         cli.executable,
-        launch.arguments,
+        [...?cli.arguments, ...launch.arguments],
         workingDirectory: launch.cwd,
         environment: {
           ...?cli.environment,
@@ -117,6 +118,11 @@ class ProcessCodexTransport implements CodexTransport {
   /// is split, and the server never starts. The binary behind it is
   /// found and run directly.
   static Future<CodexExecutable> locateCodex() async {
+    // The Codex the user says to run, if they say one: a wrapper of
+    // their own, a Codex of another version, or a stub of ours.
+    if (command case final chosen?) return chosen;
+    final configured = _configured();
+    if (configured != null) return configured;
     for (final candidate in await _candidates()) {
       if (await _runs(candidate)) return candidate;
     }
@@ -126,6 +132,23 @@ class ProcessCodexTransport implements CodexTransport {
           'Install it with "npm install -g @openai/codex", or run '
           '"codex app-server" yourself.',
     );
+  }
+
+  /// The environment variable that says which Codex to run: a command
+  /// line, the way the user would type it.
+  static const commandVariable = 'BAOCODE_CODEX_COMMAND';
+
+  /// The Codex to run, whatever the search finds: for a test, and for a
+  /// build that carries one of its own.
+  @visibleForTesting
+  static CodexExecutable? command;
+
+  /// The command of the environment, when it is one that runs.
+  static CodexExecutable? _configured() {
+    final line = Platform.environment[commandVariable]?.trim();
+    if (line == null || line.isEmpty) return null;
+    final parts = line.split(RegExp(r'\s+'));
+    return CodexExecutable(parts.first, arguments: parts.skip(1).toList());
   }
 
   /// Where the Codex CLI may be, best first.
@@ -262,7 +285,7 @@ class ProcessCodexTransport implements CodexTransport {
     try {
       final result = await Process.run(
         candidate.executable,
-        ['--version'],
+        [...?candidate.arguments, '--version'],
         environment: candidate.environment,
         runInShell: false,
       );
@@ -281,7 +304,7 @@ class ProcessCodexTransport implements CodexTransport {
   final Completer<void> _started = Completer<void>();
 
   /// The requests under way, by their id: their answers.
-  final Map<int, Completer<Map<String, Object?>>> _waiting = {};
+  final Map<Object, Completer<Map<String, Object?>>> _waiting = {};
   int _requests = 0;
   final StreamController<Map<String, Object?>> _messages =
       StreamController.broadcast();
@@ -312,9 +335,16 @@ class ProcessCodexTransport implements CodexTransport {
       if (decoded is Map<String, Object?> && !_messages.isClosed) {
         _messages.add(decoded);
       }
-      // An answer to a request of ours.
-      if (decoded is Map && decoded['id'] is int) {
-        final waiting = _waiting.remove(decoded['id'] as int);
+      // An answer to a request of ours — and only that: a message with a
+      // "method" is the server's own (a notification, or a request it
+      // makes of us, e.g. an approval), and it may carry the very id one
+      // of our requests has. The server's ids and ours are of the same
+      // space, so what tells them apart is the shape, not the number.
+      if (decoded is Map &&
+          !decoded.containsKey('method') &&
+          (decoded.containsKey('result') || decoded.containsKey('error'))) {
+        final id = decoded['id'];
+        final waiting = id == null ? null : _waiting.remove(id);
         if (waiting != null && !waiting.isCompleted) {
           final error = decoded['error'];
           if (error is Map) {
@@ -331,7 +361,10 @@ class ProcessCodexTransport implements CodexTransport {
       // The server is up when it answers the initialize request. The
       // notification is sent before anyone else can write: the server
       // refuses every other method until it has it.
-      if (decoded is Map && decoded['id'] == 0 && !_started.isCompleted) {
+      if (decoded is Map &&
+          decoded['id'] == 0 &&
+          !_started.isCompleted &&
+          (decoded.containsKey('result') || decoded.containsKey('error'))) {
         if (decoded['error'] case final error?) {
           final message = error is Map
               ? '${error['message'] ?? 'initialization failed'}'
@@ -377,7 +410,11 @@ class ProcessCodexTransport implements CodexTransport {
     String method, [
     Map<String, Object?> params = const {},
   ]) {
-    final id = ++_requests;
+    // The id is a string of our own: the server counts its own ids, and
+    // they are of the same space as ours — a number of ours could be the
+    // number of a request it makes of us, and then its answer and its
+    // request would be mixed up.
+    final id = 'baocode-${++_requests}';
     final answer = Completer<Map<String, Object?>>();
     _waiting[id] = answer;
     write({'id': id, 'method': method, 'params': params});
@@ -426,8 +463,12 @@ class ProcessCodexTransport implements CodexTransport {
 
 /// The `codex` to run, and the environment it runs with.
 class CodexExecutable {
-  const CodexExecutable(this.executable, {this.environment});
+  const CodexExecutable(this.executable, {this.environment, this.arguments});
 
   final String executable;
   final Map<String, String>? environment;
+
+  /// The arguments before the app-server's own, when the command is more
+  /// than the program itself (a wrapper of the user's, say).
+  final List<String>? arguments;
 }

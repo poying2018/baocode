@@ -100,7 +100,7 @@ class RemoteCodexTransport implements CodexTransport {
   final Completer<void> _finished = Completer<void>();
   final StreamController<Map<String, Object?>> _messages =
       StreamController.broadcast();
-  final Map<int, Completer<Map<String, Object?>>> _waiting = {};
+  final Map<Object, Completer<Map<String, Object?>>> _waiting = {};
   final List<String> _stderr = [];
   int _requests = 0;
   int? _exitCode;
@@ -121,8 +121,16 @@ class RemoteCodexTransport implements CodexTransport {
       if (decoded is Map<String, Object?> && !_messages.isClosed) {
         _messages.add(decoded);
       }
-      if (decoded is Map && decoded['id'] is int) {
-        final waiting = _waiting.remove(decoded['id'] as int);
+      // An answer to a request of ours — and only that: a message with a
+      // "method" is the server's own (a notification, or a request it
+      // makes of us, e.g. an approval), and it may carry the very id one
+      // of our requests has. The server's ids and ours are of the same
+      // space, so what tells them apart is the shape, not the number.
+      if (decoded is Map &&
+          !decoded.containsKey('method') &&
+          (decoded.containsKey('result') || decoded.containsKey('error'))) {
+        final id = decoded['id'];
+        final waiting = id == null ? null : _waiting.remove(id);
         if (waiting != null && !waiting.isCompleted) {
           if (decoded['error'] case final Map error) {
             waiting.completeError(
@@ -135,7 +143,10 @@ class RemoteCodexTransport implements CodexTransport {
           }
         }
       }
-      if (decoded is Map && decoded['id'] == 0 && !_started.isCompleted) {
+      if (decoded is Map &&
+          decoded['id'] == 0 &&
+          !_started.isCompleted &&
+          (decoded.containsKey('result') || decoded.containsKey('error'))) {
         if (decoded['error'] case final Map error) {
           _started.completeError(
             CodexUnavailable(
@@ -175,7 +186,11 @@ class RemoteCodexTransport implements CodexTransport {
     String method, [
     Map<String, Object?> params = const {},
   ]) {
-    final id = ++_requests;
+    // The id is a string of our own: the server counts its own ids, and
+    // they are of the same space as ours — a number of ours could be the
+    // number of a request it makes of us, and then its answer and its
+    // request would be mixed up.
+    final id = 'baocode-${++_requests}';
     final answer = Completer<Map<String, Object?>>();
     _waiting[id] = answer;
     write({'id': id, 'method': method, 'params': params});

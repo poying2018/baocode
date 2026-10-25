@@ -1,1 +1,1 @@
-export 'package:bao_remote/local.dart' show AppPaths;
+export 'package:bao_remote/local.dart' show AppPaths, Product;

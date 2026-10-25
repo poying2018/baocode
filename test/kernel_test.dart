@@ -5530,13 +5530,19 @@ exec /usr/bin/env "\$@"
       await pumpEventQueue();
       expect(server.written.map((m) => m['method']), [
         'model/list',
-        'collaborationMode/list',
         'thread/start',
         'turn/start',
       ]);
+      // Only what the app-server's protocol has: a parameter it does not
+      // know may make it refuse the whole request.
+      final threadStart = server.written
+          .firstWhere((m) => m['method'] == 'thread/start')['params']
+          as Map;
+      expect(threadStart.containsKey('runtimeWorkspaceRoots'), isFalse);
       // The models the server has are what the picker offers.
       expect(kernel.model.options.map((o) => o.id), ['gpt-5.5-codex']);
       final turnStart = server.written.last['params'] as Map;
+      expect(turnStart.containsKey('collaborationMode'), isFalse);
       expect(turnStart['sandboxPolicy'], {
         'type': 'readOnly',
         'networkAccess': false,
@@ -5682,13 +5688,12 @@ exec /usr/bin/env "\$@"
       final params = turnStart['params'] as Map;
       expect(params['effort'], 'high');
       expect(params['serviceTierForTurn'], 'priority');
-      expect((params['collaborationMode'] as Map)['settings'], {
-        'model': model,
-        'reasoning_effort': 'high',
-      });
+      // The effort goes with the turn, and not as a parameter the
+      // app-server does not have.
+      expect(params.containsKey('collaborationMode'), isFalse);
     });
 
-    test('Plan is a collaboration mode, and its plan starts', () async {
+    test('Plan is a note with the turn, and its plan starts', () async {
       kernel.mode.select('plan');
       kernel.send(const KernelTurn(id: 't1', text: 'plan it'));
       await pumpEventQueue();
@@ -5697,7 +5702,14 @@ exec /usr/bin/env "\$@"
         (message) => message['method'] == 'turn/start',
       );
       final params = turnStart['params'] as Map;
-      expect((params['collaborationMode'] as Map)['mode'], 'plan');
+      // The app-server has no mode of its own to plan in: the agent is
+      // told, with the message, and the sandbox keeps it from changing
+      // anything while it plans.
+      final input = (params['input'] as List).cast<Map>();
+      expect(
+        input.map((part) => part['text']),
+        contains(contains('do not change any file')),
+      );
       expect(params['sandboxPolicy'], {
         'type': 'readOnly',
         'networkAccess': false,
@@ -5729,9 +5741,22 @@ exec /usr/bin/env "\$@"
                   .item
               as PlanItem;
       expect(approved.status, PlanStatus.approved);
+
+      // The plan is carried out by the next message: the agent is told to
+      // build it, not to plan it again.
+      notify('turn/completed', {
+        'turn': {'id': 'st1', 'status': 'completed'},
+      });
+      await pumpEventQueue();
+      kernel.send(const KernelTurn(id: 't2', text: 'go'));
+      await pumpEventQueue();
+      final built = server.written.lastWhere(
+        (message) => message['method'] == 'turn/start',
+      );
+      final carried = (built['params'] as Map)['input'] as List;
       expect(
-        server.written.map((message) => message['method']),
-        contains('thread/settings/update'),
+        carried.map((part) => (part as Map)['text']),
+        contains(contains('Carry it out now')),
       );
     });
 
