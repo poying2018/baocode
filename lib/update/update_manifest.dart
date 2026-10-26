@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 
+import '../platform/app_paths.dart' show Product;
 import 'version.dart';
 
 /// Where the app looks for its next version: the release manifest
@@ -53,10 +54,7 @@ class UpdateUrlPolicy {
       ? const UpdateUrlPolicy()
       : UpdateUrlPolicy(extraOrigins: {manifest.origin});
 
-  static const domains = [
-    'github.com',
-    'githubusercontent.com',
-  ];
+  static const domains = ['github.com', 'githubusercontent.com'];
 
   final Set<String> extraOrigins;
 
@@ -213,9 +211,7 @@ class UpdateManifest {
     };
     final product = switch (json['product']) {
       null => null,
-      final String text => text.isEmpty
-          ? null
-          : text,
+      final String text => text.isEmpty ? null : text,
       _ => throw const UpdateManifestException('"product" is wrong'),
     };
     final notes = switch (json['notes']) {
@@ -310,5 +306,22 @@ class UpdateManifest {
   /// Whether this release is for [name] (the product asking): a manifest
   /// that names no product is BaoCode's (the one that came first), and so
   /// is not the codex product's.
-  bool isFor(String name) => product == null ? name == 'baocode' : product == name;
+  ///
+  /// Compared by what the names mean, not by the strings: a product is one
+  /// thing to the release tool (`--product baocode-claude`, as the build
+  /// matrix calls it), another to the manifest it writes, and a third to an
+  /// installed copy (the id its data folder carries, which is what it
+  /// answers with here). `Product` is the one table that says those are the
+  /// same product — and it says so across a release where the id changed,
+  /// which is when a string comparison would have every installed copy
+  /// refuse its own next version.
+  bool isFor(String name) => _asId(product) == _asId(name);
+
+  /// [name] as the product table knows it: no name is BaoCode's (the one
+  /// that came first), and a name belonging to no product keeps itself, as
+  /// [AppPaths.product] keeps an unknown build's own data folder.
+  static String _asId(String? name) => switch (name) {
+    null || '' => Product.baocode.id,
+    _ => Product.byId(name)?.id ?? name,
+  };
 }

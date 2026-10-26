@@ -83,6 +83,25 @@ void main() {
       expect(baocode.isFor('baocode-codex'), isFalse);
     });
 
+    test('a product is known by every name it goes by', () {
+      // The same product said three ways: what the build matrix calls it,
+      // what the release tool was told, what an installed copy answers with.
+      // Compared as strings, they are three products; as what they mean,
+      // one. Were they compared as strings, an id renamed in a later
+      // release would have every installed copy of the old name refuse its
+      // own next version — and say nothing but "up to date".
+      for (final name in ['baocode', 'baocode-claude', 'claude']) {
+        expect(
+          UpdateManifest.parse(_manifest(product: name)).isFor('baocode'),
+          isTrue,
+          reason: 'a release named "$name" is BaoCode Claude\'s own',
+        );
+      }
+      // And the other product still keeps its releases to itself.
+      expect(UpdateManifest.parse(_manifest(product: 'codex')).isFor('baocode'), isFalse);
+      expect(UpdateManifest.parse(_manifest(product: 'baocode')).isFor('baocode-codex'), isFalse);
+    });
+
     test('names a download by its path, whatever its query', () {
       // tool/release_manifest.dart ends links in the file's hash, so a
       // release redone is not served from the CDN's cache of the old one;
