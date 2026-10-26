@@ -38,7 +38,7 @@ BaoCode est une application native qui dessine directement son interface sur le 
 | Démarrage | ≈ 0,18 s |
 | Mémoire, une fenêtre inactive | ≈ 120 MB |
 | Processus, une fenêtre | 2 |
-| Taille du téléchargement Windows | ≈ 100 MB |
+| Taille du téléchargement Windows | ≈ 114 MB |
 
 Le téléchargement pour Windows contient Claude Code lui-même : il n'y a rien à installer ensuite.
 

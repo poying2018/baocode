@@ -38,7 +38,7 @@ BaoCode es una aplicación nativa que dibuja directamente su interfaz en la GPU.
 | Inicio | ≈ 0,18 s |
 | Memoria, una ventana inactiva | ≈ 120 MB |
 | Procesos, una ventana | 2 |
-| Tamaño de descarga para Windows | ≈ 100 MB |
+| Tamaño de descarga para Windows | ≈ 114 MB |
 
 La descarga para Windows incluye el propio Claude Code: no hay nada que instalar después.
 

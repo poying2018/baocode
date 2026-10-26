@@ -37,7 +37,7 @@ VS Code and Cursor are built on Electron: each window is a web page, and every c
 | Launch | ≈ 0.18 s | ≈ 2–3 s | ≈ 2–3 s |
 | Memory, one window idle | ≈ 120 MB | ≈ 970 MB | ≈ 1.9 GB |
 | Processes, one window | 2 | 8 | 13 |
-| Download size, Windows | ≈ 100 MB | ≈ 244 MB | ≈ 214 MB |
+| Download size, Windows | ≈ 114 MB | ≈ 244 MB | ≈ 214 MB |
 
 The Windows download carries Claude Code itself, so there is nothing to install afterwards.
 

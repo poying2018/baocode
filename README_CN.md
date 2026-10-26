@@ -38,7 +38,7 @@ BaoCode 是原生应用，直接通过 GPU 绘制界面。以下为英文 README
 | 启动时间 | 约 0.18 秒 |
 | 单窗口空闲内存占用 | 约 120 MB |
 | 单窗口进程数 | 2 |
-| Windows 下载大小 | 约 100 MB |
+| Windows 下载大小 | 约 114 MB |
 
 Windows 版自带 Claude Code，装完不用再装别的。
 

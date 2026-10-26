@@ -197,14 +197,16 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
   - **版本漂移由 CI 自动处理**：`.github/workflows/claude-version.yml` 每天跑一次，把渠道上的当前版本和它的 SHA-256 写进 `_claudeVersion` / `_claudeSha256`，在 `main` 上提交一个 `ci(claude): bump Claude Code to <版本>`。发版时 `check` 任务再跑一遍 `tool/bump_claude_version.dart` 兜底：落后了**发不下去**，并把该改的两行打在错误里；读不到那个源时只警告，不挡发版。日常 PR 不跑这两步。
     - 工具：`dart tool/bump_claude_version.dart`（只说现状，落后时退出码 1）、`--write`（写进 pin）。SHA-256 取自官方 manifest，不必下载那 283 MB 就能拿到；真正的二进制仍由构建时下载并按 pin 校验。
     - 那个工作流直接往 `main` 提交。**若仓库对 `main` 设了保护而拒绝 bot 的推送，第一次跑会失败**——那时改成开 PR，或给 bot 直推权限。
-  - 代价：安装包大了不少（Claude Code 的二进制约 283 MB，压缩后仍有一百多 MB）。安装包的体积因此不再是「十几 MB」。
+  - 代价：安装包大了不少（Claude Code 的二进制约 283 MB，压缩后安装包约 114 MB；1.6.2 是 21 MB）。
 - **密钥只在 `release` 环境里**，只有 `v*` 标签能用（见 7.2）。PR 和手动运行拿不到。
 - Flutter 版本固定在工作流的 `FLUTTER_VERSION`，升级 Flutter 时一起改。
 
-### 4.1 两个产品，一次发版
+### 4.1 两个产品，各发各的
 
 这个仓库出**两个程序**：BaoCode Claude（Claude Code 内核）和 BaoCode Codex（Codex 内核）。
-它们是两份程序，不是一个程序的两个开关 ⇒ **一次发版，两边都有**：
+它们是两份程序，各自有名字、各自更新，所以**一个 `v<版本>` 标签只发 BaoCode Claude**——
+Codex 还在开发中，公开出来就是一份半成品。要发第二个产品，手动运行时传
+`products: baocode-codex`（或 `both`，两个一起发）：
 
 | | BaoCode Claude | BaoCode Codex |
 | --- | --- | --- |
@@ -212,15 +214,21 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 | 更新清单 | `latest.json` | `latest-codex.json` |
 | 远端服务端 | `baocode-server-*` | `baocode-codex-server-*` |
 
-- `remote` 任务**按产品各建一次**（矩阵：`baocode`、`baocode-codex`），产物名带产品名。
-- `windows` 任务**按产品 × 版本各建一次**（矩阵），`tool/build_windows.dart --product <产品>`。
-- `publish` 任务**签两份清单**（`tool/release_manifest.dart --product <产品> --manifest out/<清单名>`），
-  **两份清单最后传**。
+- 发哪个（些）产品由 `check` 任务的 `products` 输出说定；`remote` 与 `windows`
+  任务的矩阵都跟着它，`publish` 里的循环也是（`for product in $(echo "$PRODUCTS" | jq -r '.[]')`）。
+  哪里都不要再写死两个产品名。
+- `publish` 任务**按产品各签一份清单**（`tool/release_manifest.dart --product <产品>
+  --manifest out/<清单名>`），**清单最后传**。
 - 两个产品的服务端清单名也不同（`servers.json` / `servers-codex.json`），
   否则一个会盖掉另一个的。
 - **产品由可执行文件的名字决定**（`baocode-claude.exe` / `baocode-codex.exe`），
   一处说清两个产品的分别：`packages/bao_remote/lib/src/platform/product.dart`。
   原生侧读同一个名字（`windows/runner/app_identity.cpp`），两边不会各说各话。
+- 名字之外有一样**不跟着可执行名走**：浏览器的 native messaging host。它按自己的
+  名字找应用写的端口文件，而端口文件按**产品 id** 命名，商店里已发布的扩展也只认
+  那个名字 ⇒ Claude Code 产品的 host 仍是 `baocode-browser-host.exe` /
+  `dev.baocode.browser`（`windows/CMakeLists.txt` 与 `windows/BrowserBridge/CMakeLists.txt`
+  两处说的必须是同一个名字，安装步骤装的就是前者点名的目标）。
 
 ## 5. dl.baocode.dev 上有什么
 
