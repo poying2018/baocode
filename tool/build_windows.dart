@@ -167,7 +167,15 @@ Future<void> main(List<String> arguments) async {
   // between versions (an upgrade installs over the old one) and must differ
   // between the products (so that one does not install over the other).
   // The codex product's is a new one of its own.
+  //
+  // Setup says it with the brace doubled: Inno reads a leading "{" as the
+  // start of a constant, so a GUID is written "{{…}" there. The table holds
+  // the real thing, which is what the app reads back out of the registry
+  // (installer_io.dart's uninstall key); the doubling is Setup's, not the
+  // product's, and is done where the value crosses into Setup's script.
   final productId = spec.appId;
+  // The same identity as Setup writes it: its own way of saying one brace.
+  final installerAppId = productId.replaceAll('{', '{{');
   // The context menu's key, the URL scheme and the browsers' native
   // messaging host: each product has one of its own, so that one does not
   // take the other's away.
@@ -221,8 +229,13 @@ Future<void> main(List<String> arguments) async {
     '$binaryName.exe',
     // The browsers' native messaging host and its manifest, which the
     // installer's keys point the browsers to (windows/BrowserBridge): each
-    // product's own.
-    '$binaryName-browser-host.exe',
+    // product's own. The host is named after the product's id, not after
+    // its executable: it reads the port file named after itself, the app
+    // writes the port file of its id (lib/browser/browser_bridge.dart), and
+    // the extension published to the stores knows that name — so the
+    // Claude Code product's host is baocode-browser-host.exe, though its
+    // executable is baocode-claude.exe.
+    '${spec.id}-browser-host.exe',
     productBrowserManifest,
     ..._required,
   ]);
@@ -311,7 +324,7 @@ Future<void> main(List<String> arguments) async {
     // for it (so that the two do not install over each other), its
     // executable and the folder it lives in.
     '/DProductName=$productName',
-    '/DProductId=$productId',
+    '/DProductId=$installerAppId',
     '/DProductExe=$binaryName.exe',
     // The folder it is installed in: the one it always was, so that an
     // upgrade installs over the one before it.
