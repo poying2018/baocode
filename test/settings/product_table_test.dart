@@ -86,7 +86,7 @@ void main() {
         for (final name in ['baocode', 'baocode-claude', 'claude']) {
           final published = Product.byId(name)!.id;
           final asking = AppPaths.product(
-            r'C:\Program Files\BaoCode\' + Product.byId(name)!.binary + '.exe',
+            'C:\\Program Files\\BaoCode\\${Product.byId(name)!.binary}.exe',
           );
           expect(asking, published, reason: 'a release asked for by "$name"');
         }

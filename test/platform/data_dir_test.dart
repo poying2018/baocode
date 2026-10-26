@@ -149,7 +149,10 @@ void main() {
     expect(dir.keymapsDir, at('keymaps'));
     expect(dir.stateFile, at('state/state.json'));
     expect(dir.storageFile, at('state/storage.json'));
-    expect(dir.processRegistryFile('claude'), at('state/claude-processes.json'));
+    expect(
+      dir.processRegistryFile('claude'),
+      at('state/claude-processes.json'),
+    );
     expect(dir.serversDir, at('servers'));
     expect(dir.languagePacksDir, at('language-packs'));
   });
@@ -173,5 +176,115 @@ void main() {
     expect(file.parent.listSync(), hasLength(1), reason: 'nothing aside');
     await const DataDirectoryPointer().write(file);
     expect(file.existsSync(), isFalse);
+  });
+
+  group('the pointer planted for the name this program is to be called', () {
+    /// The environment such a build starts in: the home the test made. It
+    /// is a function, not a value: `home` is only there once the setUp of
+    /// the file has run, which is later than this group is declared.
+    Map<String, String> claude() => {'HOME': home.path};
+
+    /// The pointer such a plant lands on, named as that build would name it.
+    File planted({String? id}) => File(
+      p.join(
+        home.path,
+        '.baocode-claude${id == null ? '' : '-$id'}',
+        'config-dir.json',
+      ),
+    );
+
+    Future<File> plant({String? id}) => plantRenamedPointer(
+      environment: {...claude(), 'BAOCODE_APP_ID': ?id},
+      executable: 'baocode-claude.exe',
+      dataDir: '/data/lives/here',
+    ).then((_) => planted(id: id));
+
+    test(
+      'names the folder the renamed build reads, and where the data is',
+      () async {
+        final file = await plant();
+        expect(file.existsSync(), isTrue);
+        // The name is the one such a build's own executable answers to: its
+        // binary, under the home, the same file the user's own move writes.
+        expect(
+          file.path,
+          p.join(home.path, '.baocode-claude', 'config-dir.json'),
+        );
+        // And it is a pointer that build can read, saying this run's folder.
+        expect(DataDirectoryPointer.read(file)?.dataDir, '/data/lives/here');
+      },
+    );
+
+    test('a development copy plants beside its own pointer, not the '
+        'installed one\'s', () async {
+      final file = await plant(id: 'dev');
+      expect(
+        file.path,
+        p.join(home.path, '.baocode-claude-dev', 'config-dir.json'),
+      );
+      expect(
+        DataDirectoryPointer.read(planted())?.dataDir,
+        isNull,
+        reason: 'the installed one is none of its business',
+      );
+    });
+
+    test(
+      'a pointer from an earlier run follows the data to where it went',
+      () async {
+        // Planted when the data was in the old place; the user has since
+        // moved it (Settings → Data directory), and this run reads and writes
+        // where it went. Left as it was, it would send the renamed build to a
+        // folder the data has left — the failure this exists to prevent.
+        final there = planted()
+          ..parent.createSync(recursive: true)
+          ..writeAsStringSync(jsonEncode({'dataDir': '/moved/from'}));
+        await plant();
+        expect(DataDirectoryPointer.read(there)?.dataDir, '/data/lives/here');
+      },
+    );
+
+    test(
+      'a pointer that cannot be read is left for the app to report',
+      () async {
+        final broken =
+            File(p.join(home.path, '.baocode-claude', 'config-dir.json'))
+              ..parent.createSync(recursive: true)
+              ..writeAsStringSync('not JSON');
+        await plant();
+        expect(broken.readAsStringSync(), 'not JSON');
+      },
+    );
+
+    test(
+      'nothing to plant for a product whose id already is its name',
+      () async {
+        await plantRenamedPointer(
+          environment: claude(),
+          executable: 'baocode-codex.exe',
+          dataDir: '/data/lives/here',
+        );
+        expect(
+          File(p.join(home.path, '.baocode-codex', 'config-dir.json'))
+              .existsSync(),
+          isFalse,
+          reason: 'the codex product is not renamed, and writes nothing',
+        );
+      },
+    );
+
+    test('a test run never points the home at a folder that is gone by '
+        'morning', () async {
+      await plantRenamedPointer(
+        environment: {...claude(), 'FLUTTER_TEST': 'true'},
+        executable: 'baocode-claude.exe',
+        dataDir: '/data/lives/here',
+      );
+      expect(
+        File(p.join(home.path, '.baocode-claude', 'config-dir.json'))
+            .existsSync(),
+        isFalse,
+      );
+    });
   });
 }

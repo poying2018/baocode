@@ -143,6 +143,10 @@ Future<void> main(List<String> arguments) async {
     );
     if (resolution.ok) {
       DataDirectory.current = resolution.directory;
+      // The bridge for the name this program is to be called: see
+      // [plantRenamedPointer]. Fire and forget — a folder that will not
+      // take the file is no reason to be slower to start.
+      unawaited(plantRenamedPointer(dataDir: resolution.path));
     } else {
       WidgetsFlutterBinding.ensureInitialized();
       DataDirectory.current = await recoverDataDirectory(resolution);

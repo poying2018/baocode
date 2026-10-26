@@ -444,3 +444,70 @@ bool canWriteIn(String path) {
     return false;
   }
 }
+
+/// The transition version's one job: point the program this one is going to
+/// be called at the data it already has.
+///
+/// The product's id names its data folder (`%APPDATA%\baocode`) and its
+/// pointer file (`~/.baocode/config-dir.json`). The id is kept as it was
+/// while the program is BaoCode Claude, whose executable is
+/// `baocode-claude.exe`: a build that reads its id from its own name would
+/// answer to `baocode-claude`, look in `~/.baocode-claude/config-dir.json`,
+/// find nothing there and start with an empty folder beside the user's real
+/// data — an upgrade that looks like it ate their settings.
+///
+/// So this writes that pointer, naming the folder this run actually uses.
+/// It is the same file the user's own "move the data folder" writes
+/// ([DataDirectoryPointer]), and [resolveDataDirectory] reads it before any
+/// default: the renamed build needs to know nothing new, and no data is
+/// copied anywhere by this release.
+///
+/// A pointer that cannot be read at all is left as it is: it is the app's to
+/// report, not to overwrite. And there is nothing to do for a product whose
+/// id already is its executable's name — the codex one — so this quietly
+/// does nothing there.
+///
+/// It is written again on every run rather than only once, because the point
+/// of it is that the renamed build finds the data *where this one keeps it*:
+/// the user may move the folder in between (Settings → Data directory), and
+/// a pointer planted at the first run would then name a folder the data has
+/// left, which is the very failure this exists to prevent. Nothing else
+/// writes this file while this version is the newest one.
+Future<void> plantRenamedPointer({
+  Map<String, String>? environment,
+  String? home,
+  String? executable,
+  String? dataDir,
+}) async {
+  final env = environment ?? Platform.environment;
+  // A test host's data folder is a temporary one: pointing the user's real
+  // home at it would trade their settings for a folder that is gone by
+  // morning.
+  if (env.containsKey('FLUTTER_TEST')) return;
+  final spec = Product.byExecutable(executable ?? Platform.resolvedExecutable);
+  if (spec.id == spec.binary) return;
+  final house = home ?? AppPaths.home(env);
+  final from = dataDir ?? DataDirectory.current.path;
+  if (house.isEmpty || from.isEmpty) return;
+  // The name such a build answers to, with this copy's id on it as
+  // [AppPaths.appName] puts it there.
+  final id = AppPaths.appId(env);
+  final file = File(
+    p.join(
+      house,
+      '.${id.isEmpty ? spec.binary : '${spec.binary}-$id'}',
+      'config-dir.json',
+    ),
+  );
+  try {
+    DataDirectoryPointer.read(file);
+  } on FormatException {
+    return;
+  }
+  try {
+    await DataDirectoryPointer(dataDir: from).write(file);
+  } on FileSystemException {
+    // No home drive, no permission: the rename is then what it always was,
+    // and the user's own move is still there to point the data at.
+  }
+}

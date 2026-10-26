@@ -134,8 +134,8 @@ class Product {
 
   /// The product [id] names, or null when it names none. The ids are
   /// "baocode" and "baocode-codex"; "baocode-claude" and "claude" name
-  /// the first one too, as the build scripts say it, and "codex" the
-  /// second, as they have always said it.
+  /// the first one too, as the build scripts and the release manifest say
+  /// it, and "codex" the second, as they have always said it.
   static Product? byId(String id) {
     final name = id.trim().toLowerCase();
     for (final product in all) {
