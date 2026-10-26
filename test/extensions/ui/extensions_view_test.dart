@@ -290,7 +290,7 @@ void main() {
     expect(
       find.byTooltip(
         'Partly supported: Its themes apply; the rest of it does nothing in '
-        'BaoCode.',
+        'BaoCode Claude.',
       ),
       findsOneWidget,
     );

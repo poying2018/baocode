@@ -10,11 +10,11 @@ void main() {
       const MaterialApp(home: BaoWordmark(color: Colors.white)),
     );
     // The name is in capitals, with no space: it is drawn in cells.
-    expect(BaoWordmark.word, 'BAOCODE');
+    expect(BaoWordmark.word, 'BAOCODECLAUDE');
     // The label says it as it is written.
     expect(
       tester.getSemantics(find.byType(BaoWordmark)).label,
-      'BaoCode',
+      'BaoCode Claude',
     );
   });
 
@@ -31,7 +31,7 @@ void main() {
           matching: find.byType(CustomPaint),
         ),
       ).size,
-      const Size((8 + 4 + 7 * 7 - 2) * 2, 6 * 2),
+      const Size((8 + 4 + 13 * 7 - 2) * 2, 6 * 2),
     );
   });
 }

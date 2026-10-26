@@ -58,12 +58,17 @@ class _AboutBaoCodeDialog extends StatelessWidget {
                   filterQuality: FilterQuality.medium,
                 ),
                 SizedBox(width: 10),
-                Text(
-                  productName,
-                  style: TextStyle(
-                    color: AppColors.textPrimary,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                // The name takes what is left and wraps when it cannot fit:
+                // a product's name is as long as it is ("BaoCode Claude"),
+                // and the version beside it always has its place.
+                Expanded(
+                  child: Text(
+                    productName,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
                 SizedBox(width: 10),

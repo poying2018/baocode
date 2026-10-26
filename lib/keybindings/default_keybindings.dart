@@ -12,6 +12,7 @@ import 'package:bao_editor/monaco/flutter/editor_keybindings.dart';
 
 import '../ide/explorer_history.dart'
     show explorerRedoCommandId, explorerUndoCommandId;
+import '../l10n/l10n.dart';
 import 'chat_keybindings.dart';
 import 'key_chord.dart';
 
@@ -160,9 +161,12 @@ final Map<String, CommandInfo> commandCatalog = {
       'Reset Feature Tips',
       category: 'Help',
     ),
-    const CommandInfo(
+    // The title names the product, as every other string naming it does
+    // (test/l10n_test.dart keeps the catalog's title and the localized one
+    // the same).
+    CommandInfo(
       starOnGitHubCommandId,
-      'Star BaoCode on GitHub',
+      'Star $productName on GitHub',
       category: 'Help',
     ),
     const CommandInfo(

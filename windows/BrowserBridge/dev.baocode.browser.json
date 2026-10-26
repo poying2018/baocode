@@ -1,6 +1,6 @@
 {
   "name": "dev.baocode.browser",
-  "description": "BaoCode",
+  "description": "BaoCode Claude",
   "path": "baocode-browser-host.exe",
   "type": "stdio",
   "allowed_origins": [

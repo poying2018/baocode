@@ -18,7 +18,8 @@ export 'app_localizations.dart';
 /// falls back to.
 final AppLocalizations englishLocalizations = AppLocalizationsEn();
 
-/// The product's name, as the app shows it: "BaoCode", or "BaoCode Codex".
+/// The product's name, as the app shows it: "BaoCode Claude", or
+/// "BaoCode Codex".
 ///
 /// The strings that name the app take it as an argument (the generator
 /// made them take it: "{product}" in the .arb files).
