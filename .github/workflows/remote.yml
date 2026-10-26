@@ -29,9 +29,12 @@ on:
     inputs:
       product:
         description: The product the server is for
-        type: choice
+        # A workflow that is called takes a string, not a choice: the list
+        # of allowed values is what the caller passes, and only a run
+        # started by hand has a picker to offer. Same names as above.
+        type: string
+        required: false
         default: baocode-claude
-        options: [baocode-claude, baocode-codex]
 
 permissions:
   contents: read
