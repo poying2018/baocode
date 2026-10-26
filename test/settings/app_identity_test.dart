@@ -66,19 +66,22 @@ void main() {
   });
 
   test('the names a product shows are told apart', () {
-    expect(AppPaths.product('baocode.exe'), 'baocode');
+    expect(AppPaths.product('baocode-claude.exe'), 'baocode');
     expect(AppPaths.product('baocode-codex.exe'), 'baocode-codex');
-    expect(AppPaths.displayName(without, executable: 'baocode'), 'BaoCode');
+    expect(
+      AppPaths.displayName(without, executable: 'baocode-claude'),
+      'BaoCode Claude',
+    );
     expect(
       AppPaths.displayName(without, executable: 'baocode-codex'),
       'BaoCode Codex',
     );
-    // A development copy of BaoCode says so.
+    // A development copy of the Claude Code one says so.
     expect(
-      AppPaths.displayName(withId, executable: 'baocode'),
-      'BaoCode Dev',
+      AppPaths.displayName(withId, executable: 'baocode-claude'),
+      'BaoCode Claude Dev',
     );
-    // A name with a space in it is no product's: BaoCode's is.
+    // A name with a space in it is no product's: the Claude Code one's is.
     expect(AppPaths.product('BaoCode Codex'), 'baocode');
     expect(AppPaths.product('BaoCode Codex.app/Contents/MacOS/BaoCode'),
         'baocode');

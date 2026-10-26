@@ -3406,7 +3406,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String generalSettingsClaudeCoreDescription(String product) {
-    return 'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：$product 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。';
+    return 'Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。它随 $product 一起提供：不用安装，不用下载。内置：$product 也自带，只用 设置 → 模型 里添加的模型。改动对新开的会话生效。';
   }
 
   @override
@@ -5515,8 +5515,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get claudePathSetting => '路径';
 
   @override
-  String get claudePathSettingDescription =>
-      '留空则自动用本机最新版本的 Claude Code，没有时自动下载。填入路径则固定用那一份，比如你自己编译的版本。（claudeCode.path）';
+  String claudePathSettingDescription(String product) {
+    return '留空则自动用本机最新版本的 Claude Code，没有时用 $product 自带的那份。填入路径则固定用那一份，比如你自己编译的版本。（claudeCode.path）';
+  }
 
   @override
   String get claudePathSettingHint => '自动';
@@ -5537,6 +5538,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String claudePathInUseDownloaded(String product, Object version) {
     return '当前使用：$product 下载的 Claude Code $version';
+  }
+
+  @override
+  String claudePathInUseBundled(String product, String version) {
+    return '当前使用：$product 自带的 Claude Code $version';
   }
 
   @override

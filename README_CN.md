@@ -14,7 +14,7 @@
 
 我们每天都在使用 Claude Code。终端适合运行它，却不适合阅读它：长篇 diff 很容易滚出视野，先前的步骤难以重新找到，审查修改又需要切换应用。BaoCode 就是我们希望为它提供的那个窗口。
 
-BaoCode 有意不包含自己的智能体。Claude Code 才是智能体，它拥有工具、技能、插件、MCP 服务器、子智能体和 hooks 生态。BaoCode 为它提供易于阅读的界面，并让周边功能开箱即用。它运行你已经安装的 Claude Code，沿用你的设置和 `CLAUDE.md`。
+BaoCode 有意不包含自己的智能体。Claude Code 才是智能体，它拥有工具、技能、插件、MCP 服务器、子智能体和 hooks 生态。BaoCode 为它提供易于阅读的界面，并让周边功能开箱即用。它自带 Claude Code，不用另外安装；你若已装了别的版本，就用你那份，沿用你的设置和 `CLAUDE.md`。
 
 ## 功能
 
@@ -38,12 +38,14 @@ BaoCode 是原生应用，直接通过 GPU 绘制界面。以下为英文 README
 | 启动时间 | 约 0.18 秒 |
 | 单窗口空闲内存占用 | 约 120 MB |
 | 单窗口进程数 | 2 |
-| Windows 下载大小 | 约 16 MB |
+| Windows 下载大小 | 约 100 MB |
+
+Windows 版自带 Claude Code，装完不用再装别的。
 
 ## 系统要求
 
 - macOS 12 或更新版本（Apple 芯片和 Intel 各提供一个下载版本），Windows 10 或更新版本（x64），或 Linux：Ubuntu 22.04 或更新版本及其他基于 Debian 的发行版（x64 和 arm64 各一个 .deb）。
-- 已安装 [Claude Code](https://github.com/anthropics/claude-code)。
+- 不用另外安装：[Claude Code](https://github.com/anthropics/claude-code) 随 BaoCode 一起提供。你若已装了别的版本，就用你那份。
 
 ## 从源码构建
 

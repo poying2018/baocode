@@ -50,6 +50,9 @@ gh api repos/baocode-dev/baocode/releases/tags/v1.5.0 --jq .body
 不能凭条目文字猜 —— 同一句描述在不同代码里根因常不同。定位不到就记为"该版本此条不适用"，
 写清依据，不要硬凑一个改动。
 
+**上游的 tag 与我们的同名不同提交**（见第 2 步末尾的说明）—— 所以本地核对上游的某个
+版本时用 `upstream/v<版本>`，别用 `v<版本>`（那个是我们的）。
+
 ### 2. 自己实现修复（不 cherry-pick 上游）
 
 上游的修法只是参考。做法：读懂上游为何这样改，再在本 fork 的对应位置用**自己的实现**落地，
@@ -64,10 +67,58 @@ gh api repos/baocode-dev/baocode/releases/tags/v1.5.0 --jq .body
 | 放大后标题栏按钮右缘点不到 | `_rect()` 的角点过了 zoom、尺寸没过（`box.size`）⇒ 上报的盒子比画的窄，右缘被系统当拖窗区 | 整矩形同过变换：`MatrixUtils.transformRect(box.getTransformTo(null), Offset.zero & box.size)` |
 | Windows 装语言服务器报"不是有效的 Win32 应用" | `which()` 把无扩展名候选排在 PATHEXT 前 ⇒ 命中 nvm 目录里 npm 的 Bash 脚本；`.cmd` 起的 node 在 cmd.exe 被杀后存活 | 只按 PATHEXT 匹配；npm 由 node 直跑 `npm-cli.js`；杀进程用 `taskkill /T` 收整棵树 |
 
+#### 怎么核对"上游日志里的每一条，在 fork 里都实现了"
+
+合并后别只看"提交合进来了" —— **fork 自己的改动可能盖掉了上游的实现**。用这个办法逐条查：
+
+```powershell
+# 1. fork 相对上游 main 的所有差异（只删不改的量 = 上游可能丢的东西）
+git diff --numstat upstream/main HEAD -- lib/ packages/ tool/
+# 2. 那些删除行，逐行看：地址替换、等价重构、自己的增强，还是真丢了实现
+git diff upstream/main HEAD -- lib/ packages/ tool/ | Select-String '^-' | Where-Object { $_.Line -notmatch '^---' }
+# 3. 上游 v1.6.0 之后又改过的文件（我们的合并也包含了，但要确认合并结果与 upstream/main 一致）
+git diff --name-only upstream/v1.6.0 upstream/main
+# 4. 某处两边同题（各自有修法）时，看合并后的代码是不是把两边的修法都保住了
+git diff upstream/v1.6.0 HEAD -- <那个文件>
+# 5. 最硬的一条：逐个文件比内容（提交 hash 会不同，合并是我们手改的，内容才作数）
+git diff --stat upstream/main HEAD -- <上游改过的那个文件>
+```
+
+判读：`+` 多于 `-`，且删除行里没有"上游的功能逻辑"，就是**没丢**；反过来（有实质逻辑被删）
+要逐条查清是被上游有意删掉的（如上游自己删了一个特性），还是合并出错。
+
+**用第 5 条核对"上游的修复都在我们这儿"**：`git merge-base --is-ancestor <上游提交> HEAD`
+会说"不在"（我们的合并是手改的，hash 不同），**别被它骗了** —— 比内容。
+
+**上游的日志不一定涵盖 tag 之后的提交** —— `git log <上游tag>..upstream/main` 里的那些修复
+也要写进自己的发布说明，否则用户看不到。
+
+**tag 撞名怎么办（2026-10-25 实测）**：这个 fork 的版本号与上游各走各的，但**同名的 tag
+指向不同的提交**（我们的 `v1.6.0` 是 `2c03071a`，上游的 `v1.6.0` 是 `f8e1bcfd`）。于是
+`git fetch upstream --tags` 会拒绝：
+
+```
+! [rejected] v1.6.0 -> v1.6.0  (would clobber existing tag)
+```
+
+**不要改我们已发布的 tag**（改了 release 页面上的下载链接就变了）。改成把上游的 tag 取到
+另一个名字下：
+
+```powershell
+# 同步前：上游的 tag 取到 upstream/ 下，不碰我们自己的
+git fetch upstream --no-tags
+git fetch upstream 'refs/tags/v*':refs/tags/upstream/v*
+# 之后，上游的某个版本就是 upstream/v1.6.0（我们的仍是 v1.6.0）
+git log upstream/v1.6.0..upstream/main
+```
+
+**核对上游是否已实现时，命令里要用 `upstream/v<版本>`**，不是 `v<版本>`。
+
 ### 3. 合并上游，保留 fork 特性
 
 ```powershell
-git fetch upstream
+git fetch upstream --no-tags
+git fetch upstream 'refs/tags/v*':refs/tags/upstream/v*
 git checkout dev
 git merge upstream/main --no-edit --no-verify
 ```
@@ -199,6 +250,22 @@ curl.exe -sIL --max-time 60 'https://github.com/poying2018/baocode/releases/down
   账户的额度与预算在 `https://github.com/settings/billing/usage` 与
   `https://github.com/settings/billing/budgets` —— 后者里每个产品的预算若是 $0，会显示
   "Usage blocked"，那就会把用量整个卡住（改预算需要有效的支付方式，GitHub Free 账户改不了）。
+- **只发标准版时，渠道版的资产要一起清**：`release.yml` 对普通 tag（`v1.6.0`）默认
+  `editions='["standard","channel"]'`，**两个版本都会建、都上传**。只删渠道版的安装包资产
+  是不够的 —— `latest.json` 里还留着 `windows-x64-channel` 条目，它指向被删掉的资产，
+  用户点了就是 404。要用本地工具重新生成再覆盖上传：
+  ```powershell
+  # 只传 --windows（不带 -channel），就只会有 windows-x64 一个 key
+  dart run tool/release_manifest.dart --windows <安装包> --version <版本> `
+      --notes-zh release-notes\<版本>.zh.md --notes-en release-notes\<版本>.en.md `
+      --manifest latest.json
+  gh release upload v<版本> latest.json --repo poying2018/baocode --clobber
+  ```
+  （渠道版的 `remote-latest.json` 一并删掉。）下次若只要标准版，用
+  `workflow_dispatch` 传 `editions: standard`，省掉这一步善后。
+- **CI 某个 job 因网络失败**（`curl: (56) Recv failure: Connection reset by peer` 之类），
+  下游的 job 会全变 skipped、一个 release 都没发。`gh run rerun <run-id> --failed` 重跑那个
+  job 即可，不必重来整条流水线。
 - **tag push 报 `startup_failure`**：多半是 reusable workflow 的权限写法（`permissions:` 替了
   `environment: release`）。先看 job 是否一个都没创建；再对比"同 commit 打不同 tag 名"排除
   tag 状态问题
@@ -253,6 +320,30 @@ Start-Process $chrome -ArgumentList @(
   一个同名按钮 —— header 的搜索区也有 Continue。
 - **token 不能当网页密码用**了（GitHub 已不支持），所以在干净 profile 里登录不了；
   要用有登录态的 profile。
+
+## 附：本 fork 只做 Windows 版（macOS 已去掉）
+
+2026-10-25 起，这个 fork 不构建也不发布 macOS 的应用。合并上游时**上游会把 macOS 带回来**，
+每次合并后要检查这几处，把它们改回去：
+
+| 地方 | 要做的事 |
+|---|---|
+| `macos/`、`tool/build_macos.dart`、`tool/dmg_background.swift` | 上游可能新增或修改；这个 fork 不该有它们（已在 1.6.1 删掉，别让合并带回来）|
+| `tool/release_manifest.dart` | 去掉 `--macos-*` / `--dmg-*` 选项、dmg 的签名逻辑、`_macArchitectures` |
+| `site/download.html`、`site/zh/download.html` | 删掉 macOS 区块（Apple 芯片 / Intel 按钮）、"拖进应用程序"的公证说明、meta 里的 macOS |
+| `site/index.html`、`site/zh/index.html` | 删掉 "Download for Mac" 按钮、平台列表里的 macOS 行、描述里的 macOS |
+| `site/site.js`、`site/download.js`、`site-worker/index.js` | `DESKTOP` 集合去掉 `macos-*`；`download.js` 的 `os` 判断是 `isLinux ? 'linux' : 'windows'` |
+| `README.md`、`docs/`、`pubspec.yaml` | 注释与说明里提到 macOS 构建/下载的地方 |
+
+**保留不动的**：`lib/` 里的 macOS 条件（应用在 Mac 上跑时会走到）、`remote.yml` 的
+macOS **远程服务端**（装在 SSH 主机上，与桌面应用无关）、`mobile.yml`（iOS/Android）、
+`site/changelog.html` 里的历史字样。
+
+**两个会咬人的地方**：
+- `git checkout upstream/main -- site/` 做基线对比会**把推广位的图片带回来**
+  （`ymengcc.svg`、`ymeng.png`、`ifruit.png`）—— 对比完记得删回去。
+- 改了 `site/*.html` 之后要重跑 `dart run tool/build_changelog.dart` 与
+  `tool/make_download_qr.dart`：那两个测试是**逐字节比较**生成物与文件，行尾不对就失败。
 
 ## Examples
 

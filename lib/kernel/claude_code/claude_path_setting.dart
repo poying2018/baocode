@@ -22,13 +22,22 @@ sealed class LocalClaudeStatus {
 }
 
 /// [path] runs, at [version] (null when it does not say); [downloaded]
-/// when it is the one BaoCode downloaded.
+/// when it is the one BaoCode downloaded, [bundled] when it is the one the
+/// app carries.
 class LocalClaudeFound extends LocalClaudeStatus {
-  const LocalClaudeFound(this.path, this.version, {this.downloaded = false});
+  const LocalClaudeFound(
+    this.path,
+    this.version, {
+    this.downloaded = false,
+    this.bundled = false,
+  });
 
   final String path;
   final String? version;
   final bool downloaded;
+
+  /// The one in the app's bundle: no download was needed for it.
+  final bool bundled;
 }
 
 /// None yet: one is downloaded as the first conversation starts.

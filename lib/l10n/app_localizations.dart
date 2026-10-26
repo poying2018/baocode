@@ -5975,7 +5975,7 @@ abstract class AppLocalizations {
   /// Claude Code CLI: Anthropic's own program, with this machine's sign-in and setup; pick it to use a Claude subscription. Built-in: comes with BaoCode, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.
   ///
   /// In en, this message translates to:
-  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with {product}, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.'**
+  /// **'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. It comes with {product}: no install, no download. Built-in: comes with {product} too, and uses only the models added in Settings → Models. Changes apply to new sessions.'**
   String generalSettingsClaudeCoreDescription(String product);
 
   /// Claude Code core choice: BaoCode's own agent core, written in Dart and run inside the app.
@@ -9417,11 +9417,11 @@ abstract class AppLocalizations {
   /// **'Path'**
   String get claudePathSetting;
 
-  /// No description provided for @claudePathSettingDescription.
+  /// Under the Claude Code path setting: what runs when no path is set.
   ///
   /// In en, this message translates to:
-  /// **'Empty: the newest Claude Code on this machine, downloaded if there is none. A path: always that one, e.g. one you built. (claudeCode.path)'**
-  String get claudePathSettingDescription;
+  /// **'Empty: the newest Claude Code on this machine, or the one {product} carries. A path: always that one, e.g. one you built. (claudeCode.path)'**
+  String claudePathSettingDescription(String product);
 
   /// No description provided for @claudePathSettingHint.
   ///
@@ -9452,6 +9452,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'In use: Claude Code {version}, downloaded by {product}'**
   String claudePathInUseDownloaded(String product, Object version);
+
+  /// In use: the Claude Code {version} that comes with the app.
+  ///
+  /// In en, this message translates to:
+  /// **'In use: Claude Code {version}, carried by {product}'**
+  String claudePathInUseBundled(String product, String version);
 
   /// No description provided for @claudePathMissing.
   ///

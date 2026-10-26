@@ -14,7 +14,7 @@
 
 私たちは毎日 Claude Code を使っています。ターミナルは実行には適していますが、内容を読むには不便です。長い diff は画面外へ流れ、以前の手順を探し直すのは難しく、変更の確認にはアプリの切り替えが必要になります。BaoCode は、私たちが欲しかったそのためのウィンドウです。
 
-BaoCode は意図的に独自のエージェントを持ちません。エージェントは Claude Code です。そのツール、スキル、プラグイン、MCP サーバー、サブエージェント、hooks を活かしながら、BaoCode は読みやすい UI とすぐに使える周辺機能を提供します。すでにインストールされた Claude Code を、既存の設定と `CLAUDE.md` のまま実行します。
+BaoCode は意図的に独自のエージェントを持ちません。エージェントは Claude Code です。そのツール、スキル、プラグイン、MCP サーバー、サブエージェント、hooks を活かしながら、BaoCode は読みやすい UI とすぐに使える周辺機能を提供します。Claude Code は同梱されており、インストールは不要です。お持ちのビルドがあればそちらを、設定と `CLAUDE.md` のまま使います。
 
 ## 機能
 
@@ -38,12 +38,14 @@ BaoCode は GPU に直接 UI を描画するネイティブアプリです。以
 | 起動時間 | 約 0.18 秒 |
 | 一つのウィンドウのアイドル時メモリ | 約 120 MB |
 | 一つのウィンドウのプロセス数 | 2 |
-| Windows のダウンロードサイズ | 約 16 MB |
+| Windows のダウンロードサイズ | 約 100 MB |
+
+Windows 版には Claude Code 本体が同梱されています。インストール後に另行入れるものはありません。
 
 ## 必要環境
 
 - macOS 12 以降（Apple silicon と Intel 向けにそれぞれ配布）、Windows 10 以降（x64）、または Linux：Ubuntu 22.04 以降とその他の Debian 系ディストリビューション（x64 と arm64 向けにそれぞれ .deb）。
-- [Claude Code](https://github.com/anthropics/claude-code) がインストールされていること。
+- 別途インストールは不要：[Claude Code](https://github.com/anthropics/claude-code) は BaoCode に同梱されています。すでに別のビルドをお持ちならそちらが使われます。
 
 ## ソースからのビルド
 

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 
 import '../../ide/ide_button.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/app_paths.dart';
 import '../../stash/stash_controller.dart';
 import '../../stash/stash_settings.dart';
 import '../../workspace/editor_launcher.dart' show openExternal;
@@ -65,7 +67,9 @@ class _StashSettingsPageState extends State<StashSettingsPage> {
             SettingsRow(
               label: l10n.stashSettingsDirectory,
               description: [
-                current.directory ?? root ?? '~/$productName/Stash',
+                current.directory ??
+                    root ??
+                    '~/${AppPaths.productOf(Platform.resolvedExecutable).directoryName}/Stash',
                 if (current.directory != null && current.directory != root)
                   l10n.stashSettingsDirectoryRestart(productName),
               ].join('\n'),

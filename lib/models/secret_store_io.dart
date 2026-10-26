@@ -63,7 +63,12 @@ class KeychainSecretStore implements SecretStore {
 
   /// The keychain's service: the product's own, so that the two products'
   /// secrets are apart, and re-keying in one does not touch the other.
-  static String get service => AppPaths.displayName(Platform.environment);
+  ///
+  /// The service the secrets were kept under, which does not change with
+  /// the product's name: they are where they are, and the user does not
+  /// have to enter their keys again.
+  static String get service =>
+      AppPaths.productOf(Platform.resolvedExecutable).keychainService;
 
   /// `security`'s "not found".
   static const _notFound = 44;
@@ -193,7 +198,8 @@ class SecretServiceStore implements SecretStore {
 
   List<String> _attributes(String id) => [
     'service',
-    AppPaths.displayName(Platform.environment).toLowerCase(),
+    AppPaths.productOf(Platform.resolvedExecutable).keychainService
+        .toLowerCase(),
     'account',
     id,
   ];

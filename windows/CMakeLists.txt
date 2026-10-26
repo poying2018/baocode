@@ -5,21 +5,22 @@ project(baocode LANGUAGES CXX)
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 #
-# It also names the product: baocode.exe is BaoCode (the Claude Code one),
-# baocode-codex.exe is the codex one, which keeps its own data folder, its own
-# windows and its own registration (see runner/app_identity.cpp). The name is
-# written by tool/set_product.dart, which knows both products:
+# It also names the product: baocode-claude.exe is BaoCode Claude (the Claude
+# Code one), baocode-codex.exe is the codex one, which keeps its own data
+# folder, its own windows and its own registration (see
+# runner/app_identity.cpp). The name is written by tool/set_product.dart, which
+# knows both products:
 #
 #   dart run tool/set_product.dart          the codex product
-#   dart run tool/set_product.dart baocode  BaoCode (the Claude Code one)
-set(BINARY_NAME "baocode")
+#   dart run tool/set_product.dart baocode  BaoCode Claude (the Claude Code one)
+set(BINARY_NAME "baocode-codex")
 
 # The product's name, as it shows: the one the executable's name says.
 # The version information in the executable's properties (runner/Runner.rc)
 # carries it, so that Explorer and the Task Manager name the product the
 # file is, and not the other one.
-if("${BINARY_NAME}" STREQUAL "baocode")
-  set(APP_PRODUCT_NAME "BaoCode")
+if("${BINARY_NAME}" STREQUAL "baocode-claude")
+  set(APP_PRODUCT_NAME "BaoCode Claude")
 elseif("${BINARY_NAME}" STREQUAL "baocode-codex")
   set(APP_PRODUCT_NAME "BaoCode Codex")
 else()
@@ -28,7 +29,11 @@ endif()
 
 # The browsers' native messaging host and its manifest, each product's own
 # (the host's name says the product, as the app's does).
-if("${BINARY_NAME}" STREQUAL "baocode")
+#
+# The Claude Code product's keep the names they always had: the extension
+# published in the stores knows them, and a new name would leave the
+# browsers without a host until it is updated.
+if("${BINARY_NAME}" STREQUAL "baocode-claude")
   set(BROWSER_HOST_NAME "baocode-browser-host")
   set(BROWSER_HOST_MANIFEST "dev.baocode.browser.json")
 else()

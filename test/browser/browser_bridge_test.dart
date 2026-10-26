@@ -230,7 +230,7 @@ void main() {
     ) as Map<String, Object?>;
     expect(manifest, {
       'name': BrowserBridge.hostName,
-      'description': 'BaoCode',
+      'description': 'BaoCode Claude',
       'path': 'baocode-browser-host.exe',
       'type': 'stdio',
       'allowed_origins': [

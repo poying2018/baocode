@@ -1,14 +1,19 @@
-/// The products this app is built as: BaoCode (the Claude Code one) and
-/// BaoCode Codex (the codex one). They are separate programs that happen to
-/// come from one source tree: each keeps its data, its windows, its
-/// registration, its update channel and its links to itself apart, so that
-/// neither disturbs the other.
+/// The products this app is built as: BaoCode Claude (the Claude Code one)
+/// and BaoCode Codex (the codex one). They are separate programs that
+/// happen to come from one source tree: each keeps its data, its windows,
+/// its registration, its update channel and its links to itself apart, so
+/// that neither disturbs the other.
 ///
 /// The product is said by the name of the executable the build produced
-/// (`baocode.exe`, `baocode-codex.exe`) — one fact, from which everything
-/// else follows. The native side reads the same name
+/// (`baocode-claude.exe`, `baocode-codex.exe`) — one fact, from which
+/// everything else follows. The native side reads the same name
 /// (windows/runner/app_identity.cpp), so the two cannot disagree about
 /// which product this is.
+///
+/// What does not change with the names: the install (its id and its
+/// folder), the data folder, the update channel, the links and the
+/// keychain. A release of a renamed product is an upgrade of the one
+/// before it, not a new program beside it.
 ///
 /// This table is where the rest of that follows from: one place that says
 /// what each product's identity is, instead of a rule per place.
@@ -25,22 +30,27 @@ class Product {
     required this.registryKey,
     required this.manifestName,
     required this.installerName,
+    required this.directoryName,
     required this.browserHost,
     required this.browserManifest,
     required this.keychainService,
     required this.hasClaudeCode,
   });
 
-  /// BaoCode: the Claude Code one. Its identity is the one it always had.
+  /// BaoCode Claude: the Claude Code one. Its identity is the one it
+  /// always had: the same install, the same data folder, the same update
+  /// channel, so that this release is an upgrade of it and not a new
+  /// program beside it. Only its names are new.
   static const baocode = Product(
     id: 'baocode',
-    binary: 'baocode',
-    displayName: 'BaoCode',
+    binary: 'baocode-claude',
+    displayName: 'BaoCode Claude',
     scheme: 'baocode',
     appId: '{6fdd732b-95c6-4c37-af6f-ff574358deb5}',
     registryKey: r'Software\BaoCode',
     manifestName: 'latest.json',
-    installerName: 'BaoCode',
+    installerName: 'BaoCodeClaude',
+    directoryName: 'BaoCode',
     browserHost: 'dev.baocode.browser',
     browserManifest: 'dev.baocode.browser.json',
     keychainService: 'BaoCode',
@@ -58,6 +68,7 @@ class Product {
     registryKey: r'Software\BaoCodeCodex',
     manifestName: 'latest-codex.json',
     installerName: 'BaoCodeCodex',
+    directoryName: 'BaoCodeCodex',
     browserHost: 'dev.baocode-codex.browser',
     browserManifest: 'dev.baocode-codex.browser.json',
     keychainService: 'BaoCode Codex',
@@ -102,6 +113,11 @@ class Product {
   /// them.
   final String installerName;
 
+  /// The folder the program is installed in, under Program Files or beside
+  /// the user's own programs. It does not change between versions: an
+  /// upgrade installs over the one before it, in the same folder.
+  final String directoryName;
+
   /// The name the browsers know the app's native messaging host by: each
   /// product's own, so that the two do not take each other's away.
   final String browserHost;
@@ -117,8 +133,9 @@ class Product {
   final bool hasClaudeCode;
 
   /// The product [id] names, or null when it names none. The ids are
-  /// "baocode" and "baocode-codex"; "codex" is said for the second one
-  /// too, as the build scripts have always said it.
+  /// "baocode" and "baocode-codex"; "baocode-claude" and "claude" name
+  /// the first one too, as the build scripts say it, and "codex" the
+  /// second, as they have always said it.
   static Product? byId(String id) {
     final name = id.trim().toLowerCase();
     for (final product in all) {
@@ -132,8 +149,9 @@ class Product {
   }
 
   /// The product an executable of that name is: the name says it
-  /// ("baocode-codex.exe" is the codex one). A name belonging to no
-  /// product (a test host, a build named otherwise) is BaoCode's.
+  /// ("baocode-claude.exe" is the Claude Code one, "baocode-codex.exe" the
+  /// codex one). A name belonging to no product (a test host, a build named
+  /// otherwise) is the Claude Code one's.
   static Product byExecutable(String executable) {
     final name = executable
         .split(RegExp(r'[/\\]'))
@@ -141,7 +159,7 @@ class Product {
         .replaceFirst(RegExp(r'\.[^.]*$'), '')
         .toLowerCase();
     if (!name.startsWith('baocode')) return baocode;
-    // The name is the product's, with no space in it: "baocode" or
+    // The name is the product's, with no space in it: "baocode-claude" or
     // "baocode-codex". A name with a space in it (macOS's ".app" folder)
     // belongs to no product.
     if (name.contains(' ')) return baocode;

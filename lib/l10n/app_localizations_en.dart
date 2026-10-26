@@ -3542,7 +3542,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String generalSettingsClaudeCoreDescription(String product) {
-    return 'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. Built-in: comes with $product, and uses only the models added in Settings → Models. The CLI is the default, downloaded for you if this machine has none. Changes apply to new sessions.';
+    return 'Claude Code CLI: Anthropic\'s own program, with this machine\'s sign-in and setup; pick it to use a Claude subscription. It comes with $product: no install, no download. Built-in: comes with $product too, and uses only the models added in Settings → Models. Changes apply to new sessions.';
   }
 
   @override
@@ -5881,8 +5881,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get claudePathSetting => 'Path';
 
   @override
-  String get claudePathSettingDescription =>
-      'Empty: the newest Claude Code on this machine, downloaded if there is none. A path: always that one, e.g. one you built. (claudeCode.path)';
+  String claudePathSettingDescription(String product) {
+    return 'Empty: the newest Claude Code on this machine, or the one $product carries. A path: always that one, e.g. one you built. (claudeCode.path)';
+  }
 
   @override
   String get claudePathSettingHint => 'Automatic';
@@ -5903,6 +5904,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String claudePathInUseDownloaded(String product, Object version) {
     return 'In use: Claude Code $version, downloaded by $product';
+  }
+
+  @override
+  String claudePathInUseBundled(String product, String version) {
+    return 'In use: Claude Code $version, carried by $product';
   }
 
   @override

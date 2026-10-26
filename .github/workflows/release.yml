@@ -83,8 +83,10 @@ jobs:
           fi
           publish=false
           channel_only=false
-          # A release has both: each edition's installs update to its own.
-          editions='["standard","channel"]'
+          # A release has the standard build only: the channel build is for
+          # the testers, and it is published on its own tag (v<version>-
+          # channel) beside the version published.
+          editions='["standard"]'
           if [ "$GITHUB_REF_TYPE" = tag ] && [[ "$GITHUB_REF_NAME" == test-channel-* ]]; then
             editions='["channel"]'
           elif [ "$GITHUB_REF_TYPE" = tag ] && [[ "$GITHUB_REF_NAME" == test-* ]]; then
@@ -93,6 +95,7 @@ jobs:
             case "$EDITIONS" in
               standard) editions='["standard"]' ;;
               channel) editions='["channel"]' ;;
+              both) editions='["standard","channel"]' ;;
             esac
           elif [ "$GITHUB_REF_TYPE" = tag ] && [[ "$GITHUB_REF_NAME" == *-channel ]]; then
             # The channel build alone, signed into the version published,
@@ -170,7 +173,7 @@ jobs:
       # One product failing leaves the other building, to be re-run alone.
       fail-fast: false
       matrix:
-        product: [baocode, baocode-codex]
+        product: [baocode-claude, baocode-codex]
     uses: ./.github/workflows/remote.yml
     with:
       product: ${{ matrix.product }}
@@ -185,7 +188,7 @@ jobs:
       # One edition failing leaves the other building, to be re-run alone.
       fail-fast: false
       matrix:
-        product: [baocode, baocode-codex]
+        product: [baocode-claude, baocode-codex]
         edition: ${{ fromJSON(needs.check.outputs.editions) }}
     env:
       SUFFIX: ${{ matrix.edition == 'channel' && '-channel' || '' }}
@@ -233,6 +236,8 @@ jobs:
       # v<version>-channel: the channel build alone, into the version
       # published.
       CHANNEL_ONLY: ${{ needs.check.outputs.channel_only }}
+      # The editions built: the standard one, the channel one, or both.
+      EDITIONS: ${{ needs.check.outputs.editions }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -246,14 +251,16 @@ jobs:
       - name: Gather the files
         run: |
           mkdir -p out
-          # The standard build, then the channel build's, ending in -channel.
-          # This fork publishes the Windows build only for now; the macOS
-          # and Linux ones are built by hand when they are wanted.
-          editions=('' -channel)
+          # The editions built: the standard build's files, then the channel
+          # build's, which end in -channel.
+          editions=()
+          for edition in $(echo "$EDITIONS" | jq -r '.[]'); do
+            [ "$edition" = standard ] && editions+=('') || editions+=("-$edition")
+          done
           [ "$CHANNEL_ONLY" = true ] && editions=(-channel)
           # Both products: the two are separate programs, and each is
           # published in its own name.
-          for product in baocode baocode-codex; do
+          for product in baocode-claude baocode-codex; do
             for edition in "${editions[@]}"; do
               for file in dist/windows-$product$edition/*-setup$edition.exe; do
                 cp "$file" out/
@@ -263,7 +270,7 @@ jobs:
           # The remote server's builds too: an app packaged before them (or
           # one built on another machine) downloads them from the release,
           # by the version it was built with. Each product's own.
-          for product in baocode baocode-codex; do
+          for product in baocode-claude baocode-codex; do
             for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
               cp "$file" out/
             done
@@ -277,7 +284,10 @@ jobs:
           key="$RUNNER_TEMP/update-signing.key"
           echo "$SIGNING_KEY" > "$key"
           notes=()
-          editions=('' -channel)
+          editions=()
+          for edition in $(echo "$EDITIONS" | jq -r '.[]'); do
+            [ "$edition" = standard ] && editions+=('') || editions+=("-$edition")
+          done
           if [ "$CHANNEL_ONLY" = true ]; then
             # The manifest published, which the channel build's entries join:
             # the standard build's, its notes and its downloads kept as they
@@ -297,7 +307,7 @@ jobs:
           done
           # Each product's own manifest, in its own file: a release of one
           # is not an update of the other.
-          for product in baocode baocode-codex; do
+          for product in baocode-claude baocode-codex; do
             manifest=latest.json
             [ "$product" = baocode-codex ] && manifest=latest-codex.json
             files=()
@@ -305,7 +315,7 @@ jobs:
               for file in out/*-setup$edition.exe; do
                 case "$(basename "$file")" in
                   BaoCodeCodex-*) [ "$product" = baocode-codex ] && files+=(--windows$edition "$file") ;;
-                  *) [ "$product" = baocode ] && files+=(--windows$edition "$file") ;;
+                  *) [ "$product" = baocode-claude ] && files+=(--windows$edition "$file") ;;
                 esac
               done
             done
@@ -345,7 +355,7 @@ jobs:
           # The remote server's builds are published here too, so an app
           # built months ago still downloads the one it was built with.
           # Each product's own.
-          for product in baocode baocode-codex; do
+          for product in baocode-claude baocode-codex; do
             for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
               gh release upload "v$MARKETING" "$file" --clobber
             done

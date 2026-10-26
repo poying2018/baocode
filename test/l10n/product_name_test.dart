@@ -5,10 +5,14 @@ import 'package:flutter_test/flutter_test.dart';
 /// strings were written with.
 void main() {
   test('the strings name the product', () {
-    // The test host is not a product of its own, so it is BaoCode's.
-    expect(productName, 'BaoCode');
-    expect(englishLocalizations.menuAboutBaoCode(productName), 'About BaoCode');
-    expect(englishLocalizations.trayShow(productName), 'Show BaoCode');
+    // The test host is not a product of its own, so it is the Claude Code
+    // one's.
+    expect(productName, 'BaoCode Claude');
+    expect(
+      englishLocalizations.menuAboutBaoCode(productName),
+      'About BaoCode Claude',
+    );
+    expect(englishLocalizations.trayShow(productName), 'Show BaoCode Claude');
   });
 
   test('the strings that name the app take its name', () {

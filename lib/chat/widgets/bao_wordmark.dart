@@ -56,7 +56,7 @@ class _WordmarkPainter extends CustomPainter {
   ];
 
   /// 5 × 5 capitals, sitting on the mark's bottom row; set wide, a small
-  /// label rather than a title.
+  /// label rather than a title. Every letter a product's name is made of.
   static const _glyphs = {
     'B': ['####.', '#...#', '####.', '#...#', '####.'],
     'A': ['.###.', '#...#', '#####', '#...#', '#...#'],
@@ -64,6 +64,8 @@ class _WordmarkPainter extends CustomPainter {
     'C': ['.####', '#....', '#....', '#....', '.####'],
     'D': ['####.', '#...#', '#...#', '#...#', '####.'],
     'E': ['#####', '#....', '####.', '#....', '#####'],
+    'L': ['#....', '#....', '#....', '#....', '#####'],
+    'U': ['#...#', '#...#', '#...#', '#...#', '.###.'],
     'X': ['#...#', '#...#', '.###.', '#...#', '#...#'],
   };
 

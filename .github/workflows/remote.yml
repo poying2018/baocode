@@ -8,7 +8,7 @@
 #                                      <VERSION>/, latest.json there naming
 #                                      them: for apps packaged locally with
 #                                      --remote-release (tool/build_*.dart)
-#   Actions → Remote server → Run workflow
+#   Actions 鈫?Remote server 鈫?Run workflow
 #                                      build only, to try the build
 #
 # Release (release.yml) calls it too, for the builds both apps name; it
@@ -23,15 +23,15 @@ on:
       product:
         description: The product the server is for
         type: choice
-        default: baocode
-        options: [baocode, baocode-codex]
+        default: baocode-claude
+        options: [baocode-claude, baocode-codex]
   workflow_call:
     inputs:
       product:
         description: The product the server is for
         type: choice
-        default: baocode
-        options: [baocode, baocode-codex]
+        default: baocode-claude
+        options: [baocode-claude, baocode-codex]
 
 permissions:
   contents: read
@@ -41,7 +41,7 @@ env:
 
 jobs:
   build:
-    name: Build the remote server (${{ inputs.product || 'baocode' }})
+    name: Build the remote server (${{ inputs.product || 'baocode-claude' }})
     # A Mac, as only one builds for macOS: the Linux builds are
     # cross-compiled, the macOS x64 one by an x64 Dart SDK under Rosetta.
     runs-on: macos-15
@@ -50,7 +50,7 @@ jobs:
     env:
       # The product the server is for: the codex product's server has no
       # Claude Code in it (the two products are separate programs).
-      PRODUCT: ${{ inputs.product || 'baocode' }}
+      PRODUCT: ${{ inputs.product || 'baocode-claude' }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -101,7 +101,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     env:
-      PRODUCT: ${{ inputs.product || 'baocode' }}
+      PRODUCT: ${{ inputs.product || 'baocode-claude' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -131,7 +131,7 @@ jobs:
       cancel-in-progress: false
     env:
       VERSION: ${{ needs.build.outputs.version }}
-      PRODUCT: ${{ inputs.product || 'baocode' }}
+      PRODUCT: ${{ inputs.product || 'baocode-claude' }}
     steps:
       - uses: actions/download-artifact@v4
         with:

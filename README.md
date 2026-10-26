@@ -13,7 +13,7 @@ An awesome, easy-to-use desktop UI for [Claude Code](https://github.com/anthropi
 
 We use Claude Code every day. The terminal is a fine place to run it, but a poor place to read it: long diffs scroll out of view, earlier steps are hard to find again, and reviewing what changed means switching to another app. BaoCode is the window we wanted around it.
 
-BaoCode has no agent of its own, by design. Claude Code is the agent, and its ecosystem is unmatched: its tools, skills, plugins, MCP servers, subagents and hooks. BaoCode gives it the interface it deserves and makes everything around it work out of the box. It runs the Claude Code you already have, with your settings and your `CLAUDE.md`.
+BaoCode has no agent of its own, by design. Claude Code is the agent, and its ecosystem is unmatched: its tools, skills, plugins, MCP servers, subagents and hooks. BaoCode gives it the interface it deserves and makes everything around it work out of the box. It comes with Claude Code, so there is nothing to install; your own build, if you have one, is used instead, with your settings and your `CLAUDE.md`.
 
 ## Features
 
@@ -37,12 +37,14 @@ VS Code and Cursor are built on Electron: each window is a web page, and every c
 | Launch | ≈ 0.18 s | ≈ 2–3 s | ≈ 2–3 s |
 | Memory, one window idle | ≈ 120 MB | ≈ 970 MB | ≈ 1.9 GB |
 | Processes, one window | 2 | 8 | 13 |
-| Download size, Windows | ≈ 16 MB | ≈ 244 MB | ≈ 214 MB |
+| Download size, Windows | ≈ 100 MB | ≈ 244 MB | ≈ 214 MB |
+
+The Windows download carries Claude Code itself, so there is nothing to install afterwards.
 
 ## Requirements
 
 - macOS 12 or later (Apple silicon or Intel, one download each), Windows 10 or later (x64), or Linux: Ubuntu 22.04 or later and other Debian-based distributions (x64 or arm64, a .deb each).
-- [Claude Code](https://github.com/anthropics/claude-code), installed.
+- Nothing to install: [Claude Code](https://github.com/anthropics/claude-code) comes with BaoCode. Your own build, if you have one, is used instead.
 
 ## Building from source
 

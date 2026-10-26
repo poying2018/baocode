@@ -36,7 +36,7 @@ void main() {
           .writeAsStringSync(
             jsonEncode({
               'name': BrowserBridge.hostName,
-              'description': 'BaoCode',
+              'description': 'BaoCode Claude',
               'path': host,
               'type': 'stdio',
               'allowed_origins': [

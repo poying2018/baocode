@@ -12,23 +12,30 @@ import 'cli_locator.dart';
 /// Of how far a download is: the bytes so far, and all of them.
 typedef ClaudeDownloadProgress = void Function(int received, int size);
 
-/// The Claude Code to run on a machine: the newest of the user's builds
-/// and the one BaoCode installed there ([managed]), the user's where they
-/// are as new. A machine with none is given one, when asked to.
+/// The Claude Code to run on a machine: the newest of the user's builds,
+/// the one BaoCode installed there ([managed]) and the one the app carries
+/// ([bundled]), the user's where they are as new. A machine with none is
+/// given one, when asked to.
 ///
 /// What each of the user's builds is, it is asked (`--version`) once per
 /// file: kept, by its size and time, in [managed]'s folder.
 ///
 /// The one installed does not update itself (that would put it in the
-/// user's `~/.local`): this does, now and then, for the next start.
+/// user's `~/.local`): this does, now and then, for the next start. The
+/// one the app carries cannot update itself either, and does not: the app
+/// carries a new one when it is updated.
 class ClaudeRuntime {
   ClaudeRuntime({
     required this.managed,
     required this.platform,
     this.named = _none,
+    this.bundled,
   });
 
   final ManagedClaude managed;
+
+  /// The copy the app carries in its bundle; null when it carries none.
+  final BundledClaude? bundled;
 
   /// The build the user named to run, in the environment it is found in,
   /// and how they undo that, to say where it is not there; null for none.
@@ -61,10 +68,10 @@ class ClaudeRuntime {
 
   File get _versionsFile => File(p.join(managed.directory, 'versions.json'));
 
-  /// The CLI to run: the one the user [named], else the newest of theirs
-  /// and the installed one. With none, [onDownload] given,
-  /// the current one is installed (its progress told to it); else this
-  /// throws ClaudeNotInstalled.
+  /// The CLI to run: the one the user [named], else the newest of theirs,
+  /// the installed one and the one the app carries. With none, [onDownload]
+  /// given, the current one is installed (its progress told to it); else
+  /// this throws ClaudeNotInstalled.
   Future<ClaudeCli> locate({ClaudeDownloadProgress? onDownload}) async {
     final environment = await ClaudeEnvironment.of();
     if (named(environment) case (:final path, :final undo)?) {
@@ -72,7 +79,8 @@ class ClaudeRuntime {
     }
     final users = CliLocator.installed(environment);
     final own = _own(environment);
-    final options = [...users, ?own];
+    final carried = _carried(environment);
+    final options = [...users, ?own, ?carried];
     if (options.isEmpty) {
       if (onDownload == null) throw CliLocator.notInstalled(environment);
       await fetch(onProgress: onDownload);
@@ -85,6 +93,7 @@ class ClaudeRuntime {
       final versions = await Future.wait([
         for (final cli in users) _versionOf(cli),
         if (own != null) Future.value(_parse(managed.version)),
+        if (carried != null) Future.value(_parse(bundled!.version)),
       ]);
       ClaudeCli? best;
       List<int>? newest;
@@ -121,16 +130,44 @@ class ClaudeRuntime {
         null => null,
       };
 
+  /// The copy the app carries, as it is run: its updater off, like the
+  /// installed one's (it would put another in the user's `~/.local`).
+  ClaudeCli? _carried(Map<String, String> environment) =>
+      switch (bundled) {
+        final bundled? => ClaudeCli(bundled.binary.path, {
+          ...environment,
+          'DISABLE_AUTOUPDATER': '1',
+        }),
+        null => null,
+      };
+
   /// [executable] refused an option BaoCode starts Claude Code with: it is
   /// passed over from now on, with every build of the user's no newer.
-  /// Whether another may be tried: for the installed one, whether a newer
-  /// one was installed in its place (its progress told to [onDownload]).
+  /// Whether another may be tried: for the installed one and for the one
+  /// the app carries, whether a newer one was installed in its place (its
+  /// progress told to [onDownload]).
   Future<bool> rejectTooOld(
     String executable, {
     ClaudeDownloadProgress? onDownload,
   }) async {
     final installed = managed.installed;
     if (installed != null && p.equals(installed, executable)) {
+      try {
+        final before = managed.version;
+        await fetch(onProgress: onDownload);
+        return managed.version != before;
+      } on Object {
+        return false;
+      }
+    }
+    // The one the app carries cannot be replaced (it is in the bundle):
+    // a newer one is downloaded instead, and used from then on.
+    final carried = bundled;
+    if (carried != null && p.equals(carried.binary.path, executable)) {
+      final version = _parse(carried.version);
+      if (version != null && (_floor == null || _compare(version, _floor!) > 0)) {
+        _floor = version;
+      }
       try {
         final before = managed.version;
         await fetch(onProgress: onDownload);
@@ -202,6 +239,12 @@ class ClaudeRuntime {
   /// Whether [cli] is the installed one.
   bool isInstalled(ClaudeCli cli) => switch (managed.installed) {
     final installed? => p.equals(installed, cli.executable),
+    null => false,
+  };
+
+  /// Whether [cli] is the copy the app carries.
+  bool isBundled(ClaudeCli cli) => switch (bundled) {
+    final bundled? => p.equals(bundled.binary.path, cli.executable),
     null => false,
   };
 

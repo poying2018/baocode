@@ -79,7 +79,7 @@ void main() {
       final script = File(target).readAsStringSync();
       expect(
         script,
-        startsWith('#!/usr/bin/env bash\n# BaoCode shell command\n'),
+        startsWith('#!/usr/bin/env bash\n# BaoCode Claude shell command\n'),
       );
       expect(script, contains('open -b dev.baocode.desktop'));
       expect(File(target).statSync().modeString(), 'rwxr-xr-x');
@@ -341,7 +341,7 @@ void main() {
       expect(
         command().script,
         '@echo off\r\n'
-        'REM BaoCode shell command\r\n'
+        'REM BaoCode Claude shell command\r\n'
         'for %%a in (${CodeArgs.queryOptions.join(' ')}) do '
         'if /i "%~1"=="%%a" goto query\r\n'
         'start "" "C:\\Program Files\\BaoCode %%1\\baocode.exe" '

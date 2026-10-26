@@ -135,11 +135,11 @@ Future<void> main(List<String> arguments) async {
   final stockEngine = arguments.contains('--stock-engine');
   final channel = arguments.contains('--channel');
 
-  // Which product this build is: BaoCode (the Claude Code one) or the codex
-  // one, whose executable is baocode-codex.exe. The product names the
-  // executable, and so the folder its data goes in, the window it has and
-  // the registration Windows keeps for it: the two install side by side and
-  // neither disturbs the other.
+  // Which product this build is: BaoCode Claude (the Claude Code one) or
+  // the codex one, whose executable is baocode-codex.exe. The product names
+  // the executable, and so the folder its data goes in, the window it has
+  // and the registration Windows keeps for it: the two install side by side
+  // and neither disturbs the other.
   //
   //   dart run tool/build_windows.dart --product codex
   final productAt = arguments.indexOf('--product');
@@ -152,8 +152,8 @@ Future<void> main(List<String> arguments) async {
   final spec = Product.byId(product);
   if (spec == null) {
     _fail(
-      'Unknown product "$product". It is baocode (BaoCode, the Claude Code '
-      'one) or codex (the codex one).',
+      'Unknown product "$product". It is baocode (BaoCode Claude, the Claude '
+      'Code one) or codex (the codex one).',
     );
   }
   // The remote server's manifest, as the product's build writes it: the
@@ -314,7 +314,9 @@ Future<void> main(List<String> arguments) async {
     '/DProductName=$productName',
     '/DProductId=$productId',
     '/DProductExe=$binaryName.exe',
-    '/DProductDir=$productName',
+    // The folder it is installed in: the one it always was, so that an
+    // upgrade installs over the one before it.
+    '/DProductDir=${spec.directoryName}',
     // The installer's file name: the product's own, without a space.
     '/DProductFileName=${spec.installerName}',
     // The context menu's key, the URL scheme and the browsers' native

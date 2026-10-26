@@ -14,7 +14,7 @@ Une interface de bureau conviviale pour [Claude Code](https://github.com/anthrop
 
 Nous utilisons Claude Code tous les jours. Le terminal convient pour l'exécuter, mais moins pour lire ses résultats : les longs diffs disparaissent de l'écran, les étapes précédentes sont difficiles à retrouver et vérifier les changements oblige à changer d'application. BaoCode est la fenêtre que nous souhaitions autour de cet outil.
 
-BaoCode n'intègre volontairement aucun agent propre. Claude Code est l'agent, avec son écosystème d'outils, de skills, de plugins, de serveurs MCP, de sous-agents et de hooks. BaoCode lui offre une interface lisible et rend les fonctions périphériques immédiatement utilisables. Il lance le Claude Code déjà installé, avec vos paramètres et votre `CLAUDE.md`.
+BaoCode n'intègre volontairement aucun agent propre. Claude Code est l'agent, avec son écosystème d'outils, de skills, de plugins, de serveurs MCP, de sous-agents et de hooks. BaoCode lui offre une interface lisible et rend les fonctions périphériques immédiatement utilisables. Claude Code est fourni avec BaoCode : il n'y a rien à installer ; le vôtre, si vous en avez un, est utilisé à sa place, avec vos paramètres et votre `CLAUDE.md`.
 
 ## Fonctionnalités
 
@@ -38,12 +38,14 @@ BaoCode est une application native qui dessine directement son interface sur le 
 | Démarrage | ≈ 0,18 s |
 | Mémoire, une fenêtre inactive | ≈ 120 MB |
 | Processus, une fenêtre | 2 |
-| Taille du téléchargement Windows | ≈ 16 MB |
+| Taille du téléchargement Windows | ≈ 100 MB |
+
+Le téléchargement pour Windows contient Claude Code lui-même : il n'y a rien à installer ensuite.
 
 ## Prérequis
 
 - macOS 12 ou ultérieur (un téléchargement pour Apple silicon, un pour Intel), Windows 10 ou ultérieur (x64), ou Linux : Ubuntu 22.04 ou ultérieur et les autres distributions basées sur Debian (un .deb pour x64, un pour arm64).
-- [Claude Code](https://github.com/anthropics/claude-code) installé.
+- Rien à installer : [Claude Code](https://github.com/anthropics/claude-code) est fourni avec BaoCode. Le vôtre, si vous en avez un, est utilisé à sa place.
 
 ## Compilation depuis les sources
 

@@ -979,7 +979,7 @@
   "generalSettingsCommitAttribution": "提交署名",
   "generalSettingsCommitAttributionDescription": "Agent 在它写的提交和 Pull Request 中添加的署名。更改对之后启动的 Agent 生效；目前仅支持 Claude Code。",
   "generalSettingsClaudeCore": "内核",
-  "generalSettingsClaudeCoreDescription": "Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。内置：{product} 自带，只用 设置 → 模型 里添加的模型。默认用 CLI，本机没有时会自动下载。改动对新开的会话生效。",
+  "generalSettingsClaudeCoreDescription": "Claude Code CLI：Anthropic 官方程序，沿用本机的登录和配置，用 Claude 订阅请选它。它随 {product} 一起提供：不用安装，不用下载。内置：{product} 也自带，只用 设置 → 模型 里添加的模型。改动对新开的会话生效。",
   "generalSettingsClaudeCoreBuiltin": "内置",
   "generalSettingsClaudeCoreCli": "Claude Code CLI",
   "generalSettingsQueuedMessages": "工作中发送的消息",
@@ -1552,12 +1552,22 @@
   "explorerExcludeSettingDescription": "资源管理器中不显示的文件和文件夹，用逗号分隔：文件名（`node_modules`、`*.log`）匹配任意位置，路径（`build/**`、`src/generated`）匹配所在文件夹内的位置。",
   "explorerExcludeSettingPlaceholder": "例如 .git, node_modules, *.log",
   "claudePathSetting": "路径",
-  "claudePathSettingDescription": "留空则自动用本机最新版本的 Claude Code，没有时自动下载。填入路径则固定用那一份，比如你自己编译的版本。（claudeCode.path）",
+  "claudePathSettingDescription": "留空则自动用本机最新版本的 Claude Code，没有时用 {product} 自带的那份。填入路径则固定用那一份，比如你自己编译的版本。（claudeCode.path）",
+  "@claudePathSettingDescription": {
+    "description": "Claude Code 路径设置下面：留空时用哪一份。",
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode"
+      }
+    }
+  },
   "claudePathSettingHint": "自动",
   "claudePathChecking": "正在检查…",
   "claudePathInUse": "当前使用：{path}（{version}）",
   "claudePathInUseUnknown": "当前使用：{path}",
   "claudePathInUseDownloaded": "当前使用：{product} 下载的 Claude Code {version}",
+  "claudePathInUseBundled": "当前使用：{product} 自带的 Claude Code {version}",
   "claudePathMissing": "尚未找到：开始第一个对话时会自动下载 Claude Code。",
   "generalSettingsIdeWindows": "Fast Ide 窗口",
   "generalSettingsIdeWindowsDescription": "Fast Ide 在哪里打开：在主窗口中替换对话，一次一个文件夹；或独立窗口，每个文件夹一个（新建窗口 ⇧⌘N / Ctrl+Shift+N 打开一个空窗口）。立即生效。（window.ideWindows）",

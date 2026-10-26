@@ -229,6 +229,67 @@ class _DigestSink implements Sink<Digest> {
   void close() {}
 }
 
+/// The Claude Code the app carries inside its bundle: the binary itself and
+/// a `VERSION` file naming it.
+///
+/// The app ships one, so that a machine with no Claude Code of its own
+/// needs no download. It is the floor, not the ceiling: a copy too old for
+/// what BaoCode asks of it is left for a newer one (see
+/// [ClaudeRuntime.rejectTooOld]), which is downloaded as before.
+class BundledClaude {
+  BundledClaude(this.directory, this.version, this.binary);
+
+  /// The one in [directory], if it has a VERSION and the binary it names.
+  static BundledClaude? at(String directory) {
+    final version = readVersion(directory);
+    if (version == null) return null;
+    final binary = binaryOf(directory);
+    if (binary == null) return null;
+    return BundledClaude(directory, version, binary);
+  }
+
+  /// The `VERSION` file's content; null when there is none, or it does not
+  /// name a version (a folder name is written in it, never a path).
+  static String? readVersion(String directory) {
+    final file = File(p.join(directory, versionFile));
+    if (!file.existsSync()) return null;
+    try {
+      final version = file.readAsStringSync().trim();
+      if (version.isEmpty || version.contains(RegExp(r'[^A-Za-z0-9._+-]'))) {
+        return null;
+      }
+      return version;
+    } on FileSystemException {
+      return null;
+    }
+  }
+
+  /// The binary in [directory], whichever the platform's is there: the
+  /// bundle holds one, the one of the platform it was made for.
+  static File? binaryOf(String directory) {
+    for (final name in const ['claude.exe', 'claude']) {
+      final file = File(p.join(directory, name));
+      if (file.existsSync()) return file;
+    }
+    return null;
+  }
+
+  /// The file the version is written in, beside the binary.
+  static const versionFile = 'VERSION';
+
+  /// Where it is: the folder in the app's bundle.
+  final String directory;
+
+  /// The version it is (`2.1.308`).
+  final String version;
+
+  /// The binary itself.
+  final File binary;
+
+  @override
+  String toString() => 'BundledClaude($directory, $version)';
+}
+
 /// The Claude Code BaoCode installs on a machine where the user has none
 /// (or only older ones), as VS Code's extension carries its own:
 /// `<directory>/claude-<version>` (`.exe` on Windows), the one in use named

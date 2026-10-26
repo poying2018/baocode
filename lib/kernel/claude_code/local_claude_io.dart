@@ -14,14 +14,16 @@ import 'package:path/path.dart' as p;
 import '../../network/network_proxy_io.dart';
 import '../../platform/data_dir.dart';
 import 'claude_code_transport.dart';
+import 'claude_bundle.dart';
 import 'claude_install_progress.dart';
 import 'claude_path_setting.dart';
 
 /// Claude Code on this machine, as VS Code's extension carries its own:
 /// the one set in Settings ([ClaudePathSetting]), else the newest of the
-/// user's builds and the one BaoCode downloaded into the data folder for
-/// them (see [ClaudeRuntime]), which is downloaded the first time the
-/// user has none that runs. Its progress is [LocalClaudeInstall]'s.
+/// user's builds, the one the app carries and the one BaoCode downloaded
+/// into the data folder for them (see [ClaudeRuntime]), which is
+/// downloaded the first time the user has none that runs. Its progress is
+/// [LocalClaudeInstall]'s.
 abstract final class LocalClaude {
   static ClaudeRuntime? _runtime;
 
@@ -29,6 +31,7 @@ abstract final class LocalClaude {
     managed: ManagedClaude(p.join(DataDirectory.current.path, 'claude')),
     platform: ClaudeRelease.platformOf(machinePlatform()),
     named: _named,
+    bundled: ClaudeBundle.find(),
   );
 
   /// The path set in Settings, `~` its user's home.
@@ -54,6 +57,7 @@ abstract final class LocalClaude {
         cli.executable,
         await runtime.versionOf(cli),
         downloaded: runtime.isInstalled(cli),
+        bundled: runtime.isBundled(cli),
       );
     } on ClaudeNotInstalled {
       return const LocalClaudeMissing();

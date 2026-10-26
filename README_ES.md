@@ -14,7 +14,7 @@ Una interfaz de escritorio fácil de usar para [Claude Code](https://github.com/
 
 Usamos Claude Code todos los días. El terminal es un buen lugar para ejecutarlo, pero no para leer sus resultados: los diffs largos desaparecen de la pantalla, cuesta volver a encontrar los pasos anteriores y revisar los cambios exige cambiar de aplicación. BaoCode es la ventana que queríamos para trabajar con él.
 
-BaoCode no tiene un agente propio, por diseño. Claude Code es el agente, con su ecosistema de herramientas, skills, plugins, servidores MCP, subagentes y hooks. BaoCode ofrece una interfaz legible y hace que las funciones complementarias estén listas para usar. Ejecuta el Claude Code que ya tienes instalado, con tu configuración y tu `CLAUDE.md`.
+BaoCode no tiene un agente propio, por diseño. Claude Code es el agente, con su ecosistema de herramientas, skills, plugins, servidores MCP, subagentes y hooks. BaoCode ofrece una interfaz legible y hace que las funciones complementarias estén listas para usar. Claude Code viene incluido: no hay nada que instalar; el tuyo, si ya lo tienes, se usa en su lugar, con tu configuración y tu `CLAUDE.md`.
 
 ## Funciones
 
@@ -38,12 +38,14 @@ BaoCode es una aplicación nativa que dibuja directamente su interfaz en la GPU.
 | Inicio | ≈ 0,18 s |
 | Memoria, una ventana inactiva | ≈ 120 MB |
 | Procesos, una ventana | 2 |
-| Tamaño de descarga para Windows | ≈ 16 MB |
+| Tamaño de descarga para Windows | ≈ 100 MB |
+
+La descarga para Windows incluye el propio Claude Code: no hay nada que instalar después.
 
 ## Requisitos
 
 - macOS 12 o posterior (una descarga para Apple silicon y otra para Intel), Windows 10 o posterior (x64), o Linux: Ubuntu 22.04 o posterior y otras distribuciones basadas en Debian (un .deb para x64 y otro para arm64).
-- [Claude Code](https://github.com/anthropics/claude-code) instalado.
+- Nada que instalar: [Claude Code](https://github.com/anthropics/claude-code) viene incluido con BaoCode. Si ya tienes tu propia versión, se usa esa.
 
 ## Compilar desde el código fuente
 

@@ -172,7 +172,7 @@ dart run tool/build_macos.dart --remote-release              # macOS 同理
 | `remote` › `build` | macOS 15 | 下载和 Flutter 同版本的 x64 Dart SDK → 编译远程服务端（`--all`：Linux x64/arm64 交叉编译；macOS arm64 用本机的 dart，macOS x64 用 x64 的 dart 经 Rosetta，`dart compile exe` 只能在 Mac 上、按 dart 自己的架构编 macOS 版）→ `tool/test_remote_server_macos.sh`：在这台 Mac 上把两份 macOS 版各跑一遍 → 上传 `remote`（`VERSION`、`servers.json`、`.gz`）和 `remote-linux`（Linux 的两个二进制）两个产物 |
 | `remote` › `linux` | Ubuntu | `tool/test_remote_server.sh`：在 Docker 里的 Ubuntu 20.04 / 24.04、Debian 12、Rocky Linux 8 上，两种架构各跑一遍（arm64 用 QEMU 模拟），要能启动、回答 `initialize`、列出目录 |
 | `macos` | macOS 15 | 有证书就导入临时钥匙串 → `tool/build_macos.dart --remote-built`：构建 universal 的 .app，**检查是 universal**（每个可执行文件都有 arm64 和 x86_64）→ 放进 `remote` 任务的 `servers.json` → 用 `ditto --arch` 拆成 Apple silicon（arm64）和 Intel（x64）两个应用，各自检查只剩一种架构，下面每个各做一遍：→ 签名（有证书用 Developer ID，带 hardened runtime；没有就 ad hoc，**不带** hardened runtime，否则系统拒绝加载应用自己的框架、一启动就崩；总要重签，因为放进去的文件要包进签名）→ 做 dmg → 有证书时签 dmg、公证、钉票据 → 打更新用的 zip → **把两个 zip 解开各真正启动一次**（Intel 版经 Rosetta），15 秒内退出就不发 |
-| `windows` | Windows | 装 Inno Setup → `tool/build_windows.dart --remote-built`：构建、放进 `servers.json`、打安装包 |
+| `windows` | Windows | 装 Inno Setup → `tool/build_windows.dart --remote-built`：构建、放进 `servers.json`、放进 Claude Code（下载并按 SHA-256 校验，见下）、打安装包 |
 | `publish` | Ubuntu | 汇总产物 → 用更新私钥签 `latest.json`（`tool/release_manifest.dart`，带上 dmg 给网站用）→ 上传远程服务端 → 上传安装包 → 按清单里的链接确认 CDN 给出的文件大小对 → **最后**上传 `latest.json` → 建 GitHub Release（附两个 dmg 和 exe；重新发布时先删掉旧的） |
 
 几个设计上的考虑：
@@ -181,8 +181,39 @@ dart run tool/build_macos.dart --remote-release              # macOS 同理
 - **远程服务端只编译一次**：`remote` 任务编译，macOS 和 Windows 两个应用带的是同一份 `servers.json`（四个平台都有），R2 上一个版本只有一个 `releases/remote/<版本>-<二进制哈希>/`。
 - **下载链接带哈希**：`latest.json` 里每个链接末尾是 `?sha256=<文件哈希前 16 位>`。CDN 按完整地址缓存，文件换了地址就换了，不会给出旧文件；应用取文件名时只看路径。
 - **`downloads`**：`latest.json` 里多了这一项，是给网站用的（两个 dmg 和 Windows 安装包的链接、大小，键是 `macos-arm64`、`macos-x64`、`windows`），应用不读它。
+- **Claude Code 随包分发**：Windows 安装包带上 Claude Code 自己（`claude\claude.exe` 和 `claude\VERSION`），用户不用另装、也不用等第一次对话时的下载。
+  - 版本在 `tool/build_windows.dart` 里钉死（`_claudeVersion`），并按 `_claudeSha256` 校验：**构建只会带上那一份**，换版本时两个常量一起改。
+  - 下载一次就缓存到 `build\claude\`，以后再构建直接用缓存。
+  - 这个二进制是 Anthropic 自己签过名的（Authenticode，带时间戳），Windows 不用重签，SmartScreen 也认。
+  - 应用侧的顺序：设置里指定的路径 → 用户自己装的（新的优先）→ **包里的** → 下载的。包里的那份**不自我更新**（它不能往用户的 `~/.local` 里塞东西），它太旧、拒绝了 BaoCode 传的选项时，改为下载一份新的来用。
+  - **codex 产品不带它**：那个产品没有 Claude Code 可带。
+  - **版本漂移由 CI 自动处理**：`.github/workflows/claude-version.yml` 每天跑一次，把渠道上的当前版本和它的 SHA-256 写进 `_claudeVersion` / `_claudeSha256`，在 `main` 上提交一个 `ci(claude): bump Claude Code to <版本>`。发版时 `check` 任务再跑一遍 `tool/bump_claude_version.dart` 兜底：落后了**发不下去**，并把该改的两行打在错误里；读不到那个源时只警告，不挡发版。日常 PR 不跑这两步。
+    - 工具：`dart tool/bump_claude_version.dart`（只说现状，落后时退出码 1）、`--write`（写进 pin）。SHA-256 取自官方 manifest，不必下载那 283 MB 就能拿到；真正的二进制仍由构建时下载并按 pin 校验。
+    - 那个工作流直接往 `main` 提交。**若仓库对 `main` 设了保护而拒绝 bot 的推送，第一次跑会失败**——那时改成开 PR，或给 bot 直推权限。
+  - 代价：安装包大了不少（Claude Code 的二进制约 283 MB，压缩后仍有一百多 MB）。安装包的体积因此不再是「十几 MB」。
 - **密钥只在 `release` 环境里**，只有 `v*` 标签能用（见 7.2）。PR 和手动运行拿不到。
 - Flutter 版本固定在工作流的 `FLUTTER_VERSION`，升级 Flutter 时一起改。
+
+### 4.1 两个产品，一次发版
+
+这个仓库出**两个程序**：BaoCode Claude（Claude Code 内核）和 BaoCode Codex（Codex 内核）。
+它们是两份程序，不是一个程序的两个开关 ⇒ **一次发版，两边都有**：
+
+| | BaoCode Claude | BaoCode Codex |
+| --- | --- | --- |
+| 安装包 | `BaoCodeClaude-<版本>-setup.exe` | `BaoCodeCodex-<版本>-setup.exe` |
+| 更新清单 | `latest.json` | `latest-codex.json` |
+| 远端服务端 | `baocode-server-*` | `baocode-codex-server-*` |
+
+- `remote` 任务**按产品各建一次**（矩阵：`baocode`、`baocode-codex`），产物名带产品名。
+- `windows` 任务**按产品 × 版本各建一次**（矩阵），`tool/build_windows.dart --product <产品>`。
+- `publish` 任务**签两份清单**（`tool/release_manifest.dart --product <产品> --manifest out/<清单名>`），
+  **两份清单最后传**。
+- 两个产品的服务端清单名也不同（`servers.json` / `servers-codex.json`），
+  否则一个会盖掉另一个的。
+- **产品由可执行文件的名字决定**（`baocode-claude.exe` / `baocode-codex.exe`），
+  一处说清两个产品的分别：`packages/bao_remote/lib/src/platform/product.dart`。
+  原生侧读同一个名字（`windows/runner/app_identity.cpp`），两边不会各说各话。
 
 ## 5. dl.baocode.dev 上有什么
 

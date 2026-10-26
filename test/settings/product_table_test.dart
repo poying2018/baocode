@@ -13,14 +13,20 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('the product a build is', () {
     test('is said by the name of its executable', () {
-      expect(AppPaths.product(r'C:\Program Files\BaoCode\baocode.exe'), 'baocode');
+      expect(
+        AppPaths.product(r'C:\Program Files\BaoCode\baocode-claude.exe'),
+        'baocode',
+      );
       expect(
         AppPaths.product(r'C:\Program Files\BaoCode\baocode-codex.exe'),
         'baocode-codex',
       );
+      // The name it had before the rename still names it: a copy of the
+      // old program is the same product.
+      expect(AppPaths.product(r'C:\Program Files\BaoCode\baocode.exe'), 'baocode');
     });
 
-    test('of a name belonging to no product is BaoCode\'s', () {
+    test('of a name belonging to no product is the Claude Code one\'s', () {
       // A test host, a build named otherwise.
       expect(AppPaths.product(r'C:\tmp\flutter_tester.exe'), 'baocode');
       // A name with a space in it is no product's (macOS's ".app" folder).
@@ -28,9 +34,9 @@ void main() {
     });
 
     test('keeps each product\'s own identity', () {
-      final baocode = AppPaths.productOf(r'C:\BaoCode\baocode.exe');
+      final baocode = AppPaths.productOf(r'C:\BaoCode\baocode-claude.exe');
       final codex = AppPaths.productOf(r'C:\BaoCode\baocode-codex.exe');
-      expect(baocode.displayName, 'BaoCode');
+      expect(baocode.displayName, 'BaoCode Claude');
       expect(codex.displayName, 'BaoCode Codex');
       // The scheme, the registration, the update channel: each product's
       // own, so that a link, an install and a release of one do not touch
@@ -41,8 +47,12 @@ void main() {
       expect(baocode.registryKey, isNot(codex.registryKey));
       expect(baocode.manifestName, 'latest.json');
       expect(codex.manifestName, 'latest-codex.json');
-      expect(baocode.installerName, 'BaoCode');
+      expect(baocode.installerName, 'BaoCodeClaude');
       expect(codex.installerName, 'BaoCodeCodex');
+      // The folder it is installed in does not change with the name: an
+      // upgrade installs over the one before it.
+      expect(baocode.directoryName, 'BaoCode');
+      expect(codex.directoryName, 'BaoCodeCodex');
       expect(baocode.browserHost, 'dev.baocode.browser');
       expect(codex.browserHost, 'dev.baocode-codex.browser');
       // The Claude Code is BaoCode's alone.
@@ -56,6 +66,7 @@ void main() {
       expect(Product.byId('codex')?.id, 'baocode-codex');
       expect(Product.byId('baocode-codex')?.id, 'baocode-codex');
       expect(Product.byId('baocode')?.id, 'baocode');
+      expect(Product.byId('baocode-claude')?.id, 'baocode');
       expect(Product.byId('nothing'), isNull);
     });
   });

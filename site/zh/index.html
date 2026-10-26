@@ -167,7 +167,7 @@
         <tr><td>启动</td><td>≈ 0.18 秒</td><td>≈ 2–3 秒</td><td>≈ 2–3 秒</td></tr>
         <tr><td>内存（单窗口空闲）</td><td>≈ 120 MB</td><td>≈ 970 MB</td><td>≈ 1.9 GB</td></tr>
         <tr><td>进程数（单窗口）</td><td>2</td><td>8</td><td>13</td></tr>
-        <tr><td>安装包大小（Windows）</td><td>≈ 16 MB</td><td>≈ 244 MB</td><td>≈ 214 MB</td></tr>
+        <tr><td>安装包大小（Windows）</td><td>≈ 100 MB</td><td>≈ 244 MB</td><td>≈ 214 MB</td></tr>
       </tbody>
     </table>
   </div>
@@ -175,7 +175,7 @@
   <h2 id="themes"><svg class="ic" aria-hidden="true"><use href="#ic-palette"/></svg>你的主题</h2>
   <p>BaoCode 的配色就是 VS Code 的主题配色，你常用的主题看起来和你预期的一样：编辑器、对话和侧栏都跟着主题走。随时可以换主题；在列表里上下移动时，窗口会逐个预览。</p>
   <p>不止自带的那些：在扩展视图里搜索 Open VSX，或者拖进一个 <code>.vsix</code>，就能装上 VS Code 的颜色主题和文件图标主题。我们自己也做了一套 Bao Dark 和 Bao Light，作为默认主题。</p>
-  <p>BaoCode 对整个 VS Code 也是这么做的：留下最重要的部分，装进 Windows 上 16 MB 的安装包里。</p>
+  <p>BaoCode 对整个 VS Code 也是这么做的：留下最重要的部分，装进 Windows 上 100 MB 的安装包里——里面带着 Claude Code，装完不用再装别的。</p>
   <figure>
     <div class="img" data-src="/shots/themes-light.webp"><img decoding="async" loading="lazy" src="/shots/themes-light.webp" width="1568" height="974" alt="浅色主题下的 BaoCode 主窗口，打开了搜索"></div>
     <div class="img" data-src="/shots/themes-dark.webp"><img decoding="async" loading="lazy" src="/shots/themes-dark.webp" width="1568" height="996" alt="Kimbie Dark 主题下的 Fast IDE，打开了颜色主题列表"></div>
@@ -229,7 +229,7 @@
 
   <h2 id="limits"><svg class="ic" aria-hidden="true"><use href="#ic-target"/></svg>它不做什么</h2>
   <p><strong>BaoCode 不另起一套智能体生态，这是有意为之。</strong>Claude Code 的生态无可比拟：工具、技能、插件、MCP 服务器、子代理和钩子。再做一套只会把它割裂开。BaoCode 要做的，是给 Claude Code 配上它应得的界面，并让周边的一切开箱即用。</p>
-  <p>所以 BaoCode 不附带模型，也不需要注册账号。本机装了 Claude Code，它就运行你的那一份，用你的设置、你的登录和你的 <code>CLAUDE.md</code>。没装的话，BaoCode 有自己的内置内核：同样读 <code>CLAUDE.md</code>、技能、子代理、命令、钩子、插件和 MCP 服务器，跑在你在 设置 → 模型 里添加的上游上。想用 Claude 订阅，就在 设置 → 通用 → 内核 里选 Claude Code CLI，没装的话 BaoCode 会帮你下载。</p>
+  <p>所以 BaoCode 不附带模型，也不需要注册账号。它自带 Claude Code，用你的设置、你的登录和你的 <code>CLAUDE.md</code> 运行它；你若已装了别的版本，就用你那份。BaoCode 也有自己的内置内核：同样读 <code>CLAUDE.md</code>、技能、子代理、命令、钩子、插件和 MCP 服务器，跑在你在 设置 → 模型 里添加的上游上。想用 Claude 订阅，就在 设置 → 通用 → 内核 里选 Claude Code CLI。</p>
   <p>不支持 Codex CLI 等其他智能体；它们的模型可以像上面说的那样，通过 BaoCode 使用。</p>
 
   <h2 id="download"><svg class="ic" aria-hidden="true"><use href="#ic-download"/></svg>下载</h2>

@@ -167,7 +167,7 @@
         <tr><td>Launch</td><td>≈ 0.18 s</td><td>≈ 2–3 s</td><td>≈ 2–3 s</td></tr>
         <tr><td>Memory, one window idle</td><td>≈ 120 MB</td><td>≈ 970 MB</td><td>≈ 1.9 GB</td></tr>
         <tr><td>Processes, one window</td><td>2</td><td>8</td><td>13</td></tr>
-        <tr><td>Download size, Windows</td><td>≈ 16 MB</td><td>≈ 244 MB</td><td>≈ 214 MB</td></tr>
+        <tr><td>Download size, Windows</td><td>≈ 100 MB</td><td>≈ 244 MB</td><td>≈ 214 MB</td></tr>
       </tbody>
     </table>
   </div>
@@ -175,7 +175,7 @@
   <h2 id="themes"><svg class="ic" aria-hidden="true"><use href="#ic-palette"/></svg>Your themes</h2>
   <p>BaoCode’s colors are VS Code’s theme colors, so the themes you already use look the way you expect: the editor, the conversation and the sidebar all follow them. Change the theme whenever you like; the window previews each one as you move through the list.</p>
   <p>And not only the ones that come with it: search Open VSX in the Extensions view, or drop in a <code>.vsix</code>, to install VS Code color themes and file icon themes. We made Bao Dark and Bao Light of our own, the defaults.</p>
-  <p>This is what BaoCode does with VS Code as a whole: it keeps the parts that matter most and fits them into a 16 MB download on Windows.</p>
+  <p>This is what BaoCode does with VS Code as a whole: it keeps the parts that matter most and fits them into a 100 MB download on Windows — Claude Code included, so there is nothing to install afterwards.</p>
   <figure>
     <div class="img" data-src="shots/themes-light.webp"><img decoding="async" loading="lazy" src="shots/themes-light.webp" width="1568" height="974" alt="BaoCode’s main window in a light theme, with search open"></div>
     <div class="img" data-src="shots/themes-dark.webp"><img decoding="async" loading="lazy" src="shots/themes-dark.webp" width="1568" height="996" alt="Fast IDE in Kimbie Dark, with the color theme list open"></div>
@@ -229,7 +229,7 @@
 
   <h2 id="limits"><svg class="ic" aria-hidden="true"><use href="#ic-target"/></svg>What it doesn’t do</h2>
   <p><strong>BaoCode builds no agent ecosystem of its own, by design.</strong> Claude Code’s is unmatched: its tools, skills, plugins, MCP servers, subagents and hooks. A second one would only split it. BaoCode’s job is to give Claude Code the interface it deserves, and to make everything around it work out of the box.</p>
-  <p>So BaoCode doesn’t come with a model or an account. Where Claude Code is installed, it runs yours, with your settings, your sign-in and your <code>CLAUDE.md</code>. Where it isn’t, BaoCode has a core of its own: it reads the same <code>CLAUDE.md</code>, skills, subagents, commands, hooks, plugins and MCP servers, and runs on the upstreams you add in Settings → Models. For a Claude subscription, pick Claude Code CLI in Settings → General → Core, and BaoCode downloads it if it isn’t there.</p>
+  <p>So BaoCode doesn’t come with a model or an account. It comes with Claude Code itself, and runs it with your settings, your sign-in and your <code>CLAUDE.md</code>; your own build, if you have one, is used instead. It also has a core of its own: it reads the same <code>CLAUDE.md</code>, skills, subagents, commands, hooks, plugins and MCP servers, and runs on the upstreams you add in Settings → Models. For a Claude subscription, pick Claude Code CLI in Settings → General → Core.</p>
   <p>Other agents, such as the Codex CLI, aren’t supported; their models work through BaoCode, as above.</p>
 
   <h2 id="download"><svg class="ic" aria-hidden="true"><use href="#ic-download"/></svg>Download</h2>

@@ -27,8 +27,19 @@ abstract final class AppPaths {
   ///
   /// The name is the one source of it: the native side reads the same name
   /// (windows/runner/app_identity.cpp), so the two cannot disagree.
-  static String product([String? executable]) =>
-      productOf(executable).id;
+  ///
+  /// A name that belongs to no product but says "baocode" (a build named
+  /// otherwise, "baocode-codex-codex") keeps its own name: it is a
+  /// product of its own, and its data folder is its own too.
+  static String product([String? executable]) {
+    final name = p
+        .basenameWithoutExtension(executable ?? Platform.resolvedExecutable)
+        .toLowerCase();
+    if (!name.startsWith('baocode')) return 'baocode';
+    // A name with a space in it belongs to no product (macOS's ".app").
+    if (name.contains(' ')) return 'baocode';
+    return Product.byId(name)?.id ?? name;
+  }
 
   /// The product a build of the app is, with what tells it apart: its
   /// name, its links, its registration, its update channel.
@@ -51,21 +62,23 @@ abstract final class AppPaths {
     return id.isEmpty ? base : '$base-$id';
   }
 
-  /// The name [appName] shows: "BaoCode", "BaoCode Codex", "BaoCode Dev".
+  /// The name the app shows itself as: the product's own name
+  /// ("BaoCode Claude", "BaoCode Codex"), with this copy's id (see
+  /// [appIdVariable]) when it has one ("BaoCode Claude Dev").
+  ///
+  /// The name is the product's own (see [Product.displayName]), not one
+  /// made up from its id: the id names the data folder and stays as it
+  /// was, while the name the user sees is the one the product says.
   static String displayName(
     Map<String, String> environment, {
     String? executable,
   }) {
-    final parts = appName(environment, executable: executable)
-        .split(RegExp('[-_]'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) return 'BaoCode';
+    final name = productOf(executable).displayName;
+    final id = appId(environment);
+    if (id.isEmpty) return name;
     String capitalised(String part) =>
         part[0].toUpperCase() + part.substring(1);
-    // "baocode" is one word with two capitals, not "Baocode".
-    final first = parts.first == 'baocode' ? 'BaoCode' : capitalised(parts.first);
-    return [first, ...parts.skip(1).map(capitalised)].join(' ');
+    return '$name ${capitalised(id)}';
   }
 
   /// Whether this product carries Claude Code: BaoCode does, the codex one
