@@ -23,7 +23,10 @@ void main() {
       );
       // The name it had before the rename still names it: a copy of the
       // old program is the same product.
-      expect(AppPaths.product(r'C:\Program Files\BaoCode\baocode.exe'), 'baocode');
+      expect(
+        AppPaths.product(r'C:\Program Files\BaoCode\baocode.exe'),
+        'baocode',
+      );
     });
 
     test('of a name belonging to no product is the Claude Code one\'s', () {
@@ -69,6 +72,28 @@ void main() {
       expect(Product.byId('baocode-claude')?.id, 'baocode');
       expect(Product.byId('nothing'), isNull);
     });
+
+    test(
+      'the name a release is asked for lands on the name the app answers',
+      () {
+        // The update manifest carries the product's id, and an installed app
+        // asks whether that release is for the product it knows itself to be
+        // (AppPaths.product, the name its data folder carries). A release is
+        // asked for by whichever name its caller uses — the build matrix
+        // says "baocode-claude" — so the two have to meet at the id. Passed
+        // through as it was said, every installed copy of this product would
+        // be told it is up to date, forever, and nothing would say so.
+        for (final name in ['baocode', 'baocode-claude', 'claude']) {
+          final published = Product.byId(name)!.id;
+          final asking = AppPaths.product(
+            r'C:\Program Files\BaoCode\' + Product.byId(name)!.binary + '.exe',
+          );
+          expect(asking, published, reason: 'a release asked for by "$name"');
+        }
+        // And the codex product never answers to the other's name.
+        expect(Product.byId('codex')!.id, isNot(Product.baocode.id));
+      },
+    );
   });
 
   group('the update channel', () {

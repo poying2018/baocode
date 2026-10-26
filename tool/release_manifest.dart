@@ -49,14 +49,12 @@ import 'package:crypto/crypto.dart' as crypto;
 /// GitHub releases, where the app checks for updates too (see
 /// lib/update/update_service.dart); upstream's dl.baocode.dev serves the
 /// same manifests for the official builds.
-const _releasesBase =
-    'https://github.com/poying2018/baocode/releases/download';
+const _releasesBase = 'https://github.com/poying2018/baocode/releases/download';
 
 /// [name]'s link, for the file whose SHA-256 is [sha256]. The version is
 /// the marketing one (1.5.1), as the release's tag carries it.
-Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
-  '$_releasesBase/v${version.marketing}/$name',
-);
+Uri _link(AppVersion version, String name, String sha256) =>
+    Uri.parse('$_releasesBase/v${version.marketing}/$name');
 
 /// The Linux packages built (tool/package_linux_deb.sh), the same.
 const _linuxArchitectures = ['x64', 'arm64'];
@@ -73,7 +71,8 @@ const _keyVariable = 'BAOCODE_UPDATE_SIGNING_KEY';
 /// seed, base64.
 const _dpapiPrefix = 'dpapi:';
 
-const _usage = '''
+const _usage =
+    '''
 Usage:
   dart run tool/release_manifest.dart [--windows <setup.exe>]
       [--linux-x64 <amd64.deb>] [--linux-arm64 <arm64.deb>]
@@ -155,8 +154,7 @@ Future<void> main(List<String> arguments) async {
   // Each product's manifest is its own file: they are separate programs,
   // and a release of one is not an update of the other.
   final manifestFile = File(
-    options['manifest'] ??
-        '${root.path}/build/installers/${spec.manifestName}',
+    options['manifest'] ?? '${root.path}/build/installers/${spec.manifestName}',
   );
 
   // The other platform's entry, signed before for the same version.
@@ -251,7 +249,15 @@ Future<void> main(List<String> arguments) async {
     minimumVersion: minimum,
     // The product the release is for: the two products are separate
     // programs, and each is offered only its own releases.
-    product: product,
+    //
+    // Said by the id, not by the name the caller gave: the app compares
+    // this with the product it knows itself to be (AppPaths.product, the
+    // id its data folder carries), and `baocode-claude` — the name the
+    // build matrix uses — is that same product by another name. Write the
+    // one and the app reads its own, and the release is taken; write the
+    // other and every installed copy of this product says it is up to
+    // date, forever, and no one notices.
+    product: spec.id,
     platforms: assets,
   );
   final json = {
@@ -356,9 +362,7 @@ String _dpapi(String seed, {required bool protect}) {
     script,
   ]);
   if (result.exitCode != 0) {
-    _fail(
-      'DPAPI $call failed: ${result.stderr.toString().trim()}',
-    );
+    _fail('DPAPI $call failed: ${result.stderr.toString().trim()}');
   }
   return result.stdout.toString().trim();
 }
@@ -419,11 +423,7 @@ Map<String, String?> _parse(List<String> arguments) =>
 /// could not be encrypted or read back.
 Map<String, String?> parseReleaseManifestArguments(List<String> arguments) {
   const flags = {'public-key', 'help'};
-  const files = {
-    'windows',
-    'linux-x64',
-    'linux-arm64',
-  };
+  const files = {'windows', 'linux-x64', 'linux-arm64'};
   final valued = {
     for (final edition in _editions)
       for (final file in files) '$file$edition',
