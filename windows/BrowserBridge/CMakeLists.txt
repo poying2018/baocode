@@ -7,17 +7,25 @@ project(browser_bridge LANGUAGES CXX)
 # beside it.
 #
 # Its name says the product, as the app's does: baocode-browser-host.exe for
-# BaoCode, baocode-codex-browser-host.exe for the codex one, so that the
-# browser of one product does not talk to the other (host.cpp reads the port
-# file of the product it belongs to). The app's name is in the parent
-# scope (BINARY_NAME, which tool/set_product.dart writes).
-if(NOT DEFINED BINARY_NAME)
-  set(BINARY_NAME "baocode")
-endif()
-if("${BINARY_NAME}" STREQUAL "baocode")
-  set(BROWSER_HOST_NAME "baocode-browser-host")
-else()
-  set(BROWSER_HOST_NAME "${BINARY_NAME}-browser-host")
+# BaoCode Claude, baocode-codex-browser-host.exe for the codex one, so that
+# the browser of one product does not talk to the other. The name is not
+# only a label: host.cpp reads the port file named after itself, and the app
+# writes the port file of its product id — so the Claude Code product keeps
+# the name the id says ("baocode", which is also what the published
+# extension knows), though its executable is baocode-claude.exe.
+#
+# The parent scope says the name (windows/CMakeLists.txt) and installs the
+# target it names, so this is only the rule for a build of this directory
+# alone: it agrees with the parent's, and is not to diverge from it.
+if(NOT DEFINED BROWSER_HOST_NAME)
+  if(NOT DEFINED BINARY_NAME)
+    set(BINARY_NAME "baocode")
+  endif()
+  if(BINARY_NAME STREQUAL "baocode" OR BINARY_NAME STREQUAL "baocode-claude")
+    set(BROWSER_HOST_NAME "baocode-browser-host")
+  else()
+    set(BROWSER_HOST_NAME "${BINARY_NAME}-browser-host")
+  endif()
 endif()
 
 add_executable(${BROWSER_HOST_NAME} "host.cpp")
