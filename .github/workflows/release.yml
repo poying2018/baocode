@@ -36,8 +36,15 @@ on:
       editions:
         description: The builds to make
         type: choice
-        default: both
+        default: standard
         options: [both, standard, channel]
+      products:
+        # The codex product is still being built: a release is asked for
+        # one product, and the one out in the world is the Claude Code one.
+        description: The products to build and publish
+        type: choice
+        default: baocode-claude
+        options: [baocode-claude, baocode-codex, both]
 
 permissions:
   contents: read
@@ -61,6 +68,7 @@ jobs:
       marketing: ${{ steps.version.outputs.marketing }}
       publish: ${{ steps.version.outputs.publish }}
       editions: ${{ steps.version.outputs.editions }}
+      products: ${{ steps.version.outputs.products }}
       channel_only: ${{ steps.version.outputs.channel_only }}
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +76,7 @@ jobs:
         name: Read pubspec.yaml's version, and match the tag against it
         env:
           EDITIONS: ${{ inputs.editions }}
+          PRODUCTS: ${{ inputs.products }}
         run: |
           version=$(sed -n 's/^version:[[:space:]]*//p' pubspec.yaml)
           marketing=${version%%+*}
@@ -83,6 +92,17 @@ jobs:
           fi
           publish=false
           channel_only=false
+          # What a release is of: the Claude Code product. The codex one is
+          # still being built, and is asked for by name when a run is started
+          # by hand.
+          products='["baocode-claude"]'
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            case "$PRODUCTS" in
+              baocode-claude) products='["baocode-claude"]' ;;
+              baocode-codex) products='["baocode-codex"]' ;;
+              both) products='["baocode-claude","baocode-codex"]' ;;
+            esac
+          fi
           # A release has the standard build only: the channel build is for
           # the testers, and it is published on its own tag (v<version>-
           # channel) beside the version published.
@@ -124,9 +144,10 @@ jobs:
             echo "marketing=$marketing"
             echo "publish=$publish"
             echo "editions=$editions"
+            echo "products=$products"
             echo "channel_only=$channel_only"
           } >> "$GITHUB_OUTPUT"
-          echo "Builds: $editions"
+          echo "Builds: $editions, of $products"
       - name: Be no older than the version published
         if: steps.version.outputs.publish == 'true' && steps.version.outputs.channel_only != 'true'
         env:
@@ -173,7 +194,7 @@ jobs:
       # One product failing leaves the other building, to be re-run alone.
       fail-fast: false
       matrix:
-        product: [baocode-claude, baocode-codex]
+        product: ${{ fromJSON(needs.check.outputs.products) }}
     uses: ./.github/workflows/remote.yml
     with:
       product: ${{ matrix.product }}
@@ -188,7 +209,7 @@ jobs:
       # One edition failing leaves the other building, to be re-run alone.
       fail-fast: false
       matrix:
-        product: [baocode-claude, baocode-codex]
+        product: ${{ fromJSON(needs.check.outputs.products) }}
         edition: ${{ fromJSON(needs.check.outputs.editions) }}
     env:
       SUFFIX: ${{ matrix.edition == 'channel' && '-channel' || '' }}
@@ -238,6 +259,8 @@ jobs:
       CHANNEL_ONLY: ${{ needs.check.outputs.channel_only }}
       # The editions built: the standard one, the channel one, or both.
       EDITIONS: ${{ needs.check.outputs.editions }}
+      # The products built: the Claude Code one, the codex one, or both.
+      PRODUCTS: ${{ needs.check.outputs.products }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
@@ -260,9 +283,9 @@ jobs:
             [ "$edition" = standard ] && editions+=('') || editions+=("-$edition")
           done
           [ "$CHANNEL_ONLY" = true ] && editions=(-channel)
-          # Both products: the two are separate programs, and each is
+          # Each product built: the two are separate programs, and each is
           # published in its own name.
-          for product in baocode-claude baocode-codex; do
+          for product in $(echo "$PRODUCTS" | jq -r '.[]'); do
             for edition in "${editions[@]}"; do
               for file in dist/windows-$product$edition/*-setup$edition.exe; do
                 cp "$file" out/
@@ -272,7 +295,7 @@ jobs:
           # The remote server's builds too: an app packaged before them (or
           # one built on another machine) downloads them from the release,
           # by the version it was built with. Each product's own.
-          for product in baocode-claude baocode-codex; do
+          for product in $(echo "$PRODUCTS" | jq -r '.[]'); do
             for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
               cp "$file" out/
             done
@@ -309,7 +332,7 @@ jobs:
           done
           # Each product's own manifest, in its own file: a release of one
           # is not an update of the other.
-          for product in baocode-claude baocode-codex; do
+          for product in $(echo "$PRODUCTS" | jq -r '.[]'); do
             manifest=latest.json
             [ "$product" = baocode-codex ] && manifest=latest-codex.json
             files=()
@@ -357,7 +380,7 @@ jobs:
           # The remote server's builds are published here too, so an app
           # built months ago still downloads the one it was built with.
           # Each product's own.
-          for product in baocode-claude baocode-codex; do
+          for product in $(echo "$PRODUCTS" | jq -r '.[]'); do
             for file in dist/remote-$product/*.gz dist/remote-$product/servers*.json; do
               gh release upload "v$MARKETING" "$file" --clobber
             done
