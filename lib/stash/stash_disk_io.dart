@@ -22,9 +22,13 @@ class FileStashDisk implements StashDisk {
   /// How the folder is watched: the system's, or a test's events.
   final Stream<FileSystemEvent> Function(Directory folder) _watchFolder;
 
+  /// Where the stashes are kept when the user has not moved them: in the
+  /// app's own folder, under the home directory. The folder's name is the
+  /// one the app has always used, not the name it shows: the stashes
+  /// stay where they are.
   static String get defaultRoot => p.join(
     AppPaths.home(Platform.environment),
-    AppPaths.displayName(Platform.environment),
+    AppPaths.productOf(Platform.resolvedExecutable).directoryName,
     'Stash',
   );
 
@@ -337,8 +341,10 @@ class FileStashDisk implements StashDisk {
   Timer? _settle;
 
   Future<void> _startWatching() async {
-    final folder = await _folder();
     try {
+      // Making the folder is inside the guard: when it cannot be made the
+      // Stash cannot be watched, and the app says nothing more than that.
+      final folder = await _folder();
       _watch = _watchFolder(folder).listen((event) {
         // A file written whole and moved in place (this app's writes, an
         // agent's) is, on Windows and Linux, one move: from the temporary

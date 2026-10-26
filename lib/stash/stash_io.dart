@@ -7,6 +7,8 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
 import '../kernel/claude_code/claude_environment.dart';
+import '../kernel/codex/codex_transport_factory.dart';
+import '../platform/app_paths.dart';
 import 'stash_skill.dart';
 
 /// The picture at [path] (absolute), from its file.
@@ -137,17 +139,22 @@ Future<Uint8List?> readBytesFile(String path) async {
   }
 }
 
+/// Where this product's agent reads its skills: Claude Code's folder for
+/// BaoCode Claude, the codex product's own for BaoCode Codex. The two
+/// products are separate programs: neither writes into the other's home.
+Future<String> agentSkillsDir() async {
+  if (!AppPaths.hasClaudeCode()) {
+    return p.join(CodexTransportFactory.home, 'skills');
+  }
+  return p.join(await ClaudeEnvironment.configDir(), 'skills');
+}
+
 /// Writes the Stash skill ([StashSkill]), for the stash folder [root],
-/// into Claude Code's skills on this machine: where there is none, or
-/// BaoCode's is not the same.
+/// into the skills of the agent this product runs: where there is none,
+/// or this app's is not the same.
 Future<void> installStashSkill(String root) async {
   try {
-    final path = p.join(
-      await ClaudeEnvironment.configDir(),
-      'skills',
-      StashSkill.name,
-      'SKILL.md',
-    );
+    final path = p.join(await agentSkillsDir(), StashSkill.name, 'SKILL.md');
     final text = StashSkill.text(root);
     if (!StashSkill.stale(await readTextFile(path), text)) return;
     final file = File(path);

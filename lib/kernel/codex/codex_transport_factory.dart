@@ -75,6 +75,8 @@ abstract final class CodexTransportFactory {
   /// Where the server keeps its state: the app's own folder, not the
   /// user's `~/.codex`. The Codex Desktop app holds that one while it
   /// runs, and a second server cannot start at all while it does.
+  static String get home => _home();
+
   static String _home() => p.join(DataDirectory.current.path, 'codex');
 
   /// The user's Codex settings, copied into the app's own folder: models,
