@@ -6359,7 +6359,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsRoles => '角色映射';
 
   @override
-  String get modelsRolesDescription => 'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。';
+  String get modelsRolesDescription =>
+      'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
 
   @override
   String get modelsRoleUnset => '未设置';
@@ -6398,12 +6399,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsRoleSubagent => '子 Agent';
 
   @override
-  String modelsRoleSubagentDescription(String product) {
-    return 'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。也可以选其他上游的模型，请求会经 $product 的本地代理发过去。';
-  }
+  String get modelsRoleSubagentDescription =>
+      'CLAUDE_CODE_SUBAGENT_MODEL：所有子 Agent 使用的模型，优先于子 Agent 定义或调用时指定的模型（定义为 inherit 的除外）。';
 
   @override
-  String get modelsRoleMissing => '这个模型已不在它的上游里，子 Agent 的请求会失败。';
+  String get modelsRoleMissing => '这个模型已不在它的上游里，用到它的请求会失败。';
 
   @override
   String get modelsAdvanced => '高级';
@@ -9945,4 +9945,377 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get aboutOpen => '打开';
+
+  @override
+  String modelsRemoveMissing(int count) {
+    return '移除已下架（$count）';
+  }
+
+  @override
+  String modelsRemoveMissingConfirm(int count) {
+    return '移除 $count 个上游已下架的模型？';
+  }
+
+  @override
+  String get modelsEndpoint => '端点类型';
+
+  @override
+  String modelsEndpointUpstream(String protocol) {
+    return '跟随上游（$protocol）';
+  }
+
+  @override
+  String get modelsEndpointDescription =>
+      '这个模型的请求发往哪种接口，Base URL 和 Key 与上游相同。中转站同时提供多种接口时，可以让 Claude 模型走 Anthropic 接口、GPT 模型走 Responses。';
+
+  @override
+  String get stashSettingsIssueSync => 'Issue 同步为 Stash';
+
+  @override
+  String get stashSettingsIssueSyncDescription =>
+      '项目是 GitHub / GitLab 上的 Git 仓库（并已在「账号」中登录）时，它的未关闭 issue 会成为 Stash，一个 issue 只对应一条，双向保持一致。删除或取消关联的不会再被拉回来。';
+
+  @override
+  String get stashIssueSyncMine => '只同步指派给我或我创建的';
+
+  @override
+  String get stashIssueSyncOff => '关闭：只保留手动导入或发布的';
+
+  @override
+  String get stashIssueLocal => '仅本地';
+
+  @override
+  String get stashIssueAllow => '允许发布为 issue';
+
+  @override
+  String get stashIssueNotPublished => '尚未发布为 issue';
+
+  @override
+  String stashIssuePublishTo(String repo) {
+    return '发布为 $repo 的 issue…';
+  }
+
+  @override
+  String get stashIssueKeepLocal => '仅本地保存';
+
+  @override
+  String get stashIssuePush => '把本地改动推送到 issue…';
+
+  @override
+  String get stashIssuePushShort => '推送';
+
+  @override
+  String get stashIssueTakeRemote => '放弃本地改动，用 issue 上的版本';
+
+  @override
+  String get stashIssueUnlinkOwn => '取消关联，仅本地保存';
+
+  @override
+  String stashIssueConflict(String tag) {
+    return '$tag 在远端也被改过了，保留哪一边？';
+  }
+
+  @override
+  String get stashIssueKeepMine => '保留本地（推送）';
+
+  @override
+  String get stashIssueKeepTheirs => '用 issue 的';
+
+  @override
+  String stashIssueChangedHere(String tag) {
+    return '本地改动还没同步到 $tag。';
+  }
+
+  @override
+  String get stashIssueDiscard => '放弃改动';
+
+  @override
+  String stashIssuePublishTitle(String repo) {
+    return '发布为 $repo 的 issue';
+  }
+
+  @override
+  String stashIssuePushTitle(String tag) {
+    return '把改动推送到 $tag';
+  }
+
+  @override
+  String get stashIssuePublish => '发布';
+
+  @override
+  String get stashIssueNoText => '（没有描述）';
+
+  @override
+  String stashIssuePicturesGitHub(int count, String branch) {
+    return '$count 张图片会上传到仓库的 $branch 分支，供 issue 显示。';
+  }
+
+  @override
+  String stashIssuePicturesGitLab(int count) {
+    return '$count 张图片会上传到项目，供 issue 显示。';
+  }
+
+  @override
+  String get stashImplementShort => '实施';
+
+  @override
+  String stashImplementIssue(String issue) {
+    return '它对应 issue $issue，提 PR 时写明修复了它。';
+  }
+
+  @override
+  String get stashIssueSyncAll => '全部打开的 issue';
+
+  @override
+  String get stashIssueChecking => '正在查找仓库…';
+
+  @override
+  String get stashIssueRefresh => '立即刷新';
+
+  @override
+  String get stashIssuePublishButton => '发布为 issue';
+
+  @override
+  String get stashIssuePushButton => '推送到 issue';
+
+  @override
+  String get stashIssueLoading => '正在获取…';
+
+  @override
+  String get stashSyncing => '正在同步 issue…';
+
+  @override
+  String stashSyncingRepo(String repo, int index, int total) {
+    return '正在同步 $repo 的 issue（$index/$total）…';
+  }
+
+  @override
+  String get stashSyncTooltip => '立即同步 issue';
+
+  @override
+  String stashSyncTooltipLast(String time) {
+    return '立即同步 issue · 上次 $time';
+  }
+
+  @override
+  String stashSyncFailed(String repo, String error) {
+    return '同步 $repo 的 issue 失败：$error';
+  }
+
+  @override
+  String stashSyncSignIn(String forge, String repo, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '登录 $forge 后，$repo 等 $count 个仓库的 issue 会同步为 Stash。',
+      one: '登录 $forge 后，$repo 的 issue 会同步为 Stash。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashSyncingEmpty => '正在同步项目的 issue…';
+
+  @override
+  String get stashFilterAnyIssue => '所有来源';
+
+  @override
+  String get stashFilterIssue => '来自 issue';
+
+  @override
+  String get stashFilterNotIssue => '仅本地';
+
+  @override
+  String get stashImplementEmpty => '先写点内容，再在 BaoCode 中实施';
+
+  @override
+  String stashIssueDuplicateBanner(String issue, String stash) {
+    return '$issue 来自合并进这条的 Stash $stash，还开着。作为重复关闭？';
+  }
+
+  @override
+  String get stashIssueCloseDuplicate => '作为重复关闭…';
+
+  @override
+  String get stashIssueDuplicateNoIssue => '已合并到另一条记录，作为重复关闭。';
+
+  @override
+  String get stashNewsOpened => '新 issue';
+
+  @override
+  String get stashNewsChanged => '远端有改动';
+
+  @override
+  String get stashNewsCommented => '有新评论';
+
+  @override
+  String get stashNewsClosed => '已在远端关闭';
+
+  @override
+  String get stashNewsReopened => '已在远端重新打开';
+
+  @override
+  String stashNewsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条新动态',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashNewsCountTooltip => '只看与你有关的新动态：你的 issue 和 PR、指派给你的、@ 你的';
+
+  @override
+  String get stashNewsCountTooltipOn => '正在只看与你有关的新动态，点一下看全部';
+
+  @override
+  String get stashFilterNews => '与你有关的动态';
+
+  @override
+  String get stashMarkAllSeen => '全部标为已读';
+
+  @override
+  String stashIssueComments(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条评论',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashIssueDiscussion => '讨论';
+
+  @override
+  String stashIssueDiscussionAll(int count, String forge) {
+    return '在 $forge 上查看全部 $count 条';
+  }
+
+  @override
+  String get stashIssueDiscussionFailed => '评论加载失败。';
+
+  @override
+  String get stashIssueDiscussionLoading => '正在加载评论…';
+
+  @override
+  String stashDeleteAndClose(String issue) {
+    return '删除并关闭 $issue…';
+  }
+
+  @override
+  String stashDeleteOpenIssue(String issue) {
+    return '它的 issue $issue 在远端还开着，除非一并关闭。';
+  }
+
+  @override
+  String stashIssueInSync(String issue) {
+    return '与 $issue 一致';
+  }
+
+  @override
+  String stashIssueSyncedAt(String time) {
+    return '$time 同步';
+  }
+
+  @override
+  String get stashIssueNotPushed => '本地有改动，尚未推送';
+
+  @override
+  String get stashIssueRemoteNewer => '远端有改动';
+
+  @override
+  String get stashIssueBothChanged => '本地和远端都改了';
+
+  @override
+  String get stashIssueDiscussionEmpty => '还没有评论';
+
+  @override
+  String get stashNewsMerged => 'PR 已合并';
+
+  @override
+  String get stashNewsChangesRequested => 'PR 被要求修改';
+
+  @override
+  String get stashNewsChecksFailed => 'PR 检查没通过';
+
+  @override
+  String get stashNewsMarked => '标为未读';
+
+  @override
+  String stashNewsOther(String news) {
+    return '$news（与你无关）';
+  }
+
+  @override
+  String stashNewsSidebar(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 条与你有关的新动态',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get stashFilterAllNews => '所有新动态';
+
+  @override
+  String get stashMarkSeen => '标为已读';
+
+  @override
+  String get stashMarkUnseen => '标为未读';
+
+  @override
+  String stashPullChecksFailedBanner(String pull) {
+    return '$pull 的检查没通过。';
+  }
+
+  @override
+  String stashPullChangesBanner(String pull) {
+    return '$pull 被要求修改。';
+  }
+
+  @override
+  String stashPullMergedBanner(String pull) {
+    return '$pull 已合并。这条也完成了吗？';
+  }
+
+  @override
+  String get stashPullFix => '回到对话修复';
+
+  @override
+  String get stashPullView => '查看';
+
+  @override
+  String stashPullFixChecks(String pull) {
+    return '$pull 的检查没通过，看看哪里失败了并修复。';
+  }
+
+  @override
+  String stashPullFixChanges(String pull) {
+    return '$pull 被要求修改，看一下评审意见并照着改。';
+  }
+
+  @override
+  String stashWriteManyTitle(int count) {
+    return '回复 $count 个 issue';
+  }
+
+  @override
+  String stashWriteCloseManyTitle(int count) {
+    return '关闭 $count 个 issue';
+  }
+
+  @override
+  String stashDeleteOpenIssues(int count, String issues) {
+    return '它们的 issue $issues 在远端还开着，除非一并关闭。';
+  }
+
+  @override
+  String stashDeleteAndCloseMany(int count) {
+    return '删除并关闭 $count 个 issue…';
+  }
 }

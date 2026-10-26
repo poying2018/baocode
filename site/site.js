@@ -104,7 +104,7 @@ const attribution = (() => {
   let framedChannel = null;
   if (window.top !== window) {
     ready.then((r) => { framedChannel = r?.source === 'channel' ? r.value : null; });
-    const DESKTOP = new Set(['windows', 'macos-arm64', 'macos-x64', 'linux-x64', 'linux-arm64']);
+    const DESKTOP = new Set(['windows', 'linux-x64', 'linux-arm64']);
     const newTab = (a) => { a.target = '_blank'; a.rel = 'noopener'; };
     document.addEventListener('click', (event) => {
       const a = event.target.closest?.('a[href]');

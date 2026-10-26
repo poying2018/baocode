@@ -69,6 +69,112 @@
     </ul>
   </section>
 
+  <section class="release" id="v1.6.2">
+    <h2 class="plain"><a href="#v1.6.2">1.6.2</a></h2>
+    <h1>1.6.2</h1>
+    <p>Fixed</p>
+    <ul>
+    <li>The tray icon was there and not there: the system took the icon and said it had not, so the app believed it had none. Closing the window hid it to the tray, but that icon was dead — clicking it did not bring the window back, and all the user saw was the app gone. The icon is now really in the tray, and clicking it brings the window back; should the tray refuse it for a while, it is put up again every few seconds until it takes.</li>
+    <li>The window is no longer hidden when the tray icon cannot be put up: a window hidden with no icon to click is the app gone as far as the user is concerned.</li>
+    </ul>
+    <p>Changes</p>
+    <ul>
+    <li>The tray icon is in the notification area, not over the taskbar (Windows 11 folds it into the hidden icons: the <code>^</code> at the right of the taskbar shows it).</li>
+    <li>What the tray did is written to the data folder's <code>logs\tray.log</code>: when the icon cannot be found, that file says what happened to it.</li>
+    <li>The macOS application is not built and not published any more (this fork develops the Windows version only); the remote server is still there for macOS, it runs on the SSH host.</li>
+    </ul>
+    <p>What this fork does differently from the upstream</p>
+    <ul>
+    <li>Every address the app gives out is this repository's own (the repository, the releases, the issues, the website); see Settings → About.</li>
+    <li>No usage statistics are reported and no logs are uploaded: there is no server of its own, so there is nowhere to send them.</li>
+    <li>The diagnostics say plainly that there is no server, rather than failing quietly.</li>
+    <li>The channel build's activation page still points at the upstream (there is no replacement).</li>
+    <li>The featured upstreams (ymeng / ifruit) are all gone: the list is empty and those pictures are no longer published with the site.</li>
+    <li>notanthropic.com is not given the Anthropic key.</li>
+    <li>A stash's path cannot leave its own folder.</li>
+    <li>A very large version number does not crash the app.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.6.1">
+    <h2 class="plain"><a href="#v1.6.1">1.6.1</a></h2>
+    <h1>1.6.1</h1>
+    <p>This fork develops the Windows version from now on: the macOS application is not built and not published any more. The Windows users who have it are not affected; it updates itself as before.</p>
+    <p>Changes</p>
+    <ul>
+    <li>The macOS application is not built and not published any more. The download page and the home page have no macOS part, and the links that pointed at it are gone (they led to a file that is not there).</li>
+    <li>The release tool takes no macOS or disk image option any more, so the update manifest it writes names no macOS download.</li>
+    <li>The macOS remote server is still offered (it runs on the SSH host, not on the desktop).</li>
+    <li>The code's macOS branches stay: the app walks them when it runs on a Mac; they are just not published from here.</li>
+    </ul>
+    <p>What this fork does differently from the upstream</p>
+    <ul>
+    <li>Every address the app gives out is this repository's own (the repository, the releases, the issues, the website); see Settings → About.</li>
+    <li>No usage statistics are reported and no logs are uploaded: there is no server of its own, so there is nowhere to send them.</li>
+    <li>The diagnostics say plainly that there is no server, rather than failing quietly.</li>
+    <li>The channel build's activation page still points at the upstream (there is no replacement).</li>
+    <li>The featured upstreams (ymeng / ifruit) are all gone: the list is empty and those pictures are no longer published with the site.</li>
+    <li>notanthropic.com is not given the Anthropic key.</li>
+    <li>A stash's path cannot leave its own folder.</li>
+    <li>A very large version number does not crash the app.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>See the 1.6.0 notes; there is nothing else fixed in this one.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v1.6.0">
+    <h2 class="plain"><a href="#v1.6.0">1.6.0</a></h2>
+    <p>Performance, and several times faster on Windows</p>
+    <p>This release is about speed and memory: in a long conversation, a reply streaming in, scrolling and dragging the minimap all keep up with you; the app holds much less memory as it runs; and on Windows the interface draws several times faster. Besides, Stash keeps in step with your projects' GitHub / GitLab issues, and an SSH connection that drops picks up the same session again, with nothing running there lost.</p>
+    <p>Every address this build's app gives out points at this repository: the repository, the releases and the issues on the About page, the site's own files (the channels' list, the featured upstreams), and the list of hosts a download may come from. Two of the upstream's services are not used any more: the usage statistics are not reported (nor are the logs uploaded), as this build has no server of its own; a channel build's activate page still points at the upstream, as there is no counterpart here.</p>
+    <p>Performance</p>
+    <ul>
+    <li>Windows draws with Skia, as macOS does, not Flutter's new default Impeller: measured, a frame of the chat takes a fraction of the time to draw, in about half the memory.</li>
+    <li>Long conversations stream more smoothly: each file path in a reply is no longer looked up in every file the session has read. On a real 92-turn conversation, a frame went from 6.8 ms to 4.5 ms, and janky frames from 18 to none.</li>
+    <li>Very long replies and thoughts let go of what is far out of view, keeping only its height, and show it again as it comes back; a thought draws only what is in view; code, tables and math scrolled sideways are kept as pictures. Select All and copying still get all of the text.</li>
+    <li>Dragging the minimap or the scrollbar fast no longer builds what is out of view meanwhile, catching up over a few frames after; a reply scrolled away and back is not parsed again. Dragged back and forth fast, a frame went from 12.9 ms to 2.5 ms.</li>
+    <li>Less memory: Skia's texture cache is held to 32 MB rather than 150 to 300 MB, and decoded images to 48 MB; on macOS large blocks freed go back to the system, some 180 MB while a long thought streams.</li>
+    <li>Leaner editors: files of the same language share one syntax highlighting worker, its patterns compiled once (TypeScript's 334 were compiled in some 3,500 places), and line layouts are held to about 32 MB.</li>
+    <li>In plan mode the prompt cache is read again: each turn wrote the whole conversation to it anew, slower and dearer.</li>
+    <li>A trackpad flings the editors on as it does lists; on macOS lists no longer bounce at their ends.</li>
+    </ul>
+    <p>New</p>
+    <ul>
+    <li>Stash and issues, both ways: in a project that is a GitHub / GitLab repository, open issues become stashes, one row each with its status, title, conversation and issue. Kept in step: changed there, taken here; changed here, pushed once you confirm; changed on both sides, yours to pick; an issue closed, its stash is done. Every open issue by default; Settings → Stash → Issues as stashes keeps it to yours, or off.</li>
+    <li>Stash news: new comments on an issue, one closed or reopened, a linked pull request's checks failing, changes asked for, merged: each marked on its row, and those about you counted beside Stash in the sidebar. A pull request failing or asked for changes is fixed in its conversation in a click; a merged one asks whether the stash is done.</li>
+    <li>A stash can be published as an issue: what goes is shown first, local paths and secrets pointed out, local pictures uploaded with it. Merging stashes can close a merged one's issue as a duplicate.</li>
+    <li>A new markdown editor: stashes, markdown previews in the side panel and the chat's input are edited as they read, the marks showing only where the caret is. Tables are edited in their cells: rows and columns added and removed, cells picked, copied and pasted as in a spreadsheet; a link shows a bubble to open, copy, edit or remove it.</li>
+    <li>Customize: skills, rules, commands and subagents open in the markdown editor, edited as they read or as their source; front matter shows as properties, edited as a form.</li>
+    <li>SSH drops lose nothing: after a network hiccup the connection goes back to the same session, its terminals, Claude Code and language servers still running there (kept up to three hours while disconnected), no output lost or repeated; a silent network is noticed within 30 seconds.</li>
+    <li>Going on after the usage limit: on Claude's own account, the model picker has Continue After Limit Reset. On, a conversation stopped at the limit goes on once it resets, even with the computer asleep past it; one due while the app was closed goes on as it opens.</li>
+    <li>The Claude Code CLI, recommended: where Claude Code is installed it is the core by default; a conversation on the built-in core suggests switching, above its input, downloading the CLI in a click, or Not Now.</li>
+    <li>Models: subagents and the Opus / Sonnet / Haiku tiers can use another upstream's models; a model can have its own endpoint (Anthropic, Chat Completions, Responses); an upstream or a model is duplicated in a click; models an upstream no longer lists are removed at once.</li>
+    <li>The minimap: each of your messages is a clear mark on it. The pointer near one snaps to it and shows at once the message and the replies around it; a click goes there.</li>
+    <li>The input: a / starting any word opens the command menu; a command's tag shows its whole description on hover, and Open details opens its file in the side panel. @ finds folders too. File, folder and code chips in the input open what they name.</li>
+    <li>While the agent works, Enter in the empty input sends the first queued message now; background tasks (subagents among them) keep going.</li>
+    <li>A changed file's right click opens it in the browser (HTML), its default app or another editor, shows it in the file manager, or copies its path.</li>
+    <li>The side panel's markdown preview takes pictures and files dropped or pasted in, copied beside the document and linked; a right click shows a link's file in the file manager.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A conversation switched away from and back to is where you left it, its steps still open.</li>
+    <li>A conversation renamed in Claude Code (/rename) is renamed in the list.</li>
+    <li>With &quot;viewMode&quot;: &quot;verbose&quot; in Claude's settings, Stash's polish, the input's polish and commit messages no longer fail.</li>
+    <li>A single ~ (a range such as 10-12~10-16) no longer strikes text out.</li>
+    <li>The markdown preview fills the view, wide tables no longer cut off; zoomed in, a drag in it selects under the pointer.</li>
+    <li>With the side panel at the left and the sidebar hidden, its tabs keep clear of the traffic lights on macOS, and the sidebar's toggle is there too; dragging its edge follows the pointer from the width shown.</li>
+    <li>Go to Definition in a remote project opens the right file on its host.</li>
+    <li>Windows: updating or uninstalling ends the browser extension's host first, no longer failing with &quot;DeleteFile failed; code 5&quot;.</li>
+    <li>An image above the view no longer pushes the text under it down while it loads; a link in a table cell gets its bubble too.</li>
+    <li>The user's own CLAUDE_CODE_EFFORT_LEVEL no longer pins the effort: the picker's choice is the one sent.</li>
+    <li>Windows no longer reports a hang for a ping the idle thread answers at once.</li>
+    <li>The overlays (menus, popovers, dialogs) keep below the header Windows draws itself, where a click counts.</li>
+    <li>A file the agent changed no longer opens in the IDE by itself, jumping across windows.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.5.3">
     <h2 class="plain"><a href="#v1.5.3">1.5.3</a></h2>
     <p>Every address is this build's own, and typing works on Windows again</p>

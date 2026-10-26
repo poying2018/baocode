@@ -15,7 +15,8 @@
 // (platform/theme/browser/defaultStyles.ts `defaultMenuStyles`).
 //
 // Deviations: no mnemonics; menus keep an 8px inset from the window's
-// edges and scroll when taller than the available height.
+// edges (on Windows, stay below the app's own header) and scroll when
+// taller than the available height.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -26,6 +27,7 @@ import 'package:flutter/services.dart';
 import '../l10n/l10n.dart';
 import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
+import '../workspace/window_controls.dart';
 import 'ide_hover.dart';
 import 'ide_motion.dart';
 
@@ -579,12 +581,17 @@ class _MenuLayout extends SingleChildLayoutDelegate {
   final bool submenu;
   final bool alignRight;
 
+  /// The window's own header on Windows stays above the menus (see
+  /// [WindowControls.headerInset]).
+  static double get _topInset =>
+      math.max(_edgeInset, WindowControls.headerInset);
+
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     final maxWidth = math.max(0.0, constraints.biggest.width - _edgeInset * 2);
     final maxHeight = math.max(
       0.0,
-      constraints.biggest.height - _edgeInset * 2,
+      constraints.biggest.height - _topInset - _edgeInset,
     );
     return BoxConstraints.loose(Size(maxWidth, maxHeight));
   }
@@ -592,7 +599,7 @@ class _MenuLayout extends SingleChildLayoutDelegate {
   @override
   Offset getPositionForChild(Size size, Size childSize) {
     final left = math.min(_edgeInset, size.width / 2);
-    final top = math.min(_edgeInset, size.height / 2);
+    final top = math.min(_topInset, size.height / 2);
     final right = size.width - left;
     final bottom = size.height - top;
     double x;

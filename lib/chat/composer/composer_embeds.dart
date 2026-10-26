@@ -17,6 +17,7 @@ import '../../theme/workbench_theme.dart' show themeColors;
 import '../chat_models.dart';
 import '../floating/hover_tooltip.dart';
 import '../widgets/file_label.dart';
+import '../side_panel/file_link.dart';
 import '../side_panel/file_link_menu.dart';
 import '../side_panel/file_open.dart';
 import '../widgets/image_thumbnails.dart';
@@ -150,8 +151,8 @@ class ComposerTokenEmbed {
       ComposerEmbed(
         type,
         jsonEncode({
-          'kind': (directory ? SuggestionKind.folder : SuggestionKind.file)
-              .name,
+          'kind':
+              (directory ? SuggestionKind.folder : SuggestionKind.file).name,
           'label': _name(path),
           'value': path,
         }),
@@ -436,12 +437,7 @@ String composerContentFromText(
   String text,
   ComposerVocabulary vocabulary, {
   Set<int> images = const {},
-}) => composerContentFromPaste(
-  text,
-  vocabulary,
-  atStart: true,
-  images: images,
-);
+}) => composerContentFromPaste(text, vocabulary, atStart: true, images: images);
 
 /// [text] (plain, e.g. pasted) as the composer's text: an `@path` becomes a file's token again (see
 /// [parseFileReference]; `@override`, handles stay text), and so does a
@@ -457,9 +453,7 @@ String composerContentFromPaste(
   required bool atStart,
   Set<int> images = const {},
 }) {
-  final (body: body, references: code) = splitCodeAppendix(
-    MdAtoms.strip(text),
-  );
+  final (body: body, references: code) = splitCodeAppendix(MdAtoms.strip(text));
   text = body;
   final content = StringBuffer();
   final buffer = StringBuffer();
@@ -706,10 +700,48 @@ class ComposerTokenChip extends StatelessWidget {
     }
     // A command's whole description, its file on a click (#220).
     if (isCommand) tag = CommandTagDetails(name: token.label, child: tag);
+    // A file or folder, where the chat's files open, on a click.
+    if (_opener(context, token) case final open?) {
+      tag = PreviewClick(onOpen: open, child: tag);
+    }
     return _SelectableToken(
       text: ComposerTokenEmbed.plainText(data),
       child: tag,
     );
+  }
+
+  /// What a click on [token] does: a file opens where the chat's files
+  /// do, a folder shows in the side panel's tree; null for any other, or
+  /// where there is nowhere to open it.
+  static VoidCallback? _opener(
+    BuildContext context,
+    ({SuggestionKind kind, String label, String value}) token,
+  ) {
+    final scope = FileOpenScope.maybeOf(context);
+    if (scope == null) return null;
+    final inProject = scope.resolve(token.value);
+    final path =
+        inProject ??
+        ((scope.paths ?? p.context).isAbsolute(token.value)
+            ? token.value
+            : null);
+    if (path == null) return null;
+    return switch (token.kind) {
+      // One outside the project (dropped from elsewhere) as it is.
+      SuggestionKind.file when inProject == null => () => scope.onOpen(
+        FileOpenRequest(path),
+      ),
+      SuggestionKind.file => () => scope.activate(
+        FileLink(token.value),
+        path,
+        context,
+      ),
+      SuggestionKind.folder => switch (scope.onOpenFolder) {
+        final open? => () => open(path),
+        null => null,
+      },
+      _ => null,
+    };
   }
 }
 
@@ -798,15 +830,35 @@ class ComposerCodeChip extends StatelessWidget {
         content: (context) =>
             _TextPreview(label: reference.label, text: reference.code),
         child: PreviewClick(
-          onOpen: () => showTextPreview(
-            context,
-            title: reference.label,
-            text: reference.code,
-            // Its file's extension, for its language.
-            name:
-                '${p.basenameWithoutExtension(name)} ($lines)'
-                '${p.extension(name)}',
-          ),
+          onOpen: () {
+            // The file at those lines, where the chat's files open; the
+            // lines as they were copied where it is not to be found.
+            final scope = FileOpenScope.find(context);
+            final link = FileLink(
+              reference.path,
+              FileLineRange(reference.start, reference.end),
+            );
+            if (scope != null) {
+              if (scope.openLink(link)) return;
+              // One outside the project, as it is.
+              if ((scope.paths ?? p.context).isAbsolute(reference.path)) {
+                return scope.onOpen(
+                  FileOpenRequest(reference.path, range: link.range),
+                );
+              }
+            }
+            unawaited(
+              showTextPreview(
+                context,
+                title: reference.label,
+                text: reference.code,
+                // Its file's extension, for its language.
+                name:
+                    '${p.basenameWithoutExtension(name)} ($lines)'
+                    '${p.extension(name)}',
+              ),
+            );
+          },
           child: tag,
         ),
       ),

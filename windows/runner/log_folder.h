@@ -31,6 +31,13 @@ std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> Listen(
 // The folder, made if need be; empty if there is none. From any thread.
 std::wstring Path();
 
+// A line in the folder's tray.log, for a user to send: what the tray icon
+// did (see attention.cpp). The most lines a run writes are kept; the file is
+// started anew by the run after, the old one kept as tray.1.log.
+//
+// From any thread.
+void WriteTrayLog(const char* format, ...);
+
 }  // namespace log_folder
 
 #endif  // RUNNER_LOG_FOLDER_H_

@@ -171,6 +171,7 @@ void main() {
         '${ClaudeLaunch.appendedSystemPrompt}\n\n<workspace>web</workspace>',
       );
       expect(launch.settings['env'], {
+        ...ClaudeLaunch.unsetEnvironment,
         'CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD': '1',
       });
       expect(launch.copyWith(cwd: '/remote').directories, [
@@ -187,7 +188,7 @@ void main() {
             1],
         ClaudeLaunch.appendedSystemPrompt,
       );
-      expect(launch.settings.containsKey('env'), isFalse);
+      expect(launch.settings['env'], ClaudeLaunch.unsetEnvironment);
     });
 
     test('the kernel launches with the workspace as it is then', () async {

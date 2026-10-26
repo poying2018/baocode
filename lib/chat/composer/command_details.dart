@@ -39,26 +39,19 @@ class CommandDetails extends InheritedWidget {
       open != oldWidget.open;
 }
 
-/// The command [name]'s whole [description], under the menu's rows or in a
-/// tag's hover, and the way to its file where it has one; nothing where it
-/// has neither.
+/// The command [name]'s whole [description], in a tag's hover, and the way
+/// to its file where it has one; nothing where it has neither.
 class CommandDetailsView extends StatelessWidget {
   const CommandDetailsView({
     super.key,
     required this.name,
     required this.description,
     this.maxLines = 8,
-    this.padding = EdgeInsets.zero,
-    this.divided = false,
   });
 
   final String name;
   final String description;
   final int maxLines;
-  final EdgeInsets padding;
-
-  /// With a line above it (under the menu's rows).
-  final bool divided;
 
   @override
   Widget build(BuildContext context) {
@@ -68,35 +61,23 @@ class CommandDetailsView extends StatelessWidget {
       builder: (context, file) {
         final path = file.data;
         if (description.isEmpty && path == null) return const SizedBox.shrink();
-        return Container(
-          padding: padding,
-          decoration: divided
-              ? BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: themeColors['editorSuggestWidget.border'],
-                    ),
-                  ),
-                )
-              : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (description.isNotEmpty)
-                Text(
-                  description,
-                  maxLines: maxLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                ),
-              if (path != null && details != null)
-                Padding(
-                  padding: EdgeInsets.only(top: description.isEmpty ? 0 : 6),
-                  child: _OpenLink(onTap: () => details.open(path)),
-                ),
-            ],
-          ),
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (description.isNotEmpty)
+              Text(
+                description,
+                maxLines: maxLines,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: AppColors.textMuted, fontSize: 12),
+              ),
+            if (path != null && details != null)
+              Padding(
+                padding: EdgeInsets.only(top: description.isEmpty ? 0 : 6),
+                child: _OpenLink(onTap: () => details.open(path)),
+              ),
+          ],
         );
       },
     );

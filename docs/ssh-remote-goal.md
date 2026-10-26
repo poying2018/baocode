@@ -7,7 +7,7 @@ BaoCode 是 Flutter 桌面应用（macOS / Windows），给 Claude Code 做 UI�
 
 ## 核心架构（必须遵守）
 1. **远端 server**：新建纯 Dart 包 `packages/bao_remote`（不能依赖 Flutter），包含协议和 `bin/baocode_server.dart`。
-   用 `dart compile exe --target-os linux --target-arch {x64,arm64}` 交叉编译，产物随 App 一起打包（改 tool/build_macos.dart、tool/build_windows.dart、tool/baocode.iss）。
+   用 `dart compile exe --target-os linux --target-arch {x64,arm64}` 交叉编译，产物随 App 一起打包（改 tool/build_windows.dart、tool/baocode.iss）。
    另外新增 tool/build_remote_server.dart 负责编译。
 2. **复用现有实现**：下面这些 io 实现基本是纯 Dart，把 server 需要的部分抽进 `packages/bao_remote`（或新建一个纯 Dart 包），App 里原有的公开 API 保留为薄封装，保证现有测试不变：
    - lib/ide/file_service_io.dart

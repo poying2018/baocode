@@ -383,7 +383,10 @@ DWORD WINAPI Watch(LPVOID) {
       written = false;
       continue;
     }
-    if (now - answered < kHangMilliseconds) {
+    // The thread, idle, can take the ping before this reads the time it
+    // did: that time is then after |now|, and taken from it, wraps round to
+    // a hang of centuries.
+    if (answered >= now || now - answered < kHangMilliseconds) {
       written = false;
       continue;
     }

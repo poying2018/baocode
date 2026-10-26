@@ -501,6 +501,12 @@ extension MarkdownTableEditing on MarkdownController {
 abstract interface class MdTableEditing {
   /// Into the cell [offset] (of the editor's text) is in.
   void focusAt(int offset);
+
+  /// The editor of the cell being typed in; none while none is.
+  MarkdownEditorState? get cellEditor;
+
+  /// While held, the cell being typed in stays open without the keyboard.
+  set cellHeld(bool held);
 }
 
 /// A table as it shows. With [embed] (in an editor that may change its
@@ -686,6 +692,25 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
   // --- The cell typed in ------------------------------------------------------------
 
   @override
+  MarkdownEditorState? get cellEditor {
+    final editor = _cellKey.currentState;
+    final cell = _cellController;
+    return cell != null && identical(editor?.controller, cell) ? editor : null;
+  }
+
+  /// The cell kept open without the keyboard (see [cellHeld]).
+  bool _held = false;
+
+  @override
+  set cellHeld(bool held) {
+    if (_held == held) return;
+    _held = held;
+    if (!held) _cellFocusChanged();
+  }
+
+  void _cellChanged() => _host?.tableCellChanged();
+
+  @override
   void focusAt(int offset) {
     final controller = _controller;
     final table = _read();
@@ -732,11 +757,13 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
       _cellController = MarkdownController.of(
         _CellSource(controller, id, row, column),
         inline: true,
-      );
+      )..addListener(_cellChanged);
       if (old != null) {
+        old.removeListener(_cellChanged);
         WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
       }
       setState(() => _cell = (row, column));
+      _cellChanged();
     }
     final cell = _cellController!;
     void place() {
@@ -765,17 +792,23 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
     if (old == null && _cell == null) return;
     _cellController = null;
     _cell = null;
+    _held = false;
     if (old != null) {
+      old.removeListener(_cellChanged);
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     }
     if (mounted) setState(() {});
+    _cellChanged();
   }
 
   /// The cell left (clicked elsewhere): shown again.
   void _cellFocusChanged() {
+    _cellChanged();
     if (_cellFocus.hasFocus) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && !_cellFocus.hasFocus && !_menuOpen) _closeCell();
+      if (mounted && !_cellFocus.hasFocus && !_menuOpen && !_held) {
+        _closeCell();
+      }
     });
   }
 
@@ -1496,6 +1529,8 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             onKey: _cellKeyEvent,
+            // A link shows as its editor's do (a bar over it, say).
+            revealsLinks: host.widget.revealsLinks,
             keyboardAppearance: host.widget.keyboardAppearance,
             textAlign: alignOf(c),
           ),
@@ -1704,14 +1739,13 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
             left: _side,
             top: _top,
             right: _bar + _barGap,
-            bottom: _bar + _barGap,
           ),
           child: table,
         ),
         Positioned(
           top: _top,
           right: 0,
-          bottom: _bar + _barGap,
+          bottom: 0,
           width: _bar,
           child: _AddBar(
             look: look,
@@ -1720,20 +1754,32 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
             onTap: _addColumn,
           ),
         ),
-        Positioned(
-          left: _side,
-          right: _bar + _barGap,
-          bottom: 0,
-          height: _bar,
-          child: _AddBar(
-            look: look,
-            plus: style.marks,
-            shown: _hovered,
-            onTap: _addRow,
-          ),
-        ),
         ...over,
       ],
+    );
+    // Under the table and out of its scroll: as wide as the table, or
+    // as what of it is in view.
+    final tableWidth = widths.fold(0.0, (sum, width) => sum + width);
+    final addRow = LayoutBuilder(
+      builder: (context, constraints) => Padding(
+        padding: const EdgeInsets.only(left: _side, top: _barGap),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: math.max(
+              0.0,
+              math.min(tableWidth, constraints.maxWidth - _side),
+            ),
+            height: _bar,
+            child: _AddBar(
+              look: look,
+              plus: style.marks,
+              shown: _hovered,
+              onTap: _addRow,
+            ),
+          ),
+        ),
+      ),
     );
     return MdEmbedRegion(
       child: Focus(
@@ -1749,10 +1795,14 @@ class _MdTableState extends State<MdTable> implements MdTableEditing {
               });
             }
           },
-          // Over the table's bottom edge, the bars past it not under it.
-          child: scrolled(
-            const EdgeInsets.fromLTRB(_side + 4, 0, 4, _bar + _barGap + 2),
-            framed,
+          // Over the table's bottom edge.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              scrolled(const EdgeInsets.fromLTRB(_side + 4, 0, 4, 2), framed),
+              addRow,
+            ],
           ),
         ),
       ),

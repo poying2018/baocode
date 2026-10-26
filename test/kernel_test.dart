@@ -4780,10 +4780,18 @@ void main() {
   });
 
   group('commit attribution', () {
-    /// What `--settings` gives Claude Code, if it is passed.
+    /// What `--settings` gives Claude Code besides the environment always
+    /// unset, if anything.
     Object? flagSettings(ClaudeLaunch launch) {
       final at = launch.arguments.indexOf('--settings');
-      return at < 0 ? null : jsonDecode(launch.arguments[at + 1]);
+      final settings = Map.of(
+        jsonDecode(launch.arguments[at + 1]) as Map<String, Object?>,
+      );
+      if (jsonEncode(settings['env']) ==
+          jsonEncode(ClaudeLaunch.unsetEnvironment)) {
+        settings.remove('env');
+      }
+      return settings.isEmpty ? null : settings;
     }
 
     test('is the setting\'s, BaoCode when unset or unknown', () {

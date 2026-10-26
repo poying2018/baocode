@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:bao_remote/client.dart' show RemotePlatform;
 import 'package:bao_remote/local.dart';
+import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/claude_code/claude_install_progress.dart';
 import 'package:baocode/kernel/claude_code/claude_path_setting.dart';
 import 'package:baocode/kernel/claude_code/local_claude_io.dart';
@@ -218,11 +219,40 @@ void main() {
     );
   });
 
+  test('whether it is installed: the user\'s, the one downloaded, or the '
+      'one named; as last looked', () async {
+    LocalClaude.runtime = runtime;
+    await LocalClaude.lookForInstall();
+    expect(LocalClaude.installed(), isFalse);
+    install('2.0.0');
+    // Not looked again yet.
+    expect(LocalClaude.installed(), isFalse);
+    await LocalClaude.lookForInstall();
+    expect(LocalClaude.installed(), isTrue);
+
+    LocalClaude.runtime = ClaudeRuntime(
+      managed: ManagedClaude(p.join(data.path, 'none')),
+      platform: platform,
+    );
+    final own = build('own', '2.0.0');
+    CliLocator.candidatesOverride = (_) => [own];
+    await LocalClaude.lookForInstall();
+    expect(LocalClaude.installed(), isTrue);
+
+    // One named that is not there: none, whatever else there is.
+    LocalClaude.runtime = null;
+    ClaudePathSetting.current = () => p.join(home.path, 'missing');
+    await LocalClaude.lookForInstall();
+    expect(LocalClaude.installed(), isFalse);
+  });
+
   test('downloaded ahead, as the CLI is picked: once, where there is '
       'none; its progress cleared after', () async {
     LocalClaude.runtime = runtime;
     expect(await LocalClaude.status(), isA<LocalClaudeMissing>());
     await LocalClaude.install();
+    // Installed now: the core, unset, is the CLI from here on.
+    expect(LocalClaude.installed(), isTrue);
     expect(await LocalClaude.status(), isA<LocalClaudeFound>());
     expect(LocalClaudeInstall.instance.progress, isNull);
     final served = releases.served.length;
@@ -272,9 +302,13 @@ void main() {
       await tester.pump();
     }
 
-    // The core, unset: the CLI, installed here or not.
+    // The core, unset, with no Claude Code installed: BaoCode's own,
+    // nothing downloaded unasked.
     await show(const LocalClaudeMissing());
-    expect(find.text('Claude Code CLI'), findsOneWidget);
+    expect(find.text('Built-in'), findsOneWidget);
+    // With one installed: the CLI.
+    ClaudeCore.cliInstalled = () => true;
+    addTearDown(() => ClaudeCore.cliInstalled = () => false);
     await show(const LocalClaudeFound('/usr/local/bin/claude', '2.1.3'));
     expect(find.text('Claude Code CLI'), findsOneWidget);
     expect(find.text('Built-in'), findsNothing);

@@ -252,7 +252,9 @@ jobs:
         run: |
           mkdir -p out
           # The editions built: the standard build's files, then the channel
-          # build's, which end in -channel.
+          # build's, which end in -channel. This fork publishes the Windows
+          # build only: the macOS one is not built or published any more, and
+          # the Linux one is built by hand when it is wanted.
           editions=()
           for edition in $(echo "$EDITIONS" | jq -r '.[]'); do
             [ "$edition" = standard ] && editions+=('') || editions+=("-$edition")

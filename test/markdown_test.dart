@@ -303,6 +303,25 @@ void main() {
     });
   });
 
+  group('strikethrough', () {
+    List<String> struck(String data) {
+      final found = <String>[];
+      void visit(md.Node node) {
+        if (node is! md.Element) return;
+        if (node.tag == 'del') found.add(node.textContent);
+        node.children?.forEach(visit);
+      }
+
+      MarkdownView.document().parse(data).forEach(visit);
+      return found;
+    }
+
+    test('only between two tildes, not a range\'s one', () {
+      expect(struck('上一期覆盖 10-12~10-16，本期按 10-19~10-23 统计'), isEmpty);
+      expect(struck('a ~~gone~~ b'), ['gone']);
+    });
+  });
+
   group('HTML comments', () {
     testWidgets('do not show', (tester) async {
       await pumpMarkdown(
@@ -464,10 +483,7 @@ void main() {
       final before = markdownSegments(text);
       expect(before, hasLength(greaterThan(2)));
       final changed = 'A new start.\n\n${text.substring(40)}';
-      expect(
-        markdownSegmentsGrown(changed, before),
-        markdownSegments(changed),
-      );
+      expect(markdownSegmentsGrown(changed, before), markdownSegments(changed));
     });
 
     test('footnotes and link definitions leave it whole', () {

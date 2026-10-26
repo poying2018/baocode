@@ -14,12 +14,23 @@
 #include "app_identity.h"
 #include "app_windows.h"
 #include "hang_watchdog.h"
+#include "log_folder.h"
 #include "resource.h"
 #include "utils.h"
 
 namespace {
 
 using Microsoft::WRL::ComPtr;
+
+// The window's timer that puts the tray icon up again when it is not (see
+// Attention::RetryIcon).
+constexpr UINT kRetryTimer = 7;
+
+// How often that is, and how many times: Explorer may be starting for a
+// while, and the icon refused; after a minute of trying, it is left to
+// the next thing that asks for it (a notification, the app's start).
+constexpr UINT kRetryMilliseconds = 2000;
+constexpr int kMaxRetries = 30;
 
 // What the tray icon tells the window, and which of the app's icons it is.
 constexpr UINT kTrayMessage = WM_APP + 0x41;
@@ -305,6 +316,10 @@ Attention::Attention(flutter::BinaryMessenger* messenger, HWND window,
 
 Attention::~Attention() {
   channel_->SetMethodCallHandler(nullptr);
+  if (retry_timer_ != 0) {
+    ::KillTimer(window_, retry_timer_);
+    retry_timer_ = 0;
+  }
   RemoveIcon();
   StopSounds();
   if (icon_ != nullptr) {
@@ -360,7 +375,9 @@ void Attention::HandleMethodCall(
   }
   if (method == "setTray") {
     SetTray(argument);
-    result->Success();
+    // Whether the icon is up, so the app knows it has a way back to itself
+    // (the window's close button hides to it; without it, the app goes).
+    result->Success(flutter::EncodableValue(icon_added_));
     return;
   }
   if (method == "quit") {
@@ -379,6 +396,11 @@ void Attention::HandleMethodCall(
 
 std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
                                                 WPARAM wparam, LPARAM lparam) {
+  if (message == WM_TIMER && wparam == retry_timer_ && retry_timer_ != 0) {
+    // The tray icon is not up, and Flutter wants it: it is tried again.
+    RetryIcon();
+    return 0;
+  }
   if (message == MM_MCINOTIFY) {
     const UINT device = static_cast<UINT>(lparam);
     if (sounds_.find(device) != sounds_.end()) {
@@ -416,8 +438,26 @@ std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
       return std::nullopt;
     }
     if (tray_) {
-      ::ShowWindow(window, SW_HIDE);
-      return 0;
+      // The window is hidden to the tray: there is an icon to bring it
+      // back. (The icon may be late in coming up — Explorer starting, or
+      // the tray refusing it once; it is put up again, and as often as it
+      // takes.) The window waits until it is there, so that a window
+      // hidden with no icon to click is not the app gone as far as the
+      // user is concerned.
+      if (icon_added_) {
+        ::ShowWindow(window, SW_HIDE);
+        return 0;
+      }
+      ShowIcon();
+      if (icon_added_) {
+        log_folder::WriteTrayLog("tray: added on the close, hiding the window");
+        ::ShowWindow(window, SW_HIDE);
+        return 0;
+      }
+      // Still not there: the window stays, so the user still has it.
+      log_folder::WriteTrayLog(
+          "tray: no icon to hide to; the window stays");
+      return std::nullopt;
     }
     return std::nullopt;
   }
@@ -432,6 +472,10 @@ std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
     if (icon_added_) {
       icon_added_ = false;
       ShowIcon();
+    } else if (tray_) {
+      // The icon was not up before (the tray refused it): the new tray
+      // may take it now.
+      RetryIcon();
     }
     return std::nullopt;
   }
@@ -460,6 +504,12 @@ void Attention::SetTray(const flutter::EncodableValue* value) {
   if (state == nullptr) {
     tray_.reset();
     RemoveIcon();
+    // No icon wanted: no trying to put one up.
+    if (retry_timer_ != 0) {
+      ::KillTimer(window_, retry_timer_);
+      retry_timer_ = 0;
+    }
+    retry_count_ = 0;
     return;
   }
   TrayState tray;
@@ -489,16 +539,25 @@ void Attention::SetTray(const flutter::EncodableValue* value) {
   }
   tray_ = std::move(tray);
   ShowIcon();
+  // Flutter wants the icon and it is not up (the tray refused it, or
+  // Explorer is not there yet): it is tried again, a few times.
+  if (tray_ && !icon_added_) {
+    RetryIcon();
+  }
 }
 
 HICON Attention::TrayIcon(bool dot) const {
-  const int size = ::GetSystemMetrics(SM_CXSMICON);
-  Canvas canvas(size);
+  // The tray icon is 16×16 pixels, whatever the display's scaling says
+  // (SM_CXSMICON is the system's icon size, which the tray does not
+  // follow): a tray that refuses the icon leaves the app with no way
+  // back to itself.
+  constexpr int kSize = 16;
+  Canvas canvas(kSize);
   // Whole pixels for each of the logo's 8×6 cells, as large as fit.
-  const int cell = (std::max)(1, size / 8);
+  const int cell = (std::max)(1, kSize / 8);
   const double k = cell / 7.0;
-  const int left = (size - 8 * cell) / 2;
-  const int top = (size - 6 * cell) / 2;
+  const int left = (kSize - 8 * cell) / 2;
+  const int top = (kSize - 6 * cell) / 2;
   const uint32_t ink = TaskbarIsLight() ? 0x1F1F1F : 0xFFFFFF;
   for (const Cell& c : kLogoCells) {
     canvas.Fill(left + static_cast<int>(std::lround(c.x * k)),
@@ -508,17 +567,51 @@ HICON Attention::TrayIcon(bool dot) const {
                 ink);
   }
   if (dot) {
-    const double radius = size * 0.17;
-    const double cx = size - radius;
+    const double radius = kSize * 0.17;
+    const double cx = kSize - radius;
     const double cy = radius;
-    canvas.Disc(cx, cy, radius + (std::max)(1.0, size / 16.0), 0, true);
+    canvas.Disc(cx, cy, radius + (std::max)(1.0, kSize / 16.0), 0, true);
     canvas.Disc(cx, cy, radius, kBadgeRed, false);
   }
   return canvas.Icon();
 }
 
+void Attention::RetryIcon() {
+  // The icon is up, or Flutter does not want one: nothing to do.
+  if (icon_added_ || !tray_) {
+    return;
+  }
+  ShowIcon();
+  if (icon_added_) {
+    if (retry_timer_ != 0) {
+      ::KillTimer(window_, retry_timer_);
+      retry_timer_ = 0;
+    }
+    retry_count_ = 0;
+    return;
+  }
+  // Still not up: try again in a while, a few times.
+  if (retry_count_ >= kMaxRetries) {
+    if (retry_timer_ != 0) {
+      ::KillTimer(window_, retry_timer_);
+      retry_timer_ = 0;
+    }
+    return;
+  }
+  ++retry_count_;
+  if (retry_timer_ == 0) {
+    retry_timer_ = kRetryTimer;
+    ::SetTimer(window_, retry_timer_, kRetryMilliseconds, nullptr);
+  }
+}
+
 void Attention::ShowIcon() {
   HICON icon = TrayIcon(tray_ && tray_->dot);
+  if (icon == nullptr) {
+    // No icon to show: the tray would take an empty one, and take it not.
+    log_folder::WriteTrayLog("tray: no icon to draw");
+    return;
+  }
   NOTIFYICONDATAW data = {};
   data.cbSize = sizeof(data);
   data.hWnd = window_;
@@ -530,11 +623,48 @@ void Attention::ShowIcon() {
       tray_ && !tray_->tooltip.empty() ? tray_->tooltip : AppWindowTitle();
   wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
   if (icon_added_) {
-    ::Shell_NotifyIconW(NIM_MODIFY, &data);
+    if (!::Shell_NotifyIconW(NIM_MODIFY, &data)) {
+      // The icon is gone (Explorer restarted, or took it away): add it
+      // again, and say so.
+      log_folder::WriteTrayLog("tray: NIM_MODIFY failed, adding again");
+      icon_added_ = false;
+      ShowIcon();
+      return;
+    }
   } else if (::Shell_NotifyIconW(NIM_ADD, &data)) {
     icon_added_ = true;
+  } else {
+    // The tray did not take it — but it may have it already: Windows
+    // refuses to add an icon that is there, and says so with a false
+    // (the error code is left over, and says nothing). NIM_MODIFY tells
+    // the two apart: it takes the icon that is there and refuses the
+    // one that is not.
+    if (::Shell_NotifyIconW(NIM_MODIFY, &data)) {
+      // It is there: the add was refused for that reason alone.
+      icon_added_ = true;
+      log_folder::WriteTrayLog("tray: already there (the add was refused)");
+    } else {
+      // The tray would not take it: Explorer may be starting, or the
+      // icon may be refused. Said, so a user who cannot find the icon
+      // can say so.
+      log_folder::WriteTrayLog("tray: NIM_ADD failed (hwnd=%p valid=%d)",
+                                window_, ::IsWindow(window_) ? 1 : 0);
+      if (icon_ != nullptr) {
+        ::DestroyIcon(icon_);
+      }
+      icon_ = icon;
+      return;
+    }
+  }
+  if (icon_added_) {
     data.uVersion = NOTIFYICON_VERSION_4;
     ::Shell_NotifyIconW(NIM_SETVERSION, &data);
+    // The icon is up: no need to try again.
+    if (retry_timer_ != 0) {
+      ::KillTimer(window_, retry_timer_);
+      retry_timer_ = 0;
+    }
+    retry_count_ = 0;
   }
   if (icon_ != nullptr) {
     ::DestroyIcon(icon_);
@@ -551,6 +681,7 @@ void Attention::RemoveIcon() {
   data.hWnd = window_;
   data.uID = kTrayId;
   ::Shell_NotifyIconW(NIM_DELETE, &data);
+  log_folder::WriteTrayLog("tray: removed");
   icon_added_ = false;
 }
 

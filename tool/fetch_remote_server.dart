@@ -14,8 +14,7 @@
 // than a few requests an hour: export GH_TOKEN=$(gh auth token) when that
 // fails.
 //
-// tool/build_windows.dart and tool/build_macos.dart run it with
-// --remote-release [VERSION].
+// tool/build_windows.dart runs it with --remote-release [VERSION].
 import 'dart:convert';
 import 'dart:io';
 

@@ -4,6 +4,8 @@
 #include <shlobj.h>
 #include <windows.h>
 
+#include <cstdarg>
+#include <cstdio>
 #include <vector>
 
 #include "app_identity.h"
@@ -13,6 +15,11 @@ namespace log_folder {
 namespace {
 
 constexpr wchar_t kFolderValue[] = L"LogsFolder";
+
+// The most lines a run writes to tray.log, and the size past which the
+// next run starts it anew (the old one kept as tray.1.log).
+constexpr int kMaxTrayLogLines = 300;
+constexpr ULONGLONG kMaxTrayLogBytes = 1024 * 1024;
 
 // Windows' own lock, not std::mutex: built with MSVC 14.40 or later, a
 // std::mutex is constexpr-constructed and crashes in msvcp140.dll's
@@ -136,6 +143,57 @@ std::wstring Path() {
     return fallback;
   }
   return std::wstring();
+}
+
+void WriteTrayLog(const char* format, ...) {
+  static int lines = 0;
+  if (lines >= kMaxTrayLogLines) {
+    return;
+  }
+  // The folder, and where it is when there is none yet: the tray is put
+  // up before Flutter has named the data folder, and what it did is
+  // worth saying wherever it can be said.
+  std::wstring folder = Path();
+  if (folder.empty()) {
+    folder = DefaultFolder();
+  }
+  // The line, written where it is wanted: the data folder's logs, or the
+  // system's temporary folder when that is out of reach.
+  wchar_t temporary[MAX_PATH] = {};
+  ::GetTempPathW(MAX_PATH, temporary);
+  std::wstring line;
+  {
+    SYSTEMTIME now = {};
+    ::GetLocalTime(&now);
+    char text[1024] = {};
+    va_list arguments;
+    va_start(arguments, format);
+    vsnprintf(text, sizeof(text), format, arguments);
+    va_end(arguments);
+    wchar_t head[64] = {};
+    _snwprintf_s(head, 64, _TRUNCATE,
+                 L"%04u-%02u-%02u %02u:%02u:%02u.%03u ", now.wYear,
+                 now.wMonth, now.wDay, now.wHour, now.wMinute, now.wSecond,
+                 now.wMilliseconds);
+    line = std::wstring(head) + Utf16FromUtf8(text) + L"\n";
+  }
+  for (const std::wstring& where :
+       {folder, std::wstring(temporary)}) {
+    if (where.empty()) {
+      continue;
+    }
+    const std::wstring path = where + L"\\tray.log";
+    FILE* out = nullptr;
+    if (_wfopen_s(&out, path.c_str(), L"a") != 0 || out == nullptr) {
+      continue;
+    }
+    ::fputws(line.c_str(), out);
+    std::fclose(out);
+    lines++;
+    if (where == folder) {
+      break;
+    }
+  }
 }
 
 }  // namespace log_folder

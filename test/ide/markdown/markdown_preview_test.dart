@@ -673,4 +673,41 @@ void main() {
     await tester.pumpAndSettle();
     expect(model.text, '| y | x |\n| --- | --- |\n| 2 | 12 |\n|  |  |\n');
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('a link in a table\'s cell: the caret in it, its bubble over '
+      'it (none of its marks); its address edited and taken off there', (
+    tester,
+  ) async {
+    final model = EditorDocumentModel(
+      '| x | y |\n|---|---|\n| [Docs](a.md) | 2 |\n',
+    );
+    await pumpPreview(tester, model);
+    await tester.tapAt(tester.getCenter(find.text('Docs')));
+    await tester.pumpAndSettle();
+    final editors = find.byType(MarkdownEditor);
+    expect(editors, findsNWidgets(2));
+    final text = tester.state<MarkdownEditorState>(editors.last).controller;
+    expect(text.text, '[Docs](a.md)');
+    text.selection = const TextSelection.collapsed(offset: 3);
+    await tester.pumpAndSettle();
+    expect(_text('Docs'), findsOneWidget);
+    expect(find.text('a.md'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Codicons.edit));
+    await tester.pumpAndSettle();
+    // Still typed in, its link's text picked while the address is typed.
+    expect(find.byType(MarkdownEditor), findsNWidgets(2));
+    await tester.enterText(find.byType(EditableText).last, 'b.md');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(model.text, '| x | y |\n|---|---|\n| [Docs](b.md) | 2 |\n');
+
+    final again = tester.state<MarkdownEditorState>(editors.last).controller;
+    again.selection = const TextSelection.collapsed(offset: 3);
+    await tester.pumpAndSettle();
+    expect(find.text('b.md'), findsOneWidget);
+    await tester.tap(find.byIcon(Codicons.close));
+    await tester.pumpAndSettle();
+    expect(model.text, '| x | y |\n|---|---|\n| Docs | 2 |\n');
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 }

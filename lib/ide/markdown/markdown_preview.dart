@@ -29,6 +29,7 @@ import '../../l10n/l10n.dart';
 import '../ide_hover.dart';
 import '../ide_menu.dart';
 import 'markdown_format_bar.dart';
+import 'markdown_front_matter.dart';
 import 'markdown_links.dart';
 import 'markdown_model_source.dart';
 import 'markdown_paste.dart';
@@ -59,6 +60,8 @@ class IdeMarkdownPreview extends StatefulWidget {
     this.onOpenFile,
     this.onOpenExternal,
     this.onReveal,
+    this.background,
+    this.padding,
   });
 
   final String path;
@@ -99,6 +102,14 @@ class IdeMarkdownPreview extends StatefulWidget {
   /// project's.
   final void Function(String path)? onReveal;
 
+  /// Behind it; the editor's when null.
+  final Color? background;
+
+  /// Around its text, for a view of its own laying it out (a
+  /// customization's, under its title); as wide as a page reads, in the
+  /// middle of a wide one, when null.
+  final EdgeInsets? padding;
+
   @override
   State<IdeMarkdownPreview> createState() => IdeMarkdownPreviewState();
 }
@@ -114,6 +125,20 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
 
   /// The images read, by path: read once while the preview shows.
   final Map<String, Future<Uint8List>> _images = {};
+
+  /// Those of [_images] read by now: a line built again (scrolled back
+  /// to) shows its image at once, as tall as it is.
+  final Map<String, Uint8List> _imagesRead = {};
+
+  Future<Uint8List> _readImage(String path) {
+    if (_images[path] case final reading?) return reading;
+    final reading = _images[path] = widget.readBytes(path);
+    reading.then((bytes) {
+      // Not one read again since (the images cleared).
+      if (identical(_images[path], reading)) _imagesRead[path] = bytes;
+    }, onError: (_) {});
+    return reading;
+  }
 
   /// Whether the caret was put somewhere (clicked, moved, revealed): where
   /// the source opens.
@@ -165,11 +190,13 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.model, widget.model)) {
       _images.clear();
+      _imagesRead.clear();
       final old = _controller;
       _controller = _controllerOf(widget.model);
       WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
     } else if (oldWidget.path != widget.path) {
       _images.clear();
+      _imagesRead.clear();
     }
   }
 
@@ -485,11 +512,12 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
         CodeCitationScope.maybeOf(context)?.colorizeBlock ??
         StashEditor.colorize;
     return ColoredBox(
-      color: themeColors['editor.background'],
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // As wide as a page reads, in the middle of a wide view.
-          final side = ((constraints.maxWidth - 880) / 2).clamp(0.0, 1e6) + 32;
+      color: widget.background ?? themeColors['editor.background'],
+      child: Builder(
+        builder: (context) {
+          // As wide as the view: a wide table fits.
+          final padding =
+              widget.padding ?? const EdgeInsets.fromLTRB(32, 24, 32, 160);
           final editor = MarkdownEditor(
             key: _editorKey,
             controller: _controller,
@@ -498,7 +526,7 @@ class IdeMarkdownPreviewState extends State<IdeMarkdownPreview> {
             focusNode: _focus,
             scrollController: _scroll,
             // Room after the last line, to bring any to the top.
-            padding: EdgeInsets.fromLTRB(side, 24, side, 160),
+            padding: padding,
             readOnly: widget.readOnly,
             // The bar's keys on a selection only: without one, ⌘B is the
             // workbench's (its side bar).
@@ -618,8 +646,8 @@ class _PreviewEmbeds extends MarkdownEmbeds {
       target: resolveMarkdownImage(run.href ?? '', widget.path, state._context),
       alt: alt,
       title: run.title,
-      read: (path) =>
-          state._images.putIfAbsent(path, () => widget.readBytes(path)),
+      read: state._readImage,
+      readNow: (path) => state._imagesRead[path],
     );
     if (width != null) image = SizedBox(width: width, child: image);
     return WidgetSpan(
@@ -649,6 +677,20 @@ class _PreviewEmbeds extends MarkdownEmbeds {
     final Widget shown;
     switch (embed.kind) {
       case MdLineKind.frontMatter:
+        // Its properties, each value on its line edited in a field (its
+        // source the place for the rest); YAML they do not read as.
+        if (parseFrontMatterProperties(embed.code) case final properties?) {
+          return MdEmbedRegion(
+            child: MarkdownFrontMatter(
+              properties: properties,
+              onChanged: state.widget.readOnly
+                  ? null
+                  : (key, value) => embed.replace(
+                      setFrontMatterValue(embed.source, key, value),
+                    ),
+            ),
+          );
+        }
         shown = MarkdownCodeBlock(code: embed.code, language: 'yaml');
       case MdLineKind.fenceOpen:
         shown = MermaidCodeBlock(code: embed.code);
@@ -692,12 +734,16 @@ class _MarkdownImage extends StatelessWidget {
     required this.alt,
     required this.title,
     required this.read,
+    required this.readNow,
   });
 
   final ({Uri? url, String? path})? target;
   final String alt;
   final String? title;
   final Future<Uint8List> Function(String path) read;
+
+  /// What [read] has read by now.
+  final Uint8List? Function(String path) readNow;
 
   void _preview(BuildContext context) {
     showDialog<void>(
@@ -763,6 +809,7 @@ class _MarkdownImage extends StatelessWidget {
     if (target?.path case final path?) {
       return FutureBuilder<Uint8List>(
         future: read(path),
+        initialData: readNow(path),
         builder: (context, snapshot) {
           if (snapshot.hasError) return _missing();
           final bytes = snapshot.data;

@@ -2,6 +2,12 @@
 
 BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出问题怎么查，以及以后改代码时要注意什么。版本号怎么定、怎么发版、CI 和 Cloudflare 怎么配，见 [release.md](release.md)。
 
+> **这个 fork 只发 Windows 版。** 下面讲 macOS 的那些段落，说的是上游的做法
+> （`dl.baocode.dev`、R2、dmg 与公证），在这里不适用：更新源是本仓库的
+> `releases/latest/download/latest.json`，只发 Windows 安装包，manifest 里没有
+> `macos-*` 的键。应用代码里的 macOS 分支留着（`lib/update/installer_io.dart` 等），
+> 但没有 macOS 版可发，那条路走不到。
+
 - 更新服务器：`https://dl.baocode.dev`（Cloudflare R2；`baocode.dev/releases/*` 302 到这里）
 - 平台：macOS（Apple silicon 和 Intel 各一个包）、Windows（x64）
 - 代码：`lib/update/`，测试：`test/update/`，发布工具：`tool/release_manifest.dart`
@@ -34,7 +40,7 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 | 发布工具（签名 + 生成清单） | 已完成：`tool/release_manifest.dart` |
 | 版本号工具 | 已完成：`tool/bump_version.dart` |
 | CI 构建与发布 | 已完成：`.github/workflows/release.yml`，见 [release.md](release.md) |
-| macOS 打包（dmg + 更新用 zip） | 已完成：`tool/build_macos.dart` |
+| macOS 打包（dmg + 更新用 zip） | 上游的做法（`tool/build_macos.dart`）**在这个 fork 里没有** |
 | macOS 代码签名与公证 | 脚本已支持；**等 Apple 开发者账号**，见 [release.md 7.3](release.md#73-applemacos-签名与公证) |
 | dl.baocode.dev（R2） | **需要准备**：见 [release.md 7.1](release.md#71-cloudflare) |
 | 真机端到端验证 | **未做**：见第 11 节 |

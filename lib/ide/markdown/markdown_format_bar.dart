@@ -32,6 +32,15 @@ import '../ide_motion.dart';
 /// as markdown again.
 typedef MarkdownForModel = ({String text, String Function(String reply) back});
 
+/// A link the caret is in: where it goes, its text, where that shows; in
+/// a table's [cell] (its editor), of the cell's text.
+typedef _CaretLink = ({
+  String href,
+  TextSelection range,
+  Rect around,
+  MarkdownEditorState? cell,
+});
+
 /// [child], [editorKey]'s editor of [controller], with the bar over its
 /// selection (see the file's head).
 class MarkdownFormatBar extends StatefulWidget {
@@ -100,7 +109,34 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     _controller.addListener(_barSoon);
     _focus.addListener(_barSoon);
     _linkFocus.addListener(_linkFocusChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _listenCells();
+    });
   }
+
+  /// The editor whose tables' cells are listened to: the caret in one, a
+  /// link's bar goes with it.
+  MarkdownEditorState? _cellsOf;
+
+  void _listenCells() {
+    final editor = widget.editorKey.currentState;
+    if (identical(editor, _cellsOf)) return;
+    _cellsOf?.tableCellChanges.removeListener(_barSoon);
+    _cellsOf = editor;
+    editor?.tableCellChanges.addListener(_barSoon);
+  }
+
+  /// The editor of the table's cell typed in; none while the caret is in
+  /// none.
+  MarkdownEditorState? _typedCell() {
+    final cell = widget.editorKey.currentState?.tableCell;
+    return cell != null && cell.hasFocus ? cell : null;
+  }
+
+  /// The keyboard back to where the text was typed: [cell], a table's
+  /// cell, or the editor.
+  void _refocus(MarkdownEditorState? cell) =>
+      cell != null && cell.mounted ? cell.requestFocus() : _focus.requestFocus();
 
   @override
   void didUpdateWidget(MarkdownFormatBar oldWidget) {
@@ -125,6 +161,7 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
   void dispose() {
     _controller.removeListener(_barSoon);
     _focus.removeListener(_barSoon);
+    _cellsOf?.tableCellChanges.removeListener(_barSoon);
     _linkFocus.dispose();
     _linkText.dispose();
     super.dispose();
@@ -144,10 +181,14 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
   }
 
   void _placeBar() {
+    _listenCells();
     final selection = _controller.selection;
     Rect? around;
     if (_contextMenu) {
       // The right click's menu shows alone.
+    } else if (_linkCell case final cell? when _linking && cell.mounted) {
+      // A link's address typed for a table's cell: over its text there.
+      around = _selectionBounds(cell.controller.selection, cell);
     } else if (!widget.readOnly &&
         (_focus.hasFocus || _linking || _barMenu) &&
         selection.isValid &&
@@ -161,6 +202,7 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
         link?.href == _caretLink?.href &&
         link?.range == _caretLink?.range &&
         link?.around == _caretLink?.around &&
+        link?.cell == _caretLink?.cell &&
         _barVersion == _controller.textVersion) {
       return;
     }
@@ -183,33 +225,36 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
   }
 
   /// The web link the caret is in, and where its text is (stack's box):
-  /// a bar over it opens or edits it, the text typed on as ever.
-  ({String href, TextSelection range, Rect around})? _caretLink;
+  /// a bar over it opens or edits it, the text typed on as ever. In a
+  /// table's [cell], [range] is of the cell's text.
+  _CaretLink? _caretLink;
 
-  ({String href, TextSelection range, Rect around})? _linkAtCaret() {
-    final selection = _controller.selection;
-    if (widget.readOnly ||
-        _contextMenu ||
-        !_focus.hasFocus ||
-        _linking ||
-        !selection.isValid ||
-        !selection.isCollapsed) {
+  _CaretLink? _linkAtCaret() {
+    if (widget.readOnly || _contextMenu || !_focus.hasFocus || _linking) {
       return null;
     }
-    final link = _webLinkAt(selection.baseOffset);
+    final cell = _typedCell();
+    final text = cell?.controller ?? _controller;
+    final selection = text.selection;
+    if (!selection.isValid || !selection.isCollapsed) return null;
+    final link = _webLinkAt(selection.baseOffset, text);
     if (link == null) return null;
-    final around = _selectionBounds(link.range);
+    final around = _selectionBounds(link.range, cell);
     if (around == null) return null;
-    return (href: link.href, range: link.range, around: around);
+    return (href: link.href, range: link.range, around: around, cell: cell);
   }
 
-  /// The link [offset] is in (not at its ends): where it goes, and its
-  /// text.
-  ({String href, TextSelection range})? _webLinkAt(int offset) {
-    final found = _controller.linkAt(offset);
+  /// The link [offset] is in (not at its ends) of [text] (the editor's by
+  /// default): where it goes, and its text.
+  ({String href, TextSelection range})? _webLinkAt(
+    int offset, [
+    MarkdownController? text,
+  ]) {
+    text ??= _controller;
+    final found = text.linkAt(offset);
     if (found == null) return null;
     final (line, run) = found;
-    final start = _controller.lineStart(line);
+    final start = text.lineStart(line);
     final column = offset - start;
     final href = run.href;
     if (href == null ||
@@ -226,13 +271,17 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     );
   }
 
-  /// [selection]'s bounds, in the stack's box: what of it is in the
-  /// editor's view, none where it is scrolled out of it.
-  Rect? _selectionBounds(TextSelection selection) {
+  /// [selection]'s bounds (of [cell]'s text, a table's cell's, if given),
+  /// in the stack's box: what of it is in the editor's view, none where it
+  /// is scrolled out of it.
+  Rect? _selectionBounds(
+    TextSelection selection, [
+    MarkdownEditorState? cell,
+  ]) {
     final editor = widget.editorKey.currentState;
     final stack = _stackKey.currentContext?.findRenderObject() as RenderBox?;
     if (editor == null || stack == null || !stack.attached) return null;
-    final rects = editor.selectionRects(selection);
+    final rects = (cell ?? editor).selectionRects(selection);
     if (rects.isEmpty) return null;
     var bounds = rects.reduce((a, b) => a.expandToInclude(b));
     if (editor.viewportRect case final view?) {
@@ -264,6 +313,7 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
             href: link.href,
             range: link.range,
             around: link.around.shift(by),
+            cell: link.cell,
           );
         }
       });
@@ -384,16 +434,35 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     });
   }
 
-  /// [range], a link's text, selected, where it goes ([href]) edited in
-  /// the bar (see [link]).
+  /// The table's cell whose link's address is typed in the bar: open
+  /// meanwhile, the keyboard the bar's.
+  MarkdownEditorState? _linkCell;
+
+  /// [range], a link's text (of [cell]'s, a table's cell's, if given),
+  /// selected, where it goes ([href]) edited in the bar (see [link]).
   void editLink(
     String href,
     TextSelection range, {
     void Function(String href)? apply,
+    MarkdownEditorState? cell,
   }) {
-    _controller.selection = range;
-    _focus.requestFocus();
+    if (cell != null && cell.mounted) {
+      _linkCell = cell;
+      widget.editorKey.currentState?.holdTableCell(true);
+      cell.controller.selection = range;
+    } else {
+      _controller.selection = range;
+      _focus.requestFocus();
+    }
     link(current: href, apply: apply);
+  }
+
+  /// The table's cell a link was edited for let go: closed unless the
+  /// keyboard is back in it.
+  void _releaseLinkCell() {
+    if (_linkCell == null) return;
+    _linkCell = null;
+    widget.editorKey.currentState?.holdTableCell(false);
   }
 
   /// The link typed, on the selection (none for an empty one); back to the
@@ -402,14 +471,16 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     if (!_linking) return;
     final custom = _applyLink;
     _applyLink = null;
+    final cell = _linkCell;
     final href = _linkText.text.trim();
     if (apply && custom != null) {
       custom(href);
-    } else if (apply) {
-      _controller.setLink(href.isEmpty ? null : href);
+    } else if (apply && (cell == null || cell.mounted)) {
+      (cell?.controller ?? _controller).setLink(href.isEmpty ? null : href);
     }
     setState(() => _linking = false);
-    _focus.requestFocus();
+    _refocus(cell);
+    _releaseLinkCell();
   }
 
   /// Clicked elsewhere: what was typed is dropped.
@@ -417,6 +488,7 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     if (_linking && !_linkFocus.hasFocus) {
       _applyLink = null;
       setState(() => _linking = false);
+      _releaseLinkCell();
       _barSoon();
     }
   }
@@ -469,17 +541,17 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
         _BarButton(
           icon: Codicons.copy,
           tooltip: l10n.stashLinkCopy,
-          onTap: () => _copyLink(link.href),
+          onTap: () => _copyLink(link.href, cell: link.cell),
         ),
         _BarButton(
           icon: Codicons.edit,
           tooltip: l10n.stashLinkEdit,
-          onTap: () => editLink(link.href, link.range),
+          onTap: () => editLink(link.href, link.range, cell: link.cell),
         ),
         _BarButton(
           icon: Codicons.close,
           tooltip: l10n.stashLinkRemove,
-          onTap: () => _removeLink(link.range),
+          onTap: () => _removeLink(link.range, cell: link.cell),
         ),
       ],
     );
@@ -507,17 +579,20 @@ class MarkdownFormatBarState extends State<MarkdownFormatBar> {
     return bare.length > 40 ? '${bare.substring(0, 39)}…' : bare;
   }
 
-  void _copyLink(String href) {
+  void _copyLink(String href, {MarkdownEditorState? cell}) {
     unawaited(Clipboard.setData(ClipboardData(text: href)));
-    _focus.requestFocus();
+    _refocus(cell);
   }
 
-  /// The link whose text is [range] taken off it, the text kept.
-  void _removeLink(TextSelection range) {
-    if (widget.readOnly) return;
-    _controller.selection = range;
-    _controller.setLink(null);
-    _focus.requestFocus();
+  /// The link whose text is [range] (of [cell]'s, a table's cell's, if
+  /// given) taken off it, the text kept.
+  void _removeLink(TextSelection range, {MarkdownEditorState? cell}) {
+    // The cell closed meanwhile: its range is no longer its text's.
+    if (widget.readOnly || (cell != null && !cell.mounted)) return;
+    final text = cell?.controller ?? _controller;
+    text.selection = range;
+    text.setLink(null);
+    _refocus(cell);
   }
 
   // --- The right click's menu ------------------------------------------------------
