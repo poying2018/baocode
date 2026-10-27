@@ -4855,7 +4855,15 @@
     }
   },
   "modelsRoles": "Roles",
-  "modelsRolesDescription": "Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream's: BaoCode's local proxy sends their requests there.",
+  "modelsRolesDescription": "Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream's: {product}'s local proxy sends their requests there.",
+  "@modelsRolesDescription": {
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode Claude"
+      }
+    }
+  },
   "modelsRoleUnset": "Unset",
   "modelsRoleMain": "Main Model",
   "modelsRoleMainDescription": "Used when the model a session picked of this upstream is gone.",
@@ -8206,7 +8214,15 @@
   "stashFilterAnyIssue": "Any source",
   "stashFilterIssue": "Issues",
   "stashFilterNotIssue": "Local only",
-  "stashImplementEmpty": "Write something first, then implement it in BaoCode",
+  "stashImplementEmpty": "Write something first, then implement it in {product}",
+  "@stashImplementEmpty": {
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode Claude"
+      }
+    }
+  },
   "stashIssueDuplicateBanner": "{issue}, of stash {stash} merged into this one, is still open. Close it as a duplicate?",
   "@stashIssueDuplicateBanner": {
     "placeholders": {

@@ -923,7 +923,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
         const SizedBox(height: 16),
         _Folding(
           title: l10n.modelsRoles,
-          description: l10n.modelsRolesDescription,
+          description: l10n.modelsRolesDescription(productName),
           open: _rolesOpen,
           onToggle: () => setState(() => _rolesOpen = !_rolesOpen),
           children: _roles(context),

@@ -1814,7 +1814,15 @@
   "modelsTestTotal": "总耗时 {seconds}s",
   "modelsEnableModel": "启用 {name}",
   "modelsRoles": "角色映射",
-  "modelsRolesDescription": "Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。",
+  "modelsRolesDescription": "Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 {product} 的本地代理发过去。",
+  "@modelsRolesDescription": {
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode Claude"
+      }
+    }
+  },
   "modelsRoleUnset": "未设置",
   "modelsRoleMain": "主模型",
   "modelsRoleMainDescription": "会话所选的模型被移除后，改用此模型。",
@@ -3667,7 +3675,15 @@
   "stashFilterAnyIssue": "所有来源",
   "stashFilterIssue": "来自 issue",
   "stashFilterNotIssue": "仅本地",
-  "stashImplementEmpty": "先写点内容，再在 BaoCode 中实施",
+  "stashImplementEmpty": "先写点内容，再在 {product} 中实施",
+  "@stashImplementEmpty": {
+    "placeholders": {
+      "product": {
+        "type": "String",
+        "example": "BaoCode Claude"
+      }
+    }
+  },
   "stashIssueDuplicateBanner": "{issue} 来自合并进这条的 Stash {stash}，还开着。作为重复关闭？",
   "stashIssueCloseDuplicate": "作为重复关闭…",
   "stashIssueDuplicateNoIssue": "已合并到另一条记录，作为重复关闭。",

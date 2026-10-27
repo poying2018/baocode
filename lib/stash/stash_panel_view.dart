@@ -444,7 +444,7 @@ class _TopBar extends StatelessWidget {
         leading: const BaoCodeLogo(size: 13),
         label: compact ? null : l10n.stashImplementShort,
         tooltip: implement == null
-            ? l10n.stashImplementEmpty
+            ? l10n.stashImplementEmpty(productName)
             : l10n.stashImplement(productName),
         faint: implement == null,
         onTap: implement == null

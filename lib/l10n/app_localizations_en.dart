@@ -6787,8 +6787,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsRoles => 'Roles';
 
   @override
-  String get modelsRolesDescription =>
-      'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: BaoCode\'s local proxy sends their requests there.';
+  String modelsRolesDescription(String product) {
+    return 'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: $product\'s local proxy sends their requests there.';
+  }
 
   @override
   String get modelsRoleUnset => 'Unset';
@@ -10744,8 +10745,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get stashFilterNotIssue => 'Local only';
 
   @override
-  String get stashImplementEmpty =>
-      'Write something first, then implement it in BaoCode';
+  String stashImplementEmpty(String product) {
+    return 'Write something first, then implement it in $product';
+  }
 
   @override
   String stashIssueDuplicateBanner(String issue, String stash) {

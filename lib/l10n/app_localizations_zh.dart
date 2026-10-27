@@ -6383,8 +6383,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsRoles => '角色映射';
 
   @override
-  String get modelsRolesDescription =>
-      'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 BaoCode 的本地代理发过去。';
+  String modelsRolesDescription(String product) {
+    return 'Claude Code 在各类工作中使用的模型；未设置时使用当前所选模型。除主模型外，都可以选其他上游的模型，请求会经 $product 的本地代理发过去。';
+  }
 
   @override
   String get modelsRoleUnset => '未设置';
@@ -10190,7 +10191,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashFilterNotIssue => '仅本地';
 
   @override
-  String get stashImplementEmpty => '先写点内容，再在 BaoCode 中实施';
+  String stashImplementEmpty(String product) {
+    return '先写点内容，再在 $product 中实施';
+  }
 
   @override
   String stashIssueDuplicateBanner(String issue, String stash) {

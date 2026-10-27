@@ -10941,8 +10941,8 @@ abstract class AppLocalizations {
   /// No description provided for @modelsRolesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: BaoCode\'s local proxy sends their requests there.'**
-  String get modelsRolesDescription;
+  /// **'Which model Claude Code uses for each part of its work. Unset, the model picked stands in. All but the main model may be another upstream\'s: {product}\'s local proxy sends their requests there.'**
+  String modelsRolesDescription(String product);
 
   /// No description provided for @modelsRoleUnset.
   ///
@@ -17425,8 +17425,8 @@ abstract class AppLocalizations {
   /// No description provided for @stashImplementEmpty.
   ///
   /// In en, this message translates to:
-  /// **'Write something first, then implement it in BaoCode'**
-  String get stashImplementEmpty;
+  /// **'Write something first, then implement it in {product}'**
+  String stashImplementEmpty(String product);
 
   /// No description provided for @stashIssueDuplicateBanner.
   ///
