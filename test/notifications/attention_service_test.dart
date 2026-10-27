@@ -256,7 +256,8 @@ void main() {
     expect(host.trays, hasLength(1));
     expect(host.trays.single, isNotNull);
     expect(host.trays.single!.dot, isFalse);
-    expect(host.trays.single!.tooltip, 'BaoCode');
+    // The tray says what this build is called, as the app does.
+    expect(host.trays.single!.tooltip, productName);
     expect(host.trays.single!.labels['show'], isNotEmpty);
     expect(host.trays.single!.labels['quit'], isNotEmpty);
   });

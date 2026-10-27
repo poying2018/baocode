@@ -5668,7 +5668,12 @@ exec /usr/bin/env "\$@"
         for (final line in file.readAsLinesSync())
           (jsonDecode(line) as Map).cast<String, Object?>(),
       ];
-      expect(lines.map((line) => line['cwd']), [null, to, '$to/lib']);
+      // The child path joined the way this machine joins it: a Windows one
+      // has its own separator between the folder and `lib`.
+      expect(
+        lines.map((line) => line['cwd']),
+        [null, to, p.join(to, 'lib')],
+      );
       expect(lines.first['customTitle'], 'T');
       expect(File('${dir(to)}/mine/subagents/a.jsonl').existsSync(), isTrue);
       expect(File('${dir(to)}/memory/MEMORY.md').existsSync(), isTrue);
@@ -6159,7 +6164,7 @@ exec /usr/bin/env "\$@"
             id: 'th',
             title: 'kept',
             updatedAt: DateTime(2026),
-            cwd: r'F:\Projects\baocode',
+            cwd: Directory.current.path,
           ),
         ),
       )..events.listen(historyEvents.add);
@@ -6198,7 +6203,8 @@ exec /usr/bin/env "\$@"
       };
       server.answers['fuzzyFileSearch'] = {
         'files': [
-          {'path': r'F:\Projects\baocode\lib\main.dart', 'match_type': 'file'},
+          {'path': p.join(Directory.current.path, 'lib', 'main.dart'),
+            'match_type': 'file'},
         ],
       };
       kernel.send(const KernelTurn(id: 't1', text: 'hi'));
@@ -6306,7 +6312,7 @@ exec /usr/bin/env "\$@"
             'threadId': 'th',
             'turnId': 'st1',
             'itemId': 'p1',
-            'cwd': r'F:\Projects\baocode',
+            'cwd': Directory.current.path,
             'startedAtMs': 1,
             'permissions': {
               'network': {'enabled': true},
