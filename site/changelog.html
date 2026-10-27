@@ -30,6 +30,25 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.8.1">
+    <h2 class="plain"><a href="#v1.8.1">1.8.1</a></h2>
+    <p>BaoCode Claude 1.8.1</p>
+    <p>A fix release. Chinese typing in the chat input works as it should: what
+    an input method composes is left alone, so the characters you pick are
+    the ones that go in.</p>
+    <p>Fixed</p>
+    <ul>
+    <li>Typing Chinese in the chat input left the pinyin behind: the text an
+    input method was composing was taken for the text itself, so the pinyin
+    went in as it was — apostrophes and all — and the next word was
+    composed beside it rather than over it. The input method is now left
+    alone while it composes, and the characters you pick go in where the
+    caret is.</li>
+    <li>Two places named the program BaoCode where they now name it as this
+    program is called.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.8.0">
     <h2 class="plain"><a href="#v1.8.0">1.8.0</a></h2>
     <p>BaoCode Claude 1.8.0</p>

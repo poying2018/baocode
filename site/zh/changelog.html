@@ -30,6 +30,20 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.8.1">
+    <h2 class="plain"><a href="#v1.8.1">1.8.1</a></h2>
+    <p>BaoCode Claude 1.8.1</p>
+    <p>修 bug 的一版。聊天输入框里打中文现在正常了：输入法在组合的时候不去打扰
+    它，所以选中的那个字就是进去的那个字。</p>
+    <p>修复</p>
+    <ul>
+    <li>在聊天输入框里打中文，拼音会留在框里：输入法正在组合的那段文本被当成了
+    正文，于是拼音原样进去（连撇号一起），下一个词又组合在旁边，而不是覆盖
+    上去。现在输入法组合的时候不去打扰它，选中的字会进到光标所在的位置。</li>
+    <li>有两处把程序名写成了 BaoCode，现在改成这个程序自己的名字。</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.8.0">
     <h2 class="plain"><a href="#v1.8.0">1.8.0</a></h2>
     <p>BaoCode Claude 1.8.0</p>
