@@ -4,6 +4,7 @@
 //
 //   dart run tool/release_manifest.dart \
 //     --windows build/installers/BaoCode-1.2.0-setup.exe \
+//     [--windows-arm64 build/installers/BaoCode-1.2.0-setup-arm64.exe] \
 //     [--linux-x64 build/installers/BaoCode-1.2.0-linux-amd64.deb] \
 //     [--linux-arm64 build/installers/BaoCode-1.2.0-linux-arm64.deb] \
 //     [--notes-en <text or file>] [--notes-zh <text or file>] \
@@ -34,8 +35,9 @@
 // one. The app names a download by the path alone.
 //
 // Besides what the app reads, `downloads` gives the download page
-// (site/site.js) what it offers: the Windows installer, and the Linux
-// packages (which the app updates from too).
+// (site/site.js) what it offers: the Windows installers (`windows`,
+// and `windows-arm64` when there is one), and the Linux packages (which the
+// app updates from too).
 import 'dart:convert';
 import 'dart:io';
 
@@ -59,6 +61,12 @@ Uri _link(AppVersion version, String name, String sha256) =>
 /// The Linux packages built (tool/package_linux_deb.sh), the same.
 const _linuxArchitectures = ['x64', 'arm64'];
 
+/// The Windows installers built (tool/build_windows.dart): `--windows` is
+/// the x64 one, as it always was; Arm's is `--windows-arm64`.
+const _windowsArchitectures = ['x64', 'arm64'];
+String _windowsOption(String arch) =>
+    arch == 'x64' ? 'windows' : 'windows-$arch';
+
 /// The editions built: the standard one, and the channel build, whose
 /// options and platform keys end in this.
 const _channel = '-channel';
@@ -75,6 +83,7 @@ const _usage =
     '''
 Usage:
   dart run tool/release_manifest.dart [--windows <setup.exe>]
+      [--windows-arm64 <setup-arm64.exe>]
       [--linux-x64 <amd64.deb>] [--linux-arm64 <arm64.deb>]
       [each of those with -channel after it: the channel build's]
       [--notes-en <text|file>] [--notes-zh <text|file>]
@@ -138,8 +147,9 @@ Future<void> main(List<String> arguments) async {
   }
   final files = {
     for (final edition in _editions) ...{
-      if (options['windows$edition'] case final path?)
-        'windows-x64$edition': File(path),
+      for (final arch in _windowsArchitectures)
+        if (options['${_windowsOption(arch)}$edition'] case final path?)
+          'windows-$arch$edition': File(path),
       for (final arch in _linuxArchitectures)
         if (options['linux-$arch$edition'] case final path?)
           'linux-$arch$edition': File(path),
@@ -147,7 +157,8 @@ Future<void> main(List<String> arguments) async {
   };
   if (files.isEmpty) {
     _fail(
-      'Nothing to sign: give --windows, --linux-x64 or --linux-arm64.\n\n'
+      'Nothing to sign: give --windows, --windows-arm64, '
+      '--linux-x64 or --linux-arm64.\n\n'
       '$_usage',
     );
   }
@@ -224,12 +235,14 @@ Future<void> main(List<String> arguments) async {
   }
 
   for (final edition in _editions) {
-    if (assets['windows-x64$edition'] case final installer?) {
-      offer('windows', edition, {
-        'url': '${installer.url}',
-        'size': installer.size,
-        'sha256': installer.sha256,
-      });
+    for (final arch in _windowsArchitectures) {
+      if (assets['windows-$arch$edition'] case final installer?) {
+        offer(_windowsOption(arch), edition, {
+          'url': '${installer.url}',
+          'size': installer.size,
+          'sha256': installer.sha256,
+        });
+      }
     }
     // The packages as they are: the page's links, and the app's updates.
     for (final arch in _linuxArchitectures) {
@@ -284,7 +297,7 @@ Future<void> main(List<String> arguments) async {
     for (final edition in _editions)
       if (edition.isEmpty ||
           assets.keys.any((key) => key.endsWith(edition))) ...{
-        'windows-x64$edition',
+        for (final arch in _windowsArchitectures) 'windows-$arch$edition',
         for (final arch in _linuxArchitectures) 'linux-$arch$edition',
       },
   }.difference(assets.keys.toSet());
@@ -423,7 +436,12 @@ Map<String, String?> _parse(List<String> arguments) =>
 /// could not be encrypted or read back.
 Map<String, String?> parseReleaseManifestArguments(List<String> arguments) {
   const flags = {'public-key', 'help'};
-  const files = {'windows', 'linux-x64', 'linux-arm64'};
+  const files = {
+    'windows',
+    'windows-arm64',
+    'linux-x64',
+    'linux-arm64',
+  };
   final valued = {
     for (final edition in _editions)
       for (final file in files) '$file$edition',

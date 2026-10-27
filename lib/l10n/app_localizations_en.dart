@@ -1068,6 +1068,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cmdToggleFullScreen => 'Toggle Full Screen';
 
   @override
+  String get cmdZoomIn => 'Zoom In';
+
+  @override
+  String get cmdZoomOut => 'Zoom Out';
+
+  @override
+  String get cmdZoomReset => 'Reset Zoom';
+
+  @override
   String get cmdToggleWordWrap => 'Toggle Word Wrap';
 
   @override
@@ -6548,10 +6557,24 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get modelsAccountDisabled => 'Disabled';
+
+  @override
   String get modelsAccountLimited => 'Out of quota';
 
   @override
   String get modelsAccountQuotaUnknown => 'Quota not known yet';
+
+  @override
+  String get modelsQuotaShortWindow => 'Short window';
+
+  @override
+  String get modelsQuotaLongWindow => 'Long window';
+
+  @override
+  String modelsQuotaLastUpdated(String time) {
+    return 'Last updated $time';
+  }
 
   @override
   String get modelsQuotaWeek => 'Weekly';
@@ -6570,6 +6593,40 @@ class AppLocalizationsEn extends AppLocalizations {
   String modelsQuotaUsed(int percent) {
     return '$percent% used';
   }
+
+  @override
+  String modelsQuotaRemaining(int percent) {
+    return '$percent% left';
+  }
+
+  @override
+  String quotaBarWindowLeft(String window, int percent) {
+    return '$window $percent% left';
+  }
+
+  @override
+  String quotaBarAvailable(int count, int total) {
+    return '$count/$total available';
+  }
+
+  @override
+  String quotaBarAllOut(String time) {
+    return 'All accounts out of quota · back $time';
+  }
+
+  @override
+  String quotaBarBackAt(String time) {
+    return 'Out of quota · back $time';
+  }
+
+  @override
+  String get quotaBarNone => 'No account can be used';
+
+  @override
+  String get quotaBarThisChat => 'This chat';
+
+  @override
+  String get quotaBarRefresh => 'Refresh Quota';
 
   @override
   String modelsQuotaResetsIn(String time) {
@@ -7516,6 +7573,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'A minimap of the whole conversation at the left of its column, where you are in it shown as you scroll; click or drag it to get somewhere. It stands in for the scrollbar, and is not shown in a window too narrow for it. Off: the scrollbar.';
 
   @override
+  String get appearanceSettingsWindowBlur => 'Native Window Blur';
+
+  @override
+  String get appearanceSettingsWindowBlurDescription =>
+      'The system\'s blur under the windows (macOS\'s sidebar material, Windows 11\'s acrylic): what is behind them shows through the sidebar and the conversation. Off: the windows are opaque.';
+
+  @override
   String get appearanceSettingsSidebarTimes => 'Times in the Sidebar';
 
   @override
@@ -7581,7 +7645,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceSettingsCodeSizeDescription =>
-      'The size of code in the IDE editor and the side panel\'s file and changes views. Code in the chat follows the interface size; the terminal has its own size.';
+      'The size of code in the IDE editor and the side panel\'s file and changes views at 100% interface size; zooming the interface scales it in proportion. Code in the chat follows the interface size; the terminal has its own size.';
 
   @override
   String appearanceSettingsCodeSizeLabel(String size) {
@@ -7607,7 +7671,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appearanceSettingsUiScaleDescription =>
-      'Zooms the whole interface (its text, icons and spacing), code in the chat, and terminal text while the terminal size follows it. Code in the IDE editor and side panel files and changes keeps its own size.';
+      'Zooms the whole interface (its text, icons and spacing) and the code in it, and terminal text while the terminal size follows it. Code in the editor zooms from its code size.';
 
   @override
   String appearanceSettingsUiScaleLabel(String percent) {
@@ -7736,6 +7800,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get remoteFolderRefresh => 'Read the folders again';
+
+  @override
   String get remoteOpenThisFolder => 'Open This Folder';
 
   @override
@@ -7805,6 +7872,11 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String remoteStatusInstalling(String kind, String host, int percent) {
     return '$kind: $host (installing Claude Code $percent%)';
+  }
+
+  @override
+  String remoteStatusInstallingUnsized(String kind, String host) {
+    return '$kind: $host (installing Claude Code...)';
   }
 
   @override
@@ -8948,26 +9020,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'Has AI make the selection clearer, in your words, without adding structure';
 
   @override
-  String get composerPolish => 'Polish';
+  String get composerPolish => 'Enhance prompt';
 
   @override
-  String get composerPolishing => 'Polishing…';
+  String get composerPolishing => 'Enhancing…';
 
   @override
   String get composerPolishHint =>
-      'Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back';
+      'Enhance prompt: the auxiliary model makes the message a clearer, more specific prompt for the agent, filling in what you left vague; pictures, files, code and links stay as they are; Undo takes it back';
 
   @override
   String composerPolishFailed(String error) {
-    return 'Could not polish: $error';
+    return 'Could not enhance the prompt: $error';
   }
 
   @override
-  String get generalSettingsComposerPolish => 'Polish button';
+  String get generalSettingsComposerPolish => 'Enhance Prompt button';
 
   @override
   String get generalSettingsComposerPolishDescription =>
-      'A button in the message box that has the auxiliary model make what you wrote clearer before you send it';
+      'A button in the message box that has the auxiliary model make what you wrote a clearer, more specific prompt before you send it';
 
   @override
   String get generalSettingsLiveTurnStats => 'Live Speed and Time';

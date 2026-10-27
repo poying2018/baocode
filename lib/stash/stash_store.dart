@@ -72,8 +72,19 @@ class StashStore extends ChangeNotifier {
   String? get problem => _problem;
 
   /// All of them, newest first.
-  List<StashNote> get notes =>
-      _notes.values.toList()..sort((a, b) => b.created.compareTo(a.created));
+  List<StashNote> get notes => _sorted ??= List.unmodifiable(
+    _notes.values.toList()..sort((a, b) => b.created.compareTo(a.created)),
+  );
+
+  /// [notes], kept until they change: the sidebar asks for them for each
+  /// of its rows, each build.
+  List<StashNote>? _sorted;
+
+  @override
+  void notifyListeners() {
+    _sorted = null;
+    super.notifyListeners();
+  }
 
   /// [id]'s stash, following a merged one's number to the one it went
   /// into; null when there is none.
@@ -207,6 +218,7 @@ class StashStore extends ChangeNotifier {
     _notes
       ..clear()
       ..addAll(read);
+    _sorted = null;
     _loaded = true;
     _watching ??= disk.changes.listen((_) => unawaited(reload()));
     if (changed) notifyListeners();
@@ -266,6 +278,7 @@ class StashStore extends ChangeNotifier {
       project: project,
     );
     _notes[id] = note;
+    _sorted = null;
     await _write(note);
     notifyListeners();
     return note;
@@ -315,6 +328,7 @@ class StashStore extends ChangeNotifier {
   Future<void> delete(int id) async {
     final note = _notes.remove(id);
     if (note == null) return;
+    _sorted = null;
     notifyListeners();
     await disk.delete(id);
     if (note.ownIssue case final url?) await ignoreIssue(url);
@@ -434,6 +448,7 @@ class StashStore extends ChangeNotifier {
     for (final id in gone) {
       _redirects[id] = kept.id;
       _notes.remove(id);
+      _sorted = null;
       await disk.delete(id);
     }
     await save(kept);

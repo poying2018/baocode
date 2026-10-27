@@ -30,6 +30,7 @@ workspace:
   - packages/bao_markdown
   - packages/bao_pty
   - packages/bao_remote
+  - packages/bao_sampler
   - packages/bao_xterm
 
 # Dependencies specify other packages that your package needs in order to work.
@@ -49,10 +50,13 @@ dependencies:
     path: packages/bao_pty
   bao_remote:
     path: packages/bao_remote
+  bao_sampler:
+    path: packages/bao_sampler
   bao_xterm:
     path: packages/bao_xterm
   # The names project icons are kept under (lib/icons/icon_library.dart).
   bonsoir: ^7.1.5
+  clock: ^1.1.2
   crypto: ^3.0.6
   flutter:
     sdk: flutter

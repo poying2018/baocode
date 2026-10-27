@@ -237,10 +237,10 @@ class OpenRemoteFileFlow {
     final ssh = _picker.hosts[host];
     show(
       IdeQuickPick(
-        placeholder: l10n.remoteConnecting(host),
+        placeholder: l10n.remoteConnecting(RemoteLocation.hostName(host)),
         items: [
           IdeQuickPickItem(
-            label: l10n.remoteConnecting(host),
+            label: l10n.remoteConnecting(RemoteLocation.hostName(host)),
             icon: const IdeSpinning(Icon(Codicons.loading)),
           ),
         ],
@@ -253,11 +253,13 @@ class OpenRemoteFileFlow {
       final (message, detail) = sshErrorText(error, l10n);
       _next(
         IdeQuickPick(
-          placeholder: l10n.remoteConnectFailed(host),
+          placeholder: l10n.remoteConnectFailed(RemoteLocation.hostName(host)),
           sortByLabel: false,
           items: [
             IdeQuickPickItem(
-              label: message ?? l10n.remoteConnectFailed(host),
+              label:
+                  message ??
+                  l10n.remoteConnectFailed(RemoteLocation.hostName(host)),
               detail: detail?.split('\n').last,
               icon: const Icon(Codicons.error),
             ),
@@ -287,26 +289,43 @@ class OpenRemoteFileFlow {
     String directory,
   ) async {
     final paths = p.posix;
-    List<String> folders;
-    List<String> files;
+    List<String> folders = const [];
+    List<String> files = const [];
     String? failure;
-    try {
-      final entries = await client.list(directory, directory);
-      final sorted = entries.toList()
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-      folders = [
-        for (final entry in sorted)
-          if (entry.isDirectory) entry.name,
-      ];
-      files = [
-        for (final entry in sorted)
-          if (!entry.isDirectory) entry.name,
-      ];
-    } on Object catch (error) {
-      folders = const [];
-      files = const [];
-      failure = '$error';
+
+    /// Whether the entries are being read: the pick's rows are read again
+    /// as it changes (its `refresh`).
+    final reading = ValueNotifier(false);
+
+    /// Reads the entries again, e.g. one made in a terminal since.
+    Future<void> read() async {
+      if (reading.value) return;
+      reading.value = true;
+      try {
+        final entries = await client.list(directory, directory);
+        final sorted = entries.toList()
+          ..sort(
+            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+        folders = [
+          for (final entry in sorted)
+            if (entry.isDirectory) entry.name,
+        ];
+        files = [
+          for (final entry in sorted)
+            if (!entry.isDirectory) entry.name,
+        ];
+        failure = null;
+      } on Object catch (error) {
+        folders = const [];
+        files = const [];
+        failure = '$error';
+      } finally {
+        reading.value = false;
+      }
     }
+
+    await read();
     final parent = paths.dirname(directory);
     // A path typed (absolute, or starting with `~`): a file opened where
     // it is, a folder browsed.
@@ -322,8 +341,16 @@ class OpenRemoteFileFlow {
 
     _next(
       IdeQuickPick(
-        placeholder: l10n.remoteFilePlaceholder(host),
+        placeholder: l10n.remoteFilePlaceholder(RemoteLocation.hostName(host)),
         sortByLabel: false,
+        refresh: reading,
+        buttons: [
+          IdeQuickPickItemButton(
+            icon: Codicons.refresh,
+            tooltip: l10n.remoteFolderRefresh,
+            onPressed: () => unawaited(read()),
+          ),
+        ],
         itemsFor: (value) {
           final typed = value.trim();
           final isPath = typed.startsWith('/') || typed.startsWith('~');

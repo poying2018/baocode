@@ -2108,6 +2108,24 @@ abstract class AppLocalizations {
   /// **'Toggle Full Screen'**
   String get cmdToggleFullScreen;
 
+  /// No description provided for @cmdZoomIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom In'**
+  String get cmdZoomIn;
+
+  /// No description provided for @cmdZoomOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Zoom Out'**
+  String get cmdZoomOut;
+
+  /// No description provided for @cmdZoomReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset Zoom'**
+  String get cmdZoomReset;
+
   /// No description provided for @cmdToggleWordWrap.
   ///
   /// In en, this message translates to:
@@ -10548,6 +10566,12 @@ abstract class AppLocalizations {
   /// **'Use {name}'**
   String modelsAccountEnable(String name);
 
+  /// No description provided for @modelsAccountDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get modelsAccountDisabled;
+
   /// No description provided for @modelsAccountLimited.
   ///
   /// In en, this message translates to:
@@ -10559,6 +10583,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Quota not known yet'**
   String get modelsAccountQuotaUnknown;
+
+  /// No description provided for @modelsQuotaShortWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Short window'**
+  String get modelsQuotaShortWindow;
+
+  /// No description provided for @modelsQuotaLongWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Long window'**
+  String get modelsQuotaLongWindow;
+
+  /// No description provided for @modelsQuotaLastUpdated.
+  ///
+  /// In en, this message translates to:
+  /// **'Last updated {time}'**
+  String modelsQuotaLastUpdated(String time);
 
   /// No description provided for @modelsQuotaWeek.
   ///
@@ -10583,6 +10625,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{percent}% used'**
   String modelsQuotaUsed(int percent);
+
+  /// No description provided for @modelsQuotaRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% left'**
+  String modelsQuotaRemaining(int percent);
+
+  /// No description provided for @quotaBarWindowLeft.
+  ///
+  /// In en, this message translates to:
+  /// **'{window} {percent}% left'**
+  String quotaBarWindowLeft(String window, int percent);
+
+  /// No description provided for @quotaBarAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'{count}/{total} available'**
+  String quotaBarAvailable(int count, int total);
+
+  /// No description provided for @quotaBarAllOut.
+  ///
+  /// In en, this message translates to:
+  /// **'All accounts out of quota · back {time}'**
+  String quotaBarAllOut(String time);
+
+  /// No description provided for @quotaBarBackAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Out of quota · back {time}'**
+  String quotaBarBackAt(String time);
+
+  /// No description provided for @quotaBarNone.
+  ///
+  /// In en, this message translates to:
+  /// **'No account can be used'**
+  String get quotaBarNone;
+
+  /// No description provided for @quotaBarThisChat.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat'**
+  String get quotaBarThisChat;
+
+  /// No description provided for @quotaBarRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh Quota'**
+  String get quotaBarRefresh;
 
   /// No description provided for @modelsQuotaResetsIn.
   ///
@@ -12130,6 +12220,18 @@ abstract class AppLocalizations {
   /// **'A minimap of the whole conversation at the left of its column, where you are in it shown as you scroll; click or drag it to get somewhere. It stands in for the scrollbar, and is not shown in a window too narrow for it. Off: the scrollbar.'**
   String get appearanceSettingsMinimapDescription;
 
+  /// No description provided for @appearanceSettingsWindowBlur.
+  ///
+  /// In en, this message translates to:
+  /// **'Native Window Blur'**
+  String get appearanceSettingsWindowBlur;
+
+  /// No description provided for @appearanceSettingsWindowBlurDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'The system\'s blur under the windows (macOS\'s sidebar material, Windows 11\'s acrylic): what is behind them shows through the sidebar and the conversation. Off: the windows are opaque.'**
+  String get appearanceSettingsWindowBlurDescription;
+
   /// No description provided for @appearanceSettingsSidebarTimes.
   ///
   /// In en, this message translates to:
@@ -12241,7 +12343,7 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceSettingsCodeSizeDescription.
   ///
   /// In en, this message translates to:
-  /// **'The size of code in the IDE editor and the side panel\'s file and changes views. Code in the chat follows the interface size; the terminal has its own size.'**
+  /// **'The size of code in the IDE editor and the side panel\'s file and changes views at 100% interface size; zooming the interface scales it in proportion. Code in the chat follows the interface size; the terminal has its own size.'**
   String get appearanceSettingsCodeSizeDescription;
 
   /// No description provided for @appearanceSettingsCodeSizeLabel.
@@ -12283,7 +12385,7 @@ abstract class AppLocalizations {
   /// No description provided for @appearanceSettingsUiScaleDescription.
   ///
   /// In en, this message translates to:
-  /// **'Zooms the whole interface (its text, icons and spacing), code in the chat, and terminal text while the terminal size follows it. Code in the IDE editor and side panel files and changes keeps its own size.'**
+  /// **'Zooms the whole interface (its text, icons and spacing) and the code in it, and terminal text while the terminal size follows it. Code in the editor zooms from its code size.'**
   String get appearanceSettingsUiScaleDescription;
 
   /// No description provided for @appearanceSettingsUiScaleLabel.
@@ -12484,6 +12586,12 @@ abstract class AppLocalizations {
   /// **'A folder on {host}: pick one, or type a path'**
   String remoteFolderPlaceholder(String host);
 
+  /// The button at the right of the quick pick browsing a remote host's folders: it lists the folder again, e.g. one made in a terminal since.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the folders again'**
+  String get remoteFolderRefresh;
+
   /// No description provided for @remoteOpenThisFolder.
   ///
   /// In en, this message translates to:
@@ -12579,6 +12687,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{kind}: {host} (installing Claude Code {percent}%)'**
   String remoteStatusInstalling(String kind, String host, int percent);
+
+  /// The status bar while Claude Code is installed on a host, its size not known yet (no percentage).
+  ///
+  /// In en, this message translates to:
+  /// **'{kind}: {host} (installing Claude Code...)'**
+  String remoteStatusInstallingUnsized(String kind, String host);
 
   /// Shown while Claude Code is put on a remote host where it was not installed, before the agent starts.
   ///
@@ -14473,37 +14587,37 @@ abstract class AppLocalizations {
   /// No description provided for @composerPolish.
   ///
   /// In en, this message translates to:
-  /// **'Polish'**
+  /// **'Enhance prompt'**
   String get composerPolish;
 
   /// No description provided for @composerPolishing.
   ///
   /// In en, this message translates to:
-  /// **'Polishing…'**
+  /// **'Enhancing…'**
   String get composerPolishing;
 
   /// No description provided for @composerPolishHint.
   ///
   /// In en, this message translates to:
-  /// **'Polish: the auxiliary model makes the message clearer, in your words; pictures, files, code and links stay as they are; Undo takes it back'**
+  /// **'Enhance prompt: the auxiliary model makes the message a clearer, more specific prompt for the agent, filling in what you left vague; pictures, files, code and links stay as they are; Undo takes it back'**
   String get composerPolishHint;
 
   /// No description provided for @composerPolishFailed.
   ///
   /// In en, this message translates to:
-  /// **'Could not polish: {error}'**
+  /// **'Could not enhance the prompt: {error}'**
   String composerPolishFailed(String error);
 
   /// No description provided for @generalSettingsComposerPolish.
   ///
   /// In en, this message translates to:
-  /// **'Polish button'**
+  /// **'Enhance Prompt button'**
   String get generalSettingsComposerPolish;
 
   /// No description provided for @generalSettingsComposerPolishDescription.
   ///
   /// In en, this message translates to:
-  /// **'A button in the message box that has the auxiliary model make what you wrote clearer before you send it'**
+  /// **'A button in the message box that has the auxiliary model make what you wrote a clearer, more specific prompt before you send it'**
   String get generalSettingsComposerPolishDescription;
 
   /// No description provided for @generalSettingsLiveTurnStats.

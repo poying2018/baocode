@@ -153,7 +153,7 @@ Finder _inChanges(String text) => find.descendant(
 );
 
 void main() {
-  testWidgets('the file tree preview responds to code size, not interface '
+  testWidgets('the file tree preview responds to code size and interface '
       'size', (tester) async {
     final scale = ValueNotifier(1.0);
     final originalSize = CodeFont.size.value;
@@ -170,14 +170,15 @@ void main() {
     scale.value = 1.5;
     await tester.pumpAndSettle();
     expect(tester.state(surface), same(state));
-    expect(view.lineHeight, closeTo(height, 1e-9));
+    expect(view.lineHeight, greaterThan(height * 1.4));
     expect(
       view.caretRectAt(7)!.left - view.caretRectAt(0)!.left,
-      closeTo(width, 1e-9),
+      closeTo(width * 1.5, 1),
     );
+    final zoomed = view.lineHeight;
     CodeFont.size.value = CodeFont.defaultSize + 6;
     await tester.pumpAndSettle();
-    expect(view.lineHeight, greaterThan(height * 1.4));
+    expect(view.lineHeight, greaterThan(zoomed * 1.4));
     await tester.pumpWidget(const SizedBox());
     await tester.pump(const Duration(milliseconds: 20));
   });

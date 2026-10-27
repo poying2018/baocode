@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../chat/chat_models.dart';
 import '../../chat/composer/paste_store.dart';
 import '../../chat/composer/remote_drops.dart';
+import '../../models/codex/codex_service.dart';
 import '../../models/launch_environment.dart';
 import '../../models/model_icons.dart';
 import '../../models/model_provider.dart';
@@ -123,6 +124,7 @@ class ClaudeCodeKernel
     ClaudeUsageSwitch? usageOffBy,
     this._rejectTooOld,
     ModelProviders? providers,
+    this._codex,
     ProviderEnvironment? providerEnvironment,
     Future<bool> Function(String url)? openLink,
   }) : _openLink = openLink ?? openExternal,
@@ -206,6 +208,9 @@ class ClaudeCodeKernel
   /// The providers of the user's (Settings → Models), whose models are
   /// offered beside Claude Code's own.
   final ModelProviders _providers;
+
+  /// The ChatGPT providers' accounts: the app's when null.
+  final CodexService? _codex;
   final ProviderEnvironment _providerEnvironment;
 
   static Future<String?> _usageOn() async => null;
@@ -380,9 +385,14 @@ class ClaudeCodeKernel
   String? _reportedModel;
 
   /// When the usage limit the last turn hit resets (see
-  /// [ReportsUsageLimit]): on the account's own plan only, a provider's
-  /// limits being its own.
+  /// [ReportsUsageLimit]): the account's own plan's, or every ChatGPT
+  /// account of a provider out of quota; another provider's limits are
+  /// its own.
   DateTime? _limitResetsAt;
+
+  /// Whose limit [_limitResetsAt] is: '' the plan's, else the provider's
+  /// ([_providerKey]) whose accounts are out of quota.
+  String _limitOn = '';
   // What the agent does (Agent, Ask, Plan) and how its actions are
   // approved, picked apart: the CLI runs the approvals as they are, but in
   // Plan, which is a permission mode of its own (see _cliMode). Ask is only
@@ -1748,7 +1758,10 @@ class ClaudeCodeKernel
         emitInfoChanged();
       case 'assistant':
         if (_countRequest(message)) _reportStats();
-        if (message['error'] == 'rate_limit') _limitSaid(message['message']);
+        if (message['error'] == 'rate_limit') {
+          _limitSaid(message['message']);
+          _accountsLimited();
+        }
         _translator.translate(message);
       case 'result':
         _result(message);
@@ -1904,6 +1917,7 @@ class ClaudeCodeKernel
     if (message['is_error'] == true && message['result'] is String) {
       final error = message['result'] as String;
       if (_limitResetsAt == null) _limitSaid(error);
+      _accountsLimited();
       if (error.isNotEmpty) {
         final host = _remoteHost;
         emit(
@@ -2034,21 +2048,44 @@ class ClaudeCodeKernel
   @override
   DateTime? get usageLimitResetsAt => usageLimitApplies ? _limitResetsAt : null;
 
-  /// A provider's model picked: the next message goes there, the plan's
-  /// limit no bar to it.
+  /// Another provider's model picked: the next message goes there, the
+  /// limit hit no bar to it. None hit, whether the one picked has a limit
+  /// known here.
   @override
-  bool get usageLimitApplies => _providerKey.isEmpty;
+  bool get usageLimitApplies =>
+      _limitResetsAt == null ? _hasLimit(_model) : _limitOn == _providerKey;
 
   @override
-  bool usageLimitAppliesTo(String model) => _providerKeyOf(model).isEmpty;
+  bool usageLimitAppliesTo(String model) => _hasLimit(model);
+
+  /// Whether [model] is held to a limit known here: the plan's, or its
+  /// ChatGPT accounts' quota; not another provider's.
+  bool _hasLimit(String? model) => switch (_providers.resolve(model)) {
+    (final provider, _) => provider.protocol.usesAccounts,
+    null => true,
+  };
 
   /// The usage limit is hit, to reset [at]; null, it no longer holds.
-  void _limitHit(DateTime? at) {
-    // A provider's limits are its own, and so is what it says of them.
-    if (at != null && _launchedProvider.isNotEmpty) return;
-    if (at == _limitResetsAt) return;
+  /// [on] is whose: '' the plan's, else the provider's of [_accountsLimited].
+  void _limitHit(DateTime? at, {String on = ''}) {
+    // A provider's limits are its own, and so is what it says of them:
+    // its accounts' quota is learned of them, not of the CLI.
+    if (at != null && on != _launchedProvider) return;
+    if (at == _limitResetsAt && on == _limitOn) return;
     _limitResetsAt = at;
+    _limitOn = on;
     emitInfoChanged();
+  }
+
+  /// A turn failed on a provider of ChatGPT accounts: if each one is out
+  /// of quota, its limit is hit, to reset as the first is back.
+  void _accountsLimited() {
+    if (_launchedProvider.isEmpty) return;
+    if (_custom case (final provider, _) when provider.protocol.usesAccounts) {
+      if ((_codex ?? codexService).backAt(provider) case final at?) {
+        _limitHit(at, on: _launchedProvider);
+      }
+    }
   }
 
   /// When the limit hit resets, as [said] (an error's text, or the

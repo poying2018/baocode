@@ -105,6 +105,7 @@ import 'settings/pages/upstream_import_dialog.dart';
 import 'settings/settings_dialog.dart';
 import 'settings/shell_command_actions.dart';
 import 'sidebar/sidebar.dart';
+import 'theme/code_font.dart';
 import 'theme/codicons.dart';
 import 'icons/project_icon_view.dart';
 import 'theme/app_theme.dart';
@@ -131,6 +132,7 @@ import 'stash/stash_view.dart';
 import 'stash/stash_welcome.dart' show showStashWelcome;
 import 'workspace/agent_work_path.dart';
 import 'workspace/chat_branch_bar.dart';
+import 'workspace/chat_quota_bar.dart';
 import 'workspace/chat_drag.dart';
 import 'workspace/chat_grid_view.dart';
 import 'workspace/chat_terminal.dart';
@@ -327,6 +329,11 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   /// its empty window.
   final Map<String, IdeWorkspace> _ideSpaces = {};
   final Map<String, GlobalKey<IdeWorkbenchState>> _ideKeys = {};
+
+  /// Each hidden IDE as last built: built again only once shown. A hidden
+  /// one is still laid out, and the window rebuilds with every change to
+  /// the workspace (an agent's status, its title, its diff).
+  final Map<String, ({IdeWorkspace space, Widget ide})> _hiddenIdes = {};
 
   /// The agents' changes each folder's IDE shows in its files.
   final Map<String, IdeAgentEdits> _ideAgentEdits = {};
@@ -1026,20 +1033,24 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   /// New Window, Close Window, Switch Window… and Show Chat Window, where
   /// the app has windows (the IDE in the main one: New Window shows its
-  /// empty window there, Show Chat Window the chat).
+  /// empty window there, Show Chat Window the chat); full screen and zoom
+  /// in any.
   Map<String, VoidCallback> _windowCommands() {
     final windows = _windows;
     final window = widget.window;
-    final fullScreen = {
+    final anyWindow = {
       if (WindowControls.canFullScreen)
         WindowCommandIds.toggleFullScreen: () =>
             unawaited(WindowControls.toggleFullScreen(viewId: _viewId)),
+      WindowCommandIds.zoomIn: () => _zoom(1),
+      WindowCommandIds.zoomOut: () => _zoom(-1),
+      WindowCommandIds.zoomReset: () => _zoom(null),
     };
     if (windows == null || window == null || !windows.started) {
-      return fullScreen;
+      return anyWindow;
     }
     return {
-      ...fullScreen,
+      ...anyWindow,
       WindowCommandIds.newWindow: () => unawaited(windows.newWindow()),
       WindowCommandIds.closeWindow: () => unawaited(
         windows.requestClose(
@@ -1055,6 +1066,28 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         _workspace.layout = WorkspaceLayout.chat;
       },
     };
+  }
+
+  /// The window's scale [steps] of [CodeFont.uiScaleStep] on (null: back
+  /// to the system's), kept in settings.json as Interface Size has it.
+  void _zoom(int? steps) {
+    final now = CodeFont.uiScale.value;
+    final percent = steps == null
+        ? CodeFont.defaultUiScale
+        : CodeFont.zoomedUiScale(now, steps);
+    if (percent == now) return;
+    CodeFont.uiScale.value = percent;
+    final settings = widget.settings?.files?.settings;
+    if (settings == null) return;
+    unawaited(
+      settings
+          .update(CodeFont.uiScaleSettingKey, CodeFont.uiScaleSetting(percent))
+          .catchError((Object error) {
+            // A settings file that does not parse is left as it is; its
+            // error is shown.
+            debugPrint('${CodeFont.uiScaleSettingKey} not kept: $error');
+          }),
+    );
   }
 
   /// Reaches the sidebar, for the agents it lists and its search.
@@ -2638,6 +2671,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     if (_ideWindow) return _buildIde(folder, _ideSpace(folder), shown: true);
     final ide = _showsIde;
     if (ide) _ideSpace(folder);
+    _hiddenIdes.removeWhere((path, _) => !_ideSpaces.containsKey(path));
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -2650,6 +2684,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
 
   /// The IDE of [path] (see [_ideSpace]), kept built while another shows.
   Widget _buildIde(String path, IdeWorkspace space, {required bool shown}) {
+    if (shown) {
+      _hiddenIdes.remove(path);
+    } else if (_hiddenIdes[path] case final kept? when kept.space == space) {
+      return kept.ide;
+    }
+    final built = _ideOf(path, space, shown: shown);
+    if (!shown) _hiddenIdes[path] = (space: space, ide: built);
+    return built;
+  }
+
+  Widget _ideOf(String path, IdeWorkspace space, {required bool shown}) {
     return Offstage(
       key: ValueKey(path),
       offstage: !shown,
@@ -3418,13 +3463,13 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
           ),
         const IdeMenuSeparator(),
         IdeMenuAction(
-          l10n.sidebarOpenFolderOn(host),
+          l10n.sidebarOpenFolderOn(RemoteLocation.hostName(host)),
           icon: const Icon(Codicons.folderOpened),
           onSelected: () =>
               _openRemoteProject(host: host, switchTo: true, inIde: true),
         ),
         IdeMenuAction(
-          l10n.remoteOpenFileOn(host),
+          l10n.remoteOpenFileOn(RemoteLocation.hostName(host)),
           icon: const Icon(Codicons.file),
           onSelected: () => _openRemoteFile(),
         ),
@@ -3790,17 +3835,20 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       final project = thread.project;
       final multi = _workspace.workspaceOf(project);
       final git = multi == null ? _shownGit(thread) : null;
-      return ChatBranchBar(
+      return ChatQuotaBar(
         session: thread.session,
-        name: multi?.name ?? project.name,
-        workspace: multi != null,
-        repositories: multi != null
-            ? _shownRepositories(thread, _sidePanelRepositories(multi))
-            : [if (git != null) (project.path, git)],
-        onSwitchWorktree: widget.gitFor == null
-            ? null
-            : (folder, path) =>
-                  _sidePanel.chooseWorktree(thread.session, folder, path),
+        branch: ChatBranchBar(
+          session: thread.session,
+          name: multi?.name ?? project.name,
+          workspace: multi != null,
+          repositories: multi != null
+              ? _shownRepositories(thread, _sidePanelRepositories(multi))
+              : [if (git != null) (project.path, git)],
+          onSwitchWorktree: widget.gitFor == null
+              ? null
+              : (folder, path) =>
+                    _sidePanel.chooseWorktree(thread.session, folder, path),
+        ),
       );
     },
   );

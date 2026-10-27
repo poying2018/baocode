@@ -1176,7 +1176,7 @@ class _SidebarState extends State<Sidebar>
       builder: (context) {
         final l10n = context.l10n;
         return _ConfirmDialog(
-          title: l10n.sidebarRemoveHostTitle(host),
+          title: l10n.sidebarRemoveHostTitle(RemoteLocation.hostName(host)),
           message: l10n.sidebarRemoveHostMessage,
           action: l10n.sidebarRemove,
         );
@@ -1194,7 +1194,7 @@ class _SidebarState extends State<Sidebar>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            context.l10n.sidebarNoProjectsOn(host),
+            context.l10n.sidebarNoProjectsOn(RemoteLocation.hostName(host)),
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.textFaint, fontSize: 12),
           ),
@@ -1225,7 +1225,9 @@ class _SidebarState extends State<Sidebar>
                       const SizedBox(width: 6),
                       Flexible(
                         child: Text(
-                          context.l10n.sidebarOpenFolderOn(host),
+                          context.l10n.sidebarOpenFolderOn(
+                            RemoteLocation.hostName(host),
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
@@ -2093,10 +2095,19 @@ class _NewAgentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The agent sessions window's New Session button; its hover with the
-    // keys of New Agent, which does the same (a folder first, without one).
+    // The agent sessions window's New Session button, in the side panel
+    // rail's colors (its surface and line, the text; a toolbar button's
+    // hover over it): a theme's own for it can all but vanish (One Dark
+    // Pro's, see-through on a line as dark as the sidebar). Its hover
+    // with the keys of New Agent, which does the same (a folder first,
+    // without one).
     final colors = themeColors;
-    final foreground = colors['agentsNewSessionButton.foreground'];
+    final foreground = AppColors.text;
+    final surface = AppColors.surface;
+    final hover = Color.alphaBlend(colors['toolbar.hoverBackground'], surface);
+    // A see-through surface fades in as the hover's own color: a fade
+    // from another (a theme's #ff000000) would pass through it.
+    final idle = surface.a == 0 ? hover.withValues(alpha: 0) : surface;
     return IdeHover(
       message: ChatKeys.titleWithKey(
         context.l10n.sidebarNewAgent,
@@ -2113,14 +2124,9 @@ class _NewAgentButton extends StatelessWidget {
             height: 30,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color:
-                  colors[hovered
-                      ? 'agentsNewSessionButton.hoverBackground'
-                      : 'agentsNewSessionButton.background'],
+              color: hovered ? hover : idle,
               borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: colors['agentsNewSessionButton.border'],
-              ),
+              border: Border.all(color: AppColors.partBorder),
             ),
             child: Row(
               children: [
@@ -2214,7 +2220,8 @@ class _NavRow extends StatelessWidget {
                           style: TextStyle(color: foreground, fontSize: 12.5),
                         ),
                       ),
-                      if (badge > 0) _badge(),
+                      // As the side panel rail's badges, in its colors.
+                      if (badge > 0) IdeTitleBadge(badge),
                     ],
                   ),
                 ),
@@ -2234,28 +2241,6 @@ class _NavRow extends StatelessWidget {
       null => row,
     };
   }
-}
-
-extension on _NavRow {
-  Widget _badge() => Container(
-    constraints: const BoxConstraints(minWidth: 16),
-    height: 16,
-    padding: const EdgeInsets.symmetric(horizontal: 5),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: AppColors.accent,
-      borderRadius: BorderRadius.circular(8),
-    ),
-    child: Text(
-      badge > 99 ? '99+' : '$badge',
-      style: TextStyle(
-        color: themeColors.get('badge.foreground') ?? Colors.white,
-        fontSize: 10.5,
-        fontWeight: FontWeight.w600,
-        height: 1,
-      ),
-    ),
-  );
 }
 
 class _GroupHeader extends StatelessWidget {

@@ -850,18 +850,19 @@ void main() {
         for (final event in events.whereType<FileEdited>()) event.original,
       ];
       expect(originals.first, isNull);
-      expect(
-        (originals.last! as OriginalByEdits).edits,
-        [(before: 'x', after: 'y\nz')],
-      );
+      expect((originals.last! as OriginalByEdits).edits, [
+        (before: 'x', after: 'y\nz'),
+      ]);
       expect(events.whereType<FilesMayHaveChanged>(), isEmpty);
 
       call('b1', 'Bash', {'command': 'echo c > c.txt'}, parent: 'agent-1');
       expect(events.whereType<FilesMayHaveChanged>(), hasLength(1));
-      call('agent-1', 'Agent', {
-        'description': 'Make files',
-        'prompt': 'make them',
-      }, result: {'status': 'completed', 'content': []});
+      call(
+        'agent-1',
+        'Agent',
+        {'description': 'Make files', 'prompt': 'make them'},
+        result: {'status': 'completed', 'content': []},
+      );
       expect(events.whereType<FilesMayHaveChanged>(), hasLength(2));
 
       // A kept session's, replayed: nothing to look at.
@@ -3995,6 +3996,61 @@ void main() {
       kernel.dispose();
     });
 
+    test('the last turn\'s reply: all the agent said since the last '
+        'message, in order', () async {
+      final cli = FakeCli();
+      final descriptor = KernelDescriptor(
+        id: 'claude-code',
+        label: 'Claude Code',
+        icon: Icons.auto_awesome_rounded,
+        description: '',
+        create: (context) => ClaudeCodeKernel(
+          MockKernels.claudeCode,
+          context,
+          start: (_) async => cli,
+        ),
+      );
+      final session = ChatSession(
+        kernel: descriptor,
+        kernels: [descriptor],
+        historyCount: 0,
+      );
+      addTearDown(session.dispose);
+      Future<void> say(String id, String text) async {
+        cli.push({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': id,
+            'role': 'assistant',
+            'content': [
+              {'type': 'text', 'text': text},
+            ],
+          },
+        });
+        await pumpEventQueue();
+      }
+
+      expect(session.lastTurnReply, isNull);
+      session.send(const ComposerMessage(text: 'one'));
+      await pumpEventQueue();
+      await say('m1', 'Old answer.');
+      cli.push({
+        'type': 'result',
+        'subtype': 'success',
+        'is_error': false,
+        'session_id': 's',
+      });
+      await pumpEventQueue();
+      expect(session.lastTurnReply, 'Old answer.');
+      session.send(const ComposerMessage(text: 'two'));
+      await pumpEventQueue();
+      expect(session.lastTurnReply, isNull);
+      await say('m2', 'Looking.');
+      await say('m3', 'Option 1 or 2?');
+      expect(session.lastTurnReply, 'Looking.\n\nOption 1 or 2?');
+    });
+
     test('a status row stays at the end all through a turn, hidden where '
         'something else says so', () async {
       final cli = FakeCli();
@@ -5245,6 +5301,33 @@ void main() {
         CliLocator.runnable(file('empty', const []).path, windows: false),
         isFalse,
       );
+    });
+
+    test('under WSL, Windows\' own build is passed over', () {
+      // As WSL 2 mounts the drives.
+      const mounts =
+          'none /dev/shm tmpfs rw,nosuid,nodev 0 0\n'
+          'drivers /usr/lib/wsl/drivers 9p ro,aname=drivers;fmask=222 0 0\n'
+          'C:\\134 /mnt/c 9p rw,noatime,aname=drvfs;path=C:\\;uid=1000 0 0\n'
+          'E: /mnt/e drvfs rw,noatime 0 0\n';
+      final drives = CliLocator.windowsDrivesIn(mounts);
+      expect(drives, ['/mnt/c', '/mnt/e']);
+      expect(
+        CliLocator.onWindowsDrive(
+          '/mnt/c/Users/me/AppData/Roaming/npm/claude',
+          drives: drives,
+        ),
+        isTrue,
+      );
+      expect(
+        CliLocator.onWindowsDrive('/home/me/.local/bin/claude', drives: drives),
+        isFalse,
+      );
+      expect(
+        CliLocator.onWindowsDrive('/mnt/cache/claude', drives: drives),
+        isFalse,
+      );
+      expect(CliLocator.onWindowsDrive('/mnt/c/claude', drives: []), isFalse);
     });
   });
 

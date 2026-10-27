@@ -1038,6 +1038,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cmdToggleFullScreen => '切换全屏';
 
   @override
+  String get cmdZoomIn => '放大';
+
+  @override
+  String get cmdZoomOut => '缩小';
+
+  @override
+  String get cmdZoomReset => '重置缩放';
+
+  @override
   String get cmdToggleWordWrap => '切换自动换行';
 
   @override
@@ -6153,10 +6162,24 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get modelsAccountDisabled => '已禁用';
+
+  @override
   String get modelsAccountLimited => '额度已用尽';
 
   @override
   String get modelsAccountQuotaUnknown => '额度尚未获取';
+
+  @override
+  String get modelsQuotaShortWindow => '短周期';
+
+  @override
+  String get modelsQuotaLongWindow => '长周期';
+
+  @override
+  String modelsQuotaLastUpdated(String time) {
+    return '上次更新 $time';
+  }
 
   @override
   String get modelsQuotaWeek => '每周';
@@ -6175,6 +6198,40 @@ class AppLocalizationsZh extends AppLocalizations {
   String modelsQuotaUsed(int percent) {
     return '已用 $percent%';
   }
+
+  @override
+  String modelsQuotaRemaining(int percent) {
+    return '剩余 $percent%';
+  }
+
+  @override
+  String quotaBarWindowLeft(String window, int percent) {
+    return '$window剩 $percent%';
+  }
+
+  @override
+  String quotaBarAvailable(int count, int total) {
+    return '$count/$total 可用';
+  }
+
+  @override
+  String quotaBarAllOut(String time) {
+    return '账号额度全部用尽 · $time 恢复';
+  }
+
+  @override
+  String quotaBarBackAt(String time) {
+    return '额度已用尽 · $time 恢复';
+  }
+
+  @override
+  String get quotaBarNone => '没有可用的账号';
+
+  @override
+  String get quotaBarThisChat => '当前对话';
+
+  @override
+  String get quotaBarRefresh => '刷新额度';
 
   @override
   String modelsQuotaResetsIn(String time) {
@@ -7080,6 +7137,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '在对话左侧显示整段对话的缩略图，滚动时显示当前所在位置，点击或拖动即可跳转。开启时代替右侧滚动条；窗口太窄时不显示。关闭后恢复右侧滚动条。';
 
   @override
+  String get appearanceSettingsWindowBlur => '原生高斯模糊';
+
+  @override
+  String get appearanceSettingsWindowBlurDescription =>
+      '窗口底部使用系统的模糊效果（macOS 的侧边栏材质、Windows 11 的亚克力），侧边栏和对话区会透出窗口后面的内容。关闭后窗口不透明。';
+
+  @override
   String get appearanceSettingsSidebarTimes => '侧边栏显示时间';
 
   @override
@@ -7145,7 +7209,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appearanceSettingsCodeSizeDescription =>
-      'Fast IDE 编辑器及侧边栏文件、变更视图中源码的字号。对话中的代码跟随界面大小，终端使用终端字号。';
+      'Fast IDE 编辑器及侧边栏文件、变更视图中源码的字号，按 100% 界面大小算，界面缩放时随之等比放大缩小。对话中的代码跟随界面大小，终端使用终端字号。';
 
   @override
   String appearanceSettingsCodeSizeLabel(String size) {
@@ -7171,7 +7235,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appearanceSettingsUiScaleDescription =>
-      '缩放整个界面（文字、图标与间距）、对话中的代码，以及终端字号为“跟随界面大小”时的终端文字。Fast IDE 编辑器及侧边栏文件、变更中的源码使用代码字号。';
+      '缩放整个界面（文字、图标与间距）和其中的代码，以及终端字号为“跟随界面大小”时的终端文字。编辑器中的源码按代码字号等比缩放。';
 
   @override
   String appearanceSettingsUiScaleLabel(String percent) {
@@ -7296,6 +7360,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get remoteFolderRefresh => '重新读取文件夹';
+
+  @override
   String get remoteOpenThisFolder => '打开此文件夹';
 
   @override
@@ -7365,6 +7432,11 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String remoteStatusInstalling(String kind, String host, int percent) {
     return '$kind: $host（正在安装 Claude Code $percent%）';
+  }
+
+  @override
+  String remoteStatusInstallingUnsized(String kind, String host) {
+    return '$kind: $host（正在安装 Claude Code...）';
   }
 
   @override
@@ -8474,26 +8546,26 @@ class AppLocalizationsZh extends AppLocalizations {
   String get stashPolishHint => '让 AI 把选中的文字理顺，保持你的原意，不加结构';
 
   @override
-  String get composerPolish => '润色';
+  String get composerPolish => '提示词增强';
 
   @override
-  String get composerPolishing => '润色中…';
+  String get composerPolishing => '增强中…';
 
   @override
   String get composerPolishHint =>
-      '润色：用辅助模型把消息改得更清楚，保留你的意思和口吻；图片、文件、代码和链接原样不动，可撤销';
+      '提示词增强：用辅助模型把消息改写成更清楚、更具体的提示词，没说清的地方由它补全；图片、文件、代码和链接原样不动，可撤销';
 
   @override
   String composerPolishFailed(String error) {
-    return '润色失败：$error';
+    return '提示词增强失败：$error';
   }
 
   @override
-  String get generalSettingsComposerPolish => '润色按钮';
+  String get generalSettingsComposerPolish => '提示词增强按钮';
 
   @override
   String get generalSettingsComposerPolishDescription =>
-      '在输入框里显示润色按钮，发送前用辅助模型把写的内容改得更清楚';
+      '在输入框里显示提示词增强按钮，发送前用辅助模型把写的内容改写成更清楚、更具体的提示词';
 
   @override
   String get generalSettingsLiveTurnStats => '运行时实时显示详细速率和时间';

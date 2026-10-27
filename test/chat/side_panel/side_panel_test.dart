@@ -434,7 +434,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('read-only file rows follow code size, not interface size', (
+  testWidgets('read-only file rows follow code size and interface size', (
     tester,
   ) async {
     final scale = ValueNotifier(1.0);
@@ -483,12 +483,13 @@ void main() {
 
       scale.value = 1.5;
       await tester.pumpAndSettle();
-      expect(lineHeight(), closeTo(initial, 1e-9));
-      expect(MediaQuery.textScalerOf(tester.element(list)).scale(12), 12);
+      expect(lineHeight(), closeTo(initial * 1.5, 1e-9));
+      expect(MediaQuery.textScalerOf(tester.element(list)).scale(12), 18);
 
+      final zoomed = lineHeight();
       CodeFont.size.value = CodeFont.defaultSize + 6;
       await tester.pumpAndSettle();
-      expect(lineHeight(), greaterThan(initial * 1.3));
+      expect(lineHeight(), greaterThan(zoomed * 1.3));
     }
 
     // Changes asked for, without the text before them: the text.
