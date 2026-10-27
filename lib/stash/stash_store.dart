@@ -274,10 +274,21 @@ class StashStore extends ChangeNotifier {
   /// Writes [note] (changed in place) and tells the listeners; [touch]
   /// marks it updated now.
   Future<void> save(StashNote note, {bool touch = true}) async {
-    if (touch) note.updated = _clock();
+    if (touch) note.updated = _touched(note.updated);
     _notes[note.id] = note;
     notifyListeners();
     await _write(note);
+  }
+
+  /// The stamp a note written now has: later than the one it had, even
+  /// when the clock says the same instant. A note written in the same
+  /// tick it was made in is not a draft any more (see [StashNote.isDraft]),
+  /// and the clock does not say which tick that was.
+  DateTime _touched(DateTime previous) {
+    final now = _clock();
+    return now.isAfter(previous)
+        ? now
+        : previous.add(const Duration(microseconds: 1));
   }
 
   /// Changes [id]'s stash with [change] and writes it; nothing for none.

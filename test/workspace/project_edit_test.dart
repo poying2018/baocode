@@ -13,6 +13,7 @@ import 'package:baocode/workspace/workspace.dart';
 import 'package:baocode/workspace/workspace_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import '../kernel_test.dart' show FakeCli;
 
@@ -222,7 +223,9 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
     final isFolder = ProjectDialog.isFolder;
-    ProjectDialog.isFolder = (path) => path == '/code/site-v2';
+    // The folder as this machine spells it: the path is normalized before
+    // it is asked about.
+    ProjectDialog.isFolder = (path) => p.equals(path, '/code/site-v2');
     addTearDown(() => ProjectDialog.isFolder = isFolder);
     final workspace = Workspace(
       projects: const [Project('site', '/code/site')],
@@ -258,8 +261,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.byType(ProjectDialog), findsNothing);
-    expect(workspace.projects.single.path, '/code/site-v2');
+    expect(workspace.projects.single.path, p.normalize('/code/site-v2'));
     expect(workspace.projects.single.name, 'Marketing site');
-    expect(workspace.selected.project.path, '/code/site-v2');
+    expect(workspace.selected.project.path, p.normalize('/code/site-v2'));
   });
 }

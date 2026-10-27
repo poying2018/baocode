@@ -11,6 +11,7 @@ import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/main.dart';
 import 'package:baocode/remote/open_remote.dart';
+import 'package:baocode/remote/remote_files.dart';
 import 'package:baocode/workspace/new_chat_folder_bar.dart';
 import 'package:baocode/workspace/workspace.dart';
 
@@ -18,6 +19,21 @@ const _window = MethodChannel('baocode/window');
 const _desktop = '/Users/me/Desktop';
 
 final _mac = TargetPlatformVariant.only(TargetPlatform.macOS);
+
+const _frame = Duration(milliseconds: 50);
+
+/// Pumps a frame at a time until [finder] finds something, for at most
+/// [limit]: what is looked up comes with an answer that is not there yet.
+Future<void> pumpUntilFound(
+  WidgetTester tester,
+  Finder finder, {
+  Duration limit = const Duration(seconds: 10),
+}) async {
+  for (var waited = Duration.zero; finder.evaluate().isEmpty; waited += _frame) {
+    if (waited > limit) fail('$finder is not there within $limit');
+    await tester.pump(_frame);
+  }
+}
 
 /// The app on the mock workspace, a new agent open in its first project.
 Future<Workspace> _pumpNew(WidgetTester tester) async {
@@ -241,8 +257,15 @@ void main() {
     final configHosts = OpenRemoteFlow.defaultConfigHosts;
     OpenRemoteFlow.defaultConfigHosts = () async => ['dev', 'prod'];
     addTearDown(() => OpenRemoteFlow.defaultConfigHosts = configHosts);
+    // The machine's WSL distributions are looked up by running wsl.exe:
+    // not in a test, and the picker waits for that answer.
+    final wslHosts = defaultWslHosts;
+    defaultWslHosts = () async => const [];
+    addTearDown(() => defaultWslHosts = wslHosts);
     await tester.tap(find.text('Open Remote Project...'));
     await tester.pumpAndSettle();
+    // The picker comes when the hosts are known, which is a moment later.
+    await pumpUntilFound(tester, find.byType(IdeQuickInput));
     expect(find.byType(IdeQuickInput), findsOneWidget);
     expect(
       tester
