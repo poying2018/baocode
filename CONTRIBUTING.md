@@ -10,7 +10,7 @@ a detailed review.
 
 ### Talk first
 
-Open an [issue](https://github.com/baocode-dev/baocode/issues) before you
+Open an [issue](https://github.com/poying2018/baocode/issues) before you
 write code for a new feature, a change in behavior or UI, a refactor, or a
 new dependency, and wait until a maintainer agrees to the change and to how
 it is done. Link that issue in the pull request.
@@ -53,7 +53,7 @@ not accepted.**
 ### 先讨论
 
 新功能、行为或界面的改动、重构、新增依赖，写代码之前先开
-[Issue](https://github.com/baocode-dev/baocode/issues)，等维护者认可要不要改、
+[Issue](https://github.com/poying2018/baocode/issues)，等维护者认可要不要改、
 怎么改之后再动手，并在 PR 里关联这个 Issue。
 
 以下可以直接提 PR：错别字、翻译、文档，以及小而明确的 bug 修复。

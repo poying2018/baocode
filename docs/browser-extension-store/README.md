@@ -35,7 +35,7 @@ BaoCode is a desktop app for working with AI coding agents (Claude Code). This e
 
 Requires BaoCode (https://baocode.dev/download) on macOS. Everything stays on your computer: the extension talks only to BaoCode, through native messaging, never over the network.
 
-Open source: https://github.com/baocode-dev/baocode
+Open source: https://github.com/poying2018/baocode
 ```
 
 **详细说明（中文）**：
@@ -50,7 +50,7 @@ BaoCode 是一款与 AI 编程 agent（Claude Code）协作的桌面应用。这
 
 需要在 macOS 上安装 BaoCode（https://baocode.dev/zh/download）。所有数据都留在你的电脑上：扩展只通过本地消息（Native Messaging）与 BaoCode 通信，不经过网络。
 
-开源：https://github.com/baocode-dev/baocode
+开源：https://github.com/poying2018/baocode
 ```
 
 **类别**：Developer Tools（开发者工具）
@@ -63,7 +63,7 @@ BaoCode 是一款与 AI 编程 agent（Claude Code）协作的桌面应用。这
 - 截图 1280×800 或 640×400，至少一张：BaoCode 侧边栏里的网页镜像、对话里的浏览器步骤、Chrome 里黄色的 BaoCode 分组。用 BaoCode 截，裁到 1280×800。
 
 **官网**：https://baocode.dev
-**支持**：https://github.com/baocode-dev/baocode/issues
+**支持**：https://github.com/poying2018/baocode/issues
 
 ## 隐私（Privacy practices）
 
