@@ -30,6 +30,52 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.8.0">
+    <h2 class="plain"><a href="#v1.8.0">1.8.0</a></h2>
+    <p>BaoCode Claude 1.8.0</p>
+    <p>This release brings the IDE's Git work all the way in: a commit panel that
+    takes part of a change, a log you can read and act on, blame in the
+    gutter, a three-way merge, and AI on hand for a change, a commit or a
+    conflict. A project inside a WSL distribution opens here too.</p>
+    <p>New</p>
+    <ul>
+    <li>Open a project inside a WSL distribution, beside the SSH hosts.</li>
+    <li>Git, as JetBrains IDEs have it: local changes in a commit panel with
+    changelists, commit options and message history, part of a file
+    committed, Fixup, Update Project by merge or rebase, an interactive
+    rebase, remote branches, Push, and a Stash tab.</li>
+    <li>A Git log to work in: a branch tree, file, folder and line history,
+    several commits selected at once, and diffs in the IDE's own way.</li>
+    <li>Annotate with Git Blame, and the agent's changes marked in the gutter.</li>
+    <li>Review with AI before committing, and ask AI about a change, a commit
+    or a conflict; a conflict merged by AI.</li>
+    <li>Local history of saved files, so a file's past can be looked at.</li>
+    <li>A language server of your own, from Open Language Server Settings.</li>
+    <li>Long lines wrap in the editors, one setting for all of them.</li>
+    <li>Full Screen, from the View menu and F11.</li>
+    <li>Collapse All and Expand All for the projects, a pinned project staying
+    on top, and a conversation's hover saying the model it runs on.</li>
+    <li>Edit a project's name and location, its conversations moving along.</li>
+    <li>Clone a repository from the start page; manage remotes and tags.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>An update could be taken as &quot;already up to date&quot; and never arrive. It
+    arrives now.</li>
+    <li>A stash written in and then emptied is a stash, not the draft the panel
+    goes on with.</li>
+    <li>A provider's models are let through the user's availableModels, in the
+    batch test too.</li>
+    <li>A subagent's edits outside the project, and a project opened through a
+    link, are reviewed as they are.</li>
+    <li>An input method composing over a selection replaces it.</li>
+    <li>A code block ends at its closing fence.</li>
+    <li>More than 256 open files no longer hang the processes started past it.</li>
+    <li>Live output scrolls the way the wheel goes, and stays put when it ends.</li>
+    <li>An update replaces the browser host the browser started again.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.7.1">
     <h2 class="plain"><a href="#v1.7.1">1.7.1</a></h2>
     <p>BaoCode Claude 1.7.1</p>
