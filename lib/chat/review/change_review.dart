@@ -17,7 +17,15 @@ class _Entry {
   ReviewBlob? base;
   ReviewBlob? after;
   ReviewBlob? current;
+
+  /// The agent said it edited it (not, say, by a command).
+  bool reported = false;
+  bool shared = false;
   bool conflict = false;
+
+  /// Not in the snapshots (ignored, too large, or none taken): looked at
+  /// file by file, what it was before as the agent told.
+  bool loose = false;
 
   /// Whether it differs from what was there before.
   bool get pending => switch ((base, current)) {
@@ -30,35 +38,50 @@ class _Entry {
     'base': base?.toJson(),
     'after': after?.toJson(),
     'current': current?.toJson(),
+    'reported': reported,
+    'shared': shared,
     'conflict': conflict,
+    'loose': loose,
   };
 
   static _Entry fromJson(Map<String, Object?> json) =>
       _Entry(ReviewBlob.fromJson(json['base']))
         ..after = ReviewBlob.fromJson(json['after'])
         ..current = ReviewBlob.fromJson(json['current'])
-        ..conflict = json['conflict'] == true;
+        ..reported = json['reported'] == true
+        ..shared = json['shared'] == true
+        ..conflict = json['conflict'] == true
+        ..loose = json['loose'] == true;
 }
 
 /// What an agent changed in its project, held against what was there
 /// before, for the user to keep or undo file by file: the review behind
 /// Keep and Undo.
 ///
-/// Only the edits the agent reports are in it, with what each file was
-/// before as the agent tells ([FileOriginal]): what a command changes is
-/// not. Each conversation keeps its own ([ReviewStore], a folder of its
-/// session), and nothing of the rest of the project. Whatever changes a
-/// file since the agent left it (the user, between turns) is carried over
-/// by Undo (a three-way merge) rather than written over: where it cannot,
+/// The project is snapshotted ([ReviewStore]) before a turn and as the
+/// agent edits; what differs from one snapshot to the next while it works
+/// is its change, however it made it (an edit, a command). Whatever else
+/// changes in between (the user, between turns) is not, and Undo carries
+/// it over (a three-way merge) rather than write over it: where it cannot,
 /// the file is left as it is and marked.
 ///
+/// A file the snapshots leave out (ignored, too large; any, in a project
+/// too large to snapshot) that the agent reports it edited is held
+/// against what it was as the agent tells ([FileOriginal]), as is one
+/// outside the project (in a worktree beside it, say); without that, it is
+/// listed, to be kept and not undone.
+///
 /// Kept, a change is only no longer listed: nothing is written, staged or
-/// committed. Undone, the file is put back. Once none is pending, what
-/// the session kept is gone.
+/// committed. Undone, the file is put back.
 class ChangeReview extends ChangeNotifier {
   /// Its files' paths spelled as [paths] has them: this machine's way
   /// when null.
-  ChangeReview(this._store, {p.Context? paths}) : _paths = paths ?? p.context;
+  ///
+  /// [realRoot] is [root] with its links resolved, where that is another
+  /// path: the agent may tell the project's files by it (Claude Code does:
+  /// macOS's `/tmp` is `/private/tmp`), and they are the project's.
+  ChangeReview(this._store, {p.Context? paths, this.realRoot})
+    : _paths = paths ?? p.context;
 
   /// The review of the project at [root], continuing what [session] left;
   /// null where there can be none (see [openReviewStore]).
@@ -68,8 +91,11 @@ class ChangeReview extends ChangeNotifier {
     // A remote project's paths are its host's (POSIX), whatever this
     // machine spells its own with.
     final paths = RemoteLocation.pathsOf(root);
-    if (session == null) return ChangeReview(store, paths: paths);
-    return resume(store, session, paths: paths);
+    final realRoot = await realRootOf(root);
+    if (session == null) {
+      return ChangeReview(store, paths: paths, realRoot: realRoot);
+    }
+    return resume(store, session, paths: paths, realRoot: realRoot);
   }
 
   /// The review over [store], with the changes [session] left pending.
@@ -77,8 +103,9 @@ class ChangeReview extends ChangeNotifier {
     ReviewStore store,
     String session, {
     p.Context? paths,
+    String? realRoot,
   }) async {
-    final review = ChangeReview(store, paths: paths);
+    final review = ChangeReview(store, paths: paths, realRoot: realRoot);
     await review._load(session);
     return review;
   }
@@ -86,16 +113,34 @@ class ChangeReview extends ChangeNotifier {
   final ReviewStore _store;
   final p.Context _paths;
 
+  /// [root] with its links resolved, where that is another path.
+  final String? realRoot;
+
   /// How its files' paths are spelled.
   p.Context get paths => _paths;
 
   String get root => _store.root;
 
-  /// By path relative to [root].
+  /// The latest snapshot, as a tree; null before the first.
+  String? _snapshot;
+
+  /// The project is too large to snapshot: only the edits reported are
+  /// seen.
+  bool _wide = false;
+
+  /// By key ([_key]): path relative to [root], absolute outside it.
   final Map<String, _Entry> _entries = {};
 
-  /// Edits it cannot undo (what the file was is not known, or it is
-  /// outside the project), by absolute path: listed, to be kept.
+  /// Edits reported since the last look, by key.
+  final Map<String, FileChange> _reported = {};
+
+  /// What files the agent reported it edited were before, as it told, for
+  /// those the snapshots may not see; by key, null where there was no
+  /// file.
+  final Map<String, ReviewBlob?> _originals = {};
+
+  /// Edits reported that cannot be undone (what the file was is not
+  /// known), by absolute path: listed, to be kept.
   final Map<String, FileChange> _unseen = {};
 
   List<FileChange> _changes = const [];
@@ -103,13 +148,13 @@ class ChangeReview extends ChangeNotifier {
   /// The pending changes, one per file, with absolute paths.
   List<FileChange> get changes => _changes;
 
-  /// Why it stopped: the store failed. Its changes are then no longer
-  /// known.
+  /// Why it stopped: a snapshot failed (Git went away). Its changes are
+  /// then no longer known.
   String? get failure => _failure;
   String? _failure;
 
   /// The session it is kept under, once known. Anew, what the one before
-  /// kept moves to it.
+  /// kept is kept under it instead.
   String? get session => _session;
   String? _session;
   set session(String? id) {
@@ -120,10 +165,39 @@ class ChangeReview extends ChangeNotifier {
       _enqueue(() async {
         // Nothing yet: nothing to keep.
         if (_entries.isEmpty && _unseen.isEmpty) return;
-        if (before != null) await _move(before, id);
         await _persist();
+        if (before != null) await _store.forget(before);
       }),
     );
+  }
+
+  // --- Agents at work in the same project -------------------------------------
+
+  static final Map<String, Set<ChangeReview>> _working = {};
+
+  bool _isWorking = false;
+
+  /// Another agent worked in the project since the last look.
+  bool _overlap = false;
+
+  Set<ChangeReview> get _workingHere => _working.putIfAbsent(root, () => {});
+
+  /// Whether its agent is at work: changes seen while another one in the
+  /// project is too are marked [FileChange.shared] (unless its agent said
+  /// it made them).
+  set working(bool working) {
+    if (working == _isWorking) return;
+    _isWorking = working;
+    final others = _workingHere;
+    if (working) {
+      if (others.isNotEmpty) _overlap = true;
+      for (final other in others) {
+        other._overlap = true;
+      }
+      others.add(this);
+    } else {
+      others.remove(this);
+    }
   }
 
   // --- Looking ----------------------------------------------------------------
@@ -150,27 +224,33 @@ class ChangeReview extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  /// Looks at its files again (before a turn, as one ends): one put back
-  /// as it was since is no longer pending.
-  Future<void> refresh() => _enqueue(() => _look(_entries.keys.toList()));
+  /// Snapshots the project before a turn: what changed since the last look
+  /// was not the agent.
+  Future<void> begin() => _enqueue(() => _look(agent: false));
 
-  /// The agent edited [change]'s file, which was [original] before.
-  /// Without [original], or outside the project, the edit is listed, to
-  /// be kept and not undone.
+  /// Snapshots the project as the agent works: what changed since the last
+  /// look was the agent. Only the files reported since, unless [full].
+  Future<void> observe({bool full = true}) => _enqueue(
+    () => _look(agent: true, paths: full ? null : _reported.keys.toList()),
+  );
+
+  /// The agent reported an edit to [change]'s file, which was [original]
+  /// before; seen at the next [observe].
   void report(FileChange change, {FileOriginal? original}) {
-    final path = _relative(change.path);
-    if (path == null) {
-      // Outside the project.
-      _unsee(change);
+    final path = _key(change.path);
+    if (_outside(path) && original == null) {
+      // Outside the project, never in a snapshot, and not told what it
+      // was.
+      _unseen[path] = _merged(_unseen[path], change, path);
       unawaited(_enqueue(_refresh));
       return;
     }
-    unawaited(_enqueue(() => _take(path, change, original)));
-  }
-
-  void _unsee(FileChange change) {
-    final absolute = _absolute(change.path);
-    _unseen[absolute] = _merged(_unseen[absolute], change, absolute);
+    _reported[path] = change;
+    if (original != null &&
+        !_entries.containsKey(path) &&
+        !_originals.containsKey(path)) {
+      unawaited(_enqueue(() => _keepOriginal(path, original)));
+    }
   }
 
   static FileChange _merged(
@@ -184,83 +264,134 @@ class ChangeReview extends ChangeNotifier {
     tracked: false,
   );
 
-  Future<void> _take(
-    String path,
-    FileChange change,
-    FileOriginal? original,
-  ) async {
-    final session = _session;
-    final absolute = _absolute(path);
-    if (session == null || _unseen.containsKey(absolute)) {
-      _unsee(change);
-      return _refresh();
+  /// Keeps what [path] was before the agent's first edit to it, where the
+  /// snapshots may not have it: in none of them yet.
+  Future<void> _keepOriginal(String path, FileOriginal original) async {
+    if (_entries.containsKey(path) || _originals.containsKey(path)) return;
+    final snapshot = _snapshot;
+    if (snapshot != null &&
+        !_outside(path) &&
+        await _store.contains(snapshot, path)) {
+      return;
     }
-    final after = await _store.take(session, path);
-    var entry = _entries[path];
-    if (entry == null) {
-      final (known, base) = await _baseOf(session, path, original, after);
-      if (!known) {
-        _unsee(change);
-        return _refresh();
-      }
-      entry = _entries[path] = _Entry(base);
-    }
-    entry
-      ..after = after
-      ..current = after
-      ..conflict = false;
-    _entries.removeWhere((_, entry) => !entry.pending);
-    await _refresh();
-    await _persist();
+    final (known, base) = await _baseOf(path, original);
+    if (known) _originals[path] = base;
   }
 
   /// What [path] was before the agent's edit: whether it is known, and
   /// its blob (null where there was no file).
   Future<(bool, ReviewBlob?)> _baseOf(
-    String session,
     String path,
-    FileOriginal? original,
-    ReviewBlob? after,
+    FileOriginal original,
   ) async {
-    final mode = switch (after?.mode) {
-      final mode? when mode != '120000' => mode,
-      _ => '100644',
-    };
     switch (original) {
       case OriginalText(text: null):
         return (true, null);
       case OriginalText(:final text?):
-        return (
-          true,
-          await _store.store(session, utf8.encode(text), mode: mode),
-        );
-      case OriginalByPatch(:final diff) when after != null && !after.isLink:
-        final now = utf8.decode(
-          await _store.read(session, after),
-          allowMalformed: true,
-        );
-        final text = unpatch(now, diff);
+        final now = await _store.current(path);
+        final mode = switch (now?.mode) {
+          final mode? when mode != '120000' => mode,
+          _ => '100644',
+        };
+        return (true, await _store.store(utf8.encode(text), mode: mode));
+      case OriginalByPatch() || OriginalByEdits():
+        final after = await _store.take(path);
+        if (after == null || after.isLink) return (false, null);
+        final now = utf8.decode(await _store.read(after), allowMalformed: true);
+        final text = switch (original) {
+          OriginalByPatch(:final diff) => unpatch(now, diff),
+          OriginalByEdits() => original.undo(now),
+          OriginalText() => null,
+        };
         if (text == null) return (false, null);
-        return (
-          true,
-          await _store.store(session, utf8.encode(text), mode: mode),
-        );
-      case _:
-        return (false, null);
+        return (true, await _store.store(utf8.encode(text), mode: after.mode));
     }
   }
 
-  /// [paths] (relative) as they are now: not the agent's.
-  Future<void> _look(List<String> paths) async {
-    for (final path in paths) {
-      final entry = _entries[path];
-      if (entry == null) continue;
-      final now = await _store.current(path);
-      if (now != entry.current) {
+  Future<void> _look({required bool agent, List<String>? paths}) async {
+    if (paths != null && paths.isEmpty) return;
+    final previous = _snapshot;
+    // Files outside the project alone: no snapshot to take.
+    final inside = paths?.where((path) => !_outside(path)).toList();
+    final outsideOnly = inside != null && inside.isEmpty;
+    final next = outsideOnly
+        ? previous
+        : _wide
+        ? null
+        : await _store.snapshot(paths: inside);
+    _snapshot = next;
+    if (next == null && !outsideOnly) {
+      _wide = true;
+      // None of them in a snapshot.
+      for (final entry in _entries.values) {
+        entry.loose = true;
+      }
+    }
+    var compared = false;
+    if (previous != null && next != null) {
+      List<ReviewTreeChange>? changes;
+      try {
+        changes = await _store.diff(previous, next);
+      } on Object {
+        // The snapshot before was collected since (the checkpoints were
+        // cleared, or no look for days).
+      }
+      if (changes != null) {
+        compared = true;
+        _compare(changes, agent: agent);
+      }
+    }
+    if (!compared && next != null) {
+      // No snapshot to tell from (the first since it was resumed): its
+      // files as they are now.
+      for (final MapEntry(key: path, value: entry) in _entries.entries) {
+        if (entry.loose) continue;
+        final now = await _store.current(path);
+        if (now == entry.current) continue;
         entry
           ..current = now
           ..conflict = false;
+        if (agent) entry.after = now;
       }
+    }
+    // Those the snapshots leave out, file by file.
+    for (final MapEntry(key: path, value: entry) in _entries.entries) {
+      if (!entry.loose || (paths != null && !paths.contains(path))) continue;
+      final now = await _store.take(path);
+      if (now == entry.current) continue;
+      entry
+        ..current = now
+        ..conflict = false;
+      if (agent) entry.after = now;
+    }
+    if (agent) {
+      for (final MapEntry(key: path, value: change) in [..._reported.entries]) {
+        if (paths != null && !paths.contains(path)) continue;
+        _reported.remove(path);
+        final known = _originals.containsKey(path);
+        final original = _originals.remove(path);
+        if (_entries[path] case final entry?) {
+          entry
+            ..reported = true
+            ..shared = false;
+        } else if (await _store.exists(path) &&
+            (next == null ||
+                _outside(path) ||
+                !await _store.contains(next, path))) {
+          if (known) {
+            final now = await _store.take(path);
+            _entries[path] = _Entry(original)
+              ..after = now
+              ..current = now
+              ..reported = true
+              ..loose = true;
+          } else {
+            final absolute = _absolute(path);
+            _unseen[absolute] = _merged(_unseen[absolute], change, absolute);
+          }
+        }
+      }
+      if (paths == null) _overlap = _workingHere.any((r) => r != this);
     }
     // Those it cannot undo that are gone since (a script the agent wrote
     // and deleted): nothing is left of them to keep.
@@ -272,18 +403,67 @@ class ChangeReview extends ChangeNotifier {
     await _persist();
   }
 
+  /// Takes in [changes] from one snapshot to the next: the agent's, or
+  /// what is there now.
+  void _compare(List<ReviewTreeChange> changes, {required bool agent}) {
+    for (final change in changes) {
+      // A repository inside the project the snapshots could not look
+      // into (those they can are in them, file by file).
+      if (change.before?.mode == '160000' || change.after?.mode == '160000') {
+        continue;
+      }
+      var entry = _entries[change.path];
+      if (agent) {
+        entry ??= _entries[change.path] = _Entry(change.before);
+        entry
+          ..after = change.after
+          ..current = change.after
+          ..conflict = false
+          ..loose = false;
+        _originals.remove(change.path);
+        if (_overlap && !entry.reported) entry.shared = true;
+      } else if (entry != null) {
+        entry
+          ..current = change.after
+          ..conflict = false
+          ..loose = false;
+      }
+    }
+  }
+
   /// [changes] anew, with their line counts.
   Future<void> _refresh() async {
-    final session = _session;
-    Map<String, ({int added, int removed})?> counts = const {};
-    if (session != null && _entries.isNotEmpty) {
+    final snapshot = _snapshot ?? (_wide ? '' : null);
+    final counts = <String, ({int added, int removed})?>{};
+    final inside = {
+      for (final MapEntry(key: path, value: entry) in _entries.entries)
+        if (!_outside(path)) path: entry,
+    };
+    if (snapshot != null && inside.isNotEmpty) {
       try {
-        counts = await _store.lineCounts(session, {
-          for (final MapEntry(key: path, value: entry) in _entries.entries)
+        final now = await _store.overlay(snapshot, {
+          for (final MapEntry(key: path, value: entry) in inside.entries)
+            if (entry.loose) path: entry.current,
+        });
+        final base = await _store.overlay(snapshot, {
+          for (final MapEntry(key: path, value: entry) in inside.entries)
             path: entry.base,
         });
+        counts.addAll(await _store.lineCounts(base, now));
       } on Object {
         // Listed without their counts.
+      }
+    }
+    // Those outside the project, each in a tree of its own.
+    for (final MapEntry(key: path, value: entry) in _entries.entries) {
+      if (!_outside(path)) continue;
+      try {
+        final base = await _store.overlay('', {'file': entry.base});
+        final now = await _store.overlay('', {'file': entry.current});
+        final counted = await _store.lineCounts(base, now);
+        if (counted.containsKey('file')) counts[path] = counted['file'];
+      } on Object {
+        // Listed without its counts.
       }
     }
     final paths = _entries.keys.toList()..sort();
@@ -300,6 +480,7 @@ class ChangeReview extends ChangeNotifier {
                 : entry.current == null
                 ? FileChangeKind.deleted
                 : FileChangeKind.modified,
+            shared: entry.shared,
             conflict: entry.conflict,
           ),
       ..._unseen.values,
@@ -315,7 +496,7 @@ class ChangeReview extends ChangeNotifier {
     return _enqueue(() async {
       for (final path in kept) {
         _unseen.remove(path);
-        _entries.remove(_relative(path));
+        _entries.remove(_key(path));
       }
       await _refresh();
       await _persist();
@@ -335,15 +516,13 @@ class ChangeReview extends ChangeNotifier {
   Future<void> undo(Iterable<String> paths) {
     final wanted = paths.toList();
     return _enqueue(() async {
-      final session = _session;
-      if (session == null) return;
       final undone = <String>[];
       for (final absolute in wanted) {
-        final path = _relative(absolute);
-        final entry = path == null ? null : _entries[path];
-        if (path == null || entry == null) continue;
+        final path = _key(absolute);
+        final entry = _entries[path];
+        if (entry == null) continue;
         try {
-          if (await _undo(session, path, entry)) {
+          if (await _undo(path, entry)) {
             undone.add(path);
           } else {
             entry.conflict = true;
@@ -355,7 +534,9 @@ class ChangeReview extends ChangeNotifier {
       for (final path in undone) {
         _entries.remove(path);
       }
-      await _refresh();
+      // What it wrote is not the agent's.
+      await _look(agent: false, paths: undone);
+      if (undone.isEmpty) await _refresh();
       await _persist();
     });
   }
@@ -364,7 +545,7 @@ class ChangeReview extends ChangeNotifier {
       undo([for (final path in _entries.keys) _absolute(path)]);
 
   /// Whether [path] is back as it was.
-  Future<bool> _undo(String session, String path, _Entry entry) async {
+  Future<bool> _undo(String path, _Entry entry) async {
     final now = await _store.current(path);
     final base = entry.base;
     final after = entry.after;
@@ -372,12 +553,12 @@ class ChangeReview extends ChangeNotifier {
     if (base == null ? now == null : base.sameContent(now)) return true;
     // As the agent left it: put back what was.
     if (now == null ? after == null : now.sameContent(after)) {
-      await _store.restore(session, path, base);
+      await _store.restore(path, base);
       return true;
     }
     // Changed since: the agent's change taken out of it.
     if (now != null && after != null && base != null && !now.isLink) {
-      final merged = await _store.merge(session, path, after, base);
+      final merged = await _store.merge(path, after, base);
       if (merged == null) return false;
       await _store.write(path, merged);
       return true;
@@ -392,8 +573,7 @@ class ChangeReview extends ChangeNotifier {
   /// part of the change is kept; null when it has no change pending that
   /// can be undone.
   String? baseOf(String path) {
-    final relative = _relative(path);
-    final entry = relative == null ? null : _entries[relative];
+    final entry = _entries[_key(path)];
     if (entry == null) return null;
     return entry.base?.oid ?? '';
   }
@@ -403,27 +583,22 @@ class ChangeReview extends ChangeNotifier {
   /// against. Nothing is written. Fails (the review goes on) where the
   /// store cannot keep it.
   Future<void> keepPart(String path, String base) {
-    final relative = _relative(path);
+    final key = _key(path);
     final completer = Completer<void>();
     unawaited(
       _enqueue(() async {
-        final session = _session;
-        final entry = relative == null ? null : _entries[relative];
-        if (entry == null || session == null) return completer.complete();
+        final entry = _entries[key];
+        if (entry == null) return completer.complete();
         try {
           final mode = entry.base?.mode ?? entry.current?.mode ?? '100644';
-          entry.base = await _store.store(
-            session,
-            utf8.encode(base),
-            mode: mode,
-          );
+          entry.base = await _store.store(utf8.encode(base), mode: mode);
         } on Object catch (error, stack) {
           return completer.completeError(error, stack);
         }
         entry.conflict = false;
         // The file as it is now (saved since the last look, it may be what
         // is kept): the change goes when nothing of it is left.
-        await _look([relative!]);
+        await _look(agent: false, paths: [key]);
         completer.complete();
       }).whenComplete(() {
         if (!completer.isCompleted) completer.complete();
@@ -435,31 +610,23 @@ class ChangeReview extends ChangeNotifier {
   /// Looks at [paths] (absolute) again after they were written outside the
   /// agent's turn (part of a change undone in the editor): not the agent's.
   Future<void> settle(Iterable<String> paths) {
-    final relative = [for (final path in paths) ?_relative(path)];
-    return _enqueue(() => _look(relative));
+    final keys = [for (final path in paths) _key(path)];
+    return _enqueue(() => _look(agent: false, paths: keys));
   }
 
   /// The text of [path] (absolute) before the agent changed it: empty for
   /// a file it created; null when it is not known.
   Future<String> Function()? original(String path) {
-    final relative = _relative(path);
-    if (relative == null || !_entries.containsKey(relative)) return null;
+    final key = _key(path);
+    if (!_entries.containsKey(key)) return null;
     return () async {
-      final base = _entries[relative]?.base;
-      final session = _session;
-      if (base == null || session == null) return '';
-      return utf8.decode(
-        await _store.read(session, base),
-        allowMalformed: true,
-      );
+      final base = _entries[key]?.base;
+      if (base == null) return '';
+      return utf8.decode(await _store.read(base), allowMalformed: true);
     };
   }
 
   // --- Keeping it between runs ----------------------------------------------
-
-  Iterable<ReviewBlob> get _blobs => [
-    for (final entry in _entries.values) ...[?entry.base, ?entry.after],
-  ];
 
   Future<void> _persist() async {
     final session = _session;
@@ -471,7 +638,7 @@ class ChangeReview extends ChangeNotifier {
     await _store.save(
       session,
       jsonEncode({
-        'version': 2,
+        'version': 3,
         'entries': {
           for (final MapEntry(key: path, value: entry) in _entries.entries)
             path: entry.toJson(),
@@ -485,16 +652,10 @@ class ChangeReview extends ChangeNotifier {
             },
         ],
       }),
-      blobs: _blobs,
+      blobs: [
+        for (final entry in _entries.values) ...[?entry.base, ?entry.after],
+      ],
     );
-  }
-
-  /// What [from] kept, kept for [to] instead.
-  Future<void> _move(String from, String to) async {
-    for (final blob in {..._blobs}) {
-      await _store.store(to, await _store.read(from, blob), mode: blob.mode);
-    }
-    await _store.forget(from);
   }
 
   Future<void> _load(String session) async {
@@ -503,9 +664,9 @@ class ChangeReview extends ChangeNotifier {
       final data = await _store.load(session);
       if (data == null) return;
       final json = jsonDecode(data);
-      // One of an earlier build (snapshots of the whole project) is not
-      // read: what it listed is begun anew.
-      if (json is! Map<String, Object?> || json['version'] != 2) return;
+      // One of an earlier build (kept with the snapshot it was taken
+      // against) is not read: what it listed is begun anew.
+      if (json is! Map<String, Object?> || json['version'] != 3) return;
       if (json['entries'] case final Map<String, Object?> entries) {
         for (final MapEntry(key: path, value: entry) in entries.entries) {
           if (entry is Map<String, Object?>) {
@@ -547,9 +708,37 @@ class ChangeReview extends ChangeNotifier {
     return _paths.split(_paths.relative(absolute, from: root)).join('/');
   }
 
-  String _absolute(String path) => _paths.normalize(
-    _paths.isAbsolute(path) ? path : _paths.joinAll([root, ...path.split('/')]),
-  );
+  /// [path]'s key in the review: relative to [root] ([_relative]), else
+  /// absolute (a file outside the project, say in a worktree of its
+  /// repository beside it: held file by file, as the agent told what it
+  /// was).
+  String _key(String path) => _relative(path) ?? _absolute(path);
+
+  /// Whether [key] is of a file outside the project.
+  bool _outside(String key) => _paths.isAbsolute(key);
+
+  /// Whether [path] is in the project, spelled either way (see
+  /// [ChangeReview.new]'s realRoot).
+  bool holds(String path) {
+    final absolute = _absolute(path);
+    return _paths.equals(root, absolute) || _paths.isWithin(root, absolute);
+  }
+
+  String _absolute(String path) {
+    final absolute = _paths.normalize(
+      _paths.isAbsolute(path)
+          ? path
+          : _paths.joinAll([root, ...path.split('/')]),
+    );
+    final real = realRoot;
+    if (real == null ||
+        !(_paths.equals(real, absolute) || _paths.isWithin(real, absolute))) {
+      return absolute;
+    }
+    return _paths.normalize(
+      _paths.join(root, _paths.relative(absolute, from: real)),
+    );
+  }
 
   /// Drops what it kept between runs, once what is under way is done: the
   /// conversation is gone.
@@ -565,6 +754,7 @@ class ChangeReview extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    working = false;
     super.dispose();
   }
 }

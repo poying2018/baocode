@@ -2463,6 +2463,7 @@ class CodexKernel
         emit(ItemCompleted(nextSeq, id, item: AssistantTextItem(text)));
       case 'commandExecution':
         emit(ItemUpserted(nextSeq, id, _commandItem(item)));
+        emit(FilesMayHaveChanged(nextSeq));
         _startedAt.remove(id);
         _commands.remove(id);
       case 'fileChange':

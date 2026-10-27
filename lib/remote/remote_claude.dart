@@ -168,10 +168,19 @@ Future<String?> claudeUsageOffByAt(String? cwd) async {
 
 /// Claude Code's sessions: this machine's, and those of a remote project's
 /// host, listed as that project's (their folders as locations).
-class ClaudeCatalog implements SessionCatalog {
+class ClaudeCatalog implements SessionCatalog, MovesSessions {
   const ClaudeCatalog({this.local = const ClaudeStorage()});
 
   final ClaudeStorage local;
+
+  /// This machine's alone: a remote project is not moved.
+  @override
+  Future<int> moveSessions(String from, String to) {
+    if (RemoteLocation.isRemote(from) || RemoteLocation.isRemote(to)) {
+      throw UnsupportedError('Sessions are only moved on this machine');
+    }
+    return local.moveSessions(from, to);
+  }
 
   /// The host each remote session listed was found on, to delete it there.
   static final Map<String, String> _hostOf = {};

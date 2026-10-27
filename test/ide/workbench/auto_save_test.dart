@@ -43,9 +43,7 @@ void main() {
     expect(workspace.active!.dirty, isTrue);
   });
 
-  testWidgets('afterDelay saves once edits stop for the delay', (
-    tester,
-  ) async {
+  testWidgets('afterDelay saves once edits stop for the delay', (tester) async {
     final workspace = await pumpWorkbench(
       tester,
       {'a.txt': 'a'},

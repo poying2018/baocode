@@ -491,11 +491,11 @@ void main() {
 
   group('ForegroundCommand', () {
     /// A Process that is only an argument: the output is tested on its own.
-    final _Never = _FakeProcess();
+    final silent = _FakeProcess();
 
     test('what runs past what is kept is dropped as it comes', () {
       final running = ForegroundCommand(
-        process: _Never,
+        process: silent,
         command: 'echo',
         description: 'Echo',
         toolUseId: 't1',
@@ -510,7 +510,7 @@ void main() {
 
     test('what fits is kept whole, and not trimmed', () {
       final running = ForegroundCommand(
-        process: _Never,
+        process: silent,
         command: 'echo',
         description: 'Echo',
         toolUseId: 't1',

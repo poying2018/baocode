@@ -234,4 +234,48 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('shows what the checkpoints take up; Clear clears them once '
+      'asked', (tester) async {
+    var size = 3 * 1024 * 1024 * 1024;
+    var cleared = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Material(
+          child: DataDirectoryPage(
+            service: _FakeService(),
+            checkpointsSize: () async => size,
+            clearCheckpoints: () async {
+              cleared++;
+              size = 0;
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Using 3.0 GB'), findsOneWidget);
+    // The path as this machine spells it: the folder is joined the local
+    // way, so a Windows one has its own separators.
+    expect(
+      find.text(p.join('/data/baocode', 'checkpoints')),
+      findsOneWidget,
+    );
+
+    await tester.ensureVisible(find.text('Clear'));
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear the checkpoints?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(cleared, 0);
+
+    await tester.tap(find.text('Clear'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clear').last);
+    await tester.pumpAndSettle();
+    expect(cleared, 1);
+    expect(find.textContaining('Using 0'), findsOneWidget);
+    expect(button(tester, 'Clear').onPressed, isNull);
+  });
 }

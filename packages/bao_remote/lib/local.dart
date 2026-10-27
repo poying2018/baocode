@@ -20,7 +20,7 @@ export 'src/platform/app_paths.dart';
 export 'src/platform/machine_platform.dart';
 export 'src/platform/process_tree.dart';
 export 'src/platform/product.dart';
-export 'src/review/local_review_store.dart';
+export 'src/review/git_review_store.dart';
 export 'src/search/local_search.dart';
 export 'src/terminal/shell_integration_files.dart';
 export 'terminal.dart';

@@ -137,8 +137,19 @@ Name: "contextmenu"; \
 ; where the system's ssh is too old to ask for a password), and claude\
 ; (Claude Code itself, so that a machine with none of its own needs no
 ; install and no download; tool/build_windows.dart puts it there).
-Source: "{#BundleDir}\*"; DestDir: "{app}"; \
-  Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#BundleDir}\*"; Excludes: "\baocode-browser-host.exe"; \
+  DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; The browser extension's host, which a browser may have started again since
+; PrepareToInstall: see ReplaceBrowserHost.
+Source: "{#BundleDir}\baocode-browser-host.exe"; DestDir: "{app}"; \
+  Flags: ignoreversion; BeforeInstall: ReplaceBrowserHost
+
+[InstallDelete]
+; A host ReplaceBrowserHost moved out of the way, at an install before.
+Type: files; Name: "{app}\baocode-browser-host.exe.*.old"
+
+[UninstallDelete]
+Type: files; Name: "{app}\baocode-browser-host.exe.*.old"
 
 [Icons]
 Name: "{group}\{#ProductName}"; Filename: "{app}\{#ProductExe}"
@@ -343,6 +354,28 @@ begin
     '/F /IM baocode-browser-host.exe', '', SW_HIDE,
     ewWaitUntilTerminated, Code) then
     Log(Format('taskkill baocode-browser-host.exe: %d', [Code]));
+end;
+
+// Right before the host is replaced, ended again: the extension connects
+// each minute, and the install takes long enough for it to have started the
+// host anew since PrepareToInstall, whose file then could not be replaced.
+// Started again in between, or not quite gone yet, it is moved out of the
+// way, as Windows lets a running program's file be; [InstallDelete] removes
+// it at the next install.
+procedure ReplaceBrowserHost;
+var
+  Host: String;
+  Old: String;
+begin
+  EndBrowserHost;
+  Host := ExpandConstant('{app}\baocode-browser-host.exe');
+  if (not FileExists(Host)) or DeleteFile(Host) then
+    Exit;
+  Old := Host + '.' + GetDateTimeString('yyyymmddhhnnsszzz', #0, #0) + '.old';
+  if RenameFile(Host, Old) then
+    Log(Format('%s is in use: moved to %s', [Host, Old]))
+  else
+    Log(Format('%s is in use, and could not be moved', [Host]));
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
