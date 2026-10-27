@@ -11,9 +11,13 @@ project(baocode LANGUAGES CXX)
 # runner/app_identity.cpp). The name is written by tool/set_product.dart, which
 # knows both products:
 #
-#   dart run tool/set_product.dart          the codex product
-#   dart run tool/set_product.dart baocode  BaoCode Claude (the Claude Code one)
-set(BINARY_NAME "baocode-codex")
+#   dart run tool/set_product.dart          BaoCode Claude (the Claude Code one)
+#   dart run tool/set_product.dart codex    the codex product
+#
+# The default is this repository's own program. The codex product has its
+# own repository (poying2018/baocode-codex), where the default is that one;
+# the two programs are built, released and updated apart.
+set(BINARY_NAME "baocode-claude")
 
 # The product's name, as it shows: the one the executable's name says.
 # The version information in the executable's properties (runner/Runner.rc)

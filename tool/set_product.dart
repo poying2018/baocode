@@ -8,8 +8,8 @@
 // The name is in windows/CMakeLists.txt, as the `set(BINARY_NAME "...")` the
 // Flutter tool reads to find the executable to run. This tool writes it.
 //
-//   dart run tool/set_product.dart            the codex product
-//   dart run tool/set_product.dart baocode    BaoCode Claude (the Claude Code one)
+//   dart run tool/set_product.dart          BaoCode Claude (the Claude Code one)
+//   dart run tool/set_product.dart codex    the codex product
 //
 // It changes only that one line, so the build that follows is a rebuild of
 // the app, not of the native assets.
@@ -18,7 +18,9 @@ import 'dart:io';
 import 'package:baocode/platform/app_paths.dart';
 
 void main(List<String> arguments) {
-  final product = arguments.isEmpty ? 'codex' : arguments.first;
+  // This repository's program is the Claude Code one; the codex product has
+  // its own repository, where the same tool is run with its name.
+  final product = arguments.isEmpty ? 'baocode' : arguments.first;
   // The products and their executable names: one table (the product table),
   // so that this script and the app cannot disagree about them.
   final spec = Product.byId(product);
