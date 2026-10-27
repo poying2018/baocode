@@ -221,17 +221,29 @@ for (const button of document.querySelectorAll('[data-sound]')) {
   });
 }
 
-// The release published on dl.baocode.dev, once its manifest loads: the
-// version, the day it was published, and each download's link (ending in its
-// hash, so a release redone is not served from the CDN's cache of the old
-// one) and size. Until then, and if it does not load, the page's own.
+// The release published for this site: the version, the day it was
+// published, and each download's link (ending in its hash, so a release
+// redone is not served from a cache of the old one) and size. Until then,
+// and if it does not load, the page's own.
+//
+// Windows is this repository's own build, in its release (its manifest
+// names the platforms as windows-x64); the other platforms are the
+// upstream's, which this repository does not publish.
+const OWN_MANIFEST = 'https://github.com/poying2018/baocode/releases/latest/download/latest.json';
+const UPSTREAM_MANIFEST = 'https://dl.baocode.dev/releases/latest.json';
 (async () => {
   if (!document.querySelector('[data-file], [data-version], [data-updated]')) return;
   try {
     const ctl = new AbortController();
     setTimeout(() => ctl.abort(), 4000);
-    const res = await fetch('https://dl.baocode.dev/releases/latest.json', { signal: ctl.signal, cache: 'no-store' });
-    const m = await res.json();
+    const [own, upstream] = await Promise.all([
+      fetch(OWN_MANIFEST, { signal: ctl.signal, cache: 'no-store' }),
+      fetch(UPSTREAM_MANIFEST, { signal: ctl.signal, cache: 'no-store' }),
+    ]);
+    const mine = own.ok ? await own.json() : null;
+    const theirs = upstream.ok ? await upstream.json() : null;
+    const m = mine || theirs;
+    if (!m) return;
     const v = String(m.version).split('+')[0];
     const zh = document.documentElement.lang.startsWith('zh');
     for (const el of document.querySelectorAll('[data-version]')) el.textContent = zh ? `版本 ${v}` : `Version ${v}`;
@@ -243,7 +255,10 @@ for (const button of document.querySelectorAll('[data-sound]')) {
         el.textContent = zh ? `更新于 ${y} 年 ${mo + 1} 月 ${d} 日` : `Updated ${d} ${months[mo]} ${y}`;
       }
     }
-    showDownloads(m.downloads, v);
+    showDownloads({
+      ...(theirs?.downloads || {}),
+      windows: mine?.platforms?.['windows-x64'] || theirs?.downloads?.windows,
+    }, v);
   } catch {}
 })();
 
