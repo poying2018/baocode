@@ -1491,6 +1491,9 @@ class MarkdownEditorState extends State<MarkdownEditor>
   /// Tells the platform of the text where it differs from what it has.
   void _syncRemote() {
     if (!_hasInput || _applyingRemote) return;
+    // While an input method composes, the platform has the text and the
+    // composition: told again, Windows ends what it composes.
+    if (_composing) return;
     final start = _remoteStart;
     final value = _windowValue();
     if (start == _remoteStart && _sameAsRemote(value)) return;
@@ -1503,10 +1506,19 @@ class MarkdownEditorState extends State<MarkdownEditor>
   /// that is not told types against a text that is not there.
   void _tellPlatform() {
     if (!_hasInput) return;
+    // While an input method composes, the platform has the text and the
+    // composition: told again, Windows ends what it composes, and what it
+    // composes next goes in before it, not over it (see [_sameAsRemote]).
+    if (_composing) return;
     final value = _windowValue();
     _remote = value;
     _connection!.setEditingState(value);
   }
+
+  /// Whether an input method is composing now: it sends a composing region
+  /// (of no length, at the start) while it composes, and none when it is
+  /// done.
+  bool _composing = false;
 
   /// Whether [value] is what the platform has: a composing region of no
   /// length (Windows starts composing with one) is none. Told it again as
@@ -1531,13 +1543,13 @@ class MarkdownEditorState extends State<MarkdownEditor>
   @override
   void updateEditingValueWithDeltas(List<TextEditingDelta> deltas) {
     for (final delta in deltas) {
+      _composing = delta.composing.isValid;
       _applyDelta(_composedOverSelection(delta));
     }
-    // The platform is told of the text as it is now: what it types next is
-    // told against what it has, and a platform that is not told types
-    // against a text that is not there (the characters come out in the
-    // wrong order).
-    _tellPlatform();
+    // The platform is told of the text as it is now, if it does not have
+    // it: what it types next is told against what it has, and a platform
+    // that is not told types against a text that is not there.
+    _syncRemote();
   }
 
   /// [delta] as what the platform did. Windows' engine (Linux's too),
@@ -1585,6 +1597,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
   @override
   void updateEditingValue(TextEditingValue value) {
     // Not as deltas: what changed is where the old and new differ.
+    _composing = value.composing.isValid;
     final old = _remote.text;
     final text = value.text;
     if (old == text) {
