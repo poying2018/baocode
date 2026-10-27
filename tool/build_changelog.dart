@@ -153,7 +153,7 @@ String _html(_Page page, List<(AppVersion, String?)> releases) {
   <a class="brand" href="${page.home}"><img src="/icon.png" alt="">BaoCode</a>
   <a href="${page.home}download">${page.download}</a>
   <a href="${page.url}" aria-current="page">${page.heading}</a>
-  <a href="https://github.com/baocode-dev/baocode"><svg class="ic" aria-hidden="true"><use href="#ic-github"/></svg>GitHub</a>
+  <a href="https://github.com/poying2018/baocode"><svg class="ic" aria-hidden="true"><use href="#ic-github"/></svg>GitHub</a>
   <a class="lang" href="${page.other.url}" hreflang="${page.other.language}" lang="${page.other.htmlLang}">${page.other.name}</a>
 </header>
 
