@@ -36,9 +36,13 @@ void main() {
             endsWith('qr/$os.svg'),
             reason: '$page, the $os card',
           );
+          // The button leads where the code does: the code holds the whole
+          // address (it is scanned away from the page), and so does the
+          // link — this fork's pages carry absolute addresses, which read
+          // from wherever the site is served.
           expect(
             _attribute(card, 'a', 'href'),
-            target,
+            qrSite + target,
             reason: '$page, the $os card links elsewhere',
           );
         }

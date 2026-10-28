@@ -18,6 +18,9 @@ import 'package:qr/qr.dart';
 /// The site the codes are scanned from: where their targets resolve.
 const _site = 'https://baocode.dev';
 
+/// The site the codes lead to, as the test of the pages reads it too.
+const qrSite = _site;
+
 /// Each phone card's target, as site/download.html links it, by the card
 /// it belongs to: the phone app's two downloads (docs/release.md, 10).
 /// test/tool/download_qr_test.dart holds the pages to this.
