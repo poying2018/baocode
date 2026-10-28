@@ -3778,7 +3778,9 @@ class _DiffAreaState extends State<_DiffArea> {
                 onAsk: switch (widget.onAsk) {
                   final ask? => (change, line) => ask(
                     context.l10n.gitAskAiHunkPrompt(
-                      widget.paths.relative(file.path, from: widget.root),
+                      widget.paths
+                          .relative(file.path, from: widget.root)
+                          .replaceAll(r'\', '/'),
                       line,
                       change,
                     ),
