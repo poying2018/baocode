@@ -30,6 +30,82 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.9.0">
+    <h2 class="plain"><a href="#v1.9.0">1.9.0</a></h2>
+    <p>BaoCode Claude 1.9.0</p>
+    <p>A feature release: what the upstream added since 1.8, brought over whole —
+    line wrapping, full screen and zoom, finding across lines, a better
+    message box, and a good deal less CPU. Nothing of yours moves.</p>
+    <p>New</p>
+    <ul>
+    <li>Word wrap in the editors: on from Settings → Appearance, or Alt+Z in an
+    editor.</li>
+    <li>Full screen, from the View menu or F11.</li>
+    <li>Zoom: Ctrl+= and Ctrl+- move Interface Size 2% a press, and Ctrl with
+    keypad 0 resets it. The code in the editor and the side panel's files
+    and changes zoom with it.</li>
+    <li>Find in the editor and Search both match across lines; text pasted with
+    line breaks keeps them. Search keeps its files to include and exclude,
+    and its options, across restarts.</li>
+    <li>The message box's Polish is now Enhance prompt: the auxiliary model
+    rewrites what you wrote into a clearer, more specific prompt. It reads
+    the AI's last reply, so &quot;do option 2&quot; is understood. Undo takes it back.</li>
+    <li>With ChatGPT accounts for Codex, the quota left on the conversation's
+    account shows below the message box; a click lists every account, with
+    its quota and reset times. &quot;Continue after limit reset&quot; covers ChatGPT
+    accounts too.</li>
+    <li>The agent knows the chat shows math, Mermaid diagrams, local images and
+    folding sections, and uses them where they help. Mermaid diagrams show a
+    placeholder while a reply streams in, lay out better, enlarge and have a
+    right-click menu as a picture does.</li>
+    <li>Set up a language server of your own from Open Language Server Settings.
+    It takes effect when saved, with no restart.</li>
+    <li>Sidebar: Collapse All and Expand All for the projects; hovering over a
+    conversation shows the model it uses.</li>
+    <li>Ask AI about one change of a diff: the button by a change puts it, with
+    its file and line, in the chat's input for you to look over.</li>
+    <li>Settings → Appearance has a Native Window Blur switch for the system
+    blur under the windows on Windows 11. It is off by default.</li>
+    <li>The conversation minimap appears only once a conversation is long.</li>
+    <li>Background tasks that ended can be cleared, one at a time or all at
+    once. When the built-in core's agent ends its work with to-do items
+    still open, the model is reminded to update its list.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>After a rebase finishes, the Commit panel no longer keeps showing
+    &quot;Rebasing&quot;, and Continue no longer fails.</li>
+    <li>A WSL or SSH project removed from the list no longer comes back when you
+    open another project on the same host. A remote folder that failed to
+    load on the first connection loads again once a retry connects.</li>
+    <li>Inside WSL, the Claude Code installed on Windows is no longer used by
+    mistake; hosts are named by their distribution everywhere.</li>
+    <li>Files a subagent changes show in the review as they change, and its
+    changes outside the project can be seen and undone. In a project opened
+    through a link, files are no longer taken for files outside the project.</li>
+    <li>With another upstream, availableModels in Claude Code's settings no
+    longer swaps your model for a Claude one.</li>
+    <li>A plan sent to you rather than written to a file now shows as a plan
+    card, ready to start. A code block ends at its closing fence.</li>
+    <li>On Chinese Windows, the output of a failed MCP command is no longer
+    garbled; MCP servers that refused BaoCode's connection check with HTTP
+    415 now accept it.</li>
+    <li>Typing with an input method over selected text replaces the selection.</li>
+    <li>On Windows, the title bar over Settings shows only the window's buttons,
+    and the image preview's close button no longer sits under them.</li>
+    <li>A drag selecting text in a conversation holds when the focus is taken or
+    earlier history loads; text below an open diff can be selected again.</li>
+    <li>Linux plays notification sounds and shows desktop notifications.</li>
+    <li>Much less CPU: a window is sent a frame only when something in it
+    changed, loading animations step together at 30 a second, and the IDE
+    and the sidebar rebuild only when what they show changes. Git and
+    checkpoints run in the background. Changes in ignored folders no longer
+    refresh the Git status, and the model lists are worked out once.</li>
+    <li>A stretch of sustained jank is sampled into the logs, on Windows and
+    Linux now too, to help track it down.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.8.2">
     <h2 class="plain"><a href="#v1.8.2">1.8.2</a></h2>
     <p>BaoCode Claude 1.8.2</p>
