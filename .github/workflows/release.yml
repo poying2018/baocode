@@ -195,40 +195,15 @@ jobs:
         edition: ${{ fromJSON(needs.check.outputs.editions) }}
     env:
       SUFFIX: ${{ matrix.edition == 'channel' && '-channel' || '' }}
-      # The x64 installer's name has no arch, as it always had.
-      ARCH_SUFFIX: ${{ matrix.arch == 'arm64' && '-arm64' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2
-        if: matrix.arch == 'x64'
         with:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
-      # Flutter's Windows SDK archive carries an x64 Dart; cloned at the
-      # release's tag, it downloads the Arm one for this machine.
-      - name: Clone Flutter
-        if: matrix.arch == 'arm64'
-        shell: pwsh
-        run: |
-          git clone --depth 1 --branch "$env:FLUTTER_VERSION" https://github.com/flutter/flutter.git "$env:RUNNER_TEMP\flutter"
-          "$env:RUNNER_TEMP\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" --version
-          # The engine's artifacts and packages (sky_engine), for pub.
-          & "$env:RUNNER_TEMP\flutter\bin\flutter.bat" precache --windows
       - name: Install Inno Setup
-        if: matrix.arch == 'x64'
         run: choco install innosetup --no-progress -y
-      # Its installer itself, where Chocolatey may not be (the Arm image).
-      - name: Install Inno Setup
-        if: matrix.arch == 'arm64'
-        shell: pwsh
-        run: |
-          $is = "$env:RUNNER_TEMP\innosetup.exe"
-          Invoke-WebRequest https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $is
-          if ((Get-FileHash $is -Algorithm SHA256).Hash -ne '9C73C3BAE7ED48D44112A0F48E66742C00090BDB5BEF71D9D3C056C66E97B732') { throw 'innosetup-6.7.3.exe: wrong SHA-256' }
-          $setup = Start-Process $is -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-','/ALLUSERS' -Wait -PassThru
-          if ($setup.ExitCode -ne 0) { throw "Inno Setup's installer exited with $($setup.ExitCode)" }
       - uses: actions/download-artifact@v4
         with:
           name: remote-${{ matrix.product }}
