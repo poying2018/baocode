@@ -53,6 +53,7 @@
 // the remote server's gzipped builds, which the app downloads instead of
 // carrying them (tool/build_remote_server.dart), to upload with the
 // release.
+import 'dart:convert';
 import 'dart:ffi' show Abi;
 import 'dart:io';
 
