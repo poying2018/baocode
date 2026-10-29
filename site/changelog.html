@@ -30,6 +30,24 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.9.1">
+    <h2 class="plain"><a href="#v1.9.1">1.9.1</a></h2>
+    <p>BaoCode Claude 1.9.1</p>
+    <p>A fix release: when a model or its provider answers with nothing, the
+    conversation now says why instead of ending in silence.</p>
+    <p>Fixed</p>
+    <ul>
+    <li>A message whose model answered with no visible content -- a provider that
+    refused the request, or an empty reply -- now ends with an error that says
+    what happened, using the provider's own last error when it left one.</li>
+    <li>The retry the CLI sends itself after such an answer no longer appears as
+    a message you sent.</li>
+    <li>An upstream's API error shows as an error in the conversation, and the
+    same error is not repeated twice.</li>
+    <li>Stopping a turn yourself no longer adds an error for it afterwards.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.9.0">
     <h2 class="plain"><a href="#v1.9.0">1.9.0</a></h2>
     <p>BaoCode Claude 1.9.0</p>
