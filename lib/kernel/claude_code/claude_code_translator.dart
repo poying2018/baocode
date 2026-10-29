@@ -34,8 +34,19 @@ class ClaudeTranslator {
       'Do not ask again: go with what seems best, say what you assumed, '
       'and carry on.';
 
+  /// What the CLI sends itself, after a turn whose answer had nothing in it
+  /// the user could see, to make the model try again. The retry is the
+  /// CLI's, not a message the user sent: it is not shown as one.
+  static const noVisibleOutput =
+      "[Your previous response had no visible output.";
+
   /// The turn changes belong to (the user message uuid that began it).
   String? turnId;
+
+  /// What the CLI said an upstream answered the turn's request with (an
+  /// assistant message of its own, `<synthetic>`): the turn's result says
+  /// the same words, and they are not said twice.
+  String? apiErrorSaid;
 
   /// What the agent is busy with out of sight (see [ActivityReported]).
   KernelActivity? _activity;
@@ -48,6 +59,7 @@ class ClaudeTranslator {
 
   /// A turn was sent: the agent is at work from now, before the CLI says so.
   void begin() {
+    apiErrorSaid = null;
     _resetUsage();
     _report(_waiting());
   }
@@ -696,7 +708,18 @@ class ClaudeTranslator {
           if (synthetic) {
             if (parent == null && _goalReply(text)) continue;
             if (text.isNotEmpty) {
-              _put(id, NoticeItem(NoticeKind.command, text), parent: parent);
+              // What the CLI says an upstream answered with: an error the
+              // user is meant to see, not a line of the runtime's own.
+              final apiError = message['is_api_error_message'] == true;
+              if (apiError) apiErrorSaid = text;
+              _put(
+                id,
+                NoticeItem(
+                  apiError ? NoticeKind.error : NoticeKind.command,
+                  text,
+                ),
+                parent: parent,
+              );
             }
           } else if (_textLength.remove(id) != null) {
             emit(ItemCompleted(nextSeq(), id, item: AssistantTextItem(text)));
@@ -805,6 +828,9 @@ class ClaudeTranslator {
       return;
     }
     if (message['isMeta'] == true) return;
+    // The CLI asking the model again, after an answer with nothing visible
+    // in it: not a message the user sent.
+    if (text.trimLeft().startsWith(noVisibleOutput)) return;
     final id = message['uuid'] as String?;
     if (id == null) return;
     final trimmed = text.trim();

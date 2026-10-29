@@ -1914,11 +1914,31 @@ class ClaudeCodeKernel
         }
       }
     }
-    if (message['is_error'] == true && message['result'] is String) {
-      final error = message['result'] as String;
+    if (message['is_error'] == true) {
+      final error = switch (message['result']) {
+        final String text => text.trim(),
+        _ => '',
+      };
       if (_limitResetsAt == null) _limitSaid(error);
       _accountsLimited();
-      if (error.isNotEmpty) {
+      // A turn the CLI failed with nothing to say for it -- an upstream that
+      // answered with no content, say -- would otherwise end in silence.
+      // What went wrong is said: the provider's own last word, if it left
+      // one, else what to check.
+      final said = error.isNotEmpty
+          ? error
+          : switch (_custom) {
+              (final provider, _) => _providers.error(provider.id),
+              null => null,
+            } ??
+                'The model did not reply. Check the model and its provider '
+                    'in Settings → Models, then try again.';
+      // The CLI's own error line before the result, when it sent one: the
+      // same words twice is not said twice. A turn already over (stopped
+      // by the user, say) is not given one after the fact.
+      if (_turn != null &&
+          said.isNotEmpty &&
+          said != _translator.apiErrorSaid) {
         final host = _remoteHost;
         emit(
           ItemUpserted(
@@ -1927,9 +1947,9 @@ class ClaudeCodeKernel
             NoticeItem(
               NoticeKind.error,
               // On a host over SSH: what may be why, and what to do.
-              host != null && _notLoggedIn(error)
-                  ? '$error\n\n${remoteLoginHint(host)}'
-                  : error,
+              host != null && _notLoggedIn(said)
+                  ? '$said\n\n${remoteLoginHint(host)}'
+                  : said,
             ),
           ),
         );

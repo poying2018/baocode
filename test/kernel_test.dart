@@ -1295,6 +1295,139 @@ void main() {
       kernel.dispose();
     });
 
+    test('a turn failed with nothing to say still says why', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      // As Claude Code ends a turn whose upstream answered with nothing
+      // visible: an error, and no words of its own to show.
+      cli.push({
+        'type': 'result',
+        'subtype': 'error_during_execution',
+        'is_error': true,
+        'result': '',
+      });
+      await pumpEventQueue();
+      final notices = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) case NoticeItem(:final kind, :final text))
+            (kind, text),
+      ];
+      expect(notices, hasLength(1));
+      expect(notices.single.$1, NoticeKind.error);
+      expect(notices.single.$2, contains('did not reply'));
+      expect(transcript.activeTurn, isNull);
+      kernel.dispose();
+    });
+
+    test('an upstream error the CLI reports is shown as an error', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      cli.push({
+        'type': 'assistant',
+        'uuid': 'e1',
+        'is_api_error_message': true,
+        'api_error_status': 400,
+        'message': {
+          'model': '<synthetic>',
+          'role': 'assistant',
+          'content': [
+            {
+              'type': 'text',
+              'text': 'API Error: 400 User location is not supported',
+            },
+          ],
+        },
+      });
+      await pumpEventQueue();
+      expect(shown(transcript), [
+        'user: hi',
+        'notice error: API Error: 400 User location is not supported',
+      ]);
+      kernel.dispose();
+    });
+
+    test('the same upstream error is not said twice', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      const said = 'API Error: 400 User location is not supported';
+      cli.push({
+        'type': 'assistant',
+        'uuid': 'e1',
+        'is_api_error_message': true,
+        'message': {
+          'model': '<synthetic>',
+          'role': 'assistant',
+          'content': [
+            {'type': 'text', 'text': said},
+          ],
+        },
+      });
+      cli.push({
+        'type': 'result',
+        'subtype': 'error_during_execution',
+        'is_error': true,
+        'result': said,
+      });
+      await pumpEventQueue();
+      final notices = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) case NoticeItem(:final text)) text,
+      ];
+      expect(notices, [said]);
+      kernel.dispose();
+    });
+
+    test('a turn the user stopped is not given an error after the fact',
+        () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      kernel.cancel();
+      await pumpEventQueue();
+      // The CLI says the turn failed after all, with nothing to show.
+      cli.push({
+        'type': 'result',
+        'subtype': 'error_during_execution',
+        'is_error': true,
+        'result': '',
+      });
+      await pumpEventQueue();
+      final notices = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) is NoticeItem) transcript.itemAt(i),
+      ];
+      expect(notices, isEmpty);
+      kernel.dispose();
+    });
+
+    test("the CLI's own retry after an empty answer is not shown as a "
+        'message the user sent', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      cli.push({
+        'type': 'user',
+        'uuid': 'meta-1',
+        'message': {
+          'role': 'user',
+          'content':
+              '${ClaudeTranslator.noVisibleOutput} Please continue and '
+              'produce a user-visible response.]',
+        },
+      });
+      await pumpEventQueue();
+      expect(shown(transcript), ['user: hi']);
+      kernel.dispose();
+    });
+
     test('a turn done is kept by its session and prompt, for its footer '
         'later; one stopped is not', () async {
       final kept = _KeptTurns();

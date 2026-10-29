@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
@@ -977,6 +978,35 @@ void main() {
     expect(launches.last.model, startsWith('plain'));
     expect(launches.last.env, isNotNull);
     expect(clis.last.users.single['uuid'], 'u2');
+    kernel.dispose();
+  });
+
+  test('a turn failed with nothing to say shows the provider\'s own last '
+      'error', () async {
+    final (:kernel, launches: _, :clis, environments: _) = start(providers, {
+      'model': '@gw/gpt-5',
+    });
+    final transcript = Transcript();
+    kernel.events.listen(transcript.apply);
+    kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+    await pumpEventQueue();
+    // What the proxy last made of this provider, and a result with no words
+    // of its own: as when an upstream answers with nothing visible.
+    providers.reportError('gw', 'HTTP 400: User location is not supported');
+    clis.last.push({
+      'type': 'result',
+      'subtype': 'error_during_execution',
+      'is_error': true,
+      'result': '',
+    });
+    await pumpEventQueue();
+    final notices = [
+      for (var i = 0; i < transcript.length; i++)
+        if (transcript.itemAt(i) case NoticeItem(:final kind, :final text))
+          (kind, text),
+    ];
+    expect(notices.single.$1, NoticeKind.error);
+    expect(notices.single.$2, 'HTTP 400: User location is not supported');
     kernel.dispose();
   });
 }
