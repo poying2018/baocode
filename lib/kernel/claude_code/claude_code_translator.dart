@@ -711,7 +711,9 @@ class ClaudeTranslator {
               // What the CLI says an upstream answered with: an error the
               // user is meant to see, not a line of the runtime's own.
               final apiError = message['is_api_error_message'] == true;
-              if (apiError) apiErrorSaid = text;
+              // Only the turn's own error: a subagent's says nothing of the
+              // turn's result, and must not keep it from being said.
+              if (apiError && parent == null) apiErrorSaid = text;
               _put(
                 id,
                 NoticeItem(

@@ -398,6 +398,37 @@ void main() {
       expect(transcript.length, greaterThan(0));
     });
 
+    test("a subagent's upstream error is not taken for the turn's own", () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      )..begin();
+      Map<String, Object?> error(String uuid, String text) => {
+        'type': 'assistant',
+        'uuid': uuid,
+        'parent_tool_use_id': 'tool-1',
+        'is_api_error_message': true,
+        'message': {
+          'model': '<synthetic>',
+          'role': 'assistant',
+          'content': [
+            {'type': 'text', 'text': text},
+          ],
+        },
+      };
+      translator.translate(error('a1', 'API Error: 400 no'));
+      // The turn's result says the same words; a subagent's is not what
+      // would keep it from being said.
+      expect(translator.apiErrorSaid, isNull);
+      translator.translate({
+        ...error('a2', 'API Error: 400 no'),
+        'parent_tool_use_id': null,
+      });
+      expect(translator.apiErrorSaid, 'API Error: 400 no');
+    });
+
     test('the summary a compacted conversation goes on from is not shown '
         'as a message: live or kept', () {
       final transcript = Transcript();
