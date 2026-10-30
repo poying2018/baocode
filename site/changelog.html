@@ -30,6 +30,20 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.9.2">
+    <h2 class="plain"><a href="#v1.9.2">1.9.2</a></h2>
+    <p>BaoCode Claude 1.9.2</p>
+    <p>A fix release: when an upstream fails, the conversation says so.</p>
+    <p>Fixed</p>
+    <ul>
+    <li>An upstream that answers a streaming request with JSON -- some gateways
+    send their refusal with HTTP 200 -- now shows as a failed request with
+    its message, instead of an empty answer that ends the turn in silence.</li>
+    <li>A subagent's upstream error no longer keeps the turn's own error from
+    being shown.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.9.1">
     <h2 class="plain"><a href="#v1.9.1">1.9.1</a></h2>
     <p>BaoCode Claude 1.9.1</p>

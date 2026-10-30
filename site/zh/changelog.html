@@ -30,6 +30,18 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.9.2">
+    <h2 class="plain"><a href="#v1.9.2">1.9.2</a></h2>
+    <p>BaoCode Claude 1.9.2</p>
+    <p>修复版：上游失败时，对话会把原因说出来。</p>
+    <p>修复</p>
+    <ul>
+    <li>上游对流式请求返回 JSON（有些网关拒绝时也用 HTTP 200）时，现在会显示为
+    请求失败并带上它的错误信息，而不是一条空回复、让回合悄无声息地结束。</li>
+    <li>子 agent 的上游错误不会再让主回合自己的错误被吞掉。</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.9.1">
     <h2 class="plain"><a href="#v1.9.1">1.9.1</a></h2>
     <p>BaoCode Claude 1.9.1</p>
