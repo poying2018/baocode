@@ -25,6 +25,9 @@ class FakeUpstream {
   /// The status, and the lines of the answer.
   (int, List<String>) Function(Object? body) reply = (_) => (200, const []);
 
+  /// Headers each answer carries (its content type, say).
+  Map<String, String> headers = const {};
+
   String get base => 'http://127.0.0.1:${_server.port}/v1';
 
   Future<void> _handle(HttpRequest request) async {
@@ -35,6 +38,7 @@ class FakeUpstream {
     requests.add((path: request.uri.path, headers: headers, body: body));
     final (status, lines) = reply(body);
     request.response.statusCode = status;
+    this.headers.forEach(request.response.headers.set);
     for (final line in lines) {
       request.response.write('$line\n');
     }
@@ -169,6 +173,32 @@ void main() {
     final tokens = (jsonDecode(answer.text) as Map)['input_tokens'] as int;
     expect(tokens, greaterThan(5));
     expect(upstream.requests, isEmpty);
+  });
+
+  test('a stream asked for and JSON answered instead is an error, not an '
+      'empty answer', () async {
+    // An upstream that sends its refusal as JSON with HTTP 200: passed on
+    // as a stream it reads as an answer with nothing in it.
+    upstream.headers = {'content-type': 'application/json'};
+    upstream.reply = (_) => (
+      200,
+      ['{"error":{"message":"no stream here"}}'],
+    );
+    final answer = await post(
+      await messages(),
+      {
+        'model': 'gpt-5',
+        'stream': true,
+        'messages': [
+          {'role': 'user', 'content': 'hi'},
+        ],
+      },
+      headers: {'authorization': 'Bearer tok'},
+    );
+    expect(answer.status, 502);
+    expect(answer.text, contains('no stream here'));
+    expect(errors.single, contains('no stream here'));
+    expect(upstream.requests, hasLength(1));
   });
 
   test('Chat Completions: a tool call goes out and its stream comes back '

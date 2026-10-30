@@ -324,6 +324,24 @@ class ModelProxy {
           anthropicError(answer.statusCode, message),
         );
       }
+      // A stream asked for, and an answer that is not one: some upstreams
+      // send an error as JSON with HTTP 200. Passed on as a stream it would
+      // read as an answer with nothing in it, and the turn would end in
+      // silence.
+      if (stream &&
+          answer.headers.contentType?.mimeType == 'application/json') {
+        final text = await utf8.decodeStream(answer);
+        final message = upstreamErrorMessage(answer.statusCode, text);
+        _onError?.call(provider.id, message);
+        return _json(
+          response,
+          502,
+          anthropicError(
+            502,
+            '${provider.name} did not stream its answer: $message',
+          ),
+        );
+      }
       _onError?.call(provider.id, null);
       lines = answer
           .transform(const Utf8Decoder(allowMalformed: true))
