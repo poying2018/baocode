@@ -483,6 +483,10 @@ void main() {
       }
       await tester.tap(find.text(button ?? 'Cancel').last);
       await tester.pumpAndSettle();
+      // It says it is fetching the models for two seconds at least, however
+      // soon they come: that time passes before the list is looked for.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
       // A new upstream's models, fetched, to check.
       if (find.textContaining('Models of ').evaluate().isNotEmpty) {
         for (final model in check) {
