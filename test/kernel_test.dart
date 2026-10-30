@@ -1438,6 +1438,44 @@ void main() {
       kernel.dispose();
     });
 
+    test('a turn ended keeps its id, not its words or images', () async {
+      final cli = FakeCli();
+      final (:kernel, transcript: _, events: _) = claude(cli);
+      kernel.send(
+        KernelTurn(
+          id: 'u1',
+          text: 'hi',
+          images: [
+            ImageAttachment(bytes: Uint8List(64 * 1024), mediaType: 'image/png'),
+          ],
+        ),
+      );
+      await pumpEventQueue();
+      cli.push({'type': 'result', 'subtype': 'success', 'is_error': false});
+      await pumpEventQueue();
+      expect(kernel.sentTurn('u1')?.text, isEmpty);
+      expect(kernel.sentTurn('u1')?.images, isEmpty);
+      // Still remembered as sent: the same turn again runs once.
+      kernel.send(const KernelTurn(id: 'u1', text: 'again'));
+      await pumpEventQueue();
+      expect(cli.users, hasLength(1));
+      kernel.dispose();
+    });
+
+    test('a turn waiting its turn keeps what it is to send', () async {
+      final cli = FakeCli();
+      final (:kernel, transcript: _, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+      await pumpEventQueue();
+      kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+      await pumpEventQueue();
+      cli.push({'type': 'result', 'subtype': 'success', 'is_error': false});
+      await pumpEventQueue();
+      expect(kernel.sentTurn('u1')?.text, isEmpty);
+      expect(kernel.sentTurn('u2')?.text, 'second');
+      kernel.dispose();
+    });
+
     test("the CLI's own retry after an empty answer is not shown as a "
         'message the user sent', () async {
       final cli = FakeCli();

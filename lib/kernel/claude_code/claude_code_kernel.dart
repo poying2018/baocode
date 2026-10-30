@@ -277,6 +277,11 @@ class ClaudeCodeKernel
   final Map<String, KernelTurn> _sent = {};
   final Set<String> _queued = {};
 
+  /// The turn [id] was sent with, as kept: a turn ended keeps only its id
+  /// (see [_endTurn]).
+  @visibleForTesting
+  KernelTurn? sentTurn(String id) => _sent[id];
+
   /// Turns stopped here: the CLI's word that it took one up (sent just
   /// before, it may not have yet) does not start it again.
   final Set<String> _stoppedTurns = {};
@@ -1054,6 +1059,14 @@ class ClaudeCodeKernel
         usage: usage,
       ),
     );
+    // Its words and images are the conversation's now (the transcript has
+    // them): the turn keeps only its id, so that a long conversation does
+    // not hold every message twice, images whole. Kept at all, so that
+    // sending the same turn again still runs it once. One that waits its
+    // turn is not ended yet, and keeps what it is to send.
+    if (!_queued.contains(turn)) {
+      _sent[turn] = KernelTurn(id: turn, text: '');
+    }
   }
 
   @override
