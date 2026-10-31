@@ -406,9 +406,11 @@ dart run tool/release_manifest.dart --generate-key <路径>
 
 ```powershell
 # 1. 准备一个“更新版本”：版本号比要测试的那个构建高，签名后写到一个目录
-mkdir C:\tmp\rel
+New-Item -ItemType Directory -Force -Path C:\tmp\rel | Out-Null
 Copy-Item build\installers\BaoCodeClaude-1.2.0-setup.exe C:\tmp\rel\
-$env:BAOCODE_UPDATE_SIGNING_KEY = 'dpapi:F:\Projects\baocode-release-key\update-signing.key.enc'
+# BAOCODE_UPDATE_SIGNING_KEY 是密钥文件的路径；文件内容以 dpapi: 开头时（加密的
+# 那份）工具在本机解密，dpapi: 不写进环境变量。
+$env:BAOCODE_UPDATE_SIGNING_KEY = 'F:\Projects\baocode-release-key\update-signing.key.enc'
 dart run tool/release_manifest.dart --version 9.0.0 `
   --windows C:\tmp\rel\BaoCodeClaude-1.2.0-setup.exe --manifest C:\tmp\rel\latest.json
 

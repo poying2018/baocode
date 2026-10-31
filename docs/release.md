@@ -384,8 +384,10 @@ dart run tool\build_remote_server.dart --out build\remote
 # 构建并打安装包（装到 build\installers\；--skip-build 跳过重编应用本体）
 dart run tool\build_windows.dart --remote-built
 
-# 有私钥的机器上：签出清单（BaoCodeClaude-<版本>-setup.exe 在 build\installers\）
-$env:BAOCODE_UPDATE_SIGNING_KEY = '<私钥文件路径>'
+# 有私钥的机器上：签出清单（BaoCodeClaude-<版本>-setup.exe 在 build\installers\）。
+# BAOCODE_UPDATE_SIGNING_KEY 是**密钥文件的路径**；加密的文件内容以 dpapi: 开头，
+# 工具在本机解密——不是把 dpapi: 写进环境变量。
+$env:BAOCODE_UPDATE_SIGNING_KEY = 'F:\Projects\baocode-release-key\update-signing.key.enc'
 dart run tool\release_manifest.dart `
   --version 1.2.0+12 `
   --windows build\installers\BaoCodeClaude-1.2.0-setup.exe `
