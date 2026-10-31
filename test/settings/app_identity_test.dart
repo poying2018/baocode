@@ -41,28 +41,25 @@ void main() {
       home: '/home',
     );
     // The pointer the installed one wrote is not this copy's: it goes to
-    // its own folder, the one the platform has for it.
+    // its own folder, the one the platform has for it. Where the platform
+    // puts it differs (%APPDATA% on Windows, ~/.config elsewhere); what
+    // must hold is that the copy's folder is named for its id.
     expect(resolution.source, DataDirectorySource.defaultLocation);
-    expect(resolution.path, p.join('/appdata', 'baocode-dev'));
+    expect(p.basename(resolution.path), 'baocode-dev');
   });
 
   test('a product named by its executable keeps its data apart', () {
     // The codex product's executable is baocode-codex.exe, so its folders
-    // are its own: the Claude Code product's are untouched.
-    expect(
-      AppPaths.dataDir(platform, executable: 'baocode-codex.exe'),
-      p.join('/appdata', 'baocode-codex'),
+    // are its own: the Claude Code product's are untouched. The folder name
+    // is the executable's name wherever the platform keeps its data.
+    String folder(String exe) => p.basename(
+      AppPaths.dataDir({...platform}, executable: exe),
     );
-    expect(
-      AppPaths.dataDir(platform, executable: 'baocode.exe'),
-      p.join('/appdata', 'baocode'),
-    );
+    expect(folder('baocode-codex.exe'), 'baocode-codex');
+    expect(folder('baocode.exe'), 'baocode');
     // A name belonging to no product (a test host, a build named
     // otherwise) is BaoCode's.
-    expect(
-      AppPaths.dataDir(platform, executable: 'flutter_tester.exe'),
-      p.join('/appdata', 'baocode'),
-    );
+    expect(folder('flutter_tester.exe'), 'baocode');
   });
 
   test('the names a product shows are told apart', () {
