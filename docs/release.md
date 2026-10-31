@@ -10,8 +10,9 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
 > `--dmg-*` 选项。远程服务端的 macOS 版仍在（`remote.yml` 在 Mac 上编译）—— 那是装在
 > SSH 主机上的服务端，与应用的平台无关。
 
-- 下载与更新：`https://dl.baocode.dev`（Cloudflare R2）
-- 官网：`https://baocode.dev`（Cloudflare Worker `baocode` 的静态资源，`site/`；Workers Builds 从 GitHub 部署）
+- 下载与更新：本仓库自己的 GitHub Releases（`releases/latest/download/latest.json`）。
+  `dl.baocode.dev` 是上游的域名，这个 fork 不用它
+- 官网：`https://baocode.dev` 是上游的（`site/` 目录里的源码随本仓库走，但没地方部署）；应用里给出的地址都是本仓库的
 - 构建与发布：GitHub Actions，`.github/workflows/release.yml`
 - 工具：`tool/bump_version.dart`、`tool/build_windows.dart`、`tool/build_remote_server.dart`、`tool/release_manifest.dart`
 
@@ -21,7 +22,7 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
 2. [版本号](#2-版本号)
 3. [发一个版本](#3-发一个版本)
 4. [CI 做了什么](#4-ci-做了什么)
-5. [dl.baocode.dev 上有什么](#5-dlbaocodedev-上有什么)
+5. [服务端（本仓库的 GitHub Releases）](#5-服务端本仓库的-github-releases)
 6. [更新的数据流](#6-更新的数据流)
 7. [第一次发布前的准备](#7-第一次发布前的准备)
 8. [出了问题](#8-出了问题)
@@ -42,27 +43,17 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
                                ├ check    版本号对不对，不比已发布的旧
                                ├ remote   远程服务端（remote.yml）：在 Mac 上编译一次（Linux、macOS
                                │          各两种架构），Linux 版在 Docker 里跑一遍
-                               ├ macos    构建、签名、公证（macOS 机器）
-                               ├ windows  构建、打安装包（Windows 机器）
-                               ├ linux    构建 .deb 和 tar.gz（x64、arm64 各一台 Ubuntu 22.04），装上启动一遍
-                               └ publish  签 latest.json，上传 ────────▶ R2 存储桶
-                                          建 GitHub Release              │
-                                                                         ▼
-                                                              dl.baocode.dev（CDN）
-                                                               releases/latest.json
-                                                               releases/<版本>/…
-                                                               releases/remote/…
-                                                                  ▲          ▲
-                                     已安装的 BaoCode：每 6 小时读清单 ┘          │
-                                     baocode.dev/download：读清单显示版本和链接 ──┘
-
- git push main ──────────────────────────────────────▶ Workers Builds ─▶ Worker baocode：baocode.dev
- git push 其他分支 ─────────────────────────────────▶ Workers Builds ─▶ 预览版本（不上线）
+                               └ windows  构建、打安装包（Windows 机器）
+                               └ publish  签 latest.json ────▶ 本仓库的 GitHub Release
+                                          （gh release create/upload）        │
+                                                                              ▼
+                                              已安装的 BaoCode：每 6 小时读
+                                              releases/latest/download/latest.json，
+                                              按清单里的链接下载安装包
 ```
 
-- **网站和安装包分开放**：网站是 Worker 的静态资源，推送 `main` 就发布，和应用的版本无关（见 3 节“发布官网”）；安装包在 R2 上，只有推送 `v*` 标签时才由 CI 发布。静态资源单个文件不能超过 25 MiB，dmg 放不下。
-- **流量不收钱**：Worker 静态资源的请求不计费；R2 的下载流量免费，存储每月 10 GB 以内免费。
-- **旧地址**：`site/_redirects` 把 `baocode.dev/releases/*` 302 到 `dl.baocode.dev/releases/*`，给改地址前打出来的构建用（应用的 `HttpClient` 会跟随重定向）。
+- **网站和安装包分开放**：上游有官网（Worker + R2），这个 fork 没有——`site/` 目录的源码在仓库里，没有地方部署。安装包只在 GitHub Releases 上，推送 `v*` 标签时由 CI 发布。
+- **旧地址**：`site/_redirects` 把 `baocode.dev/releases/*` 302 到 `dl.baocode.dev/releases/*`，是上游的机制，本 fork 两头都不部署。
 
 ## 2. 版本号
 
@@ -118,9 +109,8 @@ git push origin v1.2.0                          # 从这里开始 CI 接手
 
 完成后确认：
 
-- [ ] `curl -s https://dl.baocode.dev/releases/latest.json` 是新版本
-- [ ] `https://baocode.dev/download` 显示新版本，两个按钮都能下载
-- [ ] `https://baocode.dev/changelog` 有这个版本
+- [ ] `curl -s https://github.com/poying2018/baocode/releases/latest/download/latest.json` 是新版本
+- [ ] 仓库的 Releases 页有这个版本，安装包能下载
 - [ ] 装着旧版本的机器上点“检查更新”，能发现、下载、重启装上
 
 **重新发布同一个版本**（标签挪到新提交上）：
@@ -140,13 +130,15 @@ CI 会照常构建，覆盖 R2 上的文件，重新建 GitHub Release。
 git tag test-upstream-import && git push origin test-upstream-import
 ```
 
-CI 照常构建，然后把安装包传到 `dl.baocode.dev/test/<版本>-<标签去掉 test->-<运行编号>/`，链接写在这次运行的 Summary 里，直接发给测试的人，不用登录 GitHub。用的是 `release` 环境里已有的 R2 令牌（环境允许 `test-*` 标签，见 7.2），不签更新清单。同一个标签再测一次：`git tag -f … && git push -f origin …`。
+CI 照常构建，但**不发布**：安装包留在这次运行的 Artifacts 里（`windows-baocode-claude`、
+`remote-baocode-claude`、`symbols-windows-baocode-claude`），要登录 GitHub 才能下载，
+把 Artifacts 页的链接发给测试的人即可。不建 GitHub Release、不动 `latest.json`，
+已安装的应用不会收到它。同一个标签再测一次：`git tag -f … && git push -f origin …`。
 
-- 不是更新：`test/` 不在 `releases/` 下，`latest.json` 不变，已安装的应用不会收到它。
+- `test-channel-*` 标签构建的是 channel 版（`lib/channel/`），`test-*` 是标准版。
 - 版本号就是分支上 `pubspec.yaml` 的版本。测试的人之后会照常收到比它新的正式版。
-- macOS 包的签名和正式版一样（现在是 ad hoc，第一次打开要在 系统设置 → 隐私与安全性 里点“仍要打开”；配上 7.3 的证书后两者都会正式签名）。
-- 远程服务端也会传到 `releases/remote/<它的版本>/`（按内容定版本，不影响已发布的），测试包连 SSH 主机时要用。
-- 旧测试包不会自动删：可以在 R2 存储桶的 Settings → Object lifecycle rules 给前缀 `test/` 加一条“30 天后删除”。
+- 测试包连 SSH 主机时要远程服务端：正式发版（`v*`）会把各平台的 `.gz` 传到 release
+  资产里，按服务端的 VERSION 对号下载（docs/ssh-remote.md 9.3）。
 
 **单独发布远程服务端**：在要发的提交上打一个 `server-` 开头的标签并推送：
 
@@ -161,12 +153,7 @@ dart run tool/build_windows.dart --remote-release            # 最新发布的�
 dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 ```
 
-脚本用 `tool/fetch_remote_server.dart` 取 `servers.json`、确认每个 `.gz` 都能下载，放进 `build/remote-release/` 再打包。应用和服务端是严格一一对应的内部协议（docs/ssh-remote.md），**服务端要从和应用相同（至少 `packages/bao_remote` 相同）的提交发布**，否则连上后可能出错。正式发版（`v*`）也会传 `servers.json`、更新 `releases/remote/latest.json`。
-
-**发布官网**：和应用发版无关，推送到 `main` 就由 Cloudflare Workers Builds 部署到 baocode.dev（GitHub 上这个提交的检查里有“Workers Builds: baocode”）。
-
-- 先预览：推送任何别的分支，Workers Builds 只上传一个预览版本、不上线。预览地址是 `https://<版本 ID 前 8 位>-baocode.leokun-cn.workers.dev`，版本 ID 在那个提交的“Workers Builds: baocode”检查详情里。
-- 只发官网：把 `site/` 的改动单独提交推到 `main` 即可，`main` 上没发版的应用代码不受影响（应用只在推 `v*` 标签时发布）。
+脚本用 `tool/fetch_remote_server.dart` 取 `servers.json`、确认每个 `.gz` 都能下载，放进 `build/remote-release/` 再打包。应用和服务端是严格一一对应的内部协议（docs/ssh-remote.md），**服务端要从和应用相同（至少 `packages/bao_remote` 相同）的提交发布**，否则连上后可能出错。正式发版（`v*`）也会把 `servers.json`、`remote-latest-<产品>.json` 传进 release 资产。
 
 ## 4. CI 做了什么
 
@@ -178,16 +165,15 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 | `remote` | | 调用 `remote.yml`（推 `server-*` 标签时它也单独运行并发布，见第 3 节），下面两步 |
 | `remote` › `build` | macOS 15 | 下载和 Flutter 同版本的 x64 Dart SDK → 编译远程服务端（`--all`：Linux x64/arm64 交叉编译；macOS arm64 用本机的 dart，macOS x64 用 x64 的 dart 经 Rosetta，`dart compile exe` 只能在 Mac 上、按 dart 自己的架构编 macOS 版）→ `tool/test_remote_server_macos.sh`：在这台 Mac 上把两份 macOS 版各跑一遍 → 上传 `remote`（`VERSION`、`servers.json`、`.gz`）和 `remote-linux`（Linux 的两个二进制）两个产物 |
 | `remote` › `linux` | Ubuntu | `tool/test_remote_server.sh`：在 Docker 里的 Ubuntu 20.04 / 24.04、Debian 12、Rocky Linux 8 上，两种架构各跑一遍（arm64 用 QEMU 模拟），要能启动、回答 `initialize`、列出目录 |
-| `macos` | macOS 15 | 有证书就导入临时钥匙串 → `tool/build_macos.dart --remote-built`：构建 universal 的 .app，**检查是 universal**（每个可执行文件都有 arm64 和 x86_64）→ 放进 `remote` 任务的 `servers.json` → 用 `ditto --arch` 拆成 Apple silicon（arm64）和 Intel（x64）两个应用，各自检查只剩一种架构，下面每个各做一遍：→ 签名（有证书用 Developer ID，带 hardened runtime；没有就 ad hoc，**不带** hardened runtime，否则系统拒绝加载应用自己的框架、一启动就崩；总要重签，因为放进去的文件要包进签名）→ 做 dmg → 有证书时签 dmg、公证、钉票据 → 打更新用的 zip → **把两个 zip 解开各真正启动一次**（Intel 版经 Rosetta），15 秒内退出就不发 |
 | `windows` | Windows | 装 Inno Setup → `tool/build_windows.dart --remote-built`：构建、放进 `servers.json`、放进 Claude Code（下载并按 SHA-256 校验，见下）、打安装包 |
-| `publish` | Ubuntu | 汇总产物 → 用更新私钥签 `latest.json`（`tool/release_manifest.dart`）→ 上传远程服务端 → 上传安装包 → **最后**上传 `latest.json` → 建 GitHub Release（附安装包；重新发布时先删掉旧的） |
+| `publish` | Ubuntu | 汇总产物 → 用更新私钥签 `latest.json`（`tool/release_manifest.dart`）→ 上传远程服务端 → 上传安装包 → 建 GitHub Release → **最后**上传 `latest.json`（重新发布时先删掉旧的 release） |
 
 几个设计上的考虑：
 
 - **`latest.json` 最后传**：应用一读到新清单就会去下载，安装包必须先就位。
-- **远程服务端只编译一次**：`remote` 任务编译，macOS 和 Windows 两个应用带的是同一份 `servers.json`（四个平台都有），R2 上一个版本只有一个 `releases/remote/<版本>-<二进制哈希>/`。
-- **下载链接带哈希**：`latest.json` 里每个链接末尾是 `?sha256=<文件哈希前 16 位>`。CDN 按完整地址缓存，文件换了地址就换了，不会给出旧文件；应用取文件名时只看路径。
-- **`downloads`**：`latest.json` 里多了这一项，是给网站用的（两个 dmg 和 Windows 安装包的链接、大小，键是 `macos-arm64`、`macos-x64`、`windows`），应用不读它。
+- **远程服务端只编译一次**：`remote` 任务编译，Windows 应用带的是同一份 `servers.json`（四个平台都有），一个 release 里只有一份服务端资产。
+- **下载链接带哈希**：`latest.json` 里每个链接末尾是 `?sha256=<文件哈希前 16 位>`。GitHub 的资产地址带文件名，重新发布时同一地址内容会变，所以链接里的哈希同时防 CDN 缓存给出旧文件；应用取文件名时只看路径。
+- **`downloads`**：`latest.json` 里多了这一项，是上游给网站下载页用的（本 fork 没有部署下载页），应用不读它。
 - **Claude Code 随包分发**：Windows 安装包带上 Claude Code 自己（`claude\claude.exe` 和 `claude\VERSION`），用户不用另装、也不用等第一次对话时的下载。
   - 版本在 `tool/build_windows.dart` 里钉死（`_claudeVersion`），并按 `_claudeSha256` 校验：**构建只会带上那一份**，换版本时两个常量一起改。
   - 下载一次就缓存到 `build\claude\`，以后再构建直接用缓存。
@@ -232,27 +218,24 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
   `dev.baocode.browser`（`windows/CMakeLists.txt` 与 `windows/BrowserBridge/CMakeLists.txt`
   两处说的必须是同一个名字，安装步骤装的就是前者点名的目标）。
 
-## 5. dl.baocode.dev 上有什么
+## 5. 服务端（本仓库的 GitHub Releases）
 
-R2 存储桶，绑定自定义域名 `dl.baocode.dev`，前面是 Cloudflare 的 CDN。
+本仓库没有 R2、没有自定义域名：发布物就是仓库自己的 GitHub Releases 资产。一个
+`v<版本>` 标签一个 release，资产一层平铺（清单核对过的实际名字）：
 
 ```
-releases/
-  latest.json                            应用和下载页读的清单          max-age=300
-  1.2.0/
-    BaoCode-1.2.0-setup.exe              Windows：首次安装和自动更新   immutable，一年
-  remote/
-    latest.json                          最新发布的服务端（--remote-release 用） max-age=60
-    <VERSION>/                           远程服务端，应用连远程主机时按需下载
-      servers.json                       各平台的地址、大小、SHA-256（--remote-release 用）
-      baocode-server-linux-x64.gz        immutable，一年
-      baocode-server-linux-arm64.gz
-      baocode-server-darwin-x64.gz
-      baocode-server-darwin-arm64.gz
+releases/latest/download/latest.json      应用读的清单（指针指向最新 release）
+releases/download/v1.2.0/                 一个版本一个标签
+  latest.json                             同一份清单，也是这个 release 的资产
+  BaoCodeClaude-1.2.0-setup.exe           Windows：首次安装和自动更新
+  baocode-server-<平台>.gz                远程服务端，应用连远程主机时按需下载
+  servers.json                              （docs/ssh-remote.md 第 9.3 节）
+  remote-latest-baocode-claude.json       最近一次发布的服务端版本记录
 ```
 
-- **旧版本一直保留**：下载页只链最新版，但 `remote/` 下旧目录还有旧版本的用户在用，删了他们连不上远程主机。
-- **`latest.json` 缓存 5 分钟**：Cloudflare 默认不缓存 `.json`，每次都回源到 R2（算一次读取，每月 1000 万次免费）；浏览器和中间代理最多缓存 5 分钟。
+- **旧版本一直保留**：旧 release 里的服务端还有旧版本的用户在用，删了他们连不上远程主机。
+- **`releases/latest/download/<资产>` 指向最新 release 的同名资产**：清单上传是发版的
+  最后一步，之前安装包必须先就位；`gh release delete` + 重建会让指针短暂落回上一个版本。
 - 清单格式、链接规则见 [auto-update.md 第 5 节](auto-update.md#5-服务端约定)。
 
 ## 6. 更新的数据流
@@ -265,18 +248,19 @@ releases/
 
 **已安装的应用**（`update.mode` 是默认的“自动检查并下载”时）：
 
-1. 启动 30 秒后、之后每 6 小时，GET `https://dl.baocode.dev/releases/latest.json`。
-2. 解析清单；下载链接必须是 `https://*.baocode.dev`。版本不比自己新，或者没有本平台的条目 → 已是最新，结束。
-3. 后台下载本平台的安装包（Mac 按处理器取 Apple silicon 或 Intel 的包，见 [auto-update.md 5.2](auto-update.md#52-latestjson-格式)）到 `<数据目录>/updates/<版本>/`，支持断点续传。
-4. 依次校验大小 → SHA-256 → Ed25519 签名（公钥内置在应用里）。任何一项不过就删掉，报错。macOS 还会检查新 .app 的 bundle id，以及在当前应用有正式签名时，新 .app 是不是同一个 Team 签的。
+1. 启动 30 秒后、之后每 6 小时，GET 本仓库的
+   `https://github.com/poying2018/baocode/releases/latest/download/latest.json`。
+2. 解析清单；下载链接必须在 github.com（或其重定向主机 githubusercontent.com）上。
+   版本不比自己新，或者没有本平台的条目 → 已是最新，结束。
+3. 后台下载本平台的安装包（Windows x64 的 setup.exe，见 [auto-update.md 5.2](auto-update.md#52-latestjson-格式)）到 `<数据目录>/updates/<版本>/`，支持断点续传。
+4. 依次校验大小 → SHA-256 → Ed25519 签名（公钥内置在应用里）。任何一项不过就删掉，报错。
 5. 主窗口右下角弹通知。用户点“立即重启更新”后，走和平时退出一样的确认（未保存的文件、运行中的 agent 和终端），确认了才安装：
    - Windows：应用退出后，带 `/SILENT /RELAUNCH` 运行新的 setup.exe，覆盖安装到原来的位置，再重新打开。
-   - macOS：解压出新 .app，等应用退出后由脚本替换原来的 BaoCode.app，再打开。
 6. 新版本启动时清理 `updates/` 里旧版本的下载。
 
 设置和对话放在数据目录里，不在安装目录里，更新不会动它们。
 
-**官网**（首页和 `baocode.dev/download`，`site/site.js`）：浏览器读同一份 `latest.json`，按其中的 `downloads` 换上版本号、两个 dmg 和 Windows 安装包的链接（带哈希）和大小。下载页的 macOS 卡片有 Apple silicon 和 Intel 两个按钮，默认突出 Apple silicon；Chromium 系浏览器能报出处理器架构，Intel Mac 上会改为突出 Intel（`site/download.js`）。需要 R2 的 CORS 允许 `https://baocode.dev`（见 7.1）。读不到时显示页面里写死的版本；页面里的下载链接本身写的是 `/dl/windows`、`/dl/windows-arm64`、`/dl/macos-arm64`、`/dl/macos-x64`（Arm64 的按钮先隐藏，`site.js` 读到清单里有 `windows-arm64` 才显示），由 Worker（`site-worker/index.js`，只接管 `/dl/*`）按当时的 `latest.json` 302 到对应安装包，所以脚本没跑完、被拦或页面被缓存时下到的也是最新版，发版不用改页面里的链接。
+**官网**（`baocode.dev`，上游的）：`site/` 目录里的源码随本仓库走，但这个 fork 没有部署它的 Worker 和域名，所以没有可用的官网与下载页；应用无法自己更新时打开的是仓库的 Releases 页（见 `ManualUpdateRequired.downloadPage`）。上游那段「浏览器读同一份清单、`/dl/*` 由 Worker 302 到安装包」的机制在本 fork 没有对应物——上面第 5 节的扁平资产就是全部。
 
 **两把“钥匙”管的是不同的事**：
 
@@ -292,7 +276,26 @@ releases/
 
 全部是一次性的。**这些值都直接填进 GitHub 或 Cloudflare 的后台，不要发到聊天里，也不要提交到仓库。**
 
-### 7.1 Cloudflare
+### 7.1 GitHub（应用发版需要的全部）
+
+1. **环境**：Settings → Environments → New environment，名字 `release`。
+   - Deployment branches and tags → Selected branches and tags → 加三条 **Tag**，规则 `v*`、`test-*` 和 `server-*`。只有这几种标签触发的运行能用这个环境里的密钥。
+   - 可选：Required reviewers 加上你自己。每次发布要你在 Actions 里点一下批准，多一道保险。
+2. **环境密钥**（`release` 环境 → Environment secrets）：
+
+   | 名字 | 值 |
+   | --- | --- |
+   | `BAOCODE_UPDATE_SIGNING_KEY` | 更新签名私钥文件（一行 base64 的 seed，或 `dpapi:` 开头的加密文件——CI 在 ubuntu 上只认前者） |
+   | 下面 7.3 的六个 | 有 Apple 开发者账号之后再加（本 fork 只发 Windows，暂时用不上） |
+
+3. **保护标签**：Settings → Rules → Rulesets → New tag ruleset，目标 `v*`，限制创建、更新、删除，只允许你自己绕过。这样只有你能发版。
+
+应用更新的服务端就是这个仓库的 Releases，没有别的要准备。更新签名私钥放进 GitHub 之后，本机和离线备份仍然要留着（见 [auto-update.md 6.3](auto-update.md#63-保管)）。
+
+### 7.2 Cloudflare（只有扩展和手机版用）
+
+`extension.yml` 与 `mobile.yml` 把扩展和 APK 传到 R2（`dl.baocode.dev`，上游的桶）；**应用
+的更新不走那里**。要发这两样才需要，一次性的：
 
 1. **R2 存储桶**：R2 → Create bucket，名字比如 `baocode-downloads`。
 2. **自定义域名**：存储桶 → Settings → Custom Domains → Connect Domain → `dl.baocode.dev`。不要开 `r2.dev` 公共地址。
@@ -307,30 +310,14 @@ releases/
      }
    ]
    ```
-4. **API 令牌**：R2 → Manage R2 API Tokens → Create API token，权限 **Object Read & Write**，范围**只选这个存储桶**。记下 Access Key ID 和 Secret Access Key（只显示一次），以及页面上的 Account ID。
+4. **API 令牌**：R2 → Manage R2 API Tokens → Create API token，权限 **Object Read & Write**，范围**只选这个存储桶**。记下 Access Key ID 和 Secret Access Key（只显示一次），以及页面上的 Account ID。对应的 secret：`R2_ACCOUNT_ID`、`R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`，环境变量 `R2_BUCKET`（存 Action variables）。
 5. **网站**：Worker `baocode`，静态资源是 `site/`（`_headers`、`_redirects` 照常生效），Settings → Builds 连着 GitHub 仓库（生产分支 `main`），自定义域名 `baocode.dev`。
 
-### 7.2 GitHub
-
-1. **环境**：Settings → Environments → New environment，名字 `release`。
-   - Deployment branches and tags → Selected branches and tags → 加三条 **Tag**，规则 `v*`、`test-*` 和 `server-*`。只有这几种标签触发的运行能用这个环境里的密钥；`test-*` 的运行只往 R2 的 `test/` 传安装包，不签、不传 `latest.json`；`server-*` 的只传 `releases/remote/`。
-   - 可选：Required reviewers 加上你自己。每次发布要你在 Actions 里点一下批准，多一道保险。
-2. **环境密钥**（`release` 环境 → Environment secrets）：
-
-   | 名字 | 值 |
-   | --- | --- |
-   | `UPDATE_SIGNING_KEY` | `~/.baocode-release/update-signing.key` 的内容（一行 base64） |
-   | `R2_ACCOUNT_ID` | Cloudflare 的 Account ID |
-   | `R2_ACCESS_KEY_ID` | R2 令牌的 Access Key ID |
-   | `R2_SECRET_ACCESS_KEY` | R2 令牌的 Secret Access Key |
-   | 下面 7.3 的六个 | 有 Apple 开发者账号之后再加 |
-
-3. **环境变量**（`release` 环境 → Environment variables）：`R2_BUCKET` = 存储桶名字。
-4. **保护标签**：Settings → Rules → Rulesets → New tag ruleset，目标 `v*`，限制创建、更新、删除，只允许你自己绕过。这样只有你能发版。
-
-更新签名私钥放进 GitHub 之后，本机和离线备份仍然要留着（见 [auto-update.md 6.3](auto-update.md#63-保管)）。
-
 ### 7.3 Apple（macOS 签名与公证）
+
+> **本 fork 不发 macOS 版**（见第 1 节免责声明）：没有 `macos/` 构建任务，`tool/build_macos.dart`
+> 已删。下面这节是上游的记录，留着给以后万一恢复 macOS 发布时参考；本仓库的 CI
+> 不读这些 secret。
 
 **需要 Apple 开发者账号吗？** 要。没有的话应用照样能构建、能自动更新，但新用户第一次从网上下载打开时会被 Gatekeeper 拦下（“BaoCode 已损坏，无法打开”），只能在终端里运行 `xattr -dr com.apple.quarantine` 才能打开。对外发布基本绕不过去。
 
@@ -354,7 +341,7 @@ releases/
    | `NOTARY_KEY_ID` | Key ID |
    | `NOTARY_ISSUER` | Issuer ID |
 
-5. 先用 Actions → Release → Run workflow 试一次：手动运行拿不到密钥，所以这一步只验证构建本身。要验证签名和公证，就发一个真实版本，或者在本机按第 9 节手动跑 `tool/build_macos.dart`。
+5. 先用 Actions → Release → Run workflow 试一次：手动运行拿不到密钥，所以这一步只验证构建本身。要验证签名，就发一个真实版本，或在本机按第 9 节手动跑 `tool/build_windows.dart`。
 
 **注意**
 
@@ -370,52 +357,37 @@ releases/
 | `check` 失败：比已发布的旧 | `tool/bump_version.dart` 加到比已发布的新 |
 | `remote` › `linux` 失败：Docker 里跑不起来 | 日志里有每个系统、每种架构的结果和服务端的输出。在本机用 `dart run tool/build_remote_server.dart && tool/test_remote_server.sh` 复现（需要 Docker） |
 | `remote` › `build` 失败：macOS 版没编出来或跑不起来 | 多半是下载 x64 Dart SDK 失败（Flutter 带的 Dart 版本在 dart-archive 上没有对应的包），或 Rosetta 没装上。在 Apple silicon 的 Mac 上用 `dart run tool/build_remote_server.dart --all --macos-x64-dart <x64 sdk>/bin/dart && tool/test_remote_server_macos.sh` 复现 |
-| `macos` 失败：Not universal | 某个框架只编了一种架构，日志里列出了是哪个。拆出来的某个包会少这个框架的代码，在用到它时崩溃，所以不发 |
-| `macos` 公证失败 | 日志里有 Apple 返回的详细原因（哪个文件、什么问题）。常见原因：某个二进制没开 hardened runtime、没有时间戳 |
 | `publish` 在上传 `latest.json` 之前失败 | 用户什么都看不到。修好后按第 3 节重新发布同一个版本即可 |
 | 发出去的版本有问题 | 尽快发一个修复版（版本号更高）。也可以把上一版的 `latest.json` 传回去，让还没更新的人停在旧版，但已经更新的人不会被降级。见 [auto-update.md 5.5](auto-update.md#55-撤回一个版本) |
 | 用户报“检查更新失败” | 见 [auto-update.md 第 10 节](auto-update.md#10-故障排查) |
 
 ## 9. 不用 CI，手动发布
 
-CI 不可用时的备用办法，步骤和 CI 一样：
+CI 不可用时的备用办法，步骤和 CI 一样（Windows 上）：
 
-```sh
-# macOS 上：先把四份远程服务端都编好（x64 的 Dart SDK 见 docs/ssh-remote.md 9.1）
-dart run tool/build_remote_server.dart --all --macos-x64-dart <x64 sdk>/bin/dart
-# 然后打包（有证书的话先设好第 7.3 节对应的环境变量，见 tool/build_macos.dart 开头）
-dart run tool/build_macos.dart --remote-built
-# Windows 上：把 Mac 上的 build/remote/ 拷过来，用同一份（自己编的没有 macOS 版）
-dart run tool/build_windows.dart --remote-built
+```powershell
+# 远程服务端：本机没有 Mac，编不了 macOS 版——从最近一次发版的资产里取
+# （releases/download/<service端版本>/），或只发 Windows 服务端能编的几个平台
+dart run tool\build_remote_server.dart --out build\remote
 
-# 有私钥的机器上，两个平台的包都拷过来之后
-BAOCODE_UPDATE_SIGNING_KEY=~/.baocode-release/update-signing.key \
-  dart run tool/release_manifest.dart \
-    --windows build/installers/BaoCode-1.2.0-setup.exe \
-    --macos-arm64 build/installers/BaoCode-1.2.0-mac-arm64.zip \
-    --macos-x64   build/installers/BaoCode-1.2.0-mac-x64.zip \
-    --dmg-arm64   build/installers/BaoCode-1.2.0-arm64.dmg \
-    --dmg-x64     build/installers/BaoCode-1.2.0-x64.dmg \
-    --notes-en release-notes/1.2.0.en.md --notes-zh release-notes/1.2.0.zh.md
+# 构建并打安装包（装到 build\installers\；--skip-build 跳过重编应用本体）
+dart run tool\build_windows.dart --remote-built
+
+# 有私钥的机器上：签出清单（BaoCodeClaude-<版本>-setup.exe 在 build\installers\）
+$env:BAOCODE_UPDATE_SIGNING_KEY = '<私钥文件路径>'
+dart run tool\release_manifest.dart `
+  --version 1.2.0+12 `
+  --windows build\installers\BaoCodeClaude-1.2.0-setup.exe `
+  --notes-en release-notes/1.2.0.en.md --notes-zh release-notes/1.2.0.zh.md `
+  --manifest build\installers\latest.json
 ```
 
-然后按顺序上传到 R2（Cloudflare 后台直接拖，或者用 `wrangler r2 object put`）：
+然后按顺序传到仓库的 release（`gh release create v1.2.0` 先建，或让 CI 的标签运行建）：
 
-1. `build/installers/remote/<VERSION>/*` → `releases/remote/<VERSION>/`（两台机器的 `<VERSION>` 不同就都传）
-2. 安装包 → `releases/1.2.0/`
-3. 确认下载链接能打开、大小对
-4. **最后** `build/installers/latest.json` → `releases/latest.json`
-
-macOS 本机签名时用的环境变量：
-
-| 变量 | 值 |
-| --- | --- |
-| `BAOCODE_MACOS_SIGN_IDENTITY` | 证书的 40 位指纹，或 `Developer ID Application: <名字> (<Team ID>)`；证书在钥匙串里 |
-| `BAOCODE_NOTARY_KEY` | `.p8` 文件的路径 |
-| `BAOCODE_NOTARY_KEY_ID` | Key ID |
-| `BAOCODE_NOTARY_ISSUER` | Issuer ID |
-
-只设 `BAOCODE_MACOS_SIGN_IDENTITY` 就只签名、不公证；都不设就是 ad hoc 签名。
+1. 远程服务端：`build\remote\<VERSION>\*`（`.gz` 与 `servers.json`）——先传，清单会点名它们
+2. 安装包 `BaoCodeClaude-1.2.0-setup.exe`
+3. 确认资产能下载、大小对
+4. **最后** `latest.json`（`gh release upload v1.2.0 build\installers\latest.json --clobber`）
 
 ## 10. 手机版
 
