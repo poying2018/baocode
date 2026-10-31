@@ -104,8 +104,7 @@ class UpdateController {
 
   /// Offers [offer] in [notifications]: Restart to Update, Later and Skip
   /// This Version (only the first when it is mandatory); Release Notes
-  /// opens the version's notes on the site's changelog where there are
-  /// notes.
+  /// opens the version's notes on the release page where there are notes.
   IdeNotification showOffer(
     IdeNotifications notifications,
     AppLocalizations l10n,
