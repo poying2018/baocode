@@ -48,6 +48,15 @@ class ShellIntegrationFolder {
       final temp =
           _temp ?? Directory(Directory.systemTemp.resolveSymbolicLinksSync());
       folder = _folder = temp.createTempSync('baocode-shell-integration-');
+      // mkdtemp makes it the user's alone whatever the umask says; Dart
+      // cannot pass a mode to createTempSync, so the bit is set after.
+      if (!Platform.isWindows) {
+        try {
+          Process.runSync('chmod', ['700', folder.path]);
+        } on ProcessException {
+          // No chmod to speak of: the umask's say stands.
+        }
+      }
     }
     writeShellIntegrationScripts(folder.path);
     return folder.path;
