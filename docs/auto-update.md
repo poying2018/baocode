@@ -8,8 +8,9 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 > `macos-*` 的键。应用代码里的 macOS 分支留着（`lib/update/installer_io.dart` 等），
 > 但没有 macOS 版可发，那条路走不到。
 
-- 更新服务器：`https://dl.baocode.dev`（Cloudflare R2；`baocode.dev/releases/*` 302 到这里）
-- 平台：macOS（Apple silicon 和 Intel 各一个包）、Windows（x64）
+- 更新服务器：本仓库自己的 GitHub Releases（`releases/latest/download/latest.json`）。
+  `dl.baocode.dev` 是上游的域名，这个 fork 不用它
+- 平台：Windows（x64）一个包（macOS 不再构建，见上）
 - 代码：`lib/update/`，测试：`test/update/`，发布工具：`tool/release_manifest.dart`
 
 ## 目录
@@ -240,25 +241,30 @@ main.dart onExitRequested
 
 ### 5.1 目录布局
 
+本仓库的「服务端」就是它自己的 GitHub Releases。没有目录树，只有一层资产；
+地址都是 `https://github.com/poying2018/baocode/releases/…`：
+
 ```
-https://dl.baocode.dev/
-  releases/
-    latest.json                         ← 应用读取的清单
-    1.2.0/
-      BaoCode-1.2.0-setup.exe           ← Windows 更新 / 首次安装
-      BaoCode-1.2.0-mac-arm64.zip       ← macOS 更新（Apple silicon）
-      BaoCode-1.2.0-mac-x64.zip         ← macOS 更新（Intel）
-      BaoCode-1.2.0-arm64.dmg           ← macOS 首次安装（应用不读取）
-      BaoCode-1.2.0-x64.dmg
-    remote/
-      <VERSION>/                        ← 远程服务端，应用连远程主机时按需下载
-        baocode-server-linux-x64.gz        （见 docs/ssh-remote.md 第 9.3 节；
-        baocode-server-linux-arm64.gz       旧版本的目录要一直保留）
+releases/latest/download/latest.json         ← 应用读取的清单（指针指向最新 release）
+releases/download/v1.2.0/                    ← 一个版本一个标签
+  latest.json                                ← 同一份清单，也作为该版本的资产
+  BaoCodeClaude-1.2.0-setup.exe              ← Windows 更新 / 首次安装
+  baocode-server-<平台>.gz                   ← 远程服务端，应用连远程主机时按需下载
+  servers.json                                 （见 docs/ssh-remote.md 第 9.3 节；
+  remote-latest-baocode-claude.json           旧版本的资产要一直保留）
 ```
 
-下载页 `https://baocode.dev/download` 在官网上（`site/`），应用无法自己更新时会打开它。
+`releases/latest/download/<资产>` 永远指向**最新一个** release 里的同名资产：清单和
+安装包同名同处一个 release，应用读到清单里的版本比自己新，就按清单里的
+`releases/download/v<版本>/<文件名>` 链接下载——链接指回同一个 release 的资产。
+`gh release delete` + 重建会让这个指针短暂落回上一个版本，这是发版脚本先传安装包、
+**清单最后传**的原因。
 
-`tool/release_manifest.dart` 按 `https://dl.baocode.dev/releases/<marketing 版本>/<文件名>` 生成链接。要改目录结构，就改工具里的 `_releasesBase`。
+应用无法自己更新时会打开仓库的 releases 页（`lib/update/update_service.dart` 的
+`ManualUpdateRequired.downloadPage`）。上游的 `https://dl.baocode.dev/`（R2 + 目录树，
+macOS 包、dmg、`remote/<VERSION>/`）是另一套布局，本仓库不用它；要改本仓库的链接
+结构，改 `tool/release_manifest.dart` 里的 `_releasesBase` 与
+`lib/update/update_manifest.dart` 里的 `manifestUrlFor`。
 
 ### 5.2 `latest.json` 格式
 
