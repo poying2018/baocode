@@ -372,8 +372,10 @@ releases/download/v1.2.0/                 一个版本一个标签
 CI 不可用时的备用办法，步骤和 CI 一样（Windows 上）：
 
 ```powershell
-# 远程服务端：本机没有 Mac，编不了 macOS 版——从最近一次发版的资产里取
-# （releases/download/<service端版本>/），或只发 Windows 服务端能编的几个平台
+# 远程服务端：本机没有 Mac，编不了 macOS 版——工具会在 Mac 的两个平台上跳过并提示
+# "Only a Mac builds it."，servers.json 只写编出的平台。要四个平台齐全，从最近一次
+# 发版的资产里取（releases/download/<服务端版本>/，tool/fetch_remote_server.dart 取），
+# 或在 Mac 上编好后拷过来。
 dart run tool\build_remote_server.dart --out build\remote
 
 # 构建并打安装包（装到 build\installers\；--skip-build 跳过重编应用本体）
