@@ -20,8 +20,12 @@ name: Claude Code version
 
 on:
   schedule:
-    # Once a day, at a quiet hour (UTC).
-    - cron: '23 4 * * *'
+    # Once a day, UTC. The minute is deliberately away from the hour's start
+    # and from other repos' favourite times: GitHub queues scheduled runs and
+    # delays or drops them when load is high (their docs advise picking an
+    # off-peak minute), and this one ran over six hours late three days
+    # running at :23 before it moved.
+    - cron: '37 3 * * *'
   workflow_dispatch:
 
 permissions:
