@@ -255,8 +255,17 @@ void main() {
     for (var i = 0; i < 3; i++) {
       pty.emit(List.filled(60000, 0x78));
     }
-    await Future<void>.delayed(const Duration(milliseconds: 100));
+    // The parse runs on its own schedule: how long the 180,000 bytes take
+    // differs by machine (the CI runner is the slow one). Wait for the
+    // catch-up rather than a fixed beat — paused by then, then resumed.
+    final deadline = DateTime.now().add(const Duration(seconds: 5));
+    while (pty.pauses == 0 && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     expect(pty.pauses, 1);
+    while (pty.paused && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
     expect(pty.paused, isFalse);
     final buffer = terminal.terminal.buffer;
     expect(
