@@ -208,6 +208,32 @@ void main() {
     expect(workspace.isHidden(app), isTrue);
   });
 
+  testWidgets('what went off with a host comes back even across a restart', (
+    tester,
+  ) async {
+    // The record of what went off with the host has to survive the run:
+    // without it, adding the host back after a restart leaves its projects
+    // hidden — the exact trouble this remembering is here to prevent.
+    final store = MemoryPreferenceStore();
+    var workspace = await pumpLoaded(tester, preferences: store);
+    await workspace.openFolder('ssh://dev/srv/app');
+    await workspace.openFolder('ssh://dev/srv/lib');
+    final app = workspace.projects.firstWhere((p) => p.name == 'app');
+    final lib = workspace.projects.firstWhere((p) => p.name == 'lib');
+    workspace.hideProject(app);
+
+    workspace.removeSshHost('dev');
+    expect(workspace.isHidden(app), isTrue);
+    expect(workspace.isHidden(lib), isTrue);
+
+    // A restart: the persisted state is loaded, then the host added back.
+    await tester.pumpWidget(const SizedBox());
+    workspace = await pumpLoaded(tester, preferences: store);
+    workspace.addSshHost('dev');
+    expect(workspace.isHidden(lib), isFalse, reason: 'went with the host');
+    expect(workspace.isHidden(app), isTrue, reason: 'hidden on its own');
+  });
+
   testWidgets('a host is renamed in the heading, given an icon; both kept '
       'between runs', (tester) async {
     final store = MemoryPreferenceStore();

@@ -2319,6 +2319,15 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
           _hiddenProjects[key] = since;
         }
       }
+      if (sidebar['hostRemoved'] case final Map<Object?, Object?> hosts) {
+        for (final MapEntry(:key, :value) in hosts.entries) {
+          // What went off with a host that is not back yet: paths only, so
+          // addSshHost can put them back even across a restart.
+          if (key is String && value is List) {
+            _hostRemoved[key] = value.whereType<String>().toList();
+          }
+        }
+      }
       if (sidebar['order'] case final Map<Object?, Object?> order) {
         for (final MapEntry(:key, :value) in order.entries) {
           if ((key, value) case (final String path, final List<Object?> ids)) {
@@ -2424,6 +2433,10 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
         'hiddenProjects': {
           for (final MapEntry(:key, :value) in _hiddenProjects.entries)
             key: value.toIso8601String(),
+        },
+        'hostRemoved': {
+          for (final MapEntry(:key, :value) in _hostRemoved.entries)
+            key: [...value],
         },
         'order': {
           for (final MapEntry(:key, :value) in _order.entries) key: [...value],
