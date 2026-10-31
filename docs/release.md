@@ -369,7 +369,10 @@ releases/download/v1.2.0/                 一个版本一个标签
 
 ## 9. 不用 CI，手动发布
 
-CI 不可用时的备用办法，步骤和 CI 一样（Windows 上）：
+CI 不可用时的备用办法，步骤和 CI 一样（Windows 上）。**前提：本机要装 Inno Setup**
+（CI 的 runner 是现装的；本机没有时 `winget install --id JRSoftware.InnoSetup`，或从
+<https://jrsoftware.org/isdl.php> 下载——缺了它，构建会在「Compiling the installer」
+一步报 `ISCC.exe (the Inno Setup compiler) was not found.`）：
 
 ```powershell
 # 远程服务端：本机没有 Mac，编不了 macOS 版——工具会在 Mac 的两个平台上跳过并提示
