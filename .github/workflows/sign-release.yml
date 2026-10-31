@@ -22,7 +22,7 @@ on:
       asset:
         description: 'Installer asset name in that release'
         required: true
-        default: 'BaoCode-1.2.0-setup.exe'
+        default: 'BaoCodeClaude-1.9.4-setup.exe'
       notes-zh:
         description: 'Release notes (zh), optional'
         required: false
