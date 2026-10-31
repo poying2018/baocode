@@ -384,10 +384,20 @@ class ThemeExtensions
       _idOf(entry)?.toLowerCase() == id.toLowerCase();
 
   static Future<void> _delete(String path) async {
-    try {
-      await Directory(path).delete(recursive: true);
-    } on FileSystemException {
-      // Not there.
+    // Windows holds a folder's files for a moment after they were made —
+    // the checker, the indexer — and a delete in that moment fails. Gone
+    // is gone on the first try; anything else is tried again briefly
+    // before being given up on, where the old folder would linger and the
+    // next install would see it.
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await Directory(path).delete(recursive: true);
+        return;
+      } on FileSystemException catch (error) {
+        final gone = !Directory(path).existsSync();
+        if (gone || attempt == 2 || error.osError?.errorCode == 2) return;
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
   }
 
