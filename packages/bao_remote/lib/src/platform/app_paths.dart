@@ -32,8 +32,14 @@ abstract final class AppPaths {
   /// otherwise, "baocode-codex-codex") keeps its own name: it is a
   /// product of its own, and its data folder is its own too.
   static String product([String? executable]) {
-    final name = p
-        .basenameWithoutExtension(executable ?? Platform.resolvedExecutable)
+    // Split on both separators, as Product.byExecutable does: the path style
+    // says nothing about the platform here — a Windows path may be named on
+    // Linux (a test, a remote host's argument), where `p.basename` reads it
+    // as one long name starting with `c:`.
+    final name = (executable ?? Platform.resolvedExecutable)
+        .split(RegExp(r'[/\\]'))
+        .last
+        .replaceFirst(RegExp(r'\.[^.]*$'), '')
         .toLowerCase();
     if (!name.startsWith('baocode')) return 'baocode';
     // A name with a space in it belongs to no product (macOS's ".app").
