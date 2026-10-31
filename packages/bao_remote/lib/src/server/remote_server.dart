@@ -12,6 +12,7 @@ import '../files/ide_file.dart';
 import '../files/local_files.dart';
 import '../files/recursive_watch.dart';
 import '../git/git_runner.dart';
+import '../git/git_types.dart';
 import '../platform/app_paths.dart';
 import '../platform/machine_platform.dart';
 import '../protocol.dart';
@@ -242,8 +243,18 @@ class RemoteServer {
     };
     handlers[RemoteProtocol.gitRun] = (params, _) async {
       final args = paramsOf(params);
+      final arguments = (args['arguments'] as List).cast<String>();
+      // The client's arguments run here, on the user's machine, with the
+      // user's own rights: the ones that would have Git run a program of
+      // theirs are refused. The app's own Git service builds its arguments
+      // itself — its rebase's sequence editor is how the todo list is put
+      // in — and does not go through this wire, so this check bounds what
+      // a client of the server can make Git do, no more and no less.
+      if (!gitArgumentsAreSafe(arguments)) {
+        throw const IdeGitException('That Git command is not allowed.');
+      }
       final output = await runGit(
-        (args['arguments'] as List).cast<String>(),
+        arguments,
         workingDirectory: args['cwd'] as String,
         limit: args['limit'] as int?,
         stdin: args['stdin'] as String?,

@@ -4,6 +4,7 @@ library;
 import 'dart:io';
 
 import 'package:bao_remote/local.dart' show runGit;
+import 'package:bao_remote/src/git/git_runner.dart' show gitArgumentsAreSafe;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
@@ -192,8 +193,12 @@ void main() {
     expect(await service.status(), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 
-  test('the options that make Git run a program are refused', () async {
-    // Git would run it with the user's own rights.
+  test('the options that make Git run a program are refused', () {
+    // The remote server takes Git's arguments from across the wire and runs
+    // them on the user's machine: these are refused there
+    // (remote_server.dart's gitRun). The app's own Git service builds its
+    // arguments itself — the rebase's sequence editor is one of them — and
+    // is checked by no gate; what is tested here is the gate itself.
     for (final arguments in [
       ['-c', 'core.sshCommand=calc'],
       ['--upload-pack=calc'],
@@ -207,19 +212,29 @@ void main() {
       // A setting read from the environment is one more way in.
       ['--config-env=core.sshCommand=EVIL'],
     ]) {
-      await expectLater(
-        runGit(arguments, workingDirectory: root),
-        throwsA(isA<IdeGitException>()),
+      expect(
+        gitArgumentsAreSafe(arguments),
+        isFalse,
         reason: '${arguments.join(' ')} was allowed',
       );
     }
     // The ordinary ones are not refused.
-    final status = await runGit(
-      ['status', '--porcelain=v1'],
-      workingDirectory: root,
+    expect(gitArgumentsAreSafe(['status', '--porcelain=v1']), isTrue);
+    // The app's own rebase builds its todo-list editor from Git itself.
+    expect(
+      gitArgumentsAreSafe([
+        '-c',
+        'sequence.editor=git cat-file blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 >',
+        '-c',
+        'core.editor=:',
+        'rebase',
+        '-i',
+        '--autostash',
+      ]),
+      isTrue,
+      reason: 'the rebase cannot work with its sequence editor refused',
     );
-    expect(status.exitCode, 0);
-  }, skip: hasGit ? false : 'Git is not installed');
+  });
 
   test('the repository commits everything, untracked files included', () async {
     final repository = IdeGitRepository(

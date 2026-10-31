@@ -59,6 +59,26 @@ const _forbiddenGitSettings = {
   'receivepack.packobjectshook',
 };
 
+/// The rebase's todo-list editor, as the IDE's interactive rebase writes it:
+/// Git runs it with its own shell to produce the todo list, and all it is
+/// is Git reading back the object the app wrote a moment ago — the same
+/// arguments already carry a `hash-object -w --stdin`, so anyone who could
+/// shape this string already had Git running programs. Matched exactly; a
+/// freer editor string stays refused.
+final RegExp _rebaseSequenceEditor = RegExp(
+  r'^sequence\.editor=git cat-file blob [0-9a-f]{40} >$',
+);
+
+/// The no-op editor the IDE's rebase hands Git beside it: a lone `:`, the
+/// shell's do-nothing. Matched exactly — any other `core.editor` still runs
+/// what it says.
+const _noOpEditor = 'core.editor=:';
+
+/// Whether [argument] is one of the two editor settings the IDE's rebase
+/// legitimately builds, as above.
+bool _rebaseEditorSetting(String argument) =>
+    _rebaseSequenceEditor.hasMatch(argument) || argument == _noOpEditor;
+
 /// Whether [arguments] are Git's own and safe to run: the ones that make
 /// it run a program (`-c core.sshCommand=…`, `--upload-pack …`) are not.
 bool gitArgumentsAreSafe(List<String> arguments) {
@@ -70,6 +90,7 @@ bool gitArgumentsAreSafe(List<String> arguments) {
       final name = argument.substring(0, equals);
       if (_forbiddenGitOptions.contains(name)) return false;
       if (name == '-c' &&
+          !_rebaseEditorSetting(argument) &&
           _forbiddenGitSettings.any(
             argument.substring(equals + 1).toLowerCase().startsWith,
           )) {
@@ -81,6 +102,7 @@ bool gitArgumentsAreSafe(List<String> arguments) {
     // `-c` takes what follows as its own.
     if (argument == '-c' &&
         i + 1 < arguments.length &&
+        !_rebaseEditorSetting(arguments[i + 1]) &&
         _forbiddenGitSettings.any(arguments[i + 1].toLowerCase().startsWith)) {
       return false;
     }
@@ -91,8 +113,13 @@ bool gitArgumentsAreSafe(List<String> arguments) {
 /// Runs the local `git` without a shell, prompts or an editor, and without
 /// optional index refreshes or a configured fsmonitor hook.
 ///
-/// The options that make Git run a program of the caller's are refused:
-/// they would run it with the user's own rights.
+/// The arguments run as they are: what they contain is the caller's
+/// business. The one place that takes arguments from across a wire — the
+/// remote server's `gitRun` — checks them with [gitArgumentsAreSafe] before
+/// calling this, since there they arrive from the client, and Git would run
+/// a program of theirs with the user's own rights. The app's own callers
+/// (the IDE's Git service) build their arguments themselves, and its
+/// interactive rebase needs `-c sequence.editor=…` to do its work.
 ///
 /// With [limit], the output is NUL-terminated records (`-z`) of which only
 /// the first [limit] are read: Git is stopped at the one after, and the
@@ -122,9 +149,6 @@ Future<IdeGitOutput> _runGit(
   String? stdin,
   Map<String, String>? environment,
 }) async {
-  if (!gitArgumentsAreSafe(arguments)) {
-    throw const IdeGitException('That Git command is not allowed.');
-  }
   try {
     if (stdin != null || environment != null) {
       return await _runWith(
