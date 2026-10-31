@@ -201,29 +201,31 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 - **密钥只在 `release` 环境里**，只有 `v*` 标签能用（见 7.2）。PR 和手动运行拿不到。
 - Flutter 版本固定在工作流的 `FLUTTER_VERSION`，升级 Flutter 时一起改。
 
-### 4.1 两个产品，各发各的
+### 4.1 一个仓库一个产品
 
-这个仓库出**两个程序**：BaoCode Claude（Claude Code 内核）和 BaoCode Codex（Codex 内核）。
-它们是两份程序，各自有名字、各自更新，所以**一个 `v<版本>` 标签只发 BaoCode Claude**——
-Codex 还在开发中，公开出来就是一份半成品。要发第二个产品，手动运行时传
-`products: baocode-codex`（或 `both`，两个一起发）：
+这个仓库只出**一个程序**：BaoCode Claude（Claude Code 内核）。一个 `v<版本>` 标签
+发的就是它，没有产品矩阵可选。
 
-| | BaoCode Claude | BaoCode Codex |
+**BaoCode Codex 在它自己的仓库**（`poying2018/baocode-codex`）：那份代码树是从这里
+分出去的，发布链、版本号序列、更新通道（`latest-codex.json`）完全独立——一个仓库
+只发自己的产品，谁也不替谁发布，版本号也不互相消耗。两边共享的代码靠 cherry-pick
+来同步。
+
+| | BaoCode Claude（本仓库） | BaoCode Codex（`poying2018/baocode-codex`） |
 | --- | --- | --- |
 | 安装包 | `BaoCodeClaude-<版本>-setup.exe` | `BaoCodeCodex-<版本>-setup.exe` |
 | 更新清单 | `latest.json` | `latest-codex.json` |
 | 远端服务端 | `baocode-server-*` | `baocode-codex-server-*` |
 
-- 发哪个（些）产品由 `check` 任务的 `products` 输出说定；`remote` 与 `windows`
-  任务的矩阵都跟着它，`publish` 里的循环也是（`for product in $(echo "$PRODUCTS" | jq -r '.[]')`）。
-  哪里都不要再写死两个产品名。
-- `publish` 任务**按产品各签一份清单**（`tool/release_manifest.dart --product <产品>
-  --manifest out/<清单名>`），**清单最后传**。
-- 两个产品的服务端清单名也不同（`servers.json` / `servers-codex.json`），
-  否则一个会盖掉另一个的。
-- **产品由可执行文件的名字决定**（`baocode-claude.exe` / `baocode-codex.exe`），
+- 产品的身份由**可执行文件的名字**决定（`baocode-claude.exe` / `baocode-codex.exe`），
   一处说清两个产品的分别：`packages/bao_remote/lib/src/platform/product.dart`。
   原生侧读同一个名字（`windows/runner/app_identity.cpp`），两边不会各说各话。
+  源码树里两个产品都认识，但 **CI 只构建、发布本仓库的那一个**（矩阵写死
+  `product: [baocode-claude]`，`publish` 里是 `PRODUCT: baocode-claude`）；
+  本地开发时 `windows/CMakeLists.txt` 的默认产品也是它，要构建另一个产品用
+  `dart run tool/set_product.dart codex`。
+- `publish` 任务签**一份清单**（`tool/release_manifest.dart --product baocode-claude
+  --manifest out/latest.json`），**清单最后传**。
 - 名字之外有一样**不跟着可执行名走**：浏览器的 native messaging host。它按自己的
   名字找应用写的端口文件，而端口文件按**产品 id** 命名，商店里已发布的扩展也只认
   那个名字 ⇒ Claude Code 产品的 host 仍是 `baocode-browser-host.exe` /
