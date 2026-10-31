@@ -9,16 +9,21 @@ import 'package:baocode/chat/widgets/user_message_bubble.dart';
 import 'package:baocode/main.dart';
 import 'package:baocode/sidebar/sidebar.dart';
 import 'package:baocode/theme/app_theme.dart';
+import 'package:baocode/theme/window_blur.dart';
 import 'package:baocode/workspace/workspace.dart';
 
 import 'first_frame_test.dart' show LongTurnFeed;
 
 /// The app. The test's variant picks the platform; macOS and Windows 11
-/// have the system's material under the window.
+/// have the system's material under the window — once Settings →
+/// Appearance has turned the blur on, which these tests do: the material
+/// is what they are about.
 Future<void> pumpMacApp(WidgetTester tester, {double width = 1400}) async {
   tester.view.physicalSize = Size(width, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  WindowBlur.enabled.value = true;
+  addTearDown(() => WindowBlur.enabled.value = false);
   await tester.pumpWidget(BaoCodeApp(workspace: Workspace.mock()));
   await tester.pump();
 }
