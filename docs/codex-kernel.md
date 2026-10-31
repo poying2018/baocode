@@ -2,7 +2,11 @@
 
 面向在 BaoCode Codex 上开发的读本。代码位置 `lib/kernel/codex/`，共享框架在
 `lib/kernel/`，产品身份在 `packages/bao_remote/lib/src/platform/product.dart`。
-行号对应当前分支 `feature/codex-kernel`，改动后请自行校正。
+
+> **两个产品现在住在两个仓库**：本仓库（`poying2018/baocode`）发 BaoCode Claude；
+> BaoCode Codex 在 `poying2018/baocode-codex`，它自己的发布链与版本号（见
+> [release.md 4.1](release.md#41-一个仓库一个产品)）。两仓同源，共享的代码靠
+> cherry-pick 同步——本文讲的内核机制两边都成立，行号以各自仓库为准，改动后自行校正。
 
 先读这一段，能省掉后面很多摸索：
 
@@ -355,7 +359,7 @@ flutter test test/codex_live_test.dart             # 对着真的 Codex（CODEX_
 两个产品是**两份程序**，不是一份程序的两个开关。改了任何一处与身份有关的地方，
 问一句「BaoCode Claude 那边还成立吗」。
 
-| 方面 | BaoCode Claude | BaoCode Codex |
+| 方面 | BaoCode Claude（`poying2018/baocode`） | BaoCode Codex（`poying2018/baocode-codex`） |
 | --- | --- | --- |
 | 可执行文件 | `baocode-claude.exe` | `baocode-codex.exe` |
 | 数据目录 | `%APPDATA%\baocode` | `%APPDATA%\baocode-codex` |
@@ -370,6 +374,9 @@ flutter test test/codex_live_test.dart             # 对着真的 Codex（CODEX_
 | 钥匙串服务 | `BaoCode` | `BaoCode Codex` |
 | 远端服务器 | `baocode-server-*` | `baocode-codex-server-*` |
 | 内核 | Claude Code | Codex |
+
+**版本号也从分家起各走各的**：BaoCode Claude 在本仓库从 1.9.x 起步，
+Codex 在它自己的仓库里（它已发布过 1.7.x）——两边的 build 号不再共用一条序列。
 
 **BaoCode Claude 改过名字**：它以前叫 BaoCode，可执行文件是 `baocode.exe`。
 改名只改了**名字**（显示名、可执行文件名、安装包文件名），
