@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:bao_sampler/bao_sampler.dart' show StackSampler;
 import 'package:baocode/diagnostics/jank_sample.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -61,10 +62,13 @@ void main() {
 
   test('none where the platform samples not', () async {
     expect(await sampler(os: 'android').sample(), isNull);
-    // Windows and Linux sample from within, the app built ahead of time:
-    // not under flutter test.
-    expect(await sampler(os: 'linux').sample(), isNull);
-    expect(started, isEmpty);
+    // Windows and Linux sample from within when the platform's sampler is
+    // at hand (StackSampler.available); where it is not — a machine with
+    // no such tool — the platform samples not.
+    if (!StackSampler.available) {
+      expect(await sampler(os: 'linux').sample(), isNull);
+      expect(started, isEmpty);
+    }
   });
 
   test('none named when the sample did not start', () async {
