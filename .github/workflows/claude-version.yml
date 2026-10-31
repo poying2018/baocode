@@ -39,6 +39,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: main
+      # The checkout is the commit the schedule fired on; a push that landed
+      # while the run was queued would otherwise be the base the bump is
+      # written on, and the rebase below would move it after the fact (or
+      # collide). Read main as it is now, before writing anything.
+      - name: Read main as it is now
+        run: |
+          git fetch origin main
+          git reset --hard origin/main
       - uses: dart-lang/setup-dart@v1
         with:
           version: stable
@@ -54,7 +62,9 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -am "ci(claude): bump Claude Code to $version"
-          # Someone may have pushed while this ran.
+          # Someone may have pushed while the tool read the channel and
+          # wrote the pin; rebase once, and if their commit moved the pin
+          # too, the push below says so rather than landing a stale bump.
           git pull --rebase origin main
           git push
           {
