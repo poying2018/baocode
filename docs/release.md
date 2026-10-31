@@ -121,7 +121,14 @@ git push origin :refs/tags/v1.2.0                # 删掉远端的标签
 git tag -f v1.2.0 && git push origin v1.2.0      # 打在现在的提交上，重新推
 ```
 
-CI 会照常构建，覆盖 R2 上的文件，重新建 GitHub Release。
+CI 会照常构建，删掉旧的 GitHub Release 再重建，把文件重新传上。两件事要心里有数：
+
+- **`releases/latest/download/latest.json` 会短暂落回上一个版本**：release 被删后，
+  "latest" 指针退回上一个还存在的 release，安装包跟着不可达，直到新 release 的
+  清单传完。已安装的应用在这窗口里读到旧清单，显示「已是最新」——不是坏，只是慢。
+  新清单永远最后传（见第 4 节），窗口以分钟计。
+- **`test-*` 与 `server-*` 标签不受影响**：它们不建这个 release（test 的产物在
+  Artifacts 里）。
 
 **只想试一下构建**：Actions → Release → Run workflow。只构建、不发布，产物在这次运行的 Artifacts 里（要登录 GitHub 才能下载）。
 
