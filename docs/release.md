@@ -308,7 +308,8 @@ releases/download/v1.2.0/                 一个版本一个标签
 4. **Claude Code 版本的每日 bump**：`.github/workflows/claude-version.yml` 每天
    03:37 UTC 自动把渠道当前版本写进 `_claudeVersion` / `_claudeSha256`（发版的
    check 任务再兜底：pin 落旧了发不出去）。**GitHub 的 schedule 在高峰时会延迟
-   甚至丢弃**——这个 workflow 就连续两天在错过的窗口里没跑。发现 pin 落后时，
+   甚至丢弃**——这个 workflow 就连续两天在错过的窗口里没跑；也观察到配置 03:37
+   却在 09:55 才跑的纯延迟（结果一样，bump 照常落）。发现 pin 落后时，
    手动触发一次即可，与计划运行完全等价：
 
    ```sh
