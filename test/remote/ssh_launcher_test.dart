@@ -177,7 +177,11 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
     expect(progress.any((line) => line.contains('Installing')), isTrue);
     expect(commands(), [
       'sh -s',
-      startsWith("sh -c 'mkdir -p .baocode-server/1-abc && gzip -dc >"),
+      // The folder is quoted as one word in the host's shell, so that a
+      // path with a space in it does not split (ssh_launcher's _quoted).
+      startsWith(
+        "sh -c 'mkdir -p '.baocode-server/1-abc' && gzip -dc >",
+      ),
       matches(
         r'^\.baocode-server/1-abc/baocode-server --session [0-9a-f]{32}$',
       ),
