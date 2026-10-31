@@ -481,7 +481,8 @@ flutter test test/update
 
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
-| 设置页显示“此版本的 BaoCode 不支持自动更新” | 这是 debug 构建，或者不是 macOS / Windows | 用 release 构建；或者设置 `BAOCODE_UPDATE_URL` 测试 |
+| 设置页显示“此版本的 BaoCode 不支持自动更新” | 这是 debug 构建（未设 `BAOCODE_UPDATE_URL` 时）；或者不是 macOS / Windows | 用 release 构建；或者设置 `BAOCODE_UPDATE_URL` 测试 |
+| “无法在当前位置自动更新”（`BaoCode was not installed by its installer`） | Windows 上不是安装包装的（exe 旁边没有 `unins000.exe`），或者是从 build 目录直接跑的 | 用安装包重新安装 |
 | 一直显示“已是最新版本” | 清单版本不比当前高（build 号没递增）；清单里没有本平台的条目；GitHub 的 `releases/latest` 指针还指着上一个 release（发版进行中） | 检查 `version` 和平台键；等发版跑完 |
 | “检查更新失败：Invalid update manifest: …” | 清单格式有错；链接不在 github.com 上 | 错误信息里会说明是哪个字段；用发布工具重新生成 |
 | “检查更新失败：HTTP 404 / 超时” | 清单没上传，或者网络不通 | `curl` 一下清单地址 |
