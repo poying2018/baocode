@@ -163,6 +163,27 @@ jobs:
           # this is the backstop.
           dart tool/bump_claude_version.dart
 
+  # The whole test suite, on Linux, beside the release build. It is not in
+  # the needs of the jobs that publish — a red test does not hold a release
+  # — but it runs on every push of a tag and every manual run, and a red X
+  # on the run is the signal that something broke before anyone installs it.
+  # (Nothing else in CI runs the tests: the Windows build here is the
+  # release itself.)
+  tests:
+    name: Tests
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Run the tests
+        run: flutter test --no-pub --reporter compact
+
   # The Claude Code product's server: it carries its servers.json, and the
   # app downloads the build a host needs (docs/ssh-remote.md, 9.3). Its
   # artifacts: remote (VERSION, servers.json, the .gz), remote-linux.
