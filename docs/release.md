@@ -161,7 +161,7 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 
 | Job | 机器 | 做什么 |
 | --- | --- | --- |
-| `check` | Ubuntu | pubspec.yaml 和 `version.dart` 一致；版本是 `x.y.z+build`；标签是 `v<x.y.z>`；不比 `dl.baocode.dev` 上已发布的版本旧（一样就是重新发布，给个提示） |
+| `check` | Ubuntu | pubspec.yaml 和 `version.dart` 一致；版本是 `x.y.z+build`；标签是 `v<x.y.z>`；不比本仓库 `releases/latest/download/latest.json` 里已发布的版本旧（一样就是重新发布，给个提示） |
 | `remote` | | 调用 `remote.yml`（推 `server-*` 标签时它也单独运行并发布，见第 3 节），下面两步 |
 | `remote` › `build` | macOS 15 | 下载和 Flutter 同版本的 x64 Dart SDK → 编译远程服务端（`--all`：Linux x64/arm64 交叉编译；macOS arm64 用本机的 dart，macOS x64 用 x64 的 dart 经 Rosetta，`dart compile exe` 只能在 Mac 上、按 dart 自己的架构编 macOS 版）→ `tool/test_remote_server_macos.sh`：在这台 Mac 上把两份 macOS 版各跑一遍 → 上传 `remote`（`VERSION`、`servers.json`、`.gz`）和 `remote-linux`（Linux 的两个二进制）两个产物 |
 | `remote` › `linux` | Ubuntu | `tool/test_remote_server.sh`：在 Docker 里的 Ubuntu 20.04 / 24.04、Debian 12、Rocky Linux 8 上，两种架构各跑一遍（arm64 用 QEMU 模拟），要能启动、回答 `initialize`、列出目录 |
