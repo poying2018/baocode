@@ -521,6 +521,9 @@ flutter test test/update
 
 ### macOS
 
+> 这个 fork 不发 macOS 版；下面是上游的验证记录，留给万一恢复 macOS 发布时用。
+> 应用代码里的 macOS 分支（`MacUpdateInstaller`）仍在，但没有构建可验。
+
 - [ ] 放在 `/Applications` 里的 release 构建：更新后几秒内新版本自动打开，`/Applications/BaoCode.app` 已经是新版本，没有残留的 `.baocode-*`
 - [ ] `install.log` 有记录；`xattr /Applications/BaoCode.app` 里没有 `com.apple.quarantine`
 - [ ] 有未保存的文件或运行中的 agent 时，先弹确认框；取消后什么都不发生
