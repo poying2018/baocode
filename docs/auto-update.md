@@ -58,11 +58,11 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 
 | 值 | 界面名称 | 行为 |
 | --- | --- | --- |
-| `"default"`（默认，不写就是它） | 自动检查并下载 | 启动 30 秒后检查一次，之后每 6 小时检查一次；发现新版本就在后台下载，下载并校验完成后在主窗口弹出通知 |
+| `"default"`（默认，不写就是它） | 自动检查并下载 | 启动 10 秒后检查一次，之后每 5 分钟检查一次；发现新版本就在后台下载，下载并校验完成后在主窗口弹出通知 |
 | `"manual"` | 仅手动检查 | 不自动检查；只有执行“检查更新”时才检查；点“立即重启更新”时才下载 |
 | `"none"` | 关闭 | 完全不检查，手动检查也只会提示“更新已关闭” |
 
-修改后立即生效，不用重启：从 `none` / `manual` 切到 `default` 后，30 秒后开始第一次检查；切走后，定时检查停止。
+修改后立即生效，不用重启：从 `none` / `manual` 切到 `default` 后，10 秒后开始第一次检查；切走后，定时检查停止。
 
 ### 2.2 入口
 
@@ -444,7 +444,7 @@ flutter test test/update
 | `update_manifest_test.dart` | 字段缺失或错误、平台缺失、非 baocode.dev 的链接、同源例外、序列化往返 |
 | `update_signature_test.dart` | 签名往返；改版本号、换密钥、篡改签名都会验签失败；内置公钥格式正确 |
 | `update_io_test.dart` | 本地 HttpServer：下载、复用已下载的文件、SHA-256 / 签名 / 大小不对时拒绝、断点续传、服务器不支持 Range、只保留最新版本、清理旧版本 |
-| `update_service_test.dart` | 三种模式、30 秒和 6 小时的定时、模式切换、只提示一次、跳过、强制更新、下载去重、arm / disarm / 启动失败 |
+| `update_service_test.dart` | 三种模式、10 秒和 5 分钟的定时、模式切换、只提示一次、跳过、强制更新、下载去重、arm / disarm / 启动失败 |
 | `installer_test.dart` | Windows 的 Setup 参数、按注册表判断安装方式、没有 `unins000` 时的处理；macOS 的解压、bundle id、签名和 Team 检查、无法替换时转下载页、脚本内容（以及 `bash -n` 语法检查） |
 | `update_controller_test.dart` | 通知的按钮、强制更新只有一个按钮、跳过、重启、下载页、校验失败 |
 | `updates_page_test.dart` | 设置页显示、检查、重启、错误显示、`update.mode` 的读写 |
@@ -482,8 +482,8 @@ flutter test test/update
 | 现象 | 可能原因 | 处理 |
 | --- | --- | --- |
 | 设置页显示“此版本的 BaoCode 不支持自动更新” | 这是 debug 构建，或者不是 macOS / Windows | 用 release 构建；或者设置 `BAOCODE_UPDATE_URL` 测试 |
-| 一直显示“已是最新版本” | 清单版本不比当前高（build 号没递增）；清单里没有本平台的条目；CDN 还在返回旧清单 | 检查 `version` 和平台键；清 CDN 缓存 |
-| “检查更新失败：Invalid update manifest: …” | 清单格式有错；链接不在 baocode.dev 上 | 错误信息里会说明是哪个字段；用发布工具重新生成 |
+| 一直显示“已是最新版本” | 清单版本不比当前高（build 号没递增）；清单里没有本平台的条目；GitHub 的 `releases/latest` 指针还指着上一个 release（发版进行中） | 检查 `version` 和平台键；等发版跑完 |
+| “检查更新失败：Invalid update manifest: …” | 清单格式有错；链接不在 github.com 上 | 错误信息里会说明是哪个字段；用发布工具重新生成 |
 | “检查更新失败：HTTP 404 / 超时” | 清单没上传，或者网络不通 | `curl` 一下清单地址 |
 | “更新失败：The download is N bytes, not M” | 上传的文件不完整，或者清单里写的不是这个文件的 size | 重新上传；或者对实际上传的文件重新签名 |
 | “更新失败：The download does not match its SHA-256” | 上传后文件被替换了，或者签名时用的不是同一个文件 | 对实际上传的文件重新运行发布工具 |
@@ -531,7 +531,7 @@ flutter test test/update
 
 ## 12. 修改指南
 
-**改检查的时间**：改 `UpdateService` 的 `firstCheckDelay`（30 秒）和 `checkInterval`（6 小时）这两个默认值，然后同步改 `update_service_test.dart` 里对应的时间。
+**改检查的时间**：改 `UpdateService` 的 `firstCheckDelay`（10 秒）和 `checkInterval`（5 分钟）这两个默认值，然后同步改 `update_service_test.dart` 里对应的时间。
 
 **改域名或下载页**：允许的下载域在 `UpdateUrlPolicy.domains`（现在是 `github.com` 和
 `githubusercontent.com`）；清单地址在 `defaultManifestUrl`；下载页在

@@ -47,7 +47,8 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
                                └ publish  签 latest.json ────▶ 本仓库的 GitHub Release
                                           （gh release create/upload）        │
                                                                               ▼
-                                              已安装的 BaoCode：每 6 小时读
+                                              已安装的 BaoCode：启动 10 秒后读
+                                              一次，之后每 5 分钟读一次
                                               releases/latest/download/latest.json，
                                               按清单里的链接下载安装包
 ```
@@ -254,7 +255,7 @@ releases/download/v1.2.0/                 一个版本一个标签
 
 **已安装的应用**（`update.mode` 是默认的“自动检查并下载”时）：
 
-1. 启动 30 秒后、之后每 6 小时，GET 本仓库的
+1. 启动 10 秒后、之后每 5 分钟，GET 本仓库的
    `https://github.com/poying2018/baocode/releases/latest/download/latest.json`。
 2. 解析清单；下载链接必须在 github.com（或其重定向主机 githubusercontent.com）上。
    版本不比自己新，或者没有本平台的条目 → 已是最新，结束。
