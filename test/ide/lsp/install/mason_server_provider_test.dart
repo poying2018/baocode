@@ -619,7 +619,10 @@ void main() {
       );
     });
 
-    test('npm on Windows: npm.cmd answers for npm, run through node', () async {
+    test('npm on Windows: npm.cmd answers for npm, run through node',
+        skip: !Platform.isWindows
+            ? 'npm.cmd and the node lookup are Windows ways'
+            : false, () async {
       final runner = FakeRunner();
       final mason = provider(runner: runner, platform: win);
       // node there, but only npm's Bash script (nvm-windows', the
@@ -830,7 +833,10 @@ void main() {
       );
     });
 
-    test('which skips the extensionless script beside npm.cmd', () async {
+    test('which skips the extensionless script beside npm.cmd',
+        skip: !Platform.isWindows
+            ? 'npm.cmd is a Windows way'
+            : false, () async {
       await tool('npm');
       await tool('npm.cmd');
       final mason = windows();
@@ -899,6 +905,11 @@ void main() {
 
     test(
       'suggests a package by command; none when it cannot install',
+      // The suggestion is what the platform's own lookup makes of the PATH
+      // (a runner's node here, npm there): it is said for this machine.
+      skip: !Platform.isWindows
+          ? 'the suggestion follows this machine\'s PATH'
+          : false,
       () async {
         final mason = provider();
         expect(
