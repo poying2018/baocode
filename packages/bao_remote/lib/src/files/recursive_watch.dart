@@ -32,6 +32,11 @@ Stream<WatchEvent> watchRecursively(
   bool? perDirectory,
 }) {
   if (!FileSystemEntity.isWatchSupported) return const Stream.empty();
+  // A root that is gone is no news: nothing to watch, an empty stream —
+  // the same as the platforms' watcher says of it by throwing, caught
+  // below. Linux's per-directory watcher would otherwise hold the stream
+  // open for a root that will never be listed.
+  if (!Directory(root).existsSync()) return const Stream.empty();
   if (!(perDirectory ?? Platform.isLinux)) {
     try {
       return Directory(root)
