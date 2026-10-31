@@ -181,6 +181,7 @@ jobs:
           channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+      - run: flutter pub get
       - name: Run the tests
         run: flutter test --no-pub --reporter compact
 
