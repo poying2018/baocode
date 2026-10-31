@@ -43,7 +43,7 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 | CI 构建与发布 | 已完成：`.github/workflows/release.yml`，见 [release.md](release.md) |
 | macOS 打包（dmg + 更新用 zip） | 上游的做法（`tool/build_macos.dart`）**在这个 fork 里没有** |
 | macOS 代码签名与公证 | 脚本已支持；**等 Apple 开发者账号**，见 [release.md 7.3](release.md#73-applemacos-签名与公证) |
-| dl.baocode.dev（R2） | **需要准备**：见 [release.md 7.1](release.md#71-cloudflare) |
+| dl.baocode.dev（R2） | **不需要**：那是上游的渠道，本仓库发在自己的 GitHub Releases 上 |
 | 真机端到端验证 | **未做**：见第 11 节 |
 
 签名密钥已经生成：私钥在 `~/.baocode-release/update-signing.key`（不在仓库里），公钥写在 `lib/update/update_signature.dart`。
@@ -408,35 +408,38 @@ dart run tool/release_manifest.dart --generate-key <路径>
 
 ## 7. 发版步骤
 
-见 [release.md](release.md)：用 `tool/bump_version.dart` 改版本号，推送 `v<版本>` 标签，CI 构建、签名、上传到 `dl.baocode.dev`，`latest.json` 最后上传。CI 不可用时的手动步骤见 [release.md 第 9 节](release.md#9-不用-ci手动发布)。
+见 [release.md](release.md)：用 `tool/bump_version.dart` 改版本号，推送 `v<版本>` 标签，CI 构建、签名、传到本仓库的 GitHub Releases，`latest.json` 最后上传。CI 不可用时的手动步骤见 [release.md 第 9 节](release.md#9-不用-ci手动发布)。
 
 ---
 
 ## 8. 本地测试
 
-不用发布到 dl.baocode.dev，就能在本机完整走一遍更新流程：
+不用发布，就能在本机完整走一遍更新流程：
 
-```sh
+```powershell
 # 1. 准备一个“更新版本”：版本号比要测试的那个构建高，签名后写到一个目录
-mkdir -p /tmp/rel && cp build/installers/BaoCode-1.2.0-mac-arm64.zip /tmp/rel/
-BAOCODE_UPDATE_SIGNING_KEY=~/.baocode-release/update-signing.key \
-  dart run tool/release_manifest.dart --version 9.0.0 \
-  --macos-arm64 /tmp/rel/BaoCode-1.2.0-mac-arm64.zip --manifest /tmp/rel/latest.json
+mkdir C:\tmp\rel
+Copy-Item build\installers\BaoCodeClaude-1.2.0-setup.exe C:\tmp\rel\
+$env:BAOCODE_UPDATE_SIGNING_KEY = 'dpapi:F:\Projects\baocode-release-key\update-signing.key.enc'
+dart run tool/release_manifest.dart --version 9.0.0 `
+  --windows C:\tmp\rel\BaoCodeClaude-1.2.0-setup.exe --manifest C:\tmp\rel\latest.json
 
 # 2. 把 latest.json 里的 url 换成本地地址（同源的链接会被接受）
-sed -i '' 's#https://dl.baocode.dev/releases/9.0.0/#http://127.0.0.1:8080/#' /tmp/rel/latest.json
+(Get-Content C:\tmp\rel\latest.json -Raw) `
+  -replace 'https://github.com/poying2018/baocode/releases/download/9\.0\.0/', 'http://127.0.0.1:8080/' |
+  Set-Content C:\tmp\rel\latest.json
 
 # 3. 起一个静态服务器
-cd /tmp/rel && python3 -m http.server 8080
+Set-Location C:\tmp\rel; python -m http.server 8080
 
 # 4. 让被测试的应用读本地清单
-BAOCODE_UPDATE_URL=http://127.0.0.1:8080/latest.json \
-  /Applications/BaoCode.app/Contents/MacOS/BaoCode
+$env:BAOCODE_UPDATE_URL = 'http://127.0.0.1:8080/latest.json'
+& 'C:\Program Files\BaoCode\baocode-claude.exe'
 ```
 
 - 改 url 不会让签名失效，因为签名内容里不包括 url。
-- `python3 -m http.server` 不支持 Range，断点续传会退化成从头下载，这是正常的。
-- 设置了 `BAOCODE_UPDATE_URL` 时，debug 构建也会启用更新。但是 debug 构建的 .app 在 build 目录里，“更新”会替换掉它，所以最好用拷到别的目录的 release 构建来测。
+- `python -m http.server` 不支持 Range，断点续传会退化成从头下载，这是正常的。
+- 设置了 `BAOCODE_UPDATE_URL` 时，debug 构建也会启用更新。但是 debug 构建在 build 目录里，“更新”会替换掉它，所以最好用装好的 release 构建来测。
 - 从终端启动应用时，能看到 `update:` 开头的日志。
 
 自动化测试（不会联网，也不会真的安装）：
@@ -580,4 +583,4 @@ flutter test test/update
 - **没有增量更新**：每次都下载完整的安装包。
 - **拒绝 UAC 之后**：应用已经退出，需要用户手动重新打开（下次启动会再提示更新）。
 - **macOS 的 /Applications 归 root 所有时**：当前用户能改名 .app 但删不掉旧版本的内容时，`.baocode-old` 可能会残留。
-- **服务端还没准备**：R2 存储桶、`dl.baocode.dev`、GitHub 的 `release` 环境，见 [release.md 第 7 节](release.md#7-第一次发布前的准备)。
+- **服务端的 `release` 环境**：`BAOCODE_UPDATE_SIGNING_KEY` 这个 secret 只在 `release` 环境里可用（见 [release.md 第 7 节](release.md#7-第一次发布前的准备)）。R2 存储桶与 `dl.baocode.dev` 是上游的，不需要准备。
