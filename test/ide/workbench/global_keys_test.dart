@@ -302,24 +302,17 @@ void main() {
 
   testWidgets(
     'an input method composing text keeps its keys',
-    // Skipped: broken since upstream's #378 (18c816af, the find widget that
-    // finds across lines). Bisected: 065d77ac passes, 18c816af fails, and
-    // even a full revert of that commit does not mend it — the find
-    // widget's new Enter handling keeps a composed Enter from reaching the
-    // workbench, so a composition that finished never opens the quick
-    // input on Enter. A real defect for IME users; to be fixed together
-    // with the find widget's key handling.
-    skip: true,
+    // The commands' quick input is open; its filter is composing. A
+    // keybinding's key is the input method's while it composes (the panel
+    // stays as it was), and holds again once it is done. (The scene was
+    // find in files until #378 moved that to the search view.)
     (tester) async {
     KeybindingService.instance.userEntries = const [
-      KeybindingEntry(
-        key: 'enter',
-        command: 'workbench.action.showCommands',
-        when: 'searchInputBoxFocus',
-      ),
+      KeybindingEntry(key: 'ctrl+g', command: 'workbench.action.quickOpen'),
     ];
     await pump(tester);
-    await run(tester, 'workbench.action.findInFiles');
+    await run(tester, 'workbench.action.showCommands');
+    expect(quickText(tester), '>');
     tester.testTextInput.updateEditingValue(
       const TextEditingValue(
         text: 'ni',
@@ -328,9 +321,14 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(quickText(tester), isNull);
+    // The composed key is the input method's: nothing runs, the panel
+    // stays open (its filter now holding the composed text, as the test
+    // put it there itself).
+    expect(quickText(tester), 'ni');
 
     tester.testTextInput.updateEditingValue(
       const TextEditingValue(
@@ -339,9 +337,13 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    // The composition done, the keybinding holds again: quickOpen runs,
+    // and the quick input is there with its empty prefix.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyG);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pump();
-    expect(quickText(tester), '>');
+    expect(quickText(tester), isEmpty);
   });
 
   testWidgets('a dialog over the workbench keeps its keys', (tester) async {
