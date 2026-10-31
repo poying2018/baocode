@@ -276,22 +276,10 @@ macOS 包、dmg、`remote/<VERSION>/`）是另一套布局，本仓库不用它�
   "minimumVersion": "1.0.0",
   "platforms": {
     "windows-x64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-setup.exe",
+      "url": "https://github.com/poying2018/baocode/releases/download/v1.2.0/BaoCodeClaude-1.2.0-setup.exe",
       "size": 123456789,
       "sha256": "64 位十六进制",
       "signature": "base64，解码后 64 字节"
-    },
-    "macos-arm64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac-arm64.zip?sha256=0123456789abcdef",
-      "size": 123456789,
-      "sha256": "...",
-      "signature": "..."
-    },
-    "macos-x64": {
-      "url": "https://dl.baocode.dev/releases/1.2.0/BaoCode-1.2.0-mac-x64.zip?sha256=fedcba9876543210",
-      "size": 123456789,
-      "sha256": "...",
-      "signature": "..."
     }
   }
 }
@@ -303,7 +291,7 @@ macOS 包、dmg、`remote/<VERSION>/`）是另一套布局，本仓库不用它�
 | `pubDate` | 否 | ISO 8601 格式，目前只是记录下来 |
 | `notes` | 否 | `{语言: 文本}`，也可以直接写一个字符串（当作英文）。界面按应用语言取，取不到用 `en`，再取不到用任意一种 |
 | `minimumVersion` | 否 | 低于它的版本视为强制更新。格式写错时整份清单都会被拒绝 |
-| `platforms` | 是 | 平台键目前有 `windows-x64`、`macos-arm64`、`macos-x64`。Mac 按自己的处理器选：Apple silicon 取 `macos-arm64`；Intel 取 `macos-x64`；Intel 版在 Apple silicon 上经 Rosetta 运行时（`sysctl.proc_translated` 为 1）取 `macos-arm64`，借这次更新换成原生版（`installer_io.dart` 的 `macUpdatePlatform`）。1.0.0 最早发的是 universal 包、键是 `macos-universal`，那些安装找不到更新，要重新下载 |
+| `platforms` | 是 | 应用按自己的运行时选键（`installer_io.dart` 的 `platformUpdates()`）：认识 `windows-x64`、`windows-arm64`、`macos-arm64`、`macos-x64`、`linux-x64`、`linux-arm64`；Intel Mac 在 Apple silicon 上经 Rosetta 运行时取 `macos-arm64`（`macUpdatePlatform`），借这次更新换成原生版。**本仓库目前只发 `windows-x64`**——其余键是应用认识的，但这个 fork 没有对应的构建（见 [release.md 4.1](release.md#41-一个仓库一个产品)）。1.0.0 最早发的是 universal 包、键是 `macos-universal`，那是上游的安装，与本 fork 无关 |
 | `url` | 是 | 见 5.3 |
 | `size` | 是 | 正整数，单位字节 |
 | `sha256` | 是 | 64 位十六进制，大小写都可以 |

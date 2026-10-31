@@ -210,6 +210,12 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
   `product: [baocode-claude]`，`publish` 里是 `PRODUCT: baocode-claude`）；
   本地开发时 `windows/CMakeLists.txt` 的默认产品也是它，要构建另一个产品用
   `dart run tool/set_product.dart codex`。
+- **架构只有 Windows x64**。上游的 workflow 带 x64 + arm64 双架构矩阵（arm64 的
+  Flutter 克隆、Inno 安装、无 patched-engine 的处理，见上游同文件的历史版本），
+  `tool/build_windows.dart --arch arm64` 也还在，但合并进这个 fork 时矩阵的 arch
+  维度没有跟过来，**本仓库从来不发 arm64**——渠道里所有版本的清单都只有
+  `windows-x64`。要恢复的话把那个矩阵搬回来，并按 [auto-update.md 12 节](auto-update.md#12-修改指南)
+  的「加一个平台」走完清单。
 - `publish` 任务签**一份清单**（`tool/release_manifest.dart --product baocode-claude
   --manifest out/latest.json`），**清单最后传**。
 - 名字之外有一样**不跟着可执行名走**：浏览器的 native messaging host。它按自己的
