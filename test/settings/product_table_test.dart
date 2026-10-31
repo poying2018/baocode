@@ -27,6 +27,13 @@ void main() {
         AppPaths.product(r'C:\Program Files\BaoCode\baocode.exe'),
         'baocode',
       );
+      // A Windows path is read right wherever the code runs: the separators
+      // are both read, so a path named on one platform does not become a
+      // long name starting with `c:` on the other.
+      expect(
+        AppPaths.product('/opt/baocode/baocode-codex.exe'),
+        'baocode-codex',
+      );
     });
 
     test('of a name belonging to no product is the Claude Code one\'s', () {
