@@ -234,7 +234,7 @@ Windows 上，WSL 发行版也当成一台主机，主机名 `wsl+<发行版>`�
 | 快速打开的文件索引 | `fs/walk` | `IdeHostFiles.listProject` |
 | 全文搜索 | `search/text` 流（服务端用和本地相同的搜索实现） | `IdeHostFiles.searchText` |
 | 图片预览 | `fs/readBytes` | `IdeHostFiles.readBytes` |
-| Git | `git/run` 在远端执行 git 命令；`git/watch` 监听仓库 | `remoteGitService` |
+| Git | `git/run` 在远端执行 git 命令（会让 Git 跑调用方程序的参数被服务端拒绝，见 `gitArgumentsAreSafe`——这是跨机边界上唯一的一道参数闸）；`git/watch` 监听仓库 | `remoteGitService` |
 | 终端 | `pty/*`：远端开伪终端，shell 集成脚本也在远端注入（nonce 由应用生成，经环境变量 `VSCODE_NONCE` 传过去） | `remoteTerminalBackend` |
 | 语言服务器 | 见下文 | `remote_lsp.dart` |
 | Claude Code 对话 | `claude/start` 在远端启动 CLI | `RemoteClaudeTransport` |

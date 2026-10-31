@@ -55,3 +55,13 @@ Python 能力的现状和缺口：
 | 断点调试 | **没有**（没有注册适配器） | 注册 `python` 类型的调试器，用 `python -m debugpy.adapter` |
 | 选解释器、venv/conda | 没有 | 扫描 `.venv`、conda、PATH，选中的解释器同时交给 LSP 和调试器 |
 | 测试面板（pytest）、Jupyter | 没有 | 工作量大，暂不做 |
+
+## 发布
+
+浏览器扩展由 `.github/workflows/extension.yml` 发布：`extension-v<版本>` 标签或手动
+运行发正式版，`extension-test-*` 标签发测试包。两者都传到 Cloudflare R2
+（`dl.baocode.dev`，[release.md 7.2](release.md#72-cloudflare只有扩展和手机版用)）——
+那是扩展与手机版共用的渠道；**应用的自动更新不走那里**（应用走本仓库的
+GitHub Releases，见 [release.md 4.1](release.md#41-一个仓库一个产品)）。正式版会
+在 R2 上写一份 `releases/extension/latest.json`，`baocode.dev/download` 的扩展
+卡片读它。
