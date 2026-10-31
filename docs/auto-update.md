@@ -543,13 +543,21 @@ flutter test test/update
 
 **改检查的时间**：改 `UpdateService` 的 `firstCheckDelay`（30 秒）和 `checkInterval`（6 小时）这两个默认值，然后同步改 `update_service_test.dart` 里对应的时间。
 
-**改域名或下载页**：域名在 `UpdateUrlPolicy.domain`；清单地址在 `defaultManifestUrl`；下载页在 `ManualUpdateRequired.downloadPage`；发布工具里的链接前缀在 `tool/release_manifest.dart` 的 `_releasesBase`，远程服务端的在 `tool/build_remote_server.dart` 的 `_downloadsBase`；CI 的上传地址在 `.github/workflows/release.yml`；`updates_page` 和文案里也提到了 baocode.dev。改完后跑 `flutter test test/update`。
+**改域名或下载页**：允许的下载域在 `UpdateUrlPolicy.domains`（现在是 `github.com` 和
+`githubusercontent.com`）；清单地址在 `defaultManifestUrl`；下载页在
+`ManualUpdateRequired.downloadPage`；发布工具里的链接前缀在 `tool/release_manifest.dart`
+的 `_releasesBase`，远程服务端的在 `tool/build_remote_server.dart` 的 `_downloadsBase`；
+CI 的上传地址在 `.github/workflows/release.yml`；`updates_page` 和文案里也提到了
+baocode.dev。改完后跑 `flutter test test/update`。
 
 **加一个平台**（比如 `windows-arm64`、Linux）：
 
 1. 在 `installer_io.dart` 的 `platformUpdates()` 里返回新的平台键和对应的 `UpdateInstaller`。
 2. 在发布工具里加对应的参数，并加进 `missing` 检查用的平台集合。
-3. 在本文档的 5.2 节里加上新的平台键。
+3. 在 `.github/workflows/release.yml` 的 `windows` 任务矩阵里加一个维度（构建
+   `--arch arm64` 的机器与引擎处理，上游在同文件的历史版本里有现成写法），`publish`
+   的收集与清单参数跟上。
+4. 在本文档的 5.2 节里加上新的平台键。
 
 **改签名内容**：不要直接改 `v1` 的格式，否则已安装的旧版本会拒绝新签名的安装包。做法是：
 
