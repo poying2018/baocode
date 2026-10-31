@@ -8,10 +8,10 @@
 #                                      <VERSION>/, latest.json there naming
 #                                      them: for apps packaged locally with
 #                                      --remote-release (tool/build_*.dart)
-#   Actions 鈫?Remote server 鈫?Run workflow
+#   Actions → Remote server → Run workflow
 #                                      build only, to try the build
 #
-# Release (release.yml) calls it too, for the builds both apps name; it
+# Release (release.yml) calls it too, for the builds its product names; it
 # publishes them itself, with the release.
 name: Remote server
 
@@ -24,7 +24,9 @@ on:
         description: The product the server is for
         type: choice
         default: baocode-claude
-        options: [baocode-claude, baocode-codex]
+        # This repository publishes BaoCode Claude; the codex product's
+        # servers are built and published by its own repository.
+        options: [baocode-claude]
   workflow_call:
     inputs:
       product:
