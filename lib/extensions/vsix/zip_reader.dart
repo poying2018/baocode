@@ -117,6 +117,20 @@ class ZipReader {
         final inflated = Uint8List.fromList(
           ZLibDecoder(raw: true).convert(raw),
         );
+        // The central directory's size is the archive's word on what this
+        // inflates to. Deflate cannot expand more than 1032:1, so content
+        // far past it means the directory lied — a decompression bomb —
+        // and the archive is refused rather than the memory filled. (The
+        // inflate itself still runs whole first; a stream that stopped at
+        // the declared size would be the full answer, and Dart's decoder
+        // has none to offer.)
+        if (inflated.length >
+            entry.size + math.max(entry.size, 4096)) {
+          throw ZipFormatException(
+            '${entry.name} inflates to ${inflated.length} bytes, '
+            'past the ${entry.size} its directory declares',
+          );
+        }
         return maxBytes == null || inflated.length <= maxBytes
             ? inflated
             : Uint8List.sublistView(inflated, 0, maxBytes);

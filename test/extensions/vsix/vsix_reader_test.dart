@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:baocode/extensions/vsix/engine_version.dart';
 import 'package:baocode/extensions/vsix/extension_manifest.dart';
@@ -331,6 +332,27 @@ void main() {
       expect(await zip.readText('a/b.txt'), 'hello');
       expect(await zip.readText('A/B.TXT', ignoreCase: true), 'hello');
       expect(await zip.readText('missing'), isNull);
+    });
+
+    test('an entry that inflates far past its declared size is refused', () async {
+      // A decompression bomb says small in its central directory and
+      // inflates enormous: deflate cannot expand 1032:1, so content far
+      // past the declaration means the directory lied.
+      final content = List.generate(262144, (i) => i % 256);
+      final bytes = buildZip({'a/b.txt': content});
+      // The central directory's sizes sit at fixed spots of each 46-byte
+      // record: the uncompressed one 24 bytes in. Declaring 8 for an entry
+      // that inflates to a quarter of a megabyte is the lie.
+      final view = ByteData.sublistView(bytes);
+      for (var at = 0; at + 46 <= view.lengthInBytes; at++) {
+        if (view.getUint32(at, Endian.little) != 0x02014b50) continue;
+        view.setUint32(at + 24, 8, Endian.little);
+      }
+      final zip = await ZipReader.fromBytes(bytes);
+      await expectLater(
+        zip.read(zip.entries.single),
+        throwsA(isA<ZipFormatException>()),
+      );
     });
   });
 
