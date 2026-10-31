@@ -1,16 +1,17 @@
 # Claude Code 内核：BaoCode 侧的开发资料
 
 面向在 BaoCode 上开发 Claude Code 适配的读本。代码位置 `lib/kernel/claude_code/`，
-共享框架在 `lib/kernel/`。行号对应当前分支 `feature/codex-kernel`，改动后请自行校正。
+共享框架在 `lib/kernel/`。行号以本仓库 main 为准，改动后请自行校正。
 
 先读这一段，能省掉后面很多摸索：
 
 - BaoCode **没有自己的 agent**。Claude Code 才是 agent，BaoCode 只做它的界面。
   任何「让 BaoCode 自己推理」的想法都不在产品范围内。
-- 这个仓库同时编译出**两个产品**：`baocode.exe`（带 Claude Code 内核）和
-  `baocode-codex.exe`（带 Codex 内核）。产品名决定内核，数据目录、注册表、
-  进程名都随之分开。见 `lib/kernel/kernel_registry.dart:55-62` 与
-  `tool/set_product.dart`。**开发 Claude Code 内核时不要引入 Codex 依赖**。
+- 两个产品如今住在两个仓库：本仓库发 BaoCode Claude（`baocode-claude.exe`，带
+  Claude Code 内核），Codex 内核在 `poying2018/baocode-codex`（`baocode-codex.exe`）。
+  产品名决定内核，数据目录、注册表、进程名都随之分开。见
+  `lib/kernel/kernel_registry.dart:55-62` 与 `tool/set_product.dart`。
+  **开发 Claude Code 内核时不要引入 Codex 依赖**。
 - 内核通过**能力接口**（facet）暴露自己实现了什么，UI 只显示已声明的能力。
   加功能的第一步永远是「实现哪个接口」，而不是「改 UI」。
 
