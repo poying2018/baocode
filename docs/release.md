@@ -12,7 +12,7 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
 
 - 下载与更新：本仓库自己的 GitHub Releases（`releases/latest/download/latest.json`）。
   `dl.baocode.dev` 是上游的域名，这个 fork 不用它
-- 官网：`https://baocode.dev` 是上游的（`site/` 目录里的源码随本仓库走，但没地方部署）；应用里给出的地址都是本仓库的
+- 官网：`https://baocode.dev` 是上游的（`site/` 目录里的源码随本仓库走，但没地方部署）；应用里给出的地址都是本仓库的。仓库的 GitHub Pages 倒是开着（source 是 main 的 `/docs`），把这份文档部署在 `https://poying2018.github.io/baocode/`；`site/` 不在其中——更新日志页仍无处可看，只有 `latest.json` 的纯文本
 - 构建与发布：GitHub Actions，`.github/workflows/release.yml`
 - 工具：`tool/bump_version.dart`、`tool/build_windows.dart`、`tool/build_remote_server.dart`、`tool/release_manifest.dart`
 
