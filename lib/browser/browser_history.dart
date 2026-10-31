@@ -342,11 +342,23 @@ class BrowserHistory extends ChangeNotifier {
     }
     _files.clear();
     _pages.clear();
-    try {
-      final root = Directory(folder);
-      if (root.existsSync()) await root.delete(recursive: true);
-    } on FileSystemException catch (error) {
-      debugPrint('browser history: $error');
+    // Windows holds a folder's files for a moment after they were used —
+    // the checker, the indexer — and the delete in that moment fails. Left
+    // there, the history would come back at the next run, after the user
+    // has seen it gone: tried again briefly first.
+    for (var attempt = 0; ; attempt++) {
+      try {
+        final root = Directory(folder);
+        if (!root.existsSync()) break;
+        await root.delete(recursive: true);
+        break;
+      } on FileSystemException catch (error) {
+        if (attempt == 2) {
+          debugPrint('browser history: $error');
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+      }
     }
     _size = 0;
     notifyListeners();
