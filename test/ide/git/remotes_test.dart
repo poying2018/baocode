@@ -12,12 +12,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../workbench/fake_files.dart';
 import 'fake_git.dart';
+import 'git_programs.dart';
 
 void main() {
   test(
     'remotes added, renamed, removed; a tag pushed and deleted there',
     () async {
       if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+      // A push spawns Git's own `sh`: skipped where that cannot run.
+      if (!await canGitRunPrograms) return;
       final folder = await Directory.systemTemp.createTemp('remotes');
       addTearDown(() => folder.delete(recursive: true));
       final root = folder.resolveSymbolicLinksSync();

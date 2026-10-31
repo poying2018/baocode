@@ -21,6 +21,20 @@ void main() {
     }
   }();
 
+  // A link of one's own needs the privilege Windows keeps off by default
+  // (errno 1314): where none can be made, the test through one is skipped.
+  final hasLinks = () {
+    final dir = Directory.systemTemp.createTempSync('baocode_links_');
+    try {
+      Link(p.join(dir.path, 'probe')).createSync(dir.path);
+      return true;
+    } on FileSystemException {
+      return false;
+    } finally {
+      dir.deleteSync(recursive: true);
+    }
+  }();
+
   late Directory temp;
   late String root;
   late String checkpoints;
@@ -318,7 +332,7 @@ void main() {
     expect([for (final c in review.changes) c.path], [p.join(link, 'a.txt')]);
     expect(review.changes.single.tracked, isTrue);
     expect(review.holds(path('lib/b.txt')), isTrue);
-  }, skip: !hasGit);
+  }, skip: !hasGit || !hasLinks);
 
   test('undoes reported edits to files the snapshots leave out, as the agent '
       'told what they were', () async {

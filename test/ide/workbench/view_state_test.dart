@@ -100,13 +100,19 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.text('**/gen'), findsOneWidget);
-    expect(kept.last['search'], {'excludes': '**/gen', 'matchCase': true});
+    // Files to include or exclude kept: they show, and that is kept too.
+    expect(kept.last['search'], {
+      'excludes': '**/gen',
+      'matchCase': true,
+      'detailsShown': true,
+    });
 
     await tester.enterText(find.text('**/gen'), '**/gen, build');
     await tester.pump(const Duration(milliseconds: 400));
     expect(kept.last['search'], {
       'excludes': '**/gen, build',
       'matchCase': true,
+      'detailsShown': true,
     });
   });
 

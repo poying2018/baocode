@@ -9,6 +9,8 @@ import 'package:baocode/ide/git/git_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'git_programs.dart';
+
 void main() {
   late String root;
   late IdeGitService service;
@@ -47,6 +49,8 @@ void main() {
 
   test('reordered, reworded, squashed, fixed up and dropped', () async {
     if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+    // A rebase runs Git's editor sequence: skipped where that cannot run.
+    if (!await canGitRunPrograms) return;
     final by = await commits();
     final stopped = await service.interactiveRebase(by['b']!, [
       IdeGitRebaseStep(by['d']!.id, IdeGitRebaseAction.pick),
@@ -73,6 +77,8 @@ void main() {
 
   test('squashed: the messages one after another', () async {
     if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+    // A rebase runs Git's editor sequence: skipped where that cannot run.
+    if (!await canGitRunPrograms) return;
     final by = await commits();
     await service.interactiveRebase(by['d']!, [
       IdeGitRebaseStep(by['d']!.id, IdeGitRebaseAction.pick),
@@ -87,6 +93,8 @@ void main() {
 
   test('a commit to edit: stopped there, a rebase under way', () async {
     if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+    // A rebase runs Git's editor sequence: skipped where that cannot run.
+    if (!await canGitRunPrograms) return;
     final by = await commits();
     final stopped = await service.interactiveRebase(by['c']!, [
       IdeGitRebaseStep(by['c']!.id, IdeGitRebaseAction.edit),
@@ -108,6 +116,8 @@ void main() {
 
   test('Fixup: a fixup! commit squashed into its commit', () async {
     if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+    // A rebase runs Git's editor sequence: skipped where that cannot run.
+    if (!await canGitRunPrograms) return;
     final by = await commits();
     File(p.join(root, 'b.txt')).writeAsStringSync('b2\n');
     await git(['commit', '-q', '-am', 'fixup! ${by['b']!.id}']);

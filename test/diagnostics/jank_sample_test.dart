@@ -39,7 +39,8 @@ void main() {
         '4242',
         '3',
         '-file',
-        p.join(folder.path, name!),
+        // The executable is given the path as the platform writes it.
+        p.normalize(p.join(folder.path, name!)),
       ]);
     },
   );

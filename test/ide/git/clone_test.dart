@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
+import 'git_programs.dart';
+
 void main() {
   test('the folder a clone goes in', () {
     expect(ideGitCloneFolder('https://github.com/a/b.git'), 'b');
@@ -23,6 +25,9 @@ void main() {
 
   test('a real clone', () async {
     if ((await Process.run('git', ['--version'])).exitCode != 0) return;
+    // A clone over a local path spawns Git's own `sh`: skipped where that
+    // cannot run.
+    if (!await canGitRunPrograms) return;
     final folder = await Directory.systemTemp.createTemp('clone');
     addTearDown(() => folder.delete(recursive: true));
     final root = folder.resolveSymbolicLinksSync();

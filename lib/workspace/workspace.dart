@@ -1380,33 +1380,33 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   void addSshHost(String host) {
     if (_sshHosts.contains(host)) return;
     _sshHosts.add(host);
-    final hidden = {
-      for (final project in _projects)
-        if (project.host == host) project.path: ?_hiddenProjects[project.path],
-    };
-    if (hidden.isNotEmpty) {
-      // Taken off with the host: at the time it went, the last.
-      final removed = hidden.values.reduce((a, b) => a.isAfter(b) ? a : b);
-      hidden.forEach((path, since) {
-        if (since == removed) _hiddenProjects.remove(path);
-      });
+    for (final path in _hostRemoved.remove(host) ?? const <String>[]) {
+      _hiddenProjects.remove(path);
     }
     _save();
     notifyListeners();
   }
+
+  /// The paths each host's projects went off with it ([removeSshHost]),
+  /// to be listed again if it is added back: not guessed by when they
+  /// went (two may share the time), but by what went together.
+  final Map<String, List<String>> _hostRemoved = {};
 
   /// Takes [host] off, its projects off the sidebar ([hideProject]):
   /// nothing of them is deleted. What the form saved of it goes.
   void removeSshHost(String host) {
     _sshHosts.remove(host);
     _sshServers.remove(host);
-    final now = DateTime.now();
+    final removed = <String>[];
     for (final project in _projects) {
-      // Those off already stay as they were (see [addSshHost]).
-      if (project.host == host) {
-        _hiddenProjects.putIfAbsent(project.path, () => now);
-      }
+      if (project.host != host) continue;
+      // Those off already stay as they were (see [addSshHost]): only what
+      // went off now goes back with it.
+      if (_hiddenProjects.containsKey(project.path)) continue;
+      _hiddenProjects[project.path] = DateTime.now();
+      removed.add(project.path);
     }
+    if (removed.isNotEmpty) _hostRemoved[host] = removed;
     if (_sidebarHost == host) _sidebarHost = null;
     _save();
     notifyListeners();

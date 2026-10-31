@@ -10,6 +10,8 @@ import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/git_service.dart';
 import 'package:path/path.dart' as p;
 
+import 'git_programs.dart';
+
 /// Runs local Git (no network) in a temporary repository whose own config
 /// keeps the user's hooks, signing and templates out.
 void main() {
@@ -257,6 +259,8 @@ void main() {
 
   test('a rebase goes on with what is checked staged; changes left '
       'unchecked are said to be in the way', () async {
+    // A rebase runs Git's editor sequence: skipped where that cannot run.
+    if (!await canGitRunPrograms) return;
     await git(['checkout', '-q', '-b', 'feature']);
     await write('lib/a.dart', 'feature\n');
     await git(['commit', '-q', '-am', 'Feature']);
