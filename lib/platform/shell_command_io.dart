@@ -44,14 +44,25 @@ Future<ProcessResult> _runProcess(
 String get shellCommandMarker =>
     '${AppPaths.displayName(Platform.environment)} shell command';
 
+/// The lines a script of ours has carried across the renames of the
+/// product: the name changed (BaoCode to BaoCode Claude), the `code`
+/// command an older version installed did not, and its marker says the old
+/// name. A script with any of these is ours — told apart from the other
+/// product's, whose name never was this one's.
+const _shellCommandMarkers = [
+  'BaoCode shell command',
+  'BaoCode Claude shell command',
+  'BaoCode Codex shell command',
+];
+
 /// Whether the file at [path] is a script of ours: the marker in its first
 /// lines (another app's may be a large binary, so only those are read).
 Future<bool> _isOurs(String path) async {
   RandomAccessFile? file;
   try {
     file = await File(path).open();
-    final head = await file.read(512);
-    return latin1.decode(head).contains(shellCommandMarker);
+    final head = latin1.decode(await file.read(512));
+    return _shellCommandMarkers.any(head.contains);
   } on FileSystemException {
     return false;
   } finally {
