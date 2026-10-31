@@ -173,7 +173,7 @@
 代码：`SshLauncher.connect`（`ssh_launcher.dart`）、`SshHost._attempt`（`ssh_host.dart`）。
 
 1. **找 ssh**：在本机 PATH 里找 `ssh`，找不到就是 `noSsh` 失败。
-2. **找服务端二进制**：先找应用目录里的（见第 9 节）；安装包里只有 `servers.json` 时，第一次用到某个平台才从 dl.baocode.dev 下载；开发时没有就从源码编译。都没有就报错。
+2. **找服务端二进制**：先找应用目录里的（见第 9 节）；安装包里只有 `servers.json` 时，第一次用到某个平台才按它给的地址（本仓库 release 资产，`releases/download/<VERSION>/<文件>`）下载；开发时没有就从源码编译。都没有就报错。
 3. **探测**：执行 `ssh <参数> <主机> sh -s`，通过 stdin 送一段脚本，返回：
    - `uname -s` 和 `uname -m`：换成平台名 `linux-x64`、`linux-arm64`、`darwin-x64`、`darwin-arm64`（`SshLauncher.platform`），都不是就报 `unsupported`；是但应用没有这个平台的构建（比如在 Apple silicon 上本地打包、没编 Intel 版），报 `This build of the app has no server for macOS x64` 这类 `server` 失败，什么都不上传；
    - `~/.baocode-server/<VERSION>/baocode-server` 是否已经存在；
