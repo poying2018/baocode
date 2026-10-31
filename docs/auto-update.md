@@ -576,9 +576,9 @@ baocode.dev。改完后跑 `flutter test test/update`。
 
 ## 13. 已知限制与待办
 
-- **macOS 签名与公证等证书**：`tool/build_macos.dart` 和 CI 都已支持，填好 Apple 的密钥就生效（[release.md 7.3](release.md#73-applemacos-签名与公证)）。在那之前，没签名的应用在别人的机器上**第一次安装**时会被 Gatekeeper 拦下。自动更新本身不受影响：下载由应用自己完成，不带 quarantine 属性，替换后脚本还会再清除一次。签名做完后，“同一个 Team”的检查会自动生效。
+- **macOS 签名与公证等证书**：上游的记录（[release.md 7.3](release.md#73-applemacos-签名与公证)）。**本 fork 不发 macOS 版，`tool/build_macos.dart` 已删**，这条在这里不适用。
 - **Windows 安装包没有 Authenticode 签名**：首次下载时 SmartScreen 可能会警告。自动更新只依赖 Ed25519 校验，不受影响。
-- **没有发布渠道**（stable / beta）和灰度发布：所有用户读的都是同一份 `latest.json`。以后要做的话，可以给清单路径加上渠道（`releases/beta/latest.json`），并加一个设置项选择渠道。
+- **没有 stable / beta 渠道**和灰度发布：所有用户读的都是同一份 `latest.json`（`v<版本>-channel` 标签发的 channel 构建是给测试者的另一个安装包，不是另一条更新渠道——它更新到自己的 `-channel` 平台键，见 `editionUpdatePlatform`）。以后要做的话，可以给清单路径加上渠道（`releases/beta/latest.json`），并加一个设置项选择渠道。
 - **没有增量更新**：每次都下载完整的安装包。
 - **拒绝 UAC 之后**：应用已经退出，需要用户手动重新打开（下次启动会再提示更新）。
 - **macOS 的 /Applications 归 root 所有时**：当前用户能改名 .app 但删不掉旧版本的内容时，`.baocode-old` 可能会残留。
