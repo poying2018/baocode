@@ -894,6 +894,10 @@ void main() {
       );
       if (Platform.isWindows) {
         await File('$path.cmd').writeAsString('@echo off\r\n');
+      } else {
+        // A command on the PATH is one the machine may run: without the
+        // executable bit the lookup says no.
+        await Process.run('chmod', ['755', path]);
       }
       final expected = Platform.isWindows ? '$path.cmd' : path;
       expect(
