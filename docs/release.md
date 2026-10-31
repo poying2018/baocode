@@ -304,6 +304,25 @@ releases/download/v1.2.0/                 一个版本一个标签
 
 3. **保护标签**：Settings → Rules → Rulesets → New tag ruleset，目标 `v*`，限制创建、更新、删除，只允许你自己绕过。这样只有你能发版。
 
+4. **Claude Code 版本的每日 bump**：`.github/workflows/claude-version.yml` 每天
+   03:37 UTC 自动把渠道当前版本写进 `_claudeVersion` / `_claudeSha256`（发版的
+   check 任务再兜底：pin 落旧了发不出去）。**GitHub 的 schedule 在高峰时会延迟
+   甚至丢弃**——这个 workflow 就连续两天在错过的窗口里没跑。发现 pin 落后时，
+   手动触发一次即可，与计划运行完全等价：
+
+   ```sh
+   # gh 登录时
+   gh workflow run "Claude Code version" --repo poying2018/baocode --ref main
+   # 或用 API（token 要 repo 权限）
+   curl -X POST \
+     -H "Authorization: Bearer <token>" \
+     https://api.github.com/repos/poying2018/baocode/actions/workflows/claude-version.yml/dispatches \
+     -d '{"ref":"main"}'
+   ```
+
+   跑完看结果：pin 已是当前版时它什么都不提交（正常）；有新版本时在 `main` 上
+   落一个 `ci(claude): bump Claude Code to <版本>` 提交。
+
 应用更新的服务端就是这个仓库的 Releases，没有别的要准备。更新签名私钥放进 GitHub 之后，本机和离线备份仍然要留着（见 [auto-update.md 6.3](auto-update.md#63-保管)）。
 
 ### 7.2 Cloudflare（只有扩展和手机版用）
