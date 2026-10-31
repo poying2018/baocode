@@ -16,6 +16,10 @@
       → 打开 设置 → 模型 中这个上游的页面
 ```
 
+（这个 fork 没有部署 `baocode.dev/import` 转接页，上游站点按上游的格式放链接时
+会落在死页上——scheme 本身（`baocode://provider/import`）在本 fork 的 Windows
+安装包里是真的，直接给站点上面的第二行即可。）
+
 ## 链接参数
 
 | 参数 | 必填 | 说明 |
@@ -34,10 +38,12 @@
 ## 推荐上游（卡片）
 
 收录表：`site/featured/upstreams.json`，Logo 放在同目录，`logo` 只写文件名（不能带路径）。
-它随官网部署在 `https://baocode.dev/featured/upstreams.json`（缓存 5 分钟），不随应用发布：
-合并到 main、官网部署完，新收录就出现在用户的 设置 → 模型 里。应用打开该页时拉取
-（`lib/models/featured_upstreams_io.dart`，走应用代理，一小时内不重复拉），连同 Logo 存在
-数据目录的 `cache/featured/`；拉不到时用上次存下的，第一次就拉不到则不显示卡片。
+它不随应用发布，也不是官网在服务：这个 fork 没有部署官网，应用直接从
+`https://raw.githubusercontent.com/poying2018/baocode/main/site/featured/upstreams.json`
+读（`AppLinks.siteBase`，`lib/models/featured_upstreams.dart` 的 `feed`）。合并到 main
+即生效，不需要部署步骤。应用打开该页时拉取（`lib/models/featured_upstreams_io.dart`，
+走应用代理，一小时内不重复拉），连同 Logo 存在数据目录的 `cache/featured/`；拉不到时
+用上次存下的，第一次就拉不到则不显示卡片。
 
 ```json
 {
@@ -67,14 +73,14 @@
 
 ## 收录流程
 
-1. 站长按 https://baocode.dev/upstreams 接入一键导入。
+1. 站长按接入提示词（`site/upstreams.html`，本 fork 未部署官网，把它发给站长即可）接入一键导入。
 2. 站长用 issue 模板「收录我的上游」（`.github/ISSUE_TEMPLATE/upstream-listing.yml`）提交。
 3. 维护者：
    - 注册一个账号，在令牌页实际点一次导入，确认能成功添加并列出模型；
    - 核对 `hosts` 确实是该站的 API 域名；
    - 通过 issue 里的联系方式要 Logo，处理成正方形放进 `site/featured/`；
-   - 往 `site/featured/upstreams.json` 加一条，PR 引用 issue；合并后官网部署完即上线，
-     不用等应用发版。
+   - 往 `site/featured/upstreams.json` 加一条，PR 引用 issue；合并进 main 即生效
+     （应用从 GitHub raw 读它，无部署步骤），不用等应用发版。
 4. 下架：导入失效、域名易主、误导用户（例如冒充官方），删掉条目即可，在 issue 里说明。
 
 ## 给站长的接入提示词
