@@ -367,20 +367,27 @@ jobs:
           for file in out/BaoCodeClaude-*; do
             gh release upload "v$MARKETING" "$file" --clobber
           done
-      - name: Upload the remote server, beside the release
+      - name: Upload the remote server, where servers.json says
         if: env.CHANNEL_ONLY != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The remote server's builds are published here too, so an app
-          # built months ago still downloads the one it was built with.
-          for file in dist/remote-$PRODUCT/*.gz dist/remote-$PRODUCT/servers*.json; do
-            gh release upload "v$MARKETING" "$file" --clobber
-          done
+          # The builds go to a release of their own, tagged with the build's
+          # VERSION: servers.json names that release, so an app built months
+          # ago still downloads the one it was built with. --latest=false,
+          # as the app's update manifest is read from releases/latest, and a
+          # server release must not take its place. Made again on a re-run:
+          # the release is kept, its assets replaced.
           version=$(cat dist/remote-$PRODUCT/VERSION)
+          gh release create "$version" --repo "$GITHUB_REPOSITORY" \
+            --title "$version" --notes "" --latest=false \
+            --target "$GITHUB_SHA" 2>/dev/null || true
+          for file in dist/remote-$PRODUCT/*.gz dist/remote-$PRODUCT/servers*.json dist/remote-$PRODUCT/VERSION; do
+            gh release upload "$version" "$file" --clobber --repo "$GITHUB_REPOSITORY"
+          done
           jq -n --arg version "$version" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
             '{version: $version, tag: $tag, commit: $commit}' > "remote-latest-$PRODUCT.json"
-          gh release upload "v$MARKETING" "remote-latest-$PRODUCT.json" --clobber
+          gh release upload "$version" "remote-latest-$PRODUCT.json" --clobber --repo "$GITHUB_REPOSITORY"
       - name: Upload the manifest, last
         if: env.CHANNEL_ONLY != 'true'
         env:

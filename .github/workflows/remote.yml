@@ -148,9 +148,15 @@ jobs:
         run: |
           # Named by what was built, so never changed once there. The
           # release of this repository carries them, not a CDN of
-          # upstream's: the app downloads them from here.
-          for file in dist/remote/*.gz dist/remote/servers*.json; do
-            gh release upload "$GITHUB_REF_NAME" "$file" --clobber
+          # upstream's: the app downloads them from here. A release of the
+          # build's own VERSION, as servers.json says: an app built months
+          # ago still downloads the one it was built with. --latest=false,
+          # as the app's update manifest is read from releases/latest.
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --title "$VERSION" --notes "" --latest=false \
+            --target "$GITHUB_SHA" 2>/dev/null || true
+          for file in dist/remote/*.gz dist/remote/servers*.json dist/remote/VERSION; do
+            gh release upload "$VERSION" "$file" --clobber --repo "$GITHUB_REPOSITORY"
           done
       - name: Name them in latest.json, last
         env:
@@ -158,7 +164,7 @@ jobs:
         run: |
           jq -n --arg version "$VERSION" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
             '{version: $version, tag: $tag, commit: $commit}' > "remote-latest-$PRODUCT.json"
-          gh release upload "$GITHUB_REF_NAME" "remote-latest-$PRODUCT.json" --clobber
+          gh release upload "$VERSION" "remote-latest-$PRODUCT.json" --clobber --repo "$GITHUB_REPOSITORY"
           {
             echo "## Remote server \`$VERSION\` (\`$GITHUB_REF_NAME\`, ${GITHUB_SHA::7})"
             echo
