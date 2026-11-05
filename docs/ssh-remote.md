@@ -416,8 +416,8 @@ dart run tool/build_remote_server.dart --all        # 四份没编全就失败�
 安装包**不带服务端二进制**，只带 `VERSION` 和 `servers.json`。四个二进制原本占 30 多 MB，大多数用户不连远程，而每台主机只需要其中一个平台。
 
 - **打包**：`tool/build_windows.dart` 先编译到 `build/remote/`（CI 里由单独的 `remote` 任务在 macOS 机器上把四份都编一次，在那台 Mac 上直接跑一遍两份 macOS 版（`tool/test_remote_server_macos.sh`，Intel 版经 Rosetta），再由 `remote-linux` 任务在 Docker 里的几个 Linux 发行版上各跑一遍 `tool/test_remote_server.sh`，打包脚本带 `--remote-built` 直接用它），再只把 `VERSION`、`servers.json` 放进 `<bundle>\remote\`，`.gz` 放到 `build/installers/remote/<VERSION>/`。
-- **单独发布**：把 `build/remote/` 下发到本仓库一个以 `<VERSION>` 为标签的 release（`dart run tool/build_remote_server.dart` 会打印那条 `gh release create`；要带 `--latest=false`，应用的更新清单从 `releases/latest` 读，不能被服务端的 release 顶掉）；本机打包时用 `--remote-release [VERSION]` 取回已发布的那份 `servers.json`，不在本机编译（docs/release.md 第 3 节）。
-- **发布**：`.gz`、`servers.json` 和 `VERSION` 一起传上去——**要在安装包发出去之前传**，否则这个版本连不了远程。发布用的是构建自己的 `VERSION`（内容定名，同一个版本不会写出两次），所以旧版本的 release 一直保留：装着旧版的用户还要从那儿下载。
+- **单独发布**：把 `build/remote/` 下发到本仓库一个以 `<VERSION>` 为标签的 release。`release.yml` 发版时自动做（`remote.yml` 单独编服务端时也一样）：标签取的是 `dist/remote-$PRODUCT/VERSION` 的内容，`gh release create` 带 `--latest=false`（应用的更新清单从 `releases/latest` 读，服务端的 release 不能把它顶掉），然后把 `.gz`、`servers.json`、`VERSION` 和 `remote-latest-$PRODUCT.json` 一起传上去。本机打包时 `dart run tool/build_remote_server.dart` 会打印同一形状的 `gh release create`，照着传；用 `--remote-release [VERSION]` 取回已发布的那份 `servers.json`，不在本机编译（docs/release.md 第 3 节）。`test/tool/remote_server_release_test.dart` 盯着这两处：传上去的标签必须是 `servers.json` 里那些地址写的那个。
+- **发布**：`.gz`、`servers.json` 和 `VERSION` 一起传上去——**要在安装包发出去之前传**，否则这个版本连不了远程（`release.yml` 里这一步排在 `latest.json` 之前，也是这个道理）。发布用的是构建自己的 `VERSION`（内容定名，同一个版本不会写出两次），所以旧版本的 release 一直保留：装着旧版的用户还要从那儿下载。
 - **下载**：第一次连某个平台的主机时，应用下载对应的 `.gz`，按 `servers.json` 校验大小和 SHA-256，存到数据目录的 `cache/remote-server/<VERSION>/`，之后照旧经 ssh 推送到主机（第 4 节第 4 步）。远端主机不需要能上网。下载完会删掉其他版本的缓存；同时连多台同平台的主机只下载一次。
 - **安全**：`servers.json` 在安装包里，跟着应用一起签名，所以下载到的只能是这个版本编出来的那份；被替换的文件校验不过，连接报 `server` 失败。
 - 下载失败或校验不过，连接失败，报错里带着下载地址；下次连接重试。
