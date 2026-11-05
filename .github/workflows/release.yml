@@ -388,6 +388,28 @@ jobs:
           jq -n --arg version "$version" --arg tag "$GITHUB_REF_NAME" --arg commit "$GITHUB_SHA" \
             '{version: $version, tag: $tag, commit: $commit}' > "remote-latest-$PRODUCT.json"
           gh release upload "$version" "remote-latest-$PRODUCT.json" --clobber --repo "$GITHUB_REPOSITORY"
+      - name: Check the builds are where servers.json says
+        if: env.CHANNEL_ONLY != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The one way this fails without a word: the files land under one
+          # tag and servers.json names another, so every host that connects
+          # asks for a 404. (This is exactly what had happened: the upload
+          # went to the app's release.) Probe the addresses the app reads,
+          # and stop before the manifest hands the release to users.
+          failed=0
+          for url in $(jq -r '.files[].url' "dist/remote-$PRODUCT/servers.json"); do
+            code=000
+            for attempt in 1 2 3 4 5; do
+              code=$(curl -sIL -o /dev/null -w '%{http_code}' --max-time 60 "$url") || code=000
+              [ "$code" = "200" ] && break
+              sleep 5
+            done
+            echo "$code $url"
+            [ "$code" = "200" ] || failed=1
+          done
+          exit $failed
       - name: Upload the manifest, last
         if: env.CHANNEL_ONLY != 'true'
         env:

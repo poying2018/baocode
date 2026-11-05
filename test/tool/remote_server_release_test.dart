@@ -64,6 +64,29 @@ void main() {
         isTrue,
       );
     });
+
+    test('the addresses are probed before the manifest goes up', () {
+      // A release that cannot hand a host its server must not become the one
+      // apps update to: the probe sits between the two uploads.
+      final builds = lines.indexWhere(
+        (line) => line.startsWith(r'gh release upload "$version"'),
+      );
+      final probe = lines.indexWhere((line) => line.contains('.files[].url'));
+      final manifest = lines.indexWhere(
+        (line) =>
+            line.startsWith('gh release upload') &&
+            line.contains('out/latest.json'),
+      );
+      expect(builds, isNonNegative);
+      expect(probe, greaterThan(builds));
+      expect(manifest, greaterThan(probe));
+      expect(
+        lines.any(
+          (line) => line.contains('Check the builds are where servers.json says'),
+        ),
+        isTrue,
+      );
+    });
   });
 
   group('remote.yml', () {
@@ -83,6 +106,15 @@ void main() {
             .hasMatch(lines.join('\n')),
         isTrue,
       );
+    });
+
+    test('the addresses are probed after the upload', () {
+      final builds = lines.indexWhere(
+        (line) => line.startsWith(r'gh release upload "$VERSION"'),
+      );
+      final probe = lines.indexWhere((line) => line.contains('.files[].url'));
+      expect(builds, isNonNegative);
+      expect(probe, greaterThan(builds));
     });
   });
 
