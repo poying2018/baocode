@@ -44,7 +44,7 @@ Windows 版自带 Claude Code，装完不用再装别的。
 
 ## 系统要求
 
-- macOS 12 或更新版本（Apple 芯片和 Intel 各提供一个下载版本），Windows 10 或更新版本（x64），或 Linux：Ubuntu 22.04 或更新版本及其他基于 Debian 的发行版（x64 和 arm64 各一个 .deb）。
+- Windows 10 或更新版本（x64），或 Linux：Ubuntu 22.04 或更新版本及其他基于 Debian 的发行版（x64 和 arm64 各一个 .deb）。**本 fork 只构建并发布 Windows 版**，macOS 应用在这里既不构建也不发布。
 - 不用另外安装：[Claude Code](https://github.com/anthropics/claude-code) 随 BaoCode 一起提供。你若已装了别的版本，就用你那份。
 
 ## 从源码构建
@@ -53,13 +53,12 @@ BaoCode 使用 Flutter 开发，Dart SDK 要求为 `^3.13.4`。
 
 ```sh
 flutter pub get
-flutter run -d macos        # Windows 使用：flutter run -d windows
+flutter run -d windows
 ```
 
 构建发行版本，产物写入 `build/installers/`：
 
 ```sh
-dart run tool/build_macos.dart            # BaoCode-<version>-{arm64,x64}.dmg 和 BaoCode-<version>-mac-{arm64,x64}.zip
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe（需要 Inno Setup）
 flutter build linux --release && sh tool/package_linux_deb.sh   # BaoCode-<version>-linux-{amd64,arm64}.deb 和 .tar.gz，在 Ubuntu 上
 dart run tool/build_remote_server.dart    # 用于 Linux x64 和 arm64 的 SSH 远程服务器
@@ -78,7 +77,7 @@ dart run tool/build_remote_server.dart    # 用于 Linux x64 和 arm64 的 SSH �
 | [packages/bao_xterm](packages/bao_xterm) | xterm.js 的 Dart 移植版本 |
 | [packages/bao_pty](packages/bao_pty) | Dart 伪终端支持：macOS、Linux 使用 forkpty，Windows 使用 ConPTY |
 | [packages/bao_remote](packages/bao_remote) | 通过 SSH 提供服务的远程端 |
-| [macos/](macos)、[windows/](windows)、[linux/](linux) | 原生平台启动器 |
+| [windows/](windows)、[linux/](linux) | 原生平台启动器 |
 | [tool/](tool) | 构建、打包及发布脚本 |
 | [site/](site) | 官网 [baocode.dev](https://baocode.dev) 的源码 |
 | [docs/](docs) | 设计文档 |

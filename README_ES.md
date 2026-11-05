@@ -44,7 +44,7 @@ La descarga para Windows incluye el propio Claude Code: no hay nada que instalar
 
 ## Requisitos
 
-- macOS 12 o posterior (una descarga para Apple silicon y otra para Intel), Windows 10 o posterior (x64), o Linux: Ubuntu 22.04 o posterior y otras distribuciones basadas en Debian (un .deb para x64 y otro para arm64).
+- Windows 10 o posterior (x64), o Linux: Ubuntu 22.04 o posterior y otras distribuciones basadas en Debian (un .deb para x64 y otro para arm64). **Este fork solo compila y publica la versión de Windows**; la aplicación de macOS no se compila ni se publica aquí.
 - Nada que instalar: [Claude Code](https://github.com/anthropics/claude-code) viene incluido con BaoCode. Si ya tienes tu propia versión, se usa esa.
 
 ## Compilar desde el código fuente
@@ -53,13 +53,12 @@ BaoCode es una aplicación Flutter; requiere el SDK de Dart `^3.13.4`.
 
 ```sh
 flutter pub get
-flutter run -d macos        # Windows: flutter run -d windows
+flutter run -d windows
 ```
 
 Para crear las distribuciones en `build/installers/`:
 
 ```sh
-dart run tool/build_macos.dart            # BaoCode-<version>-{arm64,x64}.dmg y BaoCode-<version>-mac-{arm64,x64}.zip
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe (requiere Inno Setup)
 dart run tool/build_remote_server.dart    # servidor SSH remoto para Linux x64 y arm64
 ```
@@ -77,7 +76,7 @@ La CI compila y publica las versiones cuando se envía un tag `v*`. Consulta [do
 | [packages/bao_xterm](packages/bao_xterm) | Adaptación de xterm.js a Dart |
 | [packages/bao_pty](packages/bao_pty) | Pseudoterminales para Dart: forkpty en macOS y Linux, ConPTY en Windows |
 | [packages/bao_remote](packages/bao_remote) | Componente del host remoto servido por SSH |
-| [macos/](macos), [windows/](windows), [linux/](linux) | Ejecutores nativos |
+| [windows/](windows), [linux/](linux) | Ejecutores nativos |
 | [tool/](tool) | Scripts de compilación, empaquetado y publicación |
 | [site/](site) | Código del sitio [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Notas de diseño |

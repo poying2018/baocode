@@ -44,7 +44,7 @@ Le téléchargement pour Windows contient Claude Code lui-même : il n'y a rien 
 
 ## Prérequis
 
-- macOS 12 ou ultérieur (un téléchargement pour Apple silicon, un pour Intel), Windows 10 ou ultérieur (x64), ou Linux : Ubuntu 22.04 ou ultérieur et les autres distributions basées sur Debian (un .deb pour x64, un pour arm64).
+- Windows 10 ou ultérieur (x64), ou Linux : Ubuntu 22.04 ou ultérieur et les autres distributions basées sur Debian (un .deb pour x64, un pour arm64). **Ce fork ne compile et ne publie que la version Windows** ; l'application macOS n'y est ni compilée ni publiée.
 - Rien à installer : [Claude Code](https://github.com/anthropics/claude-code) est fourni avec BaoCode. Le vôtre, si vous en avez un, est utilisé à sa place.
 
 ## Compilation depuis les sources
@@ -53,13 +53,12 @@ BaoCode est une application Flutter ; le SDK Dart requis est `^3.13.4`.
 
 ```sh
 flutter pub get
-flutter run -d macos        # Windows : flutter run -d windows
+flutter run -d windows
 ```
 
 Pour créer les distributions dans `build/installers/` :
 
 ```sh
-dart run tool/build_macos.dart            # BaoCode-<version>-{arm64,x64}.dmg et BaoCode-<version>-mac-{arm64,x64}.zip
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe (nécessite Inno Setup)
 dart run tool/build_remote_server.dart    # serveur SSH distant pour Linux x64 et arm64
 ```
@@ -77,7 +76,7 @@ La CI compile et publie les versions lorsqu'un tag `v*` est poussé. Versions, s
 | [packages/bao_xterm](packages/bao_xterm) | Portage de xterm.js en Dart |
 | [packages/bao_pty](packages/bao_pty) | Pseudo-terminaux Dart : forkpty sur macOS et Linux, ConPTY sur Windows |
 | [packages/bao_remote](packages/bao_remote) | Composant distant servi par SSH |
-| [macos/](macos), [windows/](windows), [linux/](linux) | Lanceurs natifs |
+| [windows/](windows), [linux/](linux) | Lanceurs natifs |
 | [tool/](tool) | Scripts de compilation, de packaging et de publication |
 | [site/](site) | Sources du site [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Notes de conception |

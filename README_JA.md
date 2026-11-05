@@ -44,7 +44,7 @@ Windows 版には Claude Code 本体が同梱されています。インスト�
 
 ## 必要環境
 
-- macOS 12 以降（Apple silicon と Intel 向けにそれぞれ配布）、Windows 10 以降（x64）、または Linux：Ubuntu 22.04 以降とその他の Debian 系ディストリビューション（x64 と arm64 向けにそれぞれ .deb）。
+- Windows 10 以降（x64）、または Linux：Ubuntu 22.04 以降とその他の Debian 系ディストリビューション（x64 と arm64 向けにそれぞれ .deb）。**この fork は Windows 版のみをビルド・配布します**。macOS アプリはここではビルドも配布もしていません。
 - 別途インストールは不要：[Claude Code](https://github.com/anthropics/claude-code) は BaoCode に同梱されています。すでに別のビルドをお持ちならそちらが使われます。
 
 ## ソースからのビルド
@@ -53,13 +53,12 @@ BaoCode は Flutter アプリです。Dart SDK の要件は `^3.13.4` です。
 
 ```sh
 flutter pub get
-flutter run -d macos        # Windows: flutter run -d windows
+flutter run -d windows
 ```
 
 リリース用の成果物を `build/installers/` に作成するには：
 
 ```sh
-dart run tool/build_macos.dart            # BaoCode-<version>-{arm64,x64}.dmg と BaoCode-<version>-mac-{arm64,x64}.zip
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe（Inno Setup が必要）
 dart run tool/build_remote_server.dart    # Linux x64 / arm64 用の SSH リモートサーバー
 ```
@@ -77,7 +76,7 @@ dart run tool/build_remote_server.dart    # Linux x64 / arm64 用の SSH リモ�
 | [packages/bao_xterm](packages/bao_xterm) | xterm.js の Dart 移植 |
 | [packages/bao_pty](packages/bao_pty) | Dart 用疑似端末：macOS / Linux は forkpty、Windows は ConPTY |
 | [packages/bao_remote](packages/bao_remote) | SSH 経由でサービスを提供するリモート側 |
-| [macos/](macos)、[windows/](windows)、[linux/](linux) | ネイティブランナー |
+| [windows/](windows)、[linux/](linux) | ネイティブランナー |
 | [tool/](tool) | ビルド、パッケージング、リリースのスクリプト |
 | [site/](site) | [baocode.dev](https://baocode.dev) のソース |
 | [docs/](docs) | 設計資料 |

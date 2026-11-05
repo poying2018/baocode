@@ -41,7 +41,7 @@ Flutter 不处理某个按键时，引擎会把它继续往下传，最后落到
 
 修的是第 2 个问题：让菜单里的编辑命令交给窗口处理，再由窗口转给 Flutter 当前的焦点。
 
-1. [MainMenu.xib](../macos/Runner/Base.lproj/MainMenu.xib)：“编辑”菜单里以下命令的 action 改成了自定义方法名。`FlutterTextInputPlugin` 不认识这些方法名，所以命令会沿着响应链一直传到窗口：
+1. 上游的 `macos/Runner/Base.lproj/MainMenu.xib`（本 fork 已删掉 `macos/` 目录，这里没有这个文件，下同）：“编辑”菜单里以下命令的 action 改成了自定义方法名。`FlutterTextInputPlugin` 不认识这些方法名，所以命令会沿着响应链一直传到窗口：
 
    | 菜单项 | 原 action | 现 action |
    | --- | --- | --- |
@@ -53,7 +53,7 @@ Flutter 不处理某个按键时，引擎会把它继续往下传，最后落到
    | Paste and Match Style | `pasteAsPlainText:` | `baocodePaste:` |
    | Select All | `selectAll:` | `baocodeSelectAll:` |
 
-2. [MainFlutterWindow.swift](../macos/Runner/MainFlutterWindow.swift)：窗口实现了这些方法，通过 `baocode/window` 通道调用 Dart 端的 `editCommand`，参数是命令名（`undo`、`redo`、`cut`、`copy`、`paste` 或 `selectAll`）。
+2. 上游的 `macos/Runner/MainFlutterWindow.swift`：窗口实现了这些方法，通过 `baocode/window` 通道调用 Dart 端的 `editCommand`，参数是命令名（`undo`、`redo`、`cut`、`copy`、`paste` 或 `selectAll`）。
 3. [window_controls.dart](../lib/workspace/window_controls.dart)：`WindowControls.handleEditCommands()` 在 [workbench.dart](../lib/workbench.dart) 启动时注册。收到命令后，`runEditCommand` 把它换成对应的 Intent，交给当前焦点所在的 context 执行：
 
    | 命令 | Intent |

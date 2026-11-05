@@ -331,7 +331,7 @@ macOS 包、dmg、`remote/<VERSION>/`）是另一套布局，本仓库不用它�
 
 ### 5.4 对服务器的要求
 
-CI 上传时已经按下面这些设置好（见 [release.md 第 5 节](release.md#5-dlbaocodedev-上有什么)）：
+本 fork 的服务器就是本仓库的 GitHub Releases（见 [release.md 第 5 节](release.md#5-服务端本仓库的-github-releases)），缓存、`Range` 和 `Content-Length` 由 GitHub 负责；下面这些是换成自建 CDN 时要满足的，留着备用：
 
 - **`latest.json` 不要缓存太久**：`Cache-Control: max-age=300`。CDN 缓存旧清单会导致新版本推送延迟；撤回某个版本时也要清 CDN 缓存。
 - **安装包可以长期缓存**（`immutable`，一年）：清单里的链接末尾带文件哈希（`?sha256=…`），文件换了链接就换了，所以同一个版本重新发布也不会拿到旧文件，见 [release.md 第 2 节](release.md#2-版本号)。
