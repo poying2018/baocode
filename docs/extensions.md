@@ -65,3 +65,10 @@ Python 能力的现状和缺口：
 GitHub Releases，见 [release.md 4.1](release.md#41-一个仓库一个产品)）。正式版会
 在 R2 上写一份 `releases/extension/latest.json`，`baocode.dev/download` 的扩展
 卡片读它。
+
+应用也读它（`lib/browser/extension_store.dart`，每次运行拉一次，存在数据目录的
+`browser/store`）：设置 → 浏览器 和对话开头的引导页里那两个按钮，地址就来自这份
+清单——「商店」用 `store`（没有就用 ID 拼出来的商店地址），「下载未打包的 zip」用
+`downloads["browser-extension"].url`。**这两个地址只能在这里**：扩展不进应用的
+release，按应用 release 的资产拼地址（曾经就是这样）点开是 404。清单读不到、也从没
+存过的话，zip 按钮改为打开商店页——从那里也能装。
