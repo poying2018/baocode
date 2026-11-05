@@ -242,23 +242,34 @@ main.dart onExitRequested
 ### 5.1 目录布局
 
 本仓库的「服务端」就是它自己的 GitHub Releases。没有目录树，只有一层资产；
-地址都是 `https://github.com/poying2018/baocode/releases/…`：
+地址都是 `https://github.com/poying2018/baocode/releases/…`。**两类 release**：应用的
+一个版本一个 `v<版本>` 标签，远程服务端的一次构建一个 `<VERSION>` 标签（`VERSION`
+是构建自己的名字，和应用版本无关）：
 
 ```
-releases/latest/download/latest.json         ← 应用读取的清单（指针指向最新 release）
-releases/download/v1.2.0/                    ← 一个版本一个标签
+releases/latest/download/latest.json         ← 应用读取的清单（指针指向应用的最新 release）
+releases/download/v1.2.0/                    ← 应用：一个版本一个标签
   latest.json                                ← 同一份清单，也作为该版本的资产
   BaoCodeClaude-1.2.0-setup.exe              ← Windows 更新 / 首次安装
+releases/download/1.2.0.18-3bb062c7fa29      ← 服务端：一个构建一个标签
   baocode-server-<平台>.gz                   ← 远程服务端，应用连远程主机时按需下载
   servers.json                                 （见 docs/ssh-remote.md 第 9.3 节；
-  remote-latest-baocode-claude.json           旧版本的资产要一直保留）
+  VERSION                                      旧版本的资产要一直保留）
+  remote-latest-baocode-claude.json
 ```
+
+应用的 release 里**没有**服务端资产：`servers.json` 在安装包里，它写的地址是那个
+`<VERSION>` release。两边分开是因为应用按自己的版本更新，服务端按构建的 `VERSION`
+下载——一个应用版本和一份服务端不一一对应，混在一个 release 里就会指错地方（曾经
+就是这样传的，结果每个用户连远程主机都是 404）。
 
 `releases/latest/download/<资产>` 永远指向**最新一个** release 里的同名资产：清单和
 安装包同名同处一个 release，应用读到清单里的版本比自己新，就按清单里的
 `releases/download/v<版本>/<文件名>` 链接下载——链接指回同一个 release 的资产。
 `gh release delete` + 重建会让这个指针短暂落回上一个版本，这是发版脚本先传安装包、
-**清单最后传**的原因。
+**清单最后传**的原因。同理，`releases/latest` 这个位置只能是应用的 release：服务端的
+release 建完要显式 `--latest=false` 把它拿回来（`--latest=false` 建的时候给不够，
+`gh release edit` 才稳）。
 
 应用无法自己更新时会打开仓库的 releases 页（`lib/update/update_service.dart` 的
 `ManualUpdateRequired.downloadPage`）。上游的 `https://dl.baocode.dev/`（R2 + 目录树，
