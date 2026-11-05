@@ -22,13 +22,13 @@ import '../../ide/ide_image_preview.dart';
 import '../../ide/ide_status_bar.dart' show IdeLanguageNames;
 import '../../ide/language_mode.dart';
 import '../../ide/ide_dialog.dart';
-import '../../ide/ide_editor_placeholder.dart' show ideFormatSize;
+import '../../ide/ide_editor_placeholder.dart'
+    show IdeEditorPlaceholder, ideFormatSize;
 import '../../ide/markdown/markdown_paste.dart';
 import '../../ide/markdown/markdown_preview.dart';
 import '../../l10n/l10n.dart';
 import '../../platform/app_platform.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/codicons.dart';
 import '../../theme/material_file_icons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
 import '../../workspace/editor_launcher.dart' show openExternal;
@@ -169,6 +169,9 @@ class _FilePreviewState extends State<FilePreview> {
   /// A markdown file's text, rendered: its edit's, as it is edited.
   EditorDocumentModel? _markdown;
   int _load = 0;
+
+  /// Read past the binary and size checks (Open Anyway).
+  bool _force = false;
 
   /// Lets it be shown in place of the file before (see [ShownWhenReady]):
   /// once read.
@@ -323,7 +326,8 @@ class _FilePreviewState extends State<FilePreview> {
     _markdown = null;
   }
 
-  void _start() {
+  void _start({bool force = false}) {
+    _force = force;
     final load = ++_load;
     _loaded = null;
     _colors = const [];
@@ -352,7 +356,8 @@ class _FilePreviewState extends State<FilePreview> {
     Object? error;
     try {
       text =
-          await (request.modified?.call() ?? widget.files.read(request.path));
+          await (request.modified?.call() ??
+              widget.files.read(request.path, force: _force));
     } catch (e) {
       error = e;
     }
@@ -577,11 +582,20 @@ class _FilePreviewState extends State<FilePreview> {
       case null:
         return const SizedBox.shrink();
       case _Failed(:final error):
-        return _Message(
-          icon: error is IdeFileNotFoundException
-              ? Codicons.warning
-              : Codicons.error,
-          text: localizedFileError(context.l10n, error),
+        // As the IDE's editor shows it.
+        return IdeEditorPlaceholder(
+          error: error,
+          path: _request.path,
+          onOpenAnyway: () => setState(() => _start(force: true)),
+          onRetry: () => setState(_start),
+          // This machine's files only, not a remote project's host's, and
+          // the file itself, not another version of it.
+          onOpenInDefaultApp:
+              widget.files is! IdeHostFiles &&
+                  WindowControls.canOpenInDefaultApp &&
+                  _request.modified == null
+              ? () => unawaited(openExternal(_request.path))
+              : null,
         );
       case _Diff(:final original, :final modified, :final deleted):
         return IdeCodeDiff(
@@ -1181,35 +1195,6 @@ class _LineRow extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// In place of what cannot be shown: why.
-class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.text});
-
-  final IconData icon;
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 22, color: AppColors.textFaint),
-            const SizedBox(height: 10),
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textMuted, fontSize: 12.5),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -4583,6 +4583,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                         ? IdeEditorPlaceholder(
                             key: ValueKey(active),
                             error: active.openError!,
+                            path: active.path,
                             onOpenAnyway: () => unawaited(
                               widget.workspace.reopen(active, force: true),
                             ),
