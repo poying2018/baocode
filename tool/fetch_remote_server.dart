@@ -5,7 +5,7 @@
 // downloads the builds published, not ones only this machine has. Run from
 // anywhere in the repository:
 //
-//   dart run tool/fetch_remote_server.dart                the newest
+//   dart run tool/fetch_remote_server.dart                the newest one
 //   dart run tool/fetch_remote_server.dart <VERSION>      that one
 //   dart run tool/fetch_remote_server.dart ... --out <dir>
 //                                     into <dir> (build/remote-release/)
@@ -24,8 +24,7 @@ const _repository = 'poying2018/baocode';
 /// Where they are downloaded from: a release tagged with the build's
 /// VERSION, its assets the gzipped builds and `servers.json`
 /// (`<base>/<VERSION>/<file>`).
-const _downloadsBase =
-    'https://github.com/$_repository/releases/download';
+const _downloadsBase = 'https://github.com/$_repository/releases/download';
 
 /// Its releases, newest first: what names the newest published build.
 const _releases = 'https://api.github.com/repos/$_repository/releases';
@@ -62,14 +61,14 @@ Future<void> main(List<String> arguments) async {
     }
 
     _step('Taking servers.json of $version');
-    final servers =
-        await _getJson(
-              client,
-              Uri.parse('$_downloadsBase/$version/servers.json'),
-            )
-            as Map<String, Object?>;
+    final servers = await _getJson(
+      client,
+      Uri.parse('$_downloadsBase/$version/servers.json'),
+    ) as Map<String, Object?>;
     if (servers['version'] != version) {
-      _fail('$_downloadsBase/$version/servers.json is for ${servers['version']}.');
+      _fail(
+        '$_downloadsBase/$version/servers.json is for ${servers['version']}.',
+      );
     }
     final files = servers['files'] as Map<String, Object?>;
     for (final MapEntry(key: platform, :value) in files.entries) {
@@ -102,11 +101,7 @@ Future<void> main(List<String> arguments) async {
   }
 }
 
-Future<Object?> _getJson(
-  HttpClient client,
-  Uri url, {
-  String? token,
-}) async {
+Future<Object?> _getJson(HttpClient client, Uri url, {String? token}) async {
   final request = await client.getUrl(url);
   if (token != null) request.headers.set('authorization', 'Bearer $token');
   final response = await request.close();
@@ -124,7 +119,7 @@ Future<Object?> _getJson(
   }
 }
 
-/// The newest published build's VERSION: the first release tagged with one.
+/// The newest published build's VERSION.
 ///
 /// The releases are read through the API, which without a token allows only
 /// a few requests an hour from one address; `GH_TOKEN` (or `GITHUB_TOKEN`,
@@ -139,14 +134,46 @@ Future<String> _newest(HttpClient client) async {
     token: token,
   );
   if (releases is! List) _fail('$_releases is not what was published.');
-  for (final release in releases) {
-    final tag = '${(release as Map)['tag_name']}';
-    if (_versionTag.hasMatch(tag)) return tag;
-  }
+  final newest = newestPublishedVersion([
+    for (final release in releases) '${(release as Map)['tag_name']}',
+  ]);
+  if (newest != null) return newest;
   _fail(
     'No remote server is published in $_repository'
     '${token == null ? ' (the API may have refused: set GH_TOKEN from `gh auth token`)' : ''}.',
   );
+}
+
+/// The newest of [tags] that is a remote server's VERSION, or null if none is.
+///
+/// By the numbers in the VERSION, not by the order the API lists them in: it
+/// orders the releases by their tags, and the builds of older app versions
+/// were published after newer ones (a release that was missed, made later),
+/// so the first one listed can be the oldest build there is. Nothing here
+/// reads the network, so the ordering itself is what the tests hold.
+String? newestPublishedVersion(Iterable<String> tags) {
+  String? newest;
+  for (final tag in tags) {
+    if (!_versionTag.hasMatch(tag)) continue;
+    if (newest == null || compareVersions(newest, tag) < 0) newest = tag;
+  }
+  return newest;
+}
+
+/// The numbers of a VERSION, in order: `1.9.5.31-3bb062c7fa29` is 1, 9, 5, 31.
+List<int> versionNumbers(String version) => [
+  for (final part in version.split('-').first.split('.')) int.parse(part),
+];
+
+/// Orders two of them by those numbers, the older first.
+int compareVersions(String a, String b) {
+  final left = versionNumbers(a);
+  final right = versionNumbers(b);
+  for (var i = 0; i < left.length && i < right.length; i++) {
+    final order = left[i].compareTo(right[i]);
+    if (order != 0) return order;
+  }
+  return left.length.compareTo(right.length);
 }
 
 void _step(String message) => stdout.writeln('\n==> $message');

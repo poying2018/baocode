@@ -2,6 +2,9 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import '../../tool/fetch_remote_server.dart'
+    show compareVersions, newestPublishedVersion, versionNumbers;
+
 /// Where the remote server's builds are published.
 ///
 /// `servers.json` names a release tagged with the build's VERSION, and an app
@@ -11,12 +14,13 @@ import 'package:flutter_test/flutter_test.dart';
 /// that was never made, and every download of a server was a 404. These tests
 /// keep the workflows saying what tool/build_remote_server.dart prints.
 void main() {
-  List<String> linesOf(String name) => File('.github/workflows/$name')
-      .readAsStringSync()
-      .replaceAll('\r\n', '\n')
-      .split('\n')
-      .map((line) => line.trim())
-      .toList();
+  List<String> linesOf(String name) =>
+      File('.github/workflows/$name')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n')
+          .split('\n')
+          .map((line) => line.trim())
+          .toList();
 
   /// The upload of the server's files: the `gh release upload` a
   /// `for file in dist/remote` loop runs.
@@ -44,10 +48,7 @@ void main() {
       final upload = serverUpload(lines);
       // The VERSION the files were built at: read back from the file the
       // build wrote, so the tag is the one servers.json's URLs name.
-      expect(
-        lines,
-        contains(r'version=$(cat dist/remote-$PRODUCT/VERSION)'),
-      );
+      expect(lines, contains(r'version=$(cat dist/remote-$PRODUCT/VERSION)'));
       expect(upload, contains(r'"$version"'));
     });
 
@@ -82,7 +83,8 @@ void main() {
       expect(manifest, greaterThan(probe));
       expect(
         lines.any(
-          (line) => line.contains('Check the builds are where servers.json says'),
+          (line) =>
+              line.contains('Check the builds are where servers.json says'),
         ),
         isTrue,
       );
@@ -104,7 +106,8 @@ void main() {
       );
       final remark = lines.lastIndexWhere(
         (line) =>
-            line.startsWith('gh release edit') && line.contains('--latest=true'),
+            line.startsWith('gh release edit') &&
+            line.contains('--latest=true'),
       );
       expect(remark, greaterThan(manifest));
     });
@@ -149,6 +152,59 @@ void main() {
               line.contains('--latest=false'),
         ),
         isTrue,
+      );
+    });
+  });
+
+  group('tool/fetch_remote_server.dart', () {
+    test('the newest build is the one with the newest version', () {
+      // The API lists the releases by their tags, so the order says nothing
+      // about the numbers in a VERSION: the servers of 1.6.0 and 1.5.x were
+      // published a week after 1.9.5's, and the first one listed is 1.9.5's
+      // only because its tag is the newest.
+      final listed = [
+        '1.9.5.31-3bb062c7fa29',
+        '1.9.3.29-8d868c2d8d86',
+        '1.5.1.16-0180fa898f62',
+        '1.9.0.26-032817dec99a',
+        '1.6.2.20-2dcee4c965b5',
+      ];
+      expect(newestPublishedVersion(listed), '1.9.5.31-3bb062c7fa29');
+      expect(newestPublishedVersion(listed.reversed), '1.9.5.31-3bb062c7fa29');
+      // A backfill of an old build, made today, still names the old build.
+      expect(
+        newestPublishedVersion(['1.5.1.16-0180fa898f62', ...listed]),
+        '1.9.5.31-3bb062c7fa29',
+      );
+    });
+
+    test('only a remote server VERSION is chosen', () {
+      // The app's own releases are tagged v…, the test ones test-…: neither
+      // is a build to package an installer around.
+      expect(newestPublishedVersion(['v1.9.5', 'test-1.9.5-abc']), isNull);
+      expect(
+        newestPublishedVersion(['v1.9.5', '1.9.5.31-3bb062c7fa29']),
+        '1.9.5.31-3bb062c7fa29',
+      );
+      expect(newestPublishedVersion(const []), isNull);
+    });
+
+    test('the numbers of a version, compared in order', () {
+      expect(versionNumbers('1.9.5.31-3bb062c7fa29'), [1, 9, 5, 31]);
+      // Each number counts on its own: 31 builds past 1.9.5 is newer than
+      // 1.9.5, and 1.10.0 is newer than 1.9.5 although '10' sorts first as
+      // text.
+      expect(
+        compareVersions('1.9.5.31-aaaaaaaaaaaa', '1.9.5.30-bbbbbbbbbbbb'),
+        greaterThan(0),
+      );
+      expect(
+        compareVersions('1.10.0.32-aaaaaaaaaaaa', '1.9.5.31-bbbbbbbbbbbb'),
+        greaterThan(0),
+      );
+      expect(
+        compareVersions('1.9.5.31-aaaaaaaaaaaa', '1.9.5.31-bbbbbbbbbbbb'),
+        0,
       );
     });
   });
