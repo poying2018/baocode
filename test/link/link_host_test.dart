@@ -515,6 +515,18 @@ void main() {
     expect(platform.advertised, isEmpty);
   });
 
+  test('quitting, it is advertised no more, whatever changes', () async {
+    await host.setEnabled(true);
+    await host.advertising;
+    expect(platform.advertised, hasLength(1));
+
+    await host.stopAdvertising();
+    expect(platform.advertised, isEmpty);
+    await host.beginPairing();
+    await host.advertising;
+    expect(platform.advertised, isEmpty);
+  });
+
   test('a phone that found it nearby pairs once allowed here', () async {
     await host.setEnabled(true);
     final early = await connect(phone);
