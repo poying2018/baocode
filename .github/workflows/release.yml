@@ -374,10 +374,8 @@ jobs:
         run: |
           # The builds go to a release of their own, tagged with the build's
           # VERSION: servers.json names that release, so an app built months
-          # ago still downloads the one it was built with. --latest=false,
-          # as the app's update manifest is read from releases/latest, and a
-          # server release must not take its place. Made again on a re-run:
-          # the release is kept, its assets replaced.
+          # ago still downloads the one it was built with. Made again on a
+          # re-run: the release is kept, its assets replaced.
           version=$(cat dist/remote-$PRODUCT/VERSION)
           gh release create "$version" --repo "$GITHUB_REPOSITORY" \
             --title "$version" --notes "" --latest=false \
