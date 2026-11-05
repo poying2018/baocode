@@ -1008,11 +1008,19 @@ class IdeGitService {
   }
 
   /// The branches, local and remote, that have [commit]
-  /// (`git branch -a --contains`).
+  /// (`git branch -a --contains`). Asked of for-each-ref, whose `--contains`
+  /// came before `git branch --format` did (Git 2.13, #735).
   Future<List<String>> branchesContaining(String commit) async {
     await _requireRoot();
     final output = _check(
-      await _git(['branch', '-a', '--contains', commit, '--format=%(refname)']),
+      await _git([
+        'for-each-ref',
+        '--contains',
+        commit,
+        '--format=%(refname)',
+        'refs/heads',
+        'refs/remotes',
+      ]),
       'Cannot read the branches.',
     );
     return [

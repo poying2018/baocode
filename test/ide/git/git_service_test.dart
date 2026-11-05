@@ -154,6 +154,20 @@ void main() {
     expect(tag.details!.subject, 'Second commit');
     expect(refs.singleWhere((r) => r.name == 'older').details, isNull);
 
+    // Not `git branch --format` (Git 2.13+), as #735 had it; a remote's HEAD
+    // is left out.
+    await git([
+      'symbolic-ref',
+      'refs/remotes/origin/HEAD',
+      'refs/remotes/origin/topic',
+    ]);
+    expect(await service.branchesContaining(first), [
+      'main',
+      'older',
+      'origin/topic',
+    ]);
+    expect(await service.branchesContaining(second), ['main']);
+
     // A remote branch is checked out as a new branch tracking it.
     expect(await service.trackingBranches('origin/topic'), isEmpty);
     await service.checkout('origin/topic', track: true);
