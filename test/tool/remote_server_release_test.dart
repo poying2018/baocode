@@ -87,6 +87,27 @@ void main() {
         isTrue,
       );
     });
+    test('the place releases/latest points at stays the app\'s', () {
+      // --latest=false on create was not enough on its own: a release made
+      // that way took the place from the app's release, and releases/latest
+      // then answered with a release that has no manifest in it. It is taken
+      // back, and the app's release is marked again after the manifest is up.
+      bool edit(String flag) => lines.any(
+        (line) => line.startsWith('gh release edit') && line.contains(flag),
+      );
+      expect(edit('--latest=false'), isTrue);
+      expect(edit('--latest=true'), isTrue);
+      final manifest = lines.indexWhere(
+        (line) =>
+            line.startsWith('gh release upload') &&
+            line.contains('out/latest.json'),
+      );
+      final remark = lines.lastIndexWhere(
+        (line) =>
+            line.startsWith('gh release edit') && line.contains('--latest=true'),
+      );
+      expect(remark, greaterThan(manifest));
+    });
   });
 
   group('remote.yml', () {
@@ -115,6 +136,20 @@ void main() {
       final probe = lines.indexWhere((line) => line.contains('.files[].url'));
       expect(builds, isNonNegative);
       expect(probe, greaterThan(builds));
+    });
+
+    test('it does not take the place from the app\'s release', () {
+      // --latest=false on create was not enough on its own: the release took
+      // the place anyway, and releases/latest then answered without a
+      // manifest. Publishing a server alone must take it back.
+      expect(
+        lines.any(
+          (line) =>
+              line.startsWith('gh release edit') &&
+              line.contains('--latest=false'),
+        ),
+        isTrue,
+      );
     });
   });
 

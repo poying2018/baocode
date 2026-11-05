@@ -155,6 +155,11 @@ jobs:
           gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
             --title "$VERSION" --notes "" --latest=false \
             --target "$GITHUB_SHA" 2>/dev/null || true
+          # --latest=false on create is not enough by itself: a release made
+          # this way has been seen to take the place from the app's release
+          # anyway, and then releases/latest — where every installed app reads
+          # its update manifest from — answers without one.
+          gh release edit "$VERSION" --repo "$GITHUB_REPOSITORY" --latest=false 2>/dev/null || true
           for file in dist/remote/*.gz dist/remote/servers*.json dist/remote/VERSION; do
             gh release upload "$VERSION" "$file" --clobber --repo "$GITHUB_REPOSITORY"
           done

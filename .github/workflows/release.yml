@@ -382,6 +382,12 @@ jobs:
           gh release create "$version" --repo "$GITHUB_REPOSITORY" \
             --title "$version" --notes "" --latest=false \
             --target "$GITHUB_SHA" 2>/dev/null || true
+          # --latest=false on create is not enough by itself: a release made
+          # this way has been seen to take the place from the app's release
+          # anyway, and then releases/latest — the one address every installed
+          # app reads its update manifest from — answers with a release that
+          # has no manifest in it.
+          gh release edit "$version" --repo "$GITHUB_REPOSITORY" --latest=false 2>/dev/null || true
           for file in dist/remote-$PRODUCT/*.gz dist/remote-$PRODUCT/servers*.json dist/remote-$PRODUCT/VERSION; do
             gh release upload "$version" "$file" --clobber --repo "$GITHUB_REPOSITORY"
           done
@@ -418,3 +424,7 @@ jobs:
           # The app reads this from the release beside the installers; it is
           # uploaded last, so an app that sees it finds the files it names.
           gh release upload "v$MARKETING" out/latest.json --clobber
+          # And the app's release keeps the place, wherever the server's
+          # release left it: releases/latest is where every installed app
+          # looks, and only this release has the manifest it reads.
+          gh release edit "v$MARKETING" --latest=true
