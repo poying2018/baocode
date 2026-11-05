@@ -50,6 +50,19 @@ Set<String> anchorsOf(String markdown) => {
 
 final _link = RegExp(r'\]\(([^)\s]+)\)');
 
+/// A section a note points at by number: `release.md 第 5 节`.
+final _section = RegExp(r'([\w-]+\.md)\s*第\s*(\d+(?:\.\d+)?)\s*节');
+
+/// The numbers of the sections a doc has: `## 9.` gives 9, `### 9.3` gives
+/// 9.3.
+Set<String> sectionsOf(String markdown) => {
+  for (final line in withoutFences(markdown).split('\n'))
+    if (RegExp(r'^#{2,4}\s+\d').hasMatch(line))
+      if (RegExp(r'^#{2,4}\s+(\d+(?:\.\d+)?)').firstMatch(line)
+          case final match?)
+        match.group(1)!,
+};
+
 /// The anchor as a URL spells it, so that `%E6%9C%8D` and `服` are the
 /// same one.
 String decode(String anchor) {
@@ -81,6 +94,10 @@ void main() {
   };
   final prose = <String, String>{
     for (final path in files) path: proseOf(File(path).readAsStringSync()),
+  };
+  final sections = <String, Set<String>>{
+    for (final path in files)
+      path: sectionsOf(File(path).readAsStringSync()),
   };
 
   test('the markdown was found, and the docs have headings to point at', () {
@@ -128,5 +145,31 @@ void main() {
       }
     }
     expect(broken, isEmpty, reason: 'Broken doc links:\n${broken.join('\n')}');
+  });
+
+  test('the sections a note names by number are still numbered so', () {
+    final byName = <String, Set<String>>{};
+    for (final entry in sections.entries) {
+      (byName[p.basename(entry.key)] ??= <String>{}).addAll(entry.value);
+    }
+    final wrong = <String>[];
+    for (final entry in prose.entries) {
+      final from = p.relative(entry.key, from: root);
+      for (final match in _section.allMatches(entry.value)) {
+        final name = match.group(1)!;
+        final number = match.group(2)!;
+        final known = byName[name];
+        // A note about a file that is not one of ours is not ours to check.
+        if (known == null) continue;
+        if (!known.contains(number)) {
+          wrong.add('$from -> $name 第 $number 节 (no such section)');
+        }
+      }
+    }
+    expect(
+      wrong,
+      isEmpty,
+      reason: 'Sections that moved:\n${wrong.join('\n')}',
+    );
   });
 }
