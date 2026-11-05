@@ -181,6 +181,7 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 
 - **`latest.json` 最后传**：应用一读到新清单就会去下载，安装包必须先就位。
 - **远程服务端只编译一次**：`remote` 任务编译，Windows 应用带的是同一份 `servers.json`（四个平台都有），一个 release 里只有一份服务端资产。
+- **`releases/latest` 只能是应用的 release**：应用读清单走的就是这个指针，服务端那个 release 一旦占住它，所有人读到的就是一份没有清单的 release，更新检查全哑。所以服务端 release 建完立刻 `gh release edit --latest=false` 拿回来，清单传完再把应用 release `--latest=true` 标一遍。**建的时候给 `--latest=false` 不够**：实测仍会占位——回填 16 个服务端 release 时，最后建的那个成了 latest，`releases/latest/download/latest.json` 当场取不到，手动 `gh release edit --latest=false` 才回来。`test/tool/remote_server_release_test.dart` 盯着这两处。
 - **下载链接带哈希**：`latest.json` 里每个链接末尾是 `?sha256=<文件哈希前 16 位>`。GitHub 的资产地址带文件名，重新发布时同一地址内容会变，所以链接里的哈希同时防 CDN 缓存给出旧文件；应用取文件名时只看路径。
 - **`downloads`**：`latest.json` 里多了这一项，是上游给网站下载页用的（本 fork 没有部署下载页），应用不读它。
 - **Claude Code 随包分发**：Windows 安装包带上 Claude Code 自己（`claude\claude.exe` 和 `claude\VERSION`），用户不用另装、也不用等第一次对话时的下载。
