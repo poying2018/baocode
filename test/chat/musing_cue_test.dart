@@ -14,6 +14,7 @@ void main() {
       ('dart format lib; dart analyze lib', 'dart analyze'),
       ("cat > notes.md <<'EOF'\nhello\nEOF", 'cat'),
       ('ls -la', 'ls'),
+      (r'C:\tools\bun.exe run build', 'bun.exe run'),
       ('cd /repo', ''),
     ]) {
       test(command.split('\n').first, () {

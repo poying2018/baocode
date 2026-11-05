@@ -641,7 +641,7 @@ class MusingCue {
         if (word.isNotEmpty) word,
     ].skipWhile((word) => word.contains('=') || word == 'sudo').toList();
     if (words.isEmpty) return '';
-    final program = words.first.split('/').last;
+    final program = fileNameOf(words.first);
     final sub = words.length > 1 ? words[1] : null;
     return _short(
       sub != null && RegExp(r'^[a-z][a-z-]{1,11}$').hasMatch(sub)

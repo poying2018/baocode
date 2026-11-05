@@ -353,7 +353,7 @@ class ProjectRecord {
   final List<SessionRecord> sessions;
 
   String get name {
-    final parts = path.split('/')..removeWhere((part) => part.isEmpty);
+    final parts = path.split(RegExp(r'[/\\]'))..removeWhere((part) => part.isEmpty);
     return parts.isEmpty ? path : parts.last;
   }
 

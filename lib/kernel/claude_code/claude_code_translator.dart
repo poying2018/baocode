@@ -1001,7 +1001,8 @@ class ClaudeTranslator {
     String tense(String done, String doing) =>
         outcome == _Outcome.running ? doing : done;
     String? path(String key) => _string(input[key]);
-    String base(String? path) => path == null ? '' : path.split('/').last;
+    String base(String? path) =>
+        path == null ? '' : fileNameOf(path);
     final name = tool.name;
     // The app's own, shown as it says.
     if (ClaudeSdkTools.called(name) case ClaudeSdkTool(
