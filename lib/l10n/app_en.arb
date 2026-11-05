@@ -3683,6 +3683,17 @@
       }
     }
   },
+  "wbSelectedLines": "({lines} lines, {count} selected)",
+  "@wbSelectedLines": {
+    "placeholders": {
+      "lines": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "wbGoToLineColumn": "Go to Line/Column",
   "wbSpaces": "Spaces: {size}",
   "@wbSpaces": {
