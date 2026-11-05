@@ -141,6 +141,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// Whether a turn was under way, as last seen: to tell when it ends.
   bool _wasLive = false;
 
+  /// The feed as last noted ([_noteWords]): how many items it had, and how
+  /// long the text of the last, to tell a reply's words growing from a
+  /// change of what shows.
+  int _notedItems = 0;
+  int _notedText = -1;
+
   void _refold() {
     _folds = StepFolds.of(
       _feed.itemCount,
@@ -169,6 +175,24 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       if (mounted) setState(() {});
     },
   );
+
+  /// How near together two rebuilds a streamed change asks for may come: a
+  /// frame of a long conversation takes longer than this, and the words
+  /// streaming in meanwhile need no rebuild of their own. A dozen a second,
+  /// not one a word: ten agents streaming at once then cost the view the
+  /// same as one.
+  static const _streamFrame = Duration(milliseconds: 66);
+
+  /// Behind another app's window ([SchedulerBinding.lifecycleState] is not
+  /// [AppLifecycleState.resumed]), what changes is barely watched: a fourth
+  /// as often, and the CPU left to the agents.
+  static const _streamFrameBehind = Duration(milliseconds: 250);
+
+  /// When the last rebuild a streamed change asked for was made.
+  final Stopwatch _sinceRebuild = Stopwatch()..start();
+
+  /// The rebuild waiting for its turn to come, if one is.
+  Timer? _streamRebuild;
 
   bool _isLive(int index) => switch (_liveStart) {
     final start? => index >= start,
@@ -583,6 +607,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     FrameWatch.notes[this] = _frameNote;
     _wasLive = _feed.isStreaming;
     _prependedSeen = _session?.prependedCount ?? 0;
+    _noteWords();
     _refold();
     _seeItems();
     _resumeEditing();
@@ -693,6 +718,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _foldOpen.clear();
       _unfoldedTurns.clear();
       _wasLive = widget.feed.isStreaming;
+      _noteWords();
       _refold();
       _seeItems();
       _resumeEditing();
@@ -758,6 +784,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   void dispose() {
     FrameWatch.notes.remove(this);
     _noteLeft(_feed);
+    _streamRebuild?.cancel();
     _steady.dispose();
     _feed.removeListener(_handleSessionChanged);
     _find
@@ -1475,7 +1502,26 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (_shownAtBottom != value) _setState(() => _shownAtBottom = value);
   }
 
+  /// Notes the feed as it is, for [_handleSessionChanged] to tell a reply's
+  /// words growing from a change of what shows.
+  void _noteWords() {
+    final items = _feed.itemCount;
+    final last = items > 0 ? _feed.itemAt(items - 1) : null;
+    _notedItems = items;
+    _notedText = last is AssistantTextItem ? last.text.length : -1;
+  }
+
   void _handleSessionChanged() {
+    final items = _feed.itemCount;
+    final last = items > 0 ? _feed.itemAt(items - 1) : null;
+    final text = last is AssistantTextItem ? last.text.length : -1;
+    // The words of the reply under way: the same items, the last of them the
+    // text still growing. Anything else — a step starting or done, a status
+    // changing, a message sent, a turn ending, the earlier history coming —
+    // is news, and shows at once.
+    final words = items == _notedItems && text > _notedText;
+    _notedItems = items;
+    _notedText = text;
     final prepended = _session?.prependedCount ?? 0;
     final moved = prepended - _prependedSeen;
     _prependedSeen = prepended;
@@ -1484,9 +1530,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     final ended = _wasLive && !_feed.isStreaming;
     _wasLive = _feed.isStreaming;
     if (moved > 0 || ended || startedStreaming) _steady.clear();
-    // A turn the agent took up on its own (a background task's report)
-    // leaves the user reading where they are, the turns they read open.
-    final sent = _feed.isStreaming && !_feed.isUnprompted;
+    // Whether this change is the one a message of the user's started a turn:
+    // the news of a turn already under way, or of one the agent took up on
+    // its own (a background task's report), leaves the user where they are,
+    // the turns they read open.
+    final sent = startedStreaming && !_feed.isUnprompted;
     _refold();
     // Once folded: what of them is hidden takes no room.
     if (moved > 0) {
@@ -1520,8 +1568,54 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (ended) _toReplyStart = false;
     _itemsCame();
     _scheduleStickyUpdate();
-    setState(() {});
+    // What only a streamed word changes waits its turn; a turn starting or
+    // ending, a step's news, a message sent, an edit, the earlier history
+    // coming: at once.
+    _rebuildForChange(
+      structural: moved > 0 || startedStreaming || ended || !words,
+    );
     _wantEarlier();
+  }
+
+  /// Rebuilds for a change to the conversation: at once while none streams
+  /// (a message sent, a turn ended, an edit), and while one does no nearer
+  /// together than [_streamFrame] — a word streamed needs no rebuild of its
+  /// own while the one before it is still being made, and the words in
+  /// between join the next. What arrives meanwhile is all in [_feed] still;
+  /// only what shows waits.
+  void _rebuildForChange({required bool structural}) {
+    if (structural || !_feed.isStreaming) {
+      _streamRebuild?.cancel();
+      _streamRebuild = null;
+      _rebuilt();
+      return;
+    }
+    if (_streamRebuild != null) return;
+    // Watched: the app in front, the turn under way in view. Scrolled up
+    // or behind another window's, a fourth as often.
+    final watched = _atBottom &&
+        switch (SchedulerBinding.instance.lifecycleState) {
+          null || AppLifecycleState.resumed => true,
+          _ => false,
+        };
+    final gap = watched ? _streamFrame : _streamFrameBehind;
+    final since = _sinceRebuild.elapsed;
+    if (since >= gap) {
+      _rebuilt();
+      return;
+    }
+    _streamRebuild = Timer(gap - since, () {
+      _streamRebuild = null;
+      if (mounted) _rebuilt();
+    });
+  }
+
+  /// What a rebuild leaves behind it: the next change's to wait on.
+  void _rebuilt() {
+    _sinceRebuild
+      ..reset()
+      ..start();
+    setState(() {});
   }
 
   void _startEditing(int index) {
