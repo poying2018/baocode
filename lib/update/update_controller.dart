@@ -33,10 +33,13 @@ class UpdateController {
   final Future<void> Function(String path)? openFile;
 
   /// [version]'s notes on this fork's GitHub release page.
-  static Uri changelogUrl(AppVersion version, String languageCode) =>
-      Uri.parse(
-        'https://github.com/poying2018/baocode/releases/tag/v$version',
-      );
+  ///
+  /// The tag is the version as the user is shown it (`v1.9.5`), without the
+  /// build number: `v1.9.5+31` is a page that was never made, and opening it
+  /// is a 404 in the browser.
+  static Uri changelogUrl(AppVersion version) => Uri.parse(
+    'https://github.com/poying2018/baocode/releases/tag/v${version.marketing}',
+  );
 
   bool _restarting = false;
 
@@ -135,9 +138,7 @@ class UpdateController {
         if (hasNotes)
           IdeNotificationAction(
             l10n.updateReleaseNotes,
-            () => unawaited(
-              openUrl(changelogUrl(release.version, l10n.localeName)),
-            ),
+            () => unawaited(openUrl(changelogUrl(release.version))),
           ),
       ],
     );
@@ -154,11 +155,17 @@ class UpdateController {
       case UpdateFound(:final offer):
         showOffer(notifications, l10n, offer);
       case UpdateUpToDate():
-        notifications.notify(IdeSeverity.info, l10n.updateUpToDate(productName));
+        notifications.notify(
+          IdeSeverity.info,
+          l10n.updateUpToDate(productName),
+        );
       case UpdatesDisabled():
         notifications.notify(IdeSeverity.info, l10n.updateDisabled);
       case UpdatesUnsupported():
-        notifications.notify(IdeSeverity.info, l10n.updateUnsupported(productName));
+        notifications.notify(
+          IdeSeverity.info,
+          l10n.updateUnsupported(productName),
+        );
       case UpdateCheckFailed(:final error):
         notifications.notify(
           IdeSeverity.error,
@@ -178,7 +185,11 @@ class UpdateController {
     final openFile = this.openFile;
     return notifications.notify(
       IdeSeverity.warning,
-      l10n.updateUnfinished(productName, service.current.marketing, version.marketing),
+      l10n.updateUnfinished(
+        productName,
+        service.current.marketing,
+        version.marketing,
+      ),
       sticky: true,
       primary: [
         IdeNotificationAction(

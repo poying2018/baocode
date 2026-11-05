@@ -57,7 +57,10 @@ void main() {
     test('Check for Updates tells what it found', () async {
       make(manifest: manifestOf('1.0.0+1'));
       await controller.checkNow(notifications, l10n);
-      expect(notifications.notifications.single.message, l10n.updateUpToDate(productName));
+      expect(
+        notifications.notifications.single.message,
+        l10n.updateUpToDate(productName),
+      );
 
       backend.fetchError = Exception('offline');
       await controller.checkNow(notifications, l10n);
@@ -73,7 +76,7 @@ void main() {
     });
 
     test('offers a version found: Restart, Later, Skip', () async {
-      make(manifest: manifestOf('1.2.0', notes: {'en': 'Fixes'}));
+      make(manifest: manifestOf('1.2.0+13', notes: {'en': 'Fixes'}));
       await controller.checkNow(notifications, l10n);
       final offer = notifications.notifications.single;
       expect(offer.message, l10n.updateAvailable(productName, '1.2.0'));
@@ -85,22 +88,36 @@ void main() {
       ]);
       expect(offer.secondary.single.label, l10n.updateReleaseNotes);
       offer.secondary.single.run();
-      expect(opened, [Uri.parse('https://github.com/poying2018/baocode/releases/tag/v1.2.0')]);
+      // The tag is v1.2.0, the version as the user is shown it; v1.2.0+13,
+      // which is how the manifest writes it, is a page that was never made.
+      expect(opened, [
+        Uri.parse('https://github.com/poying2018/baocode/releases/tag/v1.2.0'),
+      ]);
 
       offer.primary[2].run();
-      expect(service.skippedVersion, '1.2.0');
+      expect(service.skippedVersion, '1.2.0+13');
     });
 
-    test('Release Notes opens the changelog in the app\'s language', () {
+    test('Release Notes opens the version\'s page, without its build', () {
       make();
-      final version = AppVersion.parse('1.2.0+13');
+      // The build number is in the manifest and in the app's About, not in
+      // the tag: every real version has one, so a tag built from it is a 404
+      // every time.
+      const page = 'https://github.com/poying2018/baocode/releases/tag/v1.2.0';
       expect(
-        UpdateController.changelogUrl(version, 'zh'),
-        Uri.parse('https://github.com/poying2018/baocode/releases/tag/v1.2.0+13'),
+        UpdateController.changelogUrl(AppVersion.parse('1.2.0+13')),
+        Uri.parse(page),
       );
       expect(
-        UpdateController.changelogUrl(version, 'en'),
-        Uri.parse('https://github.com/poying2018/baocode/releases/tag/v1.2.0+13'),
+        UpdateController.changelogUrl(AppVersion.parse('1.2.0')),
+        Uri.parse(page),
+      );
+      // A pre-release keeps its identifiers: they name the tag too.
+      expect(
+        UpdateController.changelogUrl(AppVersion.parse('2.0.0-beta.1+40')),
+        Uri.parse(
+          'https://github.com/poying2018/baocode/releases/tag/v2.0.0-beta.1',
+        ),
       );
     });
 
