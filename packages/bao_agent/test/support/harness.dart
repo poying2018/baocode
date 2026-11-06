@@ -32,6 +32,8 @@ class Harness {
     String? effort,
     String? thinkingDisplay,
     bool strictMcpConfig = false,
+    Future<void> Function()? stopSession,
+    Duration sessionStopTimeout = const Duration(seconds: 15),
   }) async {
     final root =
         from?.root ??
@@ -76,6 +78,8 @@ class Harness {
       ),
       send: harness._receive,
       clientFactory: (_) => fake,
+      stopSession: stopSession,
+      sessionStopTimeout: sessionStopTimeout,
     );
     return harness;
   }

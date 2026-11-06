@@ -137,6 +137,8 @@ class AgentEngine {
     this.options, {
     required void Function(Map<String, Object?> message) send,
     ModelClient Function(ApiConfig config)? clientFactory,
+    this.stopSession,
+    this.sessionStopTimeout = const Duration(seconds: 15),
   }) : _send = send {
     session = AgentSession(
       options: options,
@@ -152,6 +154,8 @@ class AgentEngine {
 
   final EngineOptions options;
   final void Function(Map<String, Object?>) _send;
+  final Future<void> Function()? stopSession;
+  final Duration sessionStopTimeout;
   late final AgentSession session;
   late final Future<void> _ready;
   Future<void>? _mcpReady;
@@ -238,9 +242,21 @@ class AgentEngine {
     } on Object {
       // Ending all the same.
     }
-    await session.tasks.stopAll().catchError((Object _) {});
-    await session.mcp.close().catchError((Object _) {});
+    await _stopSessionWithTimeout();
     _done.complete();
+  }
+
+  /// Neither a process tree nor a server that does not answer may keep the
+  /// session from ending.
+  Future<void> _stopSessionWithTimeout() async {
+    try {
+      final stop =
+          stopSession ??
+          () => Future.wait([session.tasks.stopAll(), session.mcp.close()]);
+      await stop().timeout(sessionStopTimeout);
+    } on Object {
+      // The session is over even when a task or server is not.
+    }
   }
 
   // --- Messages in ----------------------------------------------------------------

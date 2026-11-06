@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -186,6 +187,26 @@ void main() {
       await h.request('end_session');
       await h.engine.done.timeout(const Duration(seconds: 10));
       expect(h.engine.closed, isTrue);
+    });
+
+    test('a task or server that will not stop does not hold it open', () async {
+      final never = Completer<void>();
+      h = await Harness.start(
+        stopSession: () => never.future,
+        sessionStopTimeout: const Duration(milliseconds: 20),
+      );
+      await h.engine.close().timeout(const Duration(seconds: 2));
+      expect(h.engine.closed, isTrue);
+      await h.engine.done;
+    });
+
+    test('a cleanup error does not stop the session from ending', () async {
+      h = await Harness.start(
+        stopSession: () async => throw StateError('cleanup failed'),
+      );
+      await h.engine.close().timeout(const Duration(seconds: 2));
+      expect(h.engine.closed, isTrue);
+      await h.engine.done;
     });
   });
 
