@@ -40,10 +40,14 @@ class AgentTool extends Tool {
       for (final agent in session.agentDefinitions)
         '- ${agent.name}: ${agent.description} (Tools: ${_toolsOf(agent)})',
     ].join('\n');
+    final model = AgentTool.forced(session)
+        ? '\nThe model is set for every agent in this session, so none can '
+              'be chosen here.'
+        : '';
     return '''Hands a task to an agent of its own: it works on it alone, with a context and tools of its own, and gives you back one report when done.
 
 The kinds of agent there are, and the tools each has:
-$agents
+$agents$model
 
 Pick one with subagent_type; without it, general-purpose does the work.
 
@@ -71,6 +75,21 @@ Nor for work that fits none of the kinds above.
           : 'All tools except ${agent.disallowedTools.join(', ')}';
     }
     return tools.join(', ');
+  }
+
+  @override
+  Map<String, Object?> toApi(AgentSession session) {
+    final api = super.toApi(session);
+    if (!forced(session)) return api;
+    final schema = api['input_schema'] as Map<String, Object?>;
+    return {
+      ...api,
+      'input_schema': {
+        ...schema,
+        'properties': {...(schema['properties'] as Map<String, Object?>)}
+          ..remove('model'),
+      },
+    };
   }
 
   @override
@@ -163,18 +182,30 @@ Nor for work that fits none of the kinds above.
     return sidechainFile(main, agentId);
   }
 
-  /// The model [agent] works with, as an id.
+  /// Whether every agent runs on the model set for agents
+  /// (`CLAUDE_CODE_SUBAGENT_MODEL_FORCE`): the call is not offered `model`.
+  static bool forced(AgentSession session) {
+    final force = asText(
+      session.environment['CLAUDE_CODE_SUBAGENT_MODEL_FORCE'],
+    );
+    return force != null &&
+        force.isNotEmpty &&
+        force != '0' &&
+        force != 'false';
+  }
+
+  /// The model [agent] works with, as an id: the one [asked] for, else its
+  /// definition's, else the one set for agents. [forced], as the CLI does:
+  /// the one set for agents over both, a definition's `inherit` too; only
+  /// a call's `inherit` stands.
   static String modelFor(
     AgentSession session,
     AgentDefinition agent,
     String? asked,
   ) {
-    final env = session.environment;
-    final subagent = asText(env['CLAUDE_CODE_SUBAGENT_MODEL']);
-    final force = asText(env['CLAUDE_CODE_SUBAGENT_MODEL_FORCE']);
-    final forced = force != null && force != '0' && force != 'false';
-    final alias = forced && subagent != null && agent.model != 'inherit'
-        ? subagent
+    final subagent = asText(session.environment['CLAUDE_CODE_SUBAGENT_MODEL']);
+    final alias = forced(session)
+        ? (asked == 'inherit' ? asked : subagent)
         : asked ?? agent.model ?? subagent;
     if (alias == null || alias == 'inherit') return session.resolvedModel;
     return session.catalog.resolve(alias);

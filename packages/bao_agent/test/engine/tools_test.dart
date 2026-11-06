@@ -640,6 +640,37 @@ void main() {
     bool isSub(ModelRequest request) =>
         jsonEncode((request.body['messages'] as List).first).contains('SUB:');
 
+    test('the Agent tool offers a model unless one is forced', () async {
+      Map<String, Object?> agentTool(ModelRequest request) =>
+          (request.body['tools'] as List)
+              .cast<Map<String, Object?>>()
+              .firstWhere((tool) => tool['name'] == 'Agent');
+
+      h = await Harness.start();
+      h.model.script.add(Reply.text('ok'));
+      await h.turn('go');
+      expect(
+        (agentTool(h.model.turns.single)['input_schema'] as Map)['properties']
+            as Map,
+        contains('model'),
+      );
+
+      h = await Harness.start(
+        environment: {
+          'CLAUDE_CODE_SUBAGENT_MODEL': 'sub-model',
+          'CLAUDE_CODE_SUBAGENT_MODEL_FORCE': '1',
+        },
+      );
+      h.model.script.add(Reply.text('ok'));
+      await h.turn('go');
+      final tool = agentTool(h.model.turns.single);
+      expect(
+        (tool['input_schema'] as Map)['properties'] as Map,
+        isNot(contains('model')),
+      );
+      expect('${tool['description']}', contains('none can be chosen here'));
+    });
+
     test('in the foreground: its messages, file and result', () async {
       h = await Harness.start(files: {'a.txt': 'secret 42\n'});
       final sub = [
