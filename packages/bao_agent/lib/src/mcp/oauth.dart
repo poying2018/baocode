@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:crypto/crypto.dart';
 
+import '../util/cancel.dart';
 import '../util/json.dart';
 
 /// Signs in to MCP servers that ask for it (OAuth 2.1 with PKCE, the client
@@ -17,6 +18,7 @@ class McpOAuth {
   final Map<String, String> environment;
 
   Map<String, Object?>? _store;
+  final Set<_PendingSignIn> _pending = {};
 
   Map<String, Object?> get _tokens {
     if (_store case final store?) return store;
@@ -186,9 +188,34 @@ class McpOAuth {
     Uri? resourceMetadata,
     required void Function(Object? error) onSignedIn,
   }) async {
+    final signIn = _PendingSignIn(onSignedIn);
+    _pending.add(signIn);
+    try {
+      return await _authorize(
+        name,
+        server,
+        resourceMetadata: resourceMetadata,
+        signIn: signIn,
+      );
+    } on Object {
+      _pending.remove(signIn);
+      await signIn.callback?.close(force: true);
+      rethrow;
+    }
+  }
+
+  Future<Uri> _authorize(
+    String name,
+    Uri server, {
+    required Uri? resourceMetadata,
+    required _PendingSignIn signIn,
+  }) async {
     final key = keyOf(name, server);
     final metadata = await _discover(server, resourceMetadata);
+    signIn.cancel.check();
     final callback = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    signIn.callback = callback;
+    signIn.cancel.check();
     final redirect = 'http://localhost:${callback.port}/callback';
     var clientId = asString(asMap(_tokens[key])['client_id']);
     String? clientSecret = asString(asMap(_tokens[key])['client_secret']);
@@ -206,8 +233,8 @@ class McpOAuth {
       clientId = asString(registered['client_id']);
       clientSecret = asString(registered['client_secret']);
     }
+    signIn.cancel.check();
     if (clientId == null) {
-      await callback.close(force: true);
       throw const HttpException('The server does not let this client register');
     }
     final verifier = _random(64);
@@ -264,6 +291,7 @@ class McpOAuth {
             'resource': server.toString(),
             'client_secret': ?clientSecret,
           }, form: true);
+          signIn.cancel.check();
           _keep(key, tokens, {
             'client_id': clientId,
             'client_secret': ?clientSecret,
@@ -276,11 +304,26 @@ class McpOAuth {
       } on Object catch (error) {
         failure = error;
       } finally {
+        _pending.remove(signIn);
         await callback.close(force: true);
       }
-      onSignedIn(failure);
+      if (!signIn.cancel.isCancelled) signIn.onSignedIn(failure);
     }());
+    signIn.cancel.check();
     return url;
+  }
+
+  /// Stops every sign-in still waiting for its callback.
+  Future<void> close() async {
+    final pending = [..._pending];
+    _pending.clear();
+    await Future.wait([
+      for (final signIn in pending)
+        () async {
+          signIn.cancel.cancel('MCP sign-in cancelled');
+          await signIn.callback?.close(force: true);
+        }(),
+    ]);
   }
 
   void _keep(
@@ -327,4 +370,12 @@ class McpOAuth {
         alphabet[_secure.nextInt(alphabet.length)],
     ].join();
   }
+}
+
+class _PendingSignIn {
+  _PendingSignIn(this.onSignedIn);
+
+  final void Function(Object? error) onSignedIn;
+  final CancelToken cancel = CancelToken();
+  HttpServer? callback;
 }

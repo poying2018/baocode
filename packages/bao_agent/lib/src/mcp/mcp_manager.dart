@@ -548,6 +548,7 @@ class McpManager {
   }
 
   Future<void> close() async {
+    await oauth.close();
     await Future.wait([
       for (final server in servers.values) _disconnect(server),
     ]);

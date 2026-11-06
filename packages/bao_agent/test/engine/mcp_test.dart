@@ -349,6 +349,26 @@ void main() {
     expect(tools, contains('mcp__secure__added'));
   });
 
+  test('closing the session stops an unfinished sign-in', () async {
+    h = await Harness.start(
+      flagSettings: {
+        'mcpServers': {
+          'secure': {'type': 'http', 'url': '${servers.base}/mcp'},
+        },
+      },
+    );
+    expect((await statusOf('secure'))['status'], 'needs-auth');
+    final auth = await h.request('mcp_authenticate', {'serverName': 'secure'});
+    final callback = Uri.parse(
+      '${Uri.parse('${auth['authUrl']}').queryParameters['redirect_uri']}',
+    );
+
+    await h.engine.close();
+
+    final rebound = await HttpServer.bind(callback.host, callback.port);
+    await rebound.close(force: true);
+  });
+
   test('the older HTTP+SSE transport', () async {
     h = await Harness.start(
       flagSettings: {
