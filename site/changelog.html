@@ -30,6 +30,49 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.9.6">
+    <h2 class="plain"><a href="#v1.9.6">1.9.6</a></h2>
+    <p>BaoCode Claude 1.9.6</p>
+    <p>A fix release: browser extension connections, MCP sessions, queued messages
+    and Chinese search, with steadier quitting and proxy reads on Windows.</p>
+    <p>Improved</p>
+    <ul>
+    <li>Windows' system proxy is read in the process instead of by starting
+    <code>reg.exe</code>, so network-related pages open faster.</li>
+    <li>A streamed reply rebuilds the conversation once a frame; refresh also
+    slows down while the window is in the background.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>The browser extension finds BaoCode through the app's local data folder
+    instead of <code>TEMP</code> / <code>TMP</code>, so extensions in Chrome, Edge and other
+    Chromium browsers connect reliably on Windows.</li>
+    <li>MCP servers that strictly check the request length now pass both the
+    connection test and real sessions; unfinished MCP sign-ins and tasks
+    held open by their output are cleaned up when a session ends or the app
+    exits.</li>
+    <li>&quot;Send now&quot; on a queued message no longer drops it while Claude Code is
+    starting or background tasks are running.</li>
+    <li>Whole-word search in Chinese now agrees across chat, editor, terminal and
+    file search: <code>订单</code> is found inside <code>查看订单列表</code>, and <code>order</code> does not
+    match the order inside <code>订单order列表</code>.</li>
+    <li>Models with the same name are told apart by their upstream; a subagent
+    uses its session's upstream, and a forced subagent model no longer
+    offers a choice that cannot take effect.</li>
+    <li>Claude Code sessions no longer fail to load when an upstream sends usage
+    numbers as strings.</li>
+    <li>On Windows, quitting no longer crashes, and the tray's Quit works while
+    the confirmation is up.</li>
+    <li>Windows paths, <code>/C:/</code> links and quoted program paths in chat open the
+    right file or program; a finished turn's text wraps in a narrow
+    conversation.</li>
+    <li>The status bar counts the lines a selection covers, and a file not shown
+    in the editor opens in its default app from the side panel.</li>
+    <li>Release Notes opens the <code>v1.9.6</code> page.</li>
+    </ul>
+    <p>This update carries the current Claude Code.</p>
+  </section>
+
   <section class="release" id="v1.9.5">
     <h2 class="plain"><a href="#v1.9.5">1.9.5</a></h2>
     <p>BaoCode Claude 1.9.5</p>
