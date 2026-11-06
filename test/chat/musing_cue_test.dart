@@ -15,6 +15,10 @@ void main() {
       ("cat > notes.md <<'EOF'\nhello\nEOF", 'cat'),
       ('ls -la', 'ls'),
       (r'C:\tools\bun.exe run build', 'bun.exe run'),
+      // A program quoted for the spaces in its path is one word, not two.
+      (r'"C:\Program Files\Git\bin\git.exe" commit -m x', 'git.exe commit'),
+      (r'"C:\Program Files\nodejs\node.exe" script.js', 'node.exe'),
+      (r"'/opt/My Tools/node' run", 'node run'),
       ('cd /repo', ''),
     ]) {
       test(command.split('\n').first, () {

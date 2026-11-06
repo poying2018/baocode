@@ -635,11 +635,9 @@ class MusingCue {
         if (part.trim().isNotEmpty && !part.trim().startsWith('cd ')) part,
     ];
     if (chained.isEmpty) return '';
-    final words = [
-      for (final word
-          in chained.last.split('|').first.trim().split(RegExp(r'\s+')))
-        if (word.isNotEmpty) word,
-    ].skipWhile((word) => word.contains('=') || word == 'sudo').toList();
+    final words = _words(chained.last.split('|').first)
+        .skipWhile((word) => word.contains('=') || word == 'sudo')
+        .toList();
     if (words.isEmpty) return '';
     final program = fileNameOf(words.first);
     final sub = words.length > 1 ? words[1] : null;
@@ -649,6 +647,15 @@ class MusingCue {
           : program,
     );
   }
+
+  /// [line]'s words, as a shell gives them: a program quoted for the spaces
+  /// in its path (`"C:\Program Files\Git\bin\git.exe"`) is one, not two.
+  static List<String> _words(String line) => [
+    for (final match in RegExp(
+      r'"([^"]*)"|\x27([^\x27]*)\x27|(\S+)',
+    ).allMatches(line))
+      match.group(1) ?? match.group(2) ?? match.group(3)!,
+  ];
 
   /// [name], cut to fit in the row's line.
   static String _short(String name) =>
