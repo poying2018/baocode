@@ -104,11 +104,17 @@ void main() {
         r'C:\src\a.dart:4:2',
         r'b.dart:9',
         r'D:\x',
+        // A share's, and a name that is digits: no line either, with no colon
+        // before them.
+        r'\\server\share\c.dart:9',
+        r'C:\src\12.dart',
       ], cwd: r'C:\work');
       expect(args.paths, const [
         CodeTarget(r'C:\src\a.dart', line: 4, column: 2),
         CodeTarget(r'C:\work\b.dart', line: 9),
         CodeTarget(r'D:\x'),
+        CodeTarget(r'\\server\share\c.dart', line: 9),
+        CodeTarget(r'C:\src\12.dart'),
       ]);
     });
   });
