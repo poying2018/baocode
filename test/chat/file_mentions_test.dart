@@ -88,6 +88,35 @@ void main() {
     );
   });
 
+  test('a Chinese name is found by its characters, the exact one first', () async {
+    // Projects here are named in Chinese as often as not: an @ typed there
+    // must find those files, the one matching from its first character
+    // before the one matching later on.
+    final paths = p.Context(style: p.Style.posix);
+    final files = TreeFiles({
+      '$app/src/订单列表.vue': '',
+      '$app/src/历史订单.vue': '',
+      '$app/说明.md': '',
+    });
+    final index = IdeFileIndex(
+      files,
+      app,
+      pathContext: paths,
+      lister: (files, folder) async => IdeFileListing([
+        for (final path in (files as TreeFiles).contents.keys)
+          if (paths.isWithin(folder, path)) path,
+      ]..sort()),
+    );
+    addTearDown(index.dispose);
+    final chinese = FileMentions(files: files, paths: paths, index: index);
+
+    final found = await chinese.suggest('订单', root: app);
+    expect(found.map((s) => s.label), ['订单列表.vue', '历史订单.vue']);
+    final exact = await chinese.suggest('说明', root: app);
+    expect(exact.single.label, '说明.md');
+    expect(exact.single.value, '说明.md');
+  });
+
   test('refers to a file in the conversation\'s directory from it', () async {
     final mention = mentions();
     await mention.index.refresh();
