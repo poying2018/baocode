@@ -44,6 +44,29 @@ void main() {
   group('release.yml', () {
     final lines = linesOf('release.yml');
 
+    test('the Windows release waits for no macOS runner', () {
+      // The app is Windows-only, and macOS runners are scarce enough to
+      // leave a release queued indefinitely. The Linux server builds are
+      // cross-compiled on Ubuntu; the standalone server-* workflow remains
+      // the place that builds macOS servers on a Mac.
+      expect(
+        lines,
+        isNot(contains('uses: ./.github/workflows/remote.yml')),
+      );
+      expect(
+        lines.where((line) => line.startsWith('runs-on: macos-')),
+        isEmpty,
+      );
+      expect(lines, contains('runs-on: windows-latest'));
+      expect(
+        lines,
+        contains(
+          'run: dart run tool/build_remote_server.dart --out build/remote '
+          '--product "$PRODUCT"',
+        ),
+      );
+    });
+
     test('the server\'s builds go to the release servers.json names', () {
       final upload = serverUpload(lines);
       // The VERSION the files were built at: read back from the file the

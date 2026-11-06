@@ -7,8 +7,9 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
 > 发 Windows 安装包，更新源是本仓库的 `releases/latest/download/latest.json`。
 > 文中讲 macOS 构建、签名、公证的部分**在这里不做**：`macos/` 目录与
 > `tool/build_macos.dart` 已删掉，`tool/release_manifest.dart` 也不再收 `--macos-*` 与
-> `--dmg-*` 选项。远程服务端的 macOS 版仍在（`remote.yml` 在 Mac 上编译）—— 那是装在
-> SSH 主机上的服务端，与应用的平台无关。
+> `--dmg-*` 选项。远程服务端的 macOS 版仍可由单独的 `server-*` 流程（`remote.yml`）在
+> Mac 上编译；正式发版的 `release.yml` 只构建 Windows 应用，并只在 Ubuntu 上交叉编译
+> Linux x64/arm64 服务端，不再等待 macOS runner。
 
 - 下载与更新：本仓库自己的 GitHub Releases（`releases/latest/download/latest.json`）。
   `dl.baocode.dev` 是上游的域名，这个 fork 不用它
@@ -41,8 +42,8 @@ BaoCode 的版本号怎么定、一个版本怎么发出去、发到哪里、已
  改版本号、写更新日志
  git push / git push 标签 ──▶ Actions：release.yml
                                ├ check    版本号对不对，不比已发布的旧
-                               ├ remote   远程服务端（remote.yml）：在 Mac 上编译一次（Linux、macOS
-                               │          各两种架构），Linux 版在 Docker 里跑一遍
+                               ├ remote   远程服务端：在 Ubuntu 上交叉编译 Linux x64/arm64
+                               │          （macOS 版只由单独的 server-* 流程构建）
                                ├ windows  构建、打安装包（Windows 机器）
                                └ publish  签 latest.json ────▶ 本仓库的 GitHub Release
                                           （gh release create/upload）  ├ v<版本>：安装包 + latest.json
@@ -107,7 +108,7 @@ git tag v1.2.0
 git push origin v1.2.0                          # 从这里开始 CI 接手
 ```
 
-然后在 GitHub 的 Actions → Release 里看进度（如果给 `release` 环境设了审批人，要点一下 Approve）。macOS 公证要等几分钟，整个流程大约 20～30 分钟。
+然后在 GitHub 的 Actions → Release 里看进度（如果给 `release` 环境设了审批人，要点一下 Approve）。发布链只构建 Windows 应用和 Linux 远程服务端，不再等待 macOS runner，通常约 10～20 分钟。
 
 完成后确认：
 
@@ -147,9 +148,10 @@ CI 照常构建，但**不发布**：安装包留在这次运行的 Artifacts �
 - `test-channel-*` 标签构建的是 channel 版（`lib/channel/`），`test-*` 是标准版。
 - 版本号就是分支上 `pubspec.yaml` 的版本。测试的人之后会照常收到比它新的正式版。
 - 测试包连 SSH 主机时要远程服务端：正式发版（`v*`）会为这次构建单独建一个以服务端
-  `VERSION` 为标签的 release，把各平台的 `.gz` 传进去，应用按 `servers.json` 里的地址
-  对号下载（docs/ssh-remote.md 9.3）。测试包里的 `servers.json` 就是这次构建的那份，
-  所以测试标签的 Artifacts 里的应用连远程主机时，要等这个版本正式发出去才有得下。
+  `VERSION` 为标签的 release，把 Linux x64/arm64 的 `.gz` 传进去，应用按 `servers.json`
+  里的地址对号下载（docs/ssh-remote.md 9.3）。测试包里的 `servers.json` 就是这次构建的
+  那份，所以测试标签的 Artifacts 里的应用连 Linux 远程主机时，要等这个版本正式发出去
+  才有得下。macOS 远程主机需要单独的 `server-*` 流程；正式发版不再为它等待 Mac。
 
 **单独发布远程服务端**：在要发的提交上打一个 `server-` 开头的标签并推送：
 
@@ -164,7 +166,7 @@ dart run tool/build_windows.dart --remote-release            # 最新发布的�
 dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 ```
 
-脚本用 `tool/fetch_remote_server.dart` 取 `servers.json`、确认每个 `.gz` 都能下载，放进 `build/remote-release/` 再打包。应用和服务端是严格一一对应的内部协议（docs/ssh-remote.md），**服务端要从和应用相同（至少 `packages/bao_remote` 相同）的提交发布**，否则连上后可能出错。正式发版（`v*`）时 `release.yml` 做的是同一件事：服务端产物同样进以 `VERSION` 为标签的那个 release（**不是**应用的 release），同样在传 `latest.json` 之前逐个探测。
+脚本用 `tool/fetch_remote_server.dart` 取 `servers.json`、确认每个 `.gz` 都能下载，放进 `build/remote-release/` 再打包。应用和服务端是严格一一对应的内部协议（docs/ssh-remote.md），**服务端要从和应用相同（至少 `packages/bao_remote` 相同）的提交发布**，否则连上后可能出错。正式发版（`v*`）时 `release.yml` 做的是同一件事，但只交叉编译 Linux x64/arm64：这些产物进以 `VERSION` 为标签的那个 release（**不是**应用的 release），并在传 `latest.json` 之前逐个探测。macOS 服务端不进 `v*` 发布链，避免等待 macOS runner。
 
 ## 4. CI 做了什么
 
@@ -174,16 +176,14 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
 | --- | --- | --- |
 | `check` | Ubuntu | pubspec.yaml 和 `version.dart` 一致；版本是 `x.y.z+build`；标签是 `v<x.y.z>`；不比本仓库 `releases/latest/download/latest.json` 里已发布的版本旧（一样就是重新发布，给个提示） |
 | `tests` | Ubuntu | 跑**全部测试套**（`flutter test`）。它不在任何发布任务的 `needs` 里——红了不拦发版，但在运行的页面上是一面旗：测试失败的东西别装给用户。全套约 5 分钟（本机）/ 10-25 分钟（CI），Linux 上全绿 |
-| `remote` | | 调用 `remote.yml`（推 `server-*` 标签时它也单独运行并发布，见第 3 节），下面两步 |
-| `remote` › `build` | macOS 15 | 下载和 Flutter 同版本的 x64 Dart SDK → 编译远程服务端（`--all`：Linux x64/arm64 交叉编译；macOS arm64 用本机的 dart，macOS x64 用 x64 的 dart 经 Rosetta，`dart compile exe` 只能在 Mac 上、按 dart 自己的架构编 macOS 版）→ `tool/test_remote_server_macos.sh`：在这台 Mac 上把两份 macOS 版各跑一遍 → 上传 `remote`（`VERSION`、`servers.json`、`.gz`）和 `remote-linux`（Linux 的两个二进制）两个产物 |
-| `remote` › `linux` | Ubuntu | `tool/test_remote_server.sh`：在 Docker 里的 Ubuntu 20.04 / 24.04、Debian 12、Rocky Linux 8 上，两种架构各跑一遍（arm64 用 QEMU 模拟），要能启动、回答 `initialize`、列出目录 |
+| `remote` | Ubuntu | `tool/build_remote_server.dart` 交叉编译 Linux x64/arm64 远程服务端，上传 `remote`（`VERSION`、`servers.json`、Linux 的 `.gz`）。不再调用 macOS 的 `remote.yml`；要构建 macOS 服务端时单独推 `server-*` 标签（第 3 节） |
 | `windows` | Windows | 装 Inno Setup → `tool/build_windows.dart --remote-built`：构建、放进 `servers.json`、放进 Claude Code（下载并按 SHA-256 校验，见下）、打安装包 |
 | `publish` | Ubuntu | 汇总产物 → 用更新私钥签 `latest.json`（`tool/release_manifest.dart`）→ 建应用 release、传安装包和符号 → 建服务端 release（标签是服务端的 `VERSION`）、传 `.gz`+`servers.json`+`VERSION`+`remote-latest-<产品>.json` → 按 `servers.json` 里的地址逐个探测，非 200 就失败 → **最后**上传 `latest.json` → 把「最新」标回应用 release（重新发布时先删掉旧的 release） |
 
 几个设计上的考虑：
 
 - **`latest.json` 最后传**：应用一读到新清单就会去下载，安装包必须先就位。
-- **远程服务端只编译一次**：`remote` 任务编译，Windows 应用带的是同一份 `servers.json`（四个平台都有），一个 release 里只有一份服务端资产。
+- **发版不依赖 macOS**：`remote` 任务在 Ubuntu 上编译 Linux x64/arm64，Windows 应用带的是同一份 `servers.json`；正式发版不会因为 macOS runner 排队而停住。macOS 远程服务端只在单独的 `server-*` 流程里构建。
 - **`releases/latest` 只能是应用的 release**：应用读清单走的就是这个指针，服务端那个 release 一旦占住它，所有人读到的就是一份没有清单的 release，更新检查全哑。所以服务端 release 建完立刻 `gh release edit --latest=false` 拿回来，清单传完再把应用 release `--latest=true` 标一遍。**建的时候给 `--latest=false` 不够**：实测仍会占位——回填 16 个服务端 release 时，最后建的那个成了 latest，`releases/latest/download/latest.json` 当场取不到，手动 `gh release edit --latest=false` 才回来。`test/tool/remote_server_release_test.dart` 盯着这两处。
 - **下载链接带哈希**：`latest.json` 里每个链接末尾是 `?sha256=<文件哈希前 16 位>`。GitHub 的资产地址带文件名，重新发布时同一地址内容会变，所以链接里的哈希同时防 CDN 缓存给出旧文件；应用取文件名时只看路径。
 - **`downloads`**：`latest.json` 里多了这一项，是上游给网站下载页用的（本 fork 没有部署下载页），应用不读它。
@@ -249,8 +249,8 @@ releases/download/v1.2.0/                 应用：一个版本一个标签
   latest.json                             同一份清单，也是这个 release 的资产
   BaoCodeClaude-1.2.0-setup.exe           Windows：首次安装和自动更新
 releases/download/1.2.0.18-3bb062c7fa29   服务端：一个构建一个标签（VERSION 的内容）
-  baocode-server-<平台>.gz                远程服务端，应用连远程主机时按需下载
-  servers.json                            里面那四个地址就是这些资产（docs/ssh-remote.md 9.3）
+  baocode-server-linux-<架构>.gz          远程服务端，应用连 Linux 主机时按需下载
+  servers.json                            里面列出的地址就是这些资产（docs/ssh-remote.md 9.3）
   VERSION                                 构建的名字，servers.json 拿它当标签
   remote-latest-baocode-claude.json       最近一次发布的服务端版本记录
 ```
@@ -399,8 +399,8 @@ releases/download/1.2.0.18-3bb062c7fa29   服务端：一个构建一个标签�
 | --- | --- |
 | `check` 失败：版本不一致 / 标签不对 | 按报错改，删掉远端标签（`git push origin :refs/tags/v1.2.0`），重新打标签推送 |
 | `check` 失败：比已发布的旧 | `tool/bump_version.dart` 加到比已发布的新 |
-| `remote` › `linux` 失败：Docker 里跑不起来 | 日志里有每个系统、每种架构的结果和服务端的输出。在本机用 `dart run tool/build_remote_server.dart && tool/test_remote_server.sh` 复现（需要 Docker） |
-| `remote` › `build` 失败：macOS 版没编出来或跑不起来 | 多半是下载 x64 Dart SDK 失败（Flutter 带的 Dart 版本在 dart-archive 上没有对应的包），或 Rosetta 没装上。在 Apple silicon 的 Mac 上用 `dart run tool/build_remote_server.dart --all --macos-x64-dart <x64 sdk>/bin/dart && tool/test_remote_server_macos.sh` 复现 |
+| `remote` 失败：Linux 服务端编译不出来 | 在本机用 `dart run tool/build_remote_server.dart` 复现，看 `dart compile exe` 的输出 |
+| `server-*` 的 macOS 版没编出来或跑不起来 | 这是单独的服务端流程，不影响 Windows 应用发版。多半是下载 x64 Dart SDK 失败（Flutter 带的 Dart 版本在 dart-archive 上没有对应的包），或 Rosetta 没装上。在 Apple silicon 的 Mac 上用 `dart run tool/build_remote_server.dart --all --macos-x64-dart <x64 sdk>/bin/dart && tool/test_remote_server_macos.sh` 复现 |
 | `publish` 在上传 `latest.json` 之前失败 | 用户什么都看不到。修好后按第 3 节重新发布同一个版本即可 |
 | 发出去的版本有问题 | 尽快发一个修复版（版本号更高）。也可以把上一版的 `latest.json` 传回去，让还没更新的人停在旧版，但已经更新的人不会被降级。见 [auto-update.md 5.5](auto-update.md#55-撤回一个版本) |
 | 用户报“检查更新失败” | 见 [auto-update.md 第 10 节](auto-update.md#10-故障排查) |
@@ -441,7 +441,7 @@ dart run tool\release_manifest.dart `
    `gh release edit <VERSION> --latest=false`（「最新」的位置要留给应用，清单从
    `releases/latest` 读）。**这一步要在安装包之前做完**，否则装着这个包的人连远程主机是 404
 2. 应用：`gh release create v1.2.0`（或让 CI 的标签运行建），传 `BaoCodeClaude-1.2.0-setup.exe`
-3. 确认资产能下载、大小对（`servers.json` 里那四个地址要能直接 curl 到 200）
+3. 确认资产能下载、大小对（`servers.json` 里列出的地址要能直接 curl 到 200）
 4. **最后** `gh release upload v1.2.0 build\installers\latest.json --clobber`，再
    `gh release edit v1.2.0 --latest=true` 把「最新」标回应用这份
 

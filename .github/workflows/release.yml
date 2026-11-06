@@ -21,7 +21,7 @@
 #   Actions → Release → Run workflow           build only, to try the build
 #                                              (the editions asked for)
 #
-# The remote server alone: a server-* tag (remote.yml, which this calls).
+# The remote server alone: a server-* tag (remote.yml).
 #
 # A version may be published again (the tag moved to a fixed commit): the
 # links end in each file's hash, so the CDN serves the new files at once.
@@ -185,23 +185,39 @@ jobs:
       - name: Run the tests
         run: flutter test --no-pub --reporter compact
 
-  # The Claude Code product's server: it carries its servers.json, and the
-  # app downloads the build a host needs (docs/ssh-remote.md, 9.3). Its
-  # artifacts: remote (VERSION, servers.json, the .gz), remote-linux.
+  # The Claude Code product's server for the Windows app: it carries its
+  # servers.json, and the app downloads the Linux build a host needs
+  # (docs/ssh-remote.md, 9.3). Dart cross-compiles Linux x64 and arm64 from
+  # any host; macOS builds need a Mac, which this Windows-only release does
+  # not wait for. The standalone server-* workflow builds those separately.
   remote:
-    name: Remote server
+    name: Remote server for Windows (Linux x64 + arm64)
     needs: check
-    strategy:
-      fail-fast: false
-      matrix:
-        # This repository publishes BaoCode Claude; the codex product lives
-        # in its own repository (poying2018/baocode-codex) and publishes
-        # from there. The name stays on the matrix so the artifacts keep
-        # being named as the app and the steps below expect.
-        product: [baocode-claude]
-    uses: ./.github/workflows/remote.yml
-    with:
-      product: ${{ matrix.product }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # This repository publishes BaoCode Claude; the codex product lives
+      # in its own repository (poying2018/baocode-codex) and publishes
+      # from there.
+      PRODUCT: baocode-claude
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - name: Build the Linux remote server
+        run: dart run tool/build_remote_server.dart --out build/remote --product "$PRODUCT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-${{ env.PRODUCT }}
+          if-no-files-found: error
+          path: |
+            build/remote/VERSION
+            build/remote/servers*.json
+            build/remote/*.gz
 
   # Each build once per edition (check's editions): the channel build's
   # files and artifacts end in -channel.
@@ -294,9 +310,9 @@ jobs:
               cp "$file" out/
             done
           done
-          # The remote server's builds too: an app packaged before them (or
-          # one built on another machine) downloads them from the release,
-          # by the version it was built with.
+          # The Linux remote server's builds too: an app packaged before
+          # them (or one built on another machine) downloads them from the
+          # release, by the version it was built with.
           for file in dist/remote-$PRODUCT/*.gz dist/remote-$PRODUCT/servers*.json; do
             cp "$file" out/
           done
