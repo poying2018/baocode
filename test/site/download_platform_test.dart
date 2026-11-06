@@ -60,4 +60,28 @@ void main() {
       );
     }
   });
+
+  test('the download page offers the architecture the build makes', () {
+    // This fork builds and publishes the Windows build for x64 alone
+    // (docs/release.md). A page promising Arm64 too sends that reader to the
+    // same x64 installer, which runs emulated at best.
+    final workflow = File(
+      p.join('.github', 'workflows', 'release.yml'),
+    ).readAsStringSync();
+    expect(workflow, isNot(contains('arm64')), reason: 'x64 alone is built');
+    for (final name in ['download.html', 'zh/download.html']) {
+      final html = File(p.join('site', name)).readAsStringSync();
+      final section = RegExp(
+        r'<section[^>]*data-os="windows".*?</section>',
+        dotAll: true,
+      ).firstMatch(html)?.group(0);
+      expect(section, isNotNull, reason: name);
+      expect(section, contains('x64'), reason: name);
+      expect(
+        section!.toLowerCase(),
+        isNot(contains('arm64')),
+        reason: '$name: no Arm64 build is published',
+      );
+    }
+  });
 }
