@@ -29,6 +29,7 @@ import 'claude_code_transport.dart';
 import 'claude_code_translator.dart';
 import 'claude_elicitation.dart';
 import 'claude_goal.dart';
+import 'claude_numbers.dart';
 import 'claude_sdk_tools.dart';
 import 'turn_stats.dart';
 import 'control_channel.dart';
@@ -1942,9 +1943,9 @@ class ClaudeCodeKernel
       final said = error.isNotEmpty
           ? error
           : switch (_custom) {
-              (final provider, _) => _providers.error(provider.id),
-              null => null,
-            } ??
+                  (final provider, _) => _providers.error(provider.id),
+                  null => null,
+                } ??
                 'The model did not reply. Check the model and its provider '
                     'in Settings → Models, then try again.';
       // The CLI's own error line before the result, when it sent one: the
@@ -1971,24 +1972,20 @@ class ClaudeCodeKernel
     }
     _endTurn(
       interrupted: message['subtype'] != 'success',
-      worked: switch (message['duration_ms']) {
-        final num ms => Duration(milliseconds: ms.round()),
+      worked: switch (claudeNumber(message['duration_ms'])) {
+        final ms? => Duration(milliseconds: ms.round()),
         _ => null,
       },
       // Its tokens as the result counts them, for when none streamed (its
       // API time is the session's, too coarse for a speed).
       usage: switch (message['usage']) {
         final Map<Object?, Object?> usage => TurnUsage(
-          inputTokens:
-              [
-                'input_tokens',
-                'cache_creation_input_tokens',
-                'cache_read_input_tokens',
-              ].fold<int>(
-                0,
-                (sum, key) => sum + ((usage[key] as num?) ?? 0).toInt(),
-              ),
-          outputTokens: (usage['output_tokens'] as num?)?.toInt(),
+          inputTokens: [
+            'input_tokens',
+            'cache_creation_input_tokens',
+            'cache_read_input_tokens',
+          ].fold<int>(0, (sum, key) => sum + (claudeInt(usage[key]) ?? 0)),
+          outputTokens: claudeInt(usage['output_tokens']),
           costUsd: turnCost,
         ),
         _ => TurnUsage(costUsd: turnCost),
@@ -2320,10 +2317,12 @@ class ClaudeCodeKernel
     final limits = usage['rate_limits'];
     if (limits is! Map) return false;
     RateLimitWindow? window(String label, Object? value) {
-      if (value is! Map || value['utilization'] is! num) return null;
+      if (value is! Map) return null;
+      final utilization = claudeNumber(value['utilization']);
+      if (utilization == null) return null;
       return RateLimitWindow(
         label,
-        (value['utilization'] as num) / 100,
+        utilization / 100,
         resetsAt: switch (value['resets_at']) {
           final String at => DateTime.tryParse(at)?.toLocal(),
           _ => null,
@@ -2412,14 +2411,16 @@ class ClaudeCodeKernel
   /// drops to what is left at once, then to what the CLI counts.
   void _compacted(Map<String, Object?> message) {
     final meta = message['compact_metadata'];
-    if (meta is Map && meta['post_tokens'] is int) {
+    if (meta is Map) {
+      final used = claudeInt(meta['post_tokens']);
+      if (used == null) {
+        unawaited(_refreshContext());
+        return;
+      }
       emit(
         UsageReported(
           nextSeq,
-          ContextUsage(
-            window: _contextWindow,
-            used: meta['post_tokens'] as int,
-          ),
+          ContextUsage(window: _contextWindow, used: used),
         ),
       );
     }
@@ -2433,13 +2434,13 @@ class ClaudeCodeKernel
       final usage = await control.request('get_context_usage', {
         'detail': 'summary',
       }, const Duration(seconds: 20));
-      final max = usage['maxTokens'] as int? ?? _contextWindow;
+      final max = claudeInt(usage['maxTokens']) ?? _contextWindow;
       _contextWindow = max;
       _contextReported = true;
       // No more than the window it compacts at (the CLI reports that as
       // raw too): the model holds at least that.
-      if ((usage['rawMaxTokens'], _reportedModel)
-          case (final int raw, final model?)
+      if ((claudeInt(usage['rawMaxTokens']), _reportedModel)
+          case (final raw?, final model?)
           when raw > (_modelWindows[model] ?? 0)) {
         _modelWindows[model] = raw;
       }
@@ -2449,13 +2450,13 @@ class ClaudeCodeKernel
           nextSeq,
           ContextUsage(
             window: max,
-            used: usage['totalTokens'] as int? ?? 0,
+            used: claudeInt(usage['totalTokens']) ?? 0,
             segments: [
               for (final raw in usage['categories'] as List? ?? const [])
-                if (raw is Map && raw['tokens'] is int)
+                if (raw is Map && claudeInt(raw['tokens']) != null)
                   ContextSegment(
                     '${raw['name']}',
-                    raw['tokens'] as int,
+                    claudeInt(raw['tokens'])!,
                     kind: switch (raw['kind']) {
                       'free' => ContextKind.free,
                       'buffer' => ContextKind.buffer,

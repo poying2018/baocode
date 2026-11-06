@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../chat/chat_models.dart';
+import 'claude_numbers.dart';
 
 /// What a turn took and spent, as its footer shows it once it ends: kept,
 /// for the footer to show again when the session is opened later, which
@@ -48,11 +49,11 @@ abstract class TurnStats {
       if (json
           case {'turn': final String turn, 'workedMs': final int ms} &&
               final Map<String, Object?> json) {
-        int? count(String key) => (json[key] as num?)?.toInt();
+        int? count(String key) => claudeInt(json[key]);
         final input = count('inputTokens');
         final output = count('outputTokens');
-        final speed = (json['tokensPerSecond'] as num?)?.toDouble();
-        final cost = (json['costUsd'] as num?)?.toDouble();
+        final speed = claudeNumber(json['tokensPerSecond'])?.toDouble();
+        final cost = claudeNumber(json['costUsd'])?.toDouble();
         records[turn] = (
           worked: Duration(milliseconds: ms),
           usage:

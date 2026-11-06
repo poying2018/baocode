@@ -319,10 +319,7 @@ void main() {
               'type': 'tool_use',
               'id': 'w1',
               'name': 'Write',
-              'input': {
-                'file_path': '/p/a.txt',
-                'content': 'x' * 100000,
-              },
+              'input': {'file_path': '/p/a.txt', 'content': 'x' * 100000},
             },
           ],
         },
@@ -378,10 +375,7 @@ void main() {
         {'type': 'message_delta'},
       ]) {
         expect(
-          () => translator.translate({
-            'type': 'stream_event',
-            'event': event,
-          }),
+          () => translator.translate({'type': 'stream_event', 'event': event}),
           returnsNormally,
           reason: '$event',
         );
@@ -1325,53 +1319,56 @@ void main() {
   });
 
   group('Claude Code kernel', () {
-    test('a message that is not whole does not take the session down', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      // What a CLI or a proxy may send: an event with no index, a block
-      // with no id, a task with no id of its own.
-      for (final message in [
-        {
-          'type': 'stream_event',
-          'event': {'type': 'content_block_start'},
-        },
-        {
-          'type': 'stream_event',
-          'event': {
-            'type': 'content_block_start',
-            'index': 0,
-            'content_block': {'type': 'tool_use'},
-          },
-        },
-        {'type': 'system', 'subtype': 'task_started'},
-        {
-          'type': 'assistant',
-          'message': {
-            'role': 'assistant',
-            'content': [
-              {'type': 'tool_use', 'id': 't1'},
-            ],
-          },
-        },
-      ]) {
-        cli.push(message);
+    test(
+      'a message that is not whole does not take the session down',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
         await pumpEventQueue();
-      }
-      // The session is still there, and takes the next turn.
-      cli.push({
-        'type': 'result',
-        'subtype': 'success',
-        'is_error': false,
-        'duration_ms': 100,
-      });
-      await pumpEventQueue();
-      final message = transcript.itemAt(0) as UserMessageItem;
-      expect(message.text, 'hi');
-      expect(message.worked, const Duration(milliseconds: 100));
-      kernel.dispose();
-    });
+        // What a CLI or a proxy may send: an event with no index, a block
+        // with no id, a task with no id of its own.
+        for (final message in [
+          {
+            'type': 'stream_event',
+            'event': {'type': 'content_block_start'},
+          },
+          {
+            'type': 'stream_event',
+            'event': {
+              'type': 'content_block_start',
+              'index': 0,
+              'content_block': {'type': 'tool_use'},
+            },
+          },
+          {'type': 'system', 'subtype': 'task_started'},
+          {
+            'type': 'assistant',
+            'message': {
+              'role': 'assistant',
+              'content': [
+                {'type': 'tool_use', 'id': 't1'},
+              ],
+            },
+          },
+        ]) {
+          cli.push(message);
+          await pumpEventQueue();
+        }
+        // The session is still there, and takes the next turn.
+        cli.push({
+          'type': 'result',
+          'subtype': 'success',
+          'is_error': false,
+          'duration_ms': 100,
+        });
+        await pumpEventQueue();
+        final message = transcript.itemAt(0) as UserMessageItem;
+        expect(message.text, 'hi');
+        expect(message.worked, const Duration(milliseconds: 100));
+        kernel.dispose();
+      },
+    );
 
     test('a turn is timed as the CLI says it took', () async {
       final cli = FakeCli();
@@ -1479,29 +1476,31 @@ void main() {
       kernel.dispose();
     });
 
-    test('a turn the user stopped is not given an error after the fact',
-        () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      kernel.cancel();
-      await pumpEventQueue();
-      // The CLI says the turn failed after all, with nothing to show.
-      cli.push({
-        'type': 'result',
-        'subtype': 'error_during_execution',
-        'is_error': true,
-        'result': '',
-      });
-      await pumpEventQueue();
-      final notices = [
-        for (var i = 0; i < transcript.length; i++)
-          if (transcript.itemAt(i) is NoticeItem) transcript.itemAt(i),
-      ];
-      expect(notices, isEmpty);
-      kernel.dispose();
-    });
+    test(
+      'a turn the user stopped is not given an error after the fact',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+        await pumpEventQueue();
+        kernel.cancel();
+        await pumpEventQueue();
+        // The CLI says the turn failed after all, with nothing to show.
+        cli.push({
+          'type': 'result',
+          'subtype': 'error_during_execution',
+          'is_error': true,
+          'result': '',
+        });
+        await pumpEventQueue();
+        final notices = [
+          for (var i = 0; i < transcript.length; i++)
+            if (transcript.itemAt(i) is NoticeItem) transcript.itemAt(i),
+        ];
+        expect(notices, isEmpty);
+        kernel.dispose();
+      },
+    );
 
     test('a turn ended keeps its id, not its words or images', () async {
       final cli = FakeCli();
@@ -1511,7 +1510,10 @@ void main() {
           id: 'u1',
           text: 'hi',
           images: [
-            ImageAttachment(bytes: Uint8List(64 * 1024), mediaType: 'image/png'),
+            ImageAttachment(
+              bytes: Uint8List(64 * 1024),
+              mediaType: 'image/png',
+            ),
           ],
         ),
       );
@@ -1667,6 +1669,68 @@ void main() {
         expect(usage.tokensPerSecond, isNull);
         expect(transcript.output, isNull);
         expect(transcript.turnStartedAt, isNull);
+        kernel.dispose();
+      },
+    );
+
+    test(
+      "a model's usage given as strings reads without a broken session",
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+        await pumpEventQueue();
+        Future<void> stream(Map<String, Object?> event) async {
+          cli.push({'type': 'stream_event', 'event': event});
+          await pumpEventQueue();
+        }
+
+        await stream({
+          'type': 'message_start',
+          'message': {
+            'id': 'm1',
+            'usage': {
+              'input_tokens': '10',
+              'cache_creation_input_tokens': '300',
+              'cache_read_input_tokens': '1000',
+              'output_tokens': 'n/a',
+            },
+          },
+        });
+        await stream({
+          'type': 'content_block_start',
+          'index': '0',
+          'content_block': {'type': 'text', 'text': ''},
+        });
+        await stream({
+          'type': 'content_block_delta',
+          'index': '0',
+          'delta': {'type': 'text_delta', 'text': 'Hi.'},
+        });
+        await stream({'type': 'content_block_stop', 'index': '0'});
+        await stream({
+          'type': 'message_delta',
+          'usage': {'output_tokens': '40'},
+        });
+        await stream({'type': 'message_stop'});
+        expect(transcript.output?.tokens, 40);
+
+        cli.push({
+          'type': 'result',
+          'subtype': 'success',
+          'duration_ms': '100',
+          'usage': {'input_tokens': '10', 'output_tokens': '40'},
+        });
+        await pumpEventQueue();
+        final message =
+            transcript.itemAt(transcript.indexOf('u1')!) as UserMessageItem;
+        expect(message.worked, const Duration(milliseconds: 100));
+        expect(message.usage?.inputTokens, 1310);
+        expect(message.usage?.outputTokens, 40);
+        expect([
+          for (final (_, item) in transcript.liveItems)
+            if (item is NoticeItem && item.kind == NoticeKind.error) item,
+        ], isEmpty);
         kernel.dispose();
       },
     );
@@ -1939,29 +2003,36 @@ void main() {
       kernel.dispose();
     });
 
-    test('a turn the CLI takes up while another runs does not orphan it', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, :events) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'first'));
-      await pumpEventQueue();
-      // A second message, queued: the CLI takes it up while the first is
-      // still running.
-      kernel.send(const KernelTurn(id: 'u2', text: 'second'));
-      await pumpEventQueue();
-      cli.push({
-        'type': 'command_lifecycle',
-        'command_uuid': 'u2',
-        'state': 'started',
-      });
-      await pumpEventQueue();
-      // The first turn is ended, not left running under the second.
-      final ended = events.whereType<TurnEnded>().map((event) => event.turnId);
-      expect(ended, contains('u1'));
-      // And the second is the one running.
-      final started = events.whereType<TurnStarted>().map((event) => event.turnId);
-      expect(started.where((id) => id == 'u2'), hasLength(1));
-      kernel.dispose();
-    });
+    test(
+      'a turn the CLI takes up while another runs does not orphan it',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, :events) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+        await pumpEventQueue();
+        // A second message, queued: the CLI takes it up while the first is
+        // still running.
+        kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+        await pumpEventQueue();
+        cli.push({
+          'type': 'command_lifecycle',
+          'command_uuid': 'u2',
+          'state': 'started',
+        });
+        await pumpEventQueue();
+        // The first turn is ended, not left running under the second.
+        final ended = events.whereType<TurnEnded>().map(
+          (event) => event.turnId,
+        );
+        expect(ended, contains('u1'));
+        // And the second is the one running.
+        final started = events.whereType<TurnStarted>().map(
+          (event) => event.turnId,
+        );
+        expect(started.where((id) => id == 'u2'), hasLength(1));
+        kernel.dispose();
+      },
+    );
 
     test(
       'denying says why; a plan is put to the user, who starts it',
@@ -4731,8 +4802,32 @@ void main() {
           'reason': 'clean',
           'iterations': 2,
           'durationMs': 5000,
+          'tokens': 900,
         });
         expect(replay([set, checked, met]).goal, isNull);
+        expect(
+          replay([
+            status({
+              'condition': 'lint clean',
+              'met': false,
+              'sentinel': true,
+              'iterations': '2',
+              'durationMs': '5000',
+              'tokens': '900',
+            }),
+            status({
+              'condition': 'lint clean',
+              'met': true,
+              'iterations': '2',
+              'durationMs': '5000',
+              'tokens': '900',
+            }),
+          ]).goal,
+          isNull,
+        );
+        expect(TurnStats.decode([
+          '{"turn":"u1","workedMs":1000,"inputTokens":"1200"}',
+        ])['u1']!.usage!.inputTokens, 1200);
       });
 
       test(
@@ -6020,10 +6115,7 @@ exec /usr/bin/env "\$@"
       ];
       // The child path joined the way this machine joins it: a Windows one
       // has its own separator between the folder and `lib`.
-      expect(
-        lines.map((line) => line['cwd']),
-        [null, to, p.join(to, 'lib')],
-      );
+      expect(lines.map((line) => line['cwd']), [null, to, p.join(to, 'lib')]);
       expect(lines.first['customTitle'], 'T');
       expect(File('${dir(to)}/mine/subagents/a.jsonl').existsSync(), isTrue);
       expect(File('${dir(to)}/memory/MEMORY.md').existsSync(), isTrue);
@@ -6115,9 +6207,11 @@ exec /usr/bin/env "\$@"
       ]);
       // Only what the app-server's protocol has: a parameter it does not
       // know may make it refuse the whole request.
-      final threadStart = server.written
-          .firstWhere((m) => m['method'] == 'thread/start')['params']
-          as Map;
+      final threadStart =
+          server.written.firstWhere(
+                (m) => m['method'] == 'thread/start',
+              )['params']
+              as Map;
       expect(threadStart.containsKey('runtimeWorkspaceRoots'), isFalse);
       // The models the server has are what the picker offers.
       expect(kernel.model.options.map((o) => o.id), ['gpt-5.5-codex']);
@@ -6553,8 +6647,10 @@ exec /usr/bin/env "\$@"
       };
       server.answers['fuzzyFileSearch'] = {
         'files': [
-          {'path': p.join(Directory.current.path, 'lib', 'main.dart'),
-            'match_type': 'file'},
+          {
+            'path': p.join(Directory.current.path, 'lib', 'main.dart'),
+            'match_type': 'file',
+          },
         ],
       };
       kernel.send(const KernelTurn(id: 't1', text: 'hi'));

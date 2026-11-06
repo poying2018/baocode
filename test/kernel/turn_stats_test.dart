@@ -46,6 +46,19 @@ void main() {
     expect(records['u1']!.worked, const Duration(seconds: 2));
   });
 
+  test("a turn's usage kept as strings reads as the numbers", () {
+    final records = TurnStats.decode([
+      '{"turn":"u1","workedMs":1000,'
+          '"inputTokens":"1200","outputTokens":"300",'
+          '"tokensPerSecond":"61.25","costUsd":"0.04"}',
+    ]);
+    final usage = records['u1']!.usage!;
+    expect(usage.inputTokens, 1200);
+    expect(usage.outputTokens, 300);
+    expect(usage.tokensPerSecond, 61.25);
+    expect(usage.costUsd, 0.04);
+  });
+
   test('a session id that is no file name is not kept', () async {
     final stats = TurnStatsFiles(dir.path);
     stats.write('../s', 'u1', (
