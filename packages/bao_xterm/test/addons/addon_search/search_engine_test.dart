@@ -194,6 +194,29 @@ void main() {
           expect(result!.term, '订单');
         });
 
+        test('a supplementary ideograph is a word beside another', () async {
+          await writeP(terminal, '姓名𠮷野');
+
+          expect(
+            searchEngine.find('𠮷野', 0, 0, ISearchOptions(wholeWord: true)),
+            isNotNull,
+          );
+        });
+
+        test('a regex of supplementary ideographs is a whole word', () async {
+          await writeP(terminal, '姓名𠮷野');
+
+          expect(
+            searchEngine.find(
+              '𠮷野',
+              0,
+              0,
+              ISearchOptions(wholeWord: true, regex: true),
+            ),
+            isNotNull,
+          );
+        });
+
         test('an ASCII word is no whole word beside Chinese', () async {
           await writeP(terminal, '订单order列表');
 

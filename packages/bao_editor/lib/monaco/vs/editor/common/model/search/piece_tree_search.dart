@@ -125,17 +125,38 @@ bool isValidMatch(
 ) {
   final left =
       start == 0 ||
-      (length > 0 && _isIdeographic(text.codeUnitAt(start))) ||
+      (length > 0 && _isIdeographic(_runeAt(text, start))) ||
       !separators.isRegular(text.codeUnitAt(start - 1)) ||
       (length > 0 && !separators.isRegular(text.codeUnitAt(start)));
   final end = start + length;
   final right =
       end == text.length ||
-      (length > 0 && _isIdeographic(text.codeUnitAt(end - 1))) ||
-      !separators.isRegular(text.codeUnitAt(end)) ||
+      (length > 0 &&
+          _isIdeographic(_runeAt(text, _runeStart(text, end - 1)))) ||
+      (end < text.length && !separators.isRegular(text.codeUnitAt(end))) ||
       (length > 0 && !separators.isRegular(text.codeUnitAt(end - 1)));
   return left && right;
 }
+
+int _runeAt(String text, int start) {
+  final first = text.codeUnitAt(start);
+  if (_isHighSurrogate(first) &&
+      start + 1 < text.length &&
+      _isLowSurrogate(text.codeUnitAt(start + 1))) {
+    return 0x10000 +
+        ((first - 0xd800) << 10) +
+        (text.codeUnitAt(start + 1) - 0xdc00);
+  }
+  return first;
+}
+
+/// The UTF-16 start of the code point whose last code unit is [end].
+int _runeStart(String text, int end) =>
+    _isLowSurrogate(text.codeUnitAt(end)) &&
+        end > 0 &&
+        _isHighSurrogate(text.codeUnitAt(end - 1))
+    ? end - 1
+    : end;
 
 /// Whether [unit] belongs to a script whose words its characters end and
 /// begin: CJK ideographs and their radicals, kana, hangul, compatibility
@@ -144,7 +165,12 @@ bool _isIdeographic(int unit) =>
     (unit >= 0x2e80 && unit <= 0x9fff) ||
     (unit >= 0xac00 && unit <= 0xd7af) ||
     (unit >= 0xf900 && unit <= 0xfaff) ||
-    (unit >= 0xff00 && unit <= 0xffef);
+    (unit >= 0xff00 && unit <= 0xffef) ||
+    (unit >= 0x20000 && unit <= 0x3ffff);
+
+bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /// Stateful non-overlapping regexp scanner; reset before each new line/range.
 class Searcher {

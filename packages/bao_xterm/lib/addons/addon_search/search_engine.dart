@@ -300,8 +300,10 @@ class SearchEngine {
 
     // A Chinese character is a word by itself: it bounds `订单` in
     // `查看订单列表`, and also `order` in `订单order列表`.
-    final startsWithChinese = _isIdeographic(term.codeUnitAt(0));
-    final endsWithChinese = _isIdeographic(term.codeUnitAt(term.length - 1));
+    final startsWithChinese = _isIdeographic(_runeAt(term, 0));
+    final endsWithChinese = _isIdeographic(
+      _runeAt(term, _runeStart(term, term.length - 1)),
+    );
     final left =
         searchIndex == 0 ||
         startsWithChinese ||
@@ -328,7 +330,31 @@ class SearchEngine {
       (unit >= 0x2e80 && unit <= 0x9fff) ||
       (unit >= 0xac00 && unit <= 0xd7af) ||
       (unit >= 0xf900 && unit <= 0xfaff) ||
-      (unit >= 0xff00 && unit <= 0xffef);
+      (unit >= 0xff00 && unit <= 0xffef) ||
+      (unit >= 0x20000 && unit <= 0x3ffff);
+
+  static int _runeAt(String text, int start) {
+    final first = text.codeUnitAt(start);
+    if (_isHighSurrogate(first) &&
+        start + 1 < text.length &&
+        _isLowSurrogate(text.codeUnitAt(start + 1))) {
+      return 0x10000 +
+          ((first - 0xd800) << 10) +
+          (text.codeUnitAt(start + 1) - 0xdc00);
+    }
+    return first;
+  }
+
+  static int _runeStart(String text, int end) =>
+      _isLowSurrogate(text.codeUnitAt(end)) &&
+          end > 0 &&
+          _isHighSurrogate(text.codeUnitAt(end - 1))
+      ? end - 1
+      : end;
+
+  static bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
+
+  static bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
   /// Searches a line for a search term. Takes the provided terminal line and
   /// searches the text line, which may contain subsequent terminal lines if

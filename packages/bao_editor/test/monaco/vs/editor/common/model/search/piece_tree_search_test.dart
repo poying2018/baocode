@@ -66,6 +66,52 @@ void main() {
       );
     });
 
+    test('a supplementary ideograph is a word beside another', () {
+      final b = buffer('姓名𠮷野');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('𠮷野', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        [(1, 3, 1, 6)],
+      );
+    });
+
+    test('a supplementary ideograph at the end of a line', () {
+      final b = buffer('姓名𠮷');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('𠮷', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        [(1, 3, 1, 5)],
+      );
+    });
+
+    test('a regex of supplementary ideographs is a whole word', () {
+      final b = buffer('姓名𠮷野');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams(
+              '𠮷野',
+              isRegex: true,
+              wordSeparators: separators,
+            ),
+            full(b),
+          ),
+        ),
+        [(1, 3, 1, 6)],
+      );
+    });
+
     test('an ASCII word beside a Chinese character is no whole word', () {
       final b = buffer('订单order列表');
       expect(
