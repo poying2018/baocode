@@ -30,6 +30,7 @@ class _Servers {
 
   /// Each token a request to `/mcp` came with.
   final List<String?> seen = [];
+  final List<String?> deletedSessions = [];
   String? challenge;
   bool added = false;
   final Map<String, Completer<Map<String, Object?>>> _answers = {};
@@ -91,6 +92,14 @@ class _Servers {
       case ('POST', '/mcp'):
         return _mcp(request);
       case ('DELETE', '/mcp'):
+        final token = request.headers
+            .value('authorization')
+            ?.replaceFirst('Bearer ', '');
+        if (token == null || !tokens.contains(token)) {
+          response.statusCode = 401;
+          return response.close();
+        }
+        deletedSessions.add(request.headers.value('mcp-session-id'));
         response.statusCode = 200;
         return response.close();
       case ('GET', '/sse'):
@@ -347,6 +356,9 @@ void main() {
         (t as Map)['name'],
     ];
     expect(tools, contains('mcp__secure__added'));
+
+    await h.engine.close();
+    expect(servers.deletedSessions, contains('session-1'));
   });
 
   test('closing the session stops an unfinished sign-in', () async {

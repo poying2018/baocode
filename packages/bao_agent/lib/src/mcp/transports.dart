@@ -170,6 +170,7 @@ class StreamableHttpTransport extends McpTransport {
   late final HttpClient _client = _httpClient(environment);
   String? _sessionId;
   String? _protocolVersion;
+  bool _closed = false;
   final StreamController<Map<String, Object?>> _messages =
       StreamController.broadcast();
 
@@ -178,15 +179,12 @@ class StreamableHttpTransport extends McpTransport {
 
   set protocolVersion(String version) => _protocolVersion = version;
 
-  @override
-  Future<void> start() async {}
-
-  @override
-  Future<void> send(Map<String, Object?> message) async {
-    final request = await _client.postUrl(url);
-    request.headers
-      ..set(HttpHeaders.contentTypeHeader, 'application/json')
-      ..set(HttpHeaders.acceptHeader, 'application/json, text/event-stream');
+  Future<HttpClientRequest> _request(
+    String method,
+    Uri url, {
+    Map<String, String> extra = const {},
+  }) async {
+    final request = await _client.openUrl(method, url);
     for (final MapEntry(:key, :value) in headers.entries) {
       request.headers.set(key, value);
     }
@@ -195,10 +193,29 @@ class StreamableHttpTransport extends McpTransport {
         request.headers.set(key, value);
       }
     }
-    if (_sessionId case final id?) request.headers.set('mcp-session-id', id);
-    if (_protocolVersion case final version?) {
-      request.headers.set('mcp-protocol-version', version);
+    for (final MapEntry(:key, :value) in extra.entries) {
+      request.headers.set(key, value);
     }
+    return request;
+  }
+
+  @override
+  Future<void> start() async {}
+
+  @override
+  Future<void> send(Map<String, Object?> message) async {
+    if (_closed) throw const JsonRpcError('Not connected');
+    final request = await _request(
+      'POST',
+      url,
+      extra: {
+        'mcp-session-id': ?_sessionId,
+        'mcp-protocol-version': ?_protocolVersion,
+      },
+    );
+    request.headers
+      ..set(HttpHeaders.contentTypeHeader, 'application/json')
+      ..set(HttpHeaders.acceptHeader, 'application/json, text/event-stream');
     request.add(utf8.encode(jsonEncode(message)));
     final response = await request.close();
     if (response.headers.value('mcp-session-id') case final id?) {
@@ -249,10 +266,17 @@ class StreamableHttpTransport extends McpTransport {
 
   @override
   Future<void> close() async {
-    if (_sessionId case final id?) {
+    if (_closed) return;
+    _closed = true;
+    final sessionId = _sessionId;
+    _sessionId = null;
+    if (sessionId case final id?) {
       try {
-        final request = await _client.deleteUrl(url);
-        request.headers.set('mcp-session-id', id);
+        final request = await _request(
+          'DELETE',
+          url,
+          extra: {'mcp-session-id': id},
+        );
         final response = await request.close().timeout(
           const Duration(seconds: 3),
         );
@@ -290,18 +314,26 @@ class SseTransport extends McpTransport {
   @override
   Stream<Map<String, Object?>> get messages => _messages.stream;
 
-  Future<Map<String, String>> _headers() async => {
-    ...headers,
-    if (auth != null) ...await auth!(),
-  };
+  Future<HttpClientRequest> _request(
+    String method,
+    Uri url, {
+    Map<String, String> extra = const {},
+  }) async {
+    final request = await _client.openUrl(method, url);
+    for (final MapEntry(:key, :value) in {
+      ...headers,
+      if (auth != null) ...await auth!(),
+      ...extra,
+    }.entries) {
+      request.headers.set(key, value);
+    }
+    return request;
+  }
 
   @override
   Future<void> start() async {
-    final request = await _client.getUrl(url);
+    final request = await _request('GET', url);
     request.headers.set(HttpHeaders.acceptHeader, 'text/event-stream');
-    for (final MapEntry(:key, :value) in (await _headers()).entries) {
-      request.headers.set(key, value);
-    }
     final response = await request.close();
     if (response.statusCode == 401) {
       await response.drain<void>();
@@ -342,11 +374,8 @@ class SseTransport extends McpTransport {
   Future<void> send(Map<String, Object?> message) async {
     final endpoint = _endpoint;
     if (endpoint == null) throw const JsonRpcError('Not connected');
-    final request = await _client.postUrl(endpoint);
+    final request = await _request('POST', endpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-    for (final MapEntry(:key, :value) in (await _headers()).entries) {
-      request.headers.set(key, value);
-    }
     request.add(utf8.encode(jsonEncode(message)));
     final response = await request.close();
     await response.drain<void>();
