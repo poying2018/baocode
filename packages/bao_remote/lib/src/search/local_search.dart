@@ -119,9 +119,8 @@ Future<void> _search((SendPort, String, IdeTextQuery) arguments) async {
     if (quick != null && !quick.hasMatch(text)) continue;
     final matches = ideMatchLines(
       text,
-      regExp,
+      query,
       limit: query.maxResults - count,
-      multiline: query.isMultiline,
     );
     if (matches.isEmpty) continue;
     port.send(IdeFileMatches(path, matches));

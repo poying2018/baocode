@@ -60,11 +60,10 @@ final _files = _Files({
 /// given so its results match.
 Stream<Object> _engine(String root, IdeTextQuery query) async* {
   final accept = query.pathFilter();
-  final regExp = query.toRegExp();
   for (final MapEntry(key: path, value: text) in _files.texts.entries) {
     final relative = p.relative(path, from: root).replaceAll(r'\', '/');
     if (!accept(relative)) continue;
-    final matches = ideMatchLines(text, regExp);
+    final matches = ideMatchLines(text, query);
     if (matches.isNotEmpty) yield IdeFileMatches(path, matches);
   }
   yield const IdeTextSearchComplete(limitHit: false);

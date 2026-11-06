@@ -36,12 +36,11 @@ void main() {
   Stream<Object> engine(String root, IdeTextQuery query) async* {
     queries.add(query);
     final accept = query.pathFilter();
-    final regExp = query.toRegExp();
     final contents = (workspace.files as TreeFiles).contents;
     for (final MapEntry(key: path, value: text) in contents.entries) {
       final relative = p.relative(path, from: root).replaceAll(r'\', '/');
       if (!accept(relative)) continue;
-      final matches = ideMatchLines(text, regExp);
+      final matches = ideMatchLines(text, query);
       if (matches.isNotEmpty) yield IdeFileMatches(path, matches);
     }
     yield const IdeTextSearchComplete(limitHit: false);

@@ -55,7 +55,6 @@ class IdeTextQuery {
     pattern,
     isRegExp: isRegExp,
     matchCase: isCaseSensitive,
-    wholeWord: isWordMatch,
   );
 
   /// Whether [relativePath] (with `/`) is to be searched.
@@ -134,17 +133,11 @@ RegExp ideCreateRegExp(
   String searchString, {
   required bool isRegExp,
   bool matchCase = false,
-  bool wholeWord = false,
 }) {
   if (searchString.isEmpty) throw const FormatException('Empty pattern');
-  var source = isRegExp
+  final source = isRegExp
       ? _lineBreaksInExpression(searchString)
       : searchString.split(_lineBreak).map(RegExp.escape).join(r'\r?\n');
-  if (wholeWord) {
-    final word = RegExp(r'\w');
-    if (word.hasMatch(source[0])) source = '\\b$source';
-    if (word.hasMatch(source[source.length - 1])) source = '$source\\b';
-  }
   return RegExp(source, caseSensitive: matchCase, unicode: true);
 }
 
@@ -289,15 +282,22 @@ Iterable<String> _splitGlobs(String patterns) sync* {
   yield patterns.substring(start);
 }
 
-/// Matches [regExp] in [text], line by line, up to [limit]; across lines
-/// with [multiline] (see [IdeTextQuery.isMultiline]).
+/// Matches [query] in [text], line by line, up to [limit]; across lines
+/// with [IdeTextQuery.isMultiline].
 List<IdeTextMatch> ideMatchLines(
   String text,
-  RegExp regExp, {
+  IdeTextQuery query, {
   int? limit,
-  bool multiline = false,
 }) {
-  if (multiline) return _matchAcross(text, regExp, limit: limit);
+  final regExp = query.toRegExp();
+  if (query.isMultiline) {
+    return _matchAcross(
+      text,
+      regExp,
+      limit: limit,
+      wholeWord: query.isWordMatch,
+    );
+  }
   final matches = <IdeTextMatch>[];
   var line = 0;
   var start = 0;
@@ -309,6 +309,10 @@ List<IdeTextMatch> ideMatchLines(
     final lineText = text.substring(start, lineEnd);
     for (final match in regExp.allMatches(lineText)) {
       if (match.end == match.start) continue;
+      if (query.isWordMatch &&
+          !_isWholeWord(lineText, match.start, match.end)) {
+        continue;
+      }
       matches.add(IdeTextMatch(line, match.start, match.end, lineText));
       if (limit != null && matches.length >= limit) return matches;
     }
@@ -319,7 +323,12 @@ List<IdeTextMatch> ideMatchLines(
   return matches;
 }
 
-List<IdeTextMatch> _matchAcross(String text, RegExp regExp, {int? limit}) {
+List<IdeTextMatch> _matchAcross(
+  String text,
+  RegExp regExp, {
+  int? limit,
+  required bool wholeWord,
+}) {
   final lineStarts = [0];
   for (var i = 0; i < text.length; i++) {
     if (text.codeUnitAt(i) == 0x0A) lineStarts.add(i + 1);
@@ -341,6 +350,7 @@ List<IdeTextMatch> _matchAcross(String text, RegExp regExp, {int? limit}) {
   final matches = <IdeTextMatch>[];
   for (final match in regExp.allMatches(text)) {
     if (match.end == match.start) continue;
+    if (wholeWord && !_isWholeWord(text, match.start, match.end)) continue;
     final line = lineOf(match.start);
     // Past a line break it ends at the next line's start.
     final endLine = lineOf(match.end);
@@ -362,6 +372,71 @@ List<IdeTextMatch> _matchAcross(String text, RegExp regExp, {int? limit}) {
   }
   return matches;
 }
+
+/// Whether the match with [start] and [end] (UTF-16 offsets) begins and ends
+/// with Unicode letter or number characters that do not continue into the
+/// surrounding text. As in the editor's search, a Chinese character is a word
+/// by itself: `订单` is found in `查看订单列表`, but `order` is not found in
+/// `订单order列表`.
+bool _isWholeWord(String text, int start, int end) {
+  if (start == end) return false;
+  final first = _runeAt(text, start);
+  final last = _runeAtEnd(text, end);
+  final before = start == 0 ? null : _runeBefore(text, start);
+  final after = end == text.length ? null : _runeAt(text, end);
+  final left =
+      !_isWordCharacter(first) ||
+      before == null ||
+      !_isWordCharacter(before) ||
+      (_isIdeographic(first) && _isIdeographic(before));
+  final right =
+      !_isWordCharacter(last) ||
+      after == null ||
+      !_isWordCharacter(after) ||
+      (_isIdeographic(last) && _isIdeographic(after));
+  return left && right;
+}
+
+final _wordCharacter = RegExp(r'^[\p{L}\p{N}_]$', unicode: true);
+final _ideographic = RegExp(r'^[\p{Ideographic}]$', unicode: true);
+
+bool _isWordCharacter(int rune) =>
+    _wordCharacter.hasMatch(String.fromCharCode(rune));
+
+bool _isIdeographic(int rune) =>
+    _ideographic.hasMatch(String.fromCharCode(rune));
+
+int _runeAt(String text, int start) {
+  final first = text.codeUnitAt(start);
+  if (_isHighSurrogate(first) &&
+      start + 1 < text.length &&
+      _isLowSurrogate(text.codeUnitAt(start + 1))) {
+    return 0x10000 +
+        ((first - 0xd800) << 10) +
+        (text.codeUnitAt(start + 1) - 0xdc00);
+  }
+  return first;
+}
+
+int _runeBefore(String text, int end) {
+  return _runeAtEnd(text, end);
+}
+
+/// The code point whose last UTF-16 code unit is at [end] - 1.
+int _runeAtEnd(String text, int end) {
+  final last = end - 1;
+  final start =
+      _isLowSurrogate(text.codeUnitAt(last)) &&
+          last > 0 &&
+          _isHighSurrogate(text.codeUnitAt(last - 1))
+      ? last - 1
+      : last;
+  return _runeAt(text, start);
+}
+
+bool _isHighSurrogate(int unit) => unit >= 0xd800 && unit <= 0xdbff;
+
+bool _isLowSurrogate(int unit) => unit >= 0xdc00 && unit <= 0xdfff;
 
 /// The Search view's match preview (`Match.preview`): what comes before
 /// (cut to 26 characters at a word boundary), the match, and after, within

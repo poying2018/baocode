@@ -2325,7 +2325,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// Search without a folder: the open files' text, as upstream searches
   /// the open editors alone in an empty window.
   Stream<Object> _searchOpenFiles(IdeTextQuery query) async* {
-    final pattern = query.toRegExp();
     var count = 0;
     var limitHit = false;
     final searched = <String>{};
@@ -2334,10 +2333,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       final left = query.maxResults - count;
       final matches = ideMatchLines(
         doc.text,
-        pattern,
+        query,
         // One more: whether the limit cut it short.
         limit: left + 1,
-        multiline: query.isMultiline,
       );
       if (matches.length > left) {
         limitHit = true;

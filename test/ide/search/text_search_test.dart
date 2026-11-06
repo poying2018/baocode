@@ -49,10 +49,21 @@ void main() {
   });
 
   group('patterns', () {
+    bool hasWholeWord(String pattern, String text) {
+      final query = IdeTextQuery(pattern, isWordMatch: true);
+      return ideMatchLines(text, query).isNotEmpty;
+    }
+
     test('whole words, case and regular expressions', () {
-      final word = ideCreateRegExp('foo', isRegExp: false, wholeWord: true);
-      expect(word.hasMatch('a foo b'), isTrue);
-      expect(word.hasMatch('food'), isFalse);
+      expect(hasWholeWord('foo', 'a foo b'), isTrue);
+      expect(hasWholeWord('foo', 'food'), isFalse);
+      final regex = IdeTextQuery(
+        r'order\d+',
+        isRegExp: true,
+        isWordMatch: true,
+      );
+      expect(ideMatchLines('order12 list', regex), hasLength(1));
+      expect(ideMatchLines('订单order12列表', regex), isEmpty);
       expect(ideCreateRegExp('a.b', isRegExp: false).hasMatch('axb'), isFalse);
       expect(ideCreateRegExp('a.b', isRegExp: true).hasMatch('axb'), isTrue);
       expect(
@@ -66,17 +77,33 @@ void main() {
       expect(() => ideCreateRegExp('(', isRegExp: true), throwsFormatException);
     });
 
+    test('whole words do not span Chinese text', () {
+      expect(hasWholeWord('订单', '查看订单列表'), isTrue);
+      expect(hasWholeWord('order', 'order list'), isTrue);
+      expect(hasWholeWord('order', 'orderly'), isFalse);
+      expect(hasWholeWord('order', '订单order列表'), isFalse);
+      expect(hasWholeWord('order', 'order订单'), isFalse);
+    });
+
+    test('whole words include supplementary ideographs', () {
+      expect(hasWholeWord('𠮷野', '姓名𠮷野'), isTrue);
+      expect(hasWholeWord('𠮷野', '姓名𠮷野名'), isTrue);
+    });
+
     test('matches are per occurrence, per line, without CRs', () {
       final matches = ideMatchLines(
         'one two one\r\nthree\r\none',
-        RegExp('one'),
+        const IdeTextQuery('one'),
       );
       expect(
         [for (final m in matches) (m.line, m.start, m.end)],
         [(0, 0, 3), (0, 8, 11), (2, 0, 3)],
       );
       expect(matches.first.text, 'one two one');
-      expect(ideMatchLines('a\na', RegExp('a'), limit: 1), hasLength(1));
+      expect(
+        ideMatchLines('a\na', const IdeTextQuery('a'), limit: 1),
+        hasLength(1),
+      );
     });
 
     test('the preview cuts what comes before at a word', () {
@@ -111,7 +138,7 @@ void main() {
 
   group('across lines', () {
     List<IdeTextMatch> find(String text, IdeTextQuery query) =>
-        ideMatchLines(text, query.toRegExp(), multiline: query.isMultiline);
+        ideMatchLines(text, query);
 
     test('text pasted with its line breaks matches across lines, LF or '
         'CRLF either way', () {
@@ -247,6 +274,24 @@ void main() {
     test('across lines', () async {
       final (files, _) = await run(const IdeTextQuery('one\nno'));
       expect(files, {'lib/a.dart': 1});
+    });
+
+    test('whole words', () async {
+      final (files, _) = await run(
+        const IdeTextQuery(
+          'needle',
+          isWordMatch: true,
+          useExcludesAndIgnoreFiles: false,
+        ),
+      );
+      expect(
+        files,
+        {
+          'lib/a.dart': 2,
+          'node_modules/x/index.js': 1,
+          'ignored/c.dart': 1,
+        },
+      );
     });
 
     test('an invalid expression is an error', () async {
