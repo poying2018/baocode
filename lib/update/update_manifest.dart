@@ -11,15 +11,20 @@ import 'version.dart';
 const defaultManifestUrl =
     'https://github.com/poying2018/baocode/releases/latest/download/latest.json';
 
+/// The repository BaoCode Codex publishes in: its own, split from this one
+/// (docs/release.md), so its manifest is not in this repository's releases at
+/// all.
+const codexRepositoryUrl = 'https://github.com/poying2018/baocode-codex';
+
 /// Where the app of [product] looks for its next version: the manifest
 /// of that product.
 ///
-/// The two products are separate programs, and a release of one is not an
-/// update of the other: each has its own manifest, in the same release.
+/// The two products are separate programs, each publishing in its own
+/// repository, and a release of one is not an update of the other: each has
+/// its own manifest, beside its own releases.
 String manifestUrlFor(String product) => switch (product) {
   'baocode-codex' =>
-    'https://github.com/poying2018/baocode/releases/latest/download/'
-        'latest-codex.json',
+    '$codexRepositoryUrl/releases/latest/download/latest-codex.json',
   _ => defaultManifestUrl,
 };
 

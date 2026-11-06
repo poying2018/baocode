@@ -113,5 +113,38 @@ void main() {
         reason: 'a release of one product is not an update of the other',
       );
     });
+
+    test('is read from the repository that publishes it', () {
+      // This repository publishes BaoCode Claude alone (docs/release.md);
+      // the codex product's releases, its manifest among them, are in
+      // poying2018/baocode-codex. A codex build that looked here would find
+      // no manifest ever, and never update.
+      Uri manifestOf(String product) => Uri.parse(manifestUrlFor(product));
+      expect(manifestOf('baocode').pathSegments, [
+        'poying2018',
+        'baocode',
+        'releases',
+        'latest',
+        'download',
+        'latest.json',
+      ]);
+      expect(manifestOf('baocode-codex').pathSegments, [
+        'poying2018',
+        'baocode-codex',
+        'releases',
+        'latest',
+        'download',
+        'latest-codex.json',
+      ]);
+      // Each named as the product table names its manifest.
+      expect(
+        manifestOf('baocode').pathSegments.last,
+        Product.baocode.manifestName,
+      );
+      expect(
+        manifestOf('baocode-codex').pathSegments.last,
+        Product.codex.manifestName,
+      );
+    });
   });
 }
