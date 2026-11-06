@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../support/harness.dart';
+import '../support/message_text.dart';
 
 void main() {
   late Harness h;
@@ -244,9 +245,12 @@ void main() {
         expect(h.permissionRequests.single['tool_name'], 'Write');
         final sent = jsonEncode(h.model.turns.first.body['messages']);
         expect(sent, contains('You are in plan mode'));
-        final escaped = RegExp(r'write it to ([^ ]+\.md)').firstMatch(sent)![1]!;
-        // The path as it is, not as the JSON has it.
-        final plan = jsonDecode('"$escaped"') as String;
+        final plan = h.engine.session.planFilePath;
+        final reminder = messageWithPath(
+          h.model.turns.first.body['messages'] as List,
+          plan,
+        );
+        expect(reminder, contains('write it to $plan with Write'));
         h.model.script.addAll([
           Reply.tool('Write', {
             'file_path': plan,

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../support/harness.dart';
+import '../support/message_text.dart';
 
 /// The hook at [path] as a command the shell runs: on Windows a script is
 /// not run of itself, so the shell is told to run it.
@@ -23,16 +24,19 @@ void main() {
 
   tearDown(() => h.dispose());
 
+  /// The messages as JSON, for checks that look at their shape.
   String sentIn(ModelRequest request) => jsonEncode(request.body['messages']);
 
   test('a plan approved: the mode is left, the plan given back', () async {
     h = await Harness.start(permissionMode: 'plan');
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
-    final escaped = RegExp(r'write it to ([^ ]+\.md)')
-        .firstMatch(sentIn(h.model.turns.first))![1]!;
-    // The path as it is, not as the JSON has it.
-    final plan = jsonDecode('"$escaped"') as String;
+    final plan = h.engine.session.planFilePath;
+    final reminder = messageWithPath(
+      h.model.turns.first.body['messages'] as List,
+      plan,
+    );
+    expect(reminder, contains('write it to $plan with Write'));
     h.model.script.addAll([
       Reply.tool('Write', {
         'file_path': plan,
@@ -71,11 +75,26 @@ void main() {
   test('a plan sent rather than written is kept in its file, which the '
       'user is shown', () async {
     // #298: the file named was not there, and its tab said so.
-    h = await Harness.start(permissionMode: 'plan');
+    final plans = p.join(
+      Directory.systemTemp.path,
+      'bao_agent plans ${DateTime.now().microsecondsSinceEpoch}',
+    );
+    h = await Harness.start(
+      permissionMode: 'plan',
+      settings: {'plansDirectory': plans},
+    );
+    addTearDown(() {
+      final dir = Directory(plans);
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
-    final plan = RegExp(r'write it to ([^ ]+\.md)')
-        .firstMatch(sentIn(h.model.turns.first))![1]!;
+    final plan = h.engine.session.planFilePath;
+    final reminder = messageWithPath(
+      h.model.turns.first.body['messages'] as List,
+      plan,
+    );
+    expect(reminder, contains('write it to $plan with Write'));
     expect(File(plan).existsSync(), isFalse);
     h.model.script.addAll([
       Reply.tool('ExitPlanMode', {'plan': '# Plan\n\nStep one.'}),
@@ -389,8 +408,12 @@ void main() {
       );
       h.model.script.add(Reply.text('looking'));
       await h.turn('plan');
-      final plan = RegExp(r'write it to ([^ ]+\.md)')
-          .firstMatch(sentIn(h.model.turns.first))![1]!;
+      final plan = h.engine.session.planFilePath;
+      final reminder = messageWithPath(
+        h.model.turns.first.body['messages'] as List,
+        plan,
+      );
+      expect(reminder, contains('write it to $plan with Write'));
       h.model.script.addAll([
         Reply.tools([
           ('Write', {'file_path': plan, 'content': '# Plan'}),
@@ -422,7 +445,7 @@ void main() {
           .of('user')
           .lastWhere((m) => m['isCompactSummary'] == true);
       expect(
-        jsonEncode(summary),
+        messageText(summary),
         allOf(contains('[pending] First'), contains(plan)),
       );
     });
