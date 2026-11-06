@@ -66,7 +66,7 @@ void main() {
       );
     });
 
-    test("an ASCII word beside a Chinese character is the word's own", () {
+    test('an ASCII word beside a Chinese character is no whole word', () {
       final b = buffer('订单order列表');
       expect(
         coordinates(
@@ -76,7 +76,21 @@ void main() {
             full(b),
           ),
         ),
-        [(1, 3, 1, 8)],
+        isEmpty,
+      );
+    });
+
+    test('a Chinese character beside an ASCII word is no whole word', () {
+      final b = buffer('order订单');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('order', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        isEmpty,
       );
     });
 

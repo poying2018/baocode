@@ -125,26 +125,17 @@ bool isValidMatch(
 ) {
   final left =
       start == 0 ||
-      !_isWordCharacter(separators, text.codeUnitAt(start - 1)) ||
-      (length > 0 && !_isWordCharacter(separators, text.codeUnitAt(start)));
+      (length > 0 && _isIdeographic(text.codeUnitAt(start))) ||
+      !separators.isRegular(text.codeUnitAt(start - 1)) ||
+      (length > 0 && !separators.isRegular(text.codeUnitAt(start)));
   final end = start + length;
   final right =
       end == text.length ||
-      !_isWordCharacter(separators, text.codeUnitAt(end)) ||
-      (length > 0 && !_isWordCharacter(separators, text.codeUnitAt(end - 1)));
+      (length > 0 && _isIdeographic(text.codeUnitAt(end - 1))) ||
+      !separators.isRegular(text.codeUnitAt(end)) ||
+      (length > 0 && !separators.isRegular(text.codeUnitAt(end - 1)));
   return left && right;
 }
-
-/// Whether [unit] is a character a word is made of: ASCII's, and not one of
-/// the separators — or a letter of a script that spaces its words apart
-/// (Cyrillic, accented Latin, as upstream's #3623 has them).
-///
-/// A Chinese character is a word by itself: its script puts no spaces between
-/// words, and the separator list (spaces and ASCII punctuation) offers no
-/// boundary beside it — with which `订单` in `查看订单列表` is found as a whole
-/// word.
-bool _isWordCharacter(WordCharacterClassifier separators, int unit) =>
-    separators.isRegular(unit) && !_isIdeographic(unit);
 
 /// Whether [unit] belongs to a script whose words its characters end and
 /// begin: CJK ideographs and their radicals, kana, hangul, compatibility

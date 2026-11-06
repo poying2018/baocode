@@ -296,22 +296,20 @@ class SearchEngine {
   /// substring, [line] the entire string in which the potential whole word
   /// was found, [term] the substring that starts at searchIndex.
   bool _isWholeWord(int searchIndex, String line, String term) {
-    // A boundary only where the term's own edge is a character the non-word
-    // ones are drawn from (ASCII's): beside a Chinese one there is no
-    // boundary to be had, so `订单` in `查看订单列表` demanded a character
-    // that cannot exist and found nothing at all.
-    // A boundary only where the term's own edge is a character the non-word
-    // ones are drawn from (ASCII's): beside a Chinese one there is no
-    // boundary to be had, so `订单` in `查看订单列表` demanded a character
-    // that cannot exist and found nothing at all.
-    final before = term.isNotEmpty && term.codeUnitAt(0) < 0x80;
-    final after = term.isNotEmpty && term.codeUnitAt(term.length - 1) < 0x80;
-    return (!before ||
-            searchIndex == 0 ||
-            _isNonWordCharacter(line, searchIndex - 1)) &&
-        (!after ||
-            (searchIndex + term.length) == line.length ||
-            _isNonWordCharacter(line, searchIndex + term.length));
+    if (term.isEmpty) return true;
+
+    // A Chinese character is a word by itself: it bounds `订单` in
+    // `查看订单列表`, and also `order` in `订单order列表`.
+    final startsWithChinese = _isIdeographic(term.codeUnitAt(0));
+    final endsWithChinese = _isIdeographic(term.codeUnitAt(term.length - 1));
+    final left =
+        searchIndex == 0 ||
+        startsWithChinese ||
+        _isNonWordCharacter(line, searchIndex - 1);
+    final end = searchIndex + term.length;
+    final right =
+        end == line.length || endsWithChinese || _isNonWordCharacter(line, end);
+    return left && right;
   }
 
   /// `NON_WORD_CHARACTERS.includes(line[index])`: false past the ends, where
@@ -322,6 +320,15 @@ class SearchEngine {
     }
     return _Constants.nonWordCharacters.contains(line[index]);
   }
+
+  /// A character of a script whose words its characters end and begin:
+  /// CJK ideographs and their radicals, kana, hangul, compatibility
+  /// ideographs, CJK punctuation and fullwidth forms.
+  static bool _isIdeographic(int unit) =>
+      (unit >= 0x2e80 && unit <= 0x9fff) ||
+      (unit >= 0xac00 && unit <= 0xd7af) ||
+      (unit >= 0xf900 && unit <= 0xfaff) ||
+      (unit >= 0xff00 && unit <= 0xffef);
 
   /// Searches a line for a search term. Takes the provided terminal line and
   /// searches the text line, which may contain subsequent terminal lines if
