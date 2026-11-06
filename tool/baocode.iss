@@ -124,6 +124,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 DisableProgramGroupPage=yes
+; Windows 10 or later, as the download page and the README say: Flutter's
+; Windows build needs it, and the app would install on 8.1 and then not start.
+MinVersion=10.0
 ; A running BaoCode is asked to close (it quits on WM_ENDSESSION, see
 ; windows/runner/flutter_window.cpp), and ended if it does not: a version
 ; from before that, or one stuck, would otherwise hold Setup at "Closing
