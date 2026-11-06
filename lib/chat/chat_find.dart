@@ -95,7 +95,9 @@ class ChatFind extends ChangeNotifier {
     final query = text.text;
     if (query.isEmpty) return null;
     var source = regex ? query : RegExp.escape(query);
-    if (wholeWord) source = r'\b(?:' + source + r')\b';
+    if (wholeWord) {
+      source = regex ? r'\b(?:' + source + r')\b' : _wordBounded(query);
+    }
     try {
       final pattern = RegExp(source, caseSensitive: matchCase);
       // One matching nothing would match everywhere.
@@ -105,6 +107,28 @@ class ChatFind extends ChangeNotifier {
       return null;
     }
   }
+
+  /// [query] matched as a whole word: a boundary at each end that is a word
+  /// character's. `\b` is ASCII's alone, so a query of Chinese — or one
+  /// ending in `é` — matched nothing at all between two of them, the
+  /// conversation being Chinese text more often than not.
+  static String _wordBounded(String query) {
+    final escaped = RegExp.escape(query);
+    final before = _isWordCharacter(query.codeUnitAt(0))
+        ? r'(?<![A-Za-z0-9_])'
+        : '';
+    final after = _isWordCharacter(query.codeUnitAt(query.length - 1))
+        ? r'(?![A-Za-z0-9_])'
+        : '';
+    return '$before$escaped$after';
+  }
+
+  /// A character `\b` counts as a word's: `[A-Za-z0-9_]`.
+  static bool _isWordCharacter(int unit) =>
+      (unit >= 0x30 && unit <= 0x39) ||
+      (unit >= 0x41 && unit <= 0x5a) ||
+      (unit >= 0x61 && unit <= 0x7a) ||
+      unit == 0x5f;
 
   /// Shows the bar, focused, its text all selected; looking for [query]
   /// when given (a search's), its first match brought into view.

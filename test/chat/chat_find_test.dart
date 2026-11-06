@@ -100,6 +100,41 @@ bool _inView(WidgetTester tester, Finder finder) {
 }
 
 void main() {
+  test('a Chinese search finds its words with whole word on', () {
+    // `\b` is ASCII's: `\b订单\b` matches nothing, in Chinese text or in the
+    // word alone. Whole word is a boundary where a word character is.
+    final find = ChatFind();
+    addTearDown(find.dispose);
+    find.feed = _Feed([
+      UserMessageItem(
+        text: '查看订单列表，然后处理订单',
+        worked: const Duration(seconds: 1),
+      ),
+    ]);
+    find.show(query: '订单');
+    expect(find.matches, hasLength(2));
+    find.toggleWholeWord();
+    expect(find.matches, hasLength(2));
+
+    // A word's own boundaries still hold: half a word is no whole word.
+    find.text.text = 'order';
+    expect(find.matches, isEmpty);
+    find.hide();
+  });
+
+  test('whole word beside a letter of another alphabet', () {
+    // é ends `café`: no boundary after it, and none needed before it.
+    final find = ChatFind();
+    addTearDown(find.dispose);
+    find.feed = _Feed([
+      UserMessageItem(text: 'un café noir', worked: const Duration(seconds: 1)),
+    ]);
+    find.show(query: 'café');
+    find.toggleWholeWord();
+    expect(find.matches, hasLength(1));
+    find.hide();
+  });
+
   test('markdown is searched as it shows', () {
     final text = ChatFind.markdownText(
       '# Title\n\nSome **bold** `code` text<!-- hidden -->\n\n'
