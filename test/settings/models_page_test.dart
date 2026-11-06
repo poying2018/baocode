@@ -398,6 +398,34 @@ void main() {
     expect(find.text('Gateway · Flash'), findsOneWidget);
   });
 
+  testWidgets('models going by one name are told apart where they are '
+      'picked', (tester) async {
+    await providers.save(
+      const ModelProvider(
+        id: 'gw',
+        name: 'Gateway',
+        baseUrl: 'https://gw.example.com',
+        models: [
+          ProviderModel(id: 'congee/gpt-6.1-terra', label: 'GPT-6.1 Terra'),
+          ProviderModel(
+            id: 'github-copilot/gpt-6.1-terra',
+            label: 'GPT-6.1 Terra',
+          ),
+        ],
+      ),
+    );
+    await pump(tester);
+    await tester.tap(find.text('Last picked'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gateway').last);
+    await tester.pumpAndSettle();
+    expect(find.text('GPT-6.1 Terra (congee)'), findsOneWidget);
+    expect(
+      find.text('GPT-6.1 Terra (github-copilot)'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a model is added by hand, and edited', (tester) async {
     await providers.save(
       const ModelProvider(

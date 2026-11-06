@@ -3104,7 +3104,7 @@ class ClaudeCodeKernel
           for (final info in provider.enabledModels)
             KernelOption(
               modelRef(provider.id, info.id),
-              info.displayName,
+              provider.labelOf(info),
               Icons.hub_outlined,
               [
                 info.id,

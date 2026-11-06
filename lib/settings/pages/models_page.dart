@@ -213,7 +213,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
     final l10n = context.l10n;
     if (value == null) return l10n.modelsDefaultLast;
     if (_providers.resolve(value) case (final provider, final model)) {
-      return '${provider.name} · ${model.displayName}';
+      return '${provider.name} · ${provider.labelOf(model)}';
     }
     if (value == 'default') return l10n.modelsBuiltinDefault;
     return value;
@@ -263,7 +263,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
       (_, null) => l10n.modelsImageNone,
       (final String picked, (:final provider, :final model))
           when modelRef(provider.id, model.id) == picked =>
-        '${provider.name} · ${model.displayName}',
+        '${provider.name} · ${provider.labelOf(model)}',
       _ => l10n.modelsImageFirst,
     };
     void set(String? model) => unawaited(_providers.setImageModel(model));
@@ -292,7 +292,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
               submenu: [
                 for (final model in provider.imageModels)
                   IdeMenuAction(
-                    model.displayName,
+                    provider.labelOf(model),
                     checked: current == modelRef(provider.id, model.id),
                     onSelected: () => set(modelRef(provider.id, model.id)),
                   ),
@@ -354,7 +354,7 @@ class _ModelsSettingsPageState extends State<ModelsSettingsPage> {
                       submenu: [
                         for (final model in provider.enabledModels)
                           IdeMenuAction(
-                            model.displayName,
+                            provider.labelOf(model),
                             checked: current == modelRef(provider.id, model.id),
                             onSelected: () => unawaited(
                               _providers.setDefaultModel(
@@ -1356,9 +1356,12 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
       final missing = picked != null && pickedModel == null;
       final shown = switch (current) {
         _ when pickedModel != null =>
-          '${pickedProvider!.name} · ${pickedModel.displayName}',
+          '${pickedProvider!.name} · ${pickedProvider.labelOf(pickedModel)}',
         _ when picked != null => picked.model,
-        final id? => provider.model(id)?.displayName ?? id,
+        final id? => switch (provider.model(id)) {
+          final model? => provider.labelOf(model),
+          null => id,
+        },
         null => l10n.modelsRoleUnset,
       };
       Widget caution(String text) => Row(
@@ -1413,7 +1416,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
             ),
             const IdeMenuSeparator(),
             for (final model in provider.enabledModels)
-              pick(model.displayName, model.id),
+              pick(provider.labelOf(model), model.id),
             if (elsewhere && others.isNotEmpty) ...[
               const IdeMenuSeparator(),
               for (final other in others)
@@ -1422,7 +1425,7 @@ class _ProviderSettingsPageState extends State<ProviderSettingsPage> {
                   checked: picked?.provider == other.id,
                   submenu: [
                     for (final model in other.enabledModels)
-                      pick(model.displayName, modelRef(other.id, model.id)),
+                      pick(other.labelOf(model), modelRef(other.id, model.id)),
                   ],
                 ),
             ],
