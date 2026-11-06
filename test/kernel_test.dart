@@ -31,7 +31,7 @@ import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/kernel/queued_messages.dart';
 import 'package:baocode/kernel/transcript.dart';
 
-/// Lines Claude Code 2.1.281 printed (recorded, with paths and account
+/// Lines Claude Code 2.1.311 printed (recorded, with paths and account
 /// details replaced).
 List<Map<String, Object?>> recorded(String name) => [
   for (final line in File(

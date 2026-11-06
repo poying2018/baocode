@@ -401,7 +401,7 @@ flutter test test/e2e_claude_real_test.dart
 | `test/remote/remote_claude_install_test.dart` | 远端安装 |
 | `test/kernel/kernel_product_test.dart` | 两个产品的内核隔离 |
 
-Mock 传输 `mock_claude_code_transport.dart` 的报文录自真实 CLI 2.1.281，覆盖 20 余种
+Mock 传输 `mock_claude_code_transport.dart` 的报文录自真实 CLI 2.1.311，覆盖 20 余种
 control subtype。**改协议后要同步更新 mock**，否则测试会静默走不到新路径。
 
 ---

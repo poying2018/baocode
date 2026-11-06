@@ -5,7 +5,7 @@ import 'claude_code_translator.dart';
 import 'claude_code_transport.dart';
 
 /// Plays [MockScript] as Claude Code prints it, for tests and demos: the
-/// same message shapes as the CLI (recorded from 2.1.281), answering the
+/// same message shapes as the CLI (recorded from 2.1.311), answering the
 /// control requests a session makes. Questions and plans wait on
 /// `can_use_tool` like the real thing; other tools are allowed.
 class MockClaudeCodeTransport implements ClaudeCodeTransport {
