@@ -85,4 +85,21 @@ void main() {
     expect(id, hasLength(32));
     expect(RegExp(r'^[a-p]{32}$').hasMatch(id), isTrue);
   });
+
+  test('the extension asks for the hosts the products register', () {
+    // The names it knows are written into it, and it is published on its own
+    // (extension-v* tags): a product whose host is renamed without it never
+    // being published again would find no host, silently.
+    final background = File(
+      'browser_extension/background.js',
+    ).readAsStringSync();
+    final list = RegExp(
+      r'const HOSTS = \[([^\]]*)\]',
+    ).firstMatch(background)!.group(1)!;
+    final hosts = {
+      for (final match in RegExp(r"'([^']+)'").allMatches(list))
+        match.group(1)!,
+    };
+    expect(hosts, {for (final product in Product.all) product.browserHost});
+  });
 }
