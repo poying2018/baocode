@@ -10,6 +10,7 @@ import 'dart:io';
 import 'package:baocode/channel/channel_setup.dart';
 import 'package:baocode/models/featured_upstreams.dart';
 import 'package:baocode/platform/app_links.dart';
+import 'package:baocode/update/update_manifest.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -22,6 +23,17 @@ void main() {
   test('the app reads this repository, on this branch', () {
     expect(AppLinks.siteBase.path, endsWith('/poying2018/baocode/main/site/'));
     expect(AppLinks.siteBase.path, endsWith('/'));
+  });
+
+  test('the site offers the version the app checks for', () {
+    // The download page fills in what it says from the site's own manifest:
+    // the app's, in this repository's releases. Two addresses, one fact.
+    final script = File(p.join('site', 'site.js')).readAsStringSync();
+    final own = RegExp(r"const OWN_MANIFEST = '([^']+)'")
+        .firstMatch(script)
+        ?.group(1);
+    expect(own, isNotNull, reason: 'site/site.js');
+    expect(Uri.parse(own!), Uri.parse(defaultManifestUrl));
   });
 
   test("the channels' list is one every channel in it parses", () {
