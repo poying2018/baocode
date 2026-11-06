@@ -72,7 +72,10 @@ class FileLink {
       return range == null ? _withSuffix(path) : FileLink(path, range);
     }
     final hash = text.indexOf('#');
-    final path = _decode(hash < 0 ? text : text.substring(0, hash));
+    var path = _decode(hash < 0 ? text : text.substring(0, hash));
+    // `/C:/a.dart`: a Windows path written with a leading slash, not a folder
+    // named `C:` under the root. As a `file:///C:/a.dart` one comes.
+    if (_rootedDrive.hasMatch(path)) path = path.substring(1);
     if (path.isEmpty) return null;
     if (hash >= 0) {
       final range = _fragment(text.substring(hash + 1));
@@ -123,6 +126,9 @@ class FileLink {
   /// A scheme (`https:`, `vscode:`); a drive (`C:`) is not one.
   static final _scheme = RegExp(r'^([A-Za-z][A-Za-z0-9+.-]*):');
   static final _drive = RegExp(r'^[A-Za-z]:([/\\]|$)');
+
+  /// A drive's path with a folder's slash before it (`/C:/`).
+  static final _rootedDrive = RegExp(r'^/[A-Za-z]:[/\\]');
 
   /// `L12`, `L12-L20`, `L12-20`, `L12C5`, `12`; null for a heading's.
   static FileLineRange? _fragment(String? fragment) {

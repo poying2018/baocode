@@ -80,6 +80,21 @@ void main() {
         FileLink.parseHref('file:///C:/p/a.dart'),
         const FileLink('C:/p/a.dart'),
       );
+      // A Windows path written with a folder's slash before it, as an agent
+      // on Windows may: the drive's, not a folder named `C:`.
+      expect(
+        FileLink.parseHref('/C:/p/a.dart'),
+        const FileLink('C:/p/a.dart'),
+      );
+      expect(
+        FileLink.parseHref('/C:/p/a.dart#L2'),
+        const FileLink('C:/p/a.dart', FileLineRange(2)),
+      );
+      // Still another machine's root, and not one of its drives'.
+      expect(
+        FileLink.parseHref('/home/me/p/a.dart'),
+        const FileLink('/home/me/p/a.dart'),
+      );
     });
 
     test('spaces, escaped or in angle brackets', () {
