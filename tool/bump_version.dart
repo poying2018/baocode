@@ -69,8 +69,18 @@ Future<void> main(List<String> arguments) async {
   stdout
     ..writeln('$current -> $next')
     ..writeln('  ${pubspec.path}')
-    ..writeln('  ${source.path}')
-    ..writeln();
+    ..writeln('  ${source.path}');
+  // The site says a version too, for when its script cannot fill it in: the
+  // download page's and the front page's, in both languages.
+  for (final name in siteVersionPages) {
+    final page = File('${root.path}/$name');
+    final text = page.readAsStringSync();
+    final rewritten = rewriteSiteVersion(text, next.marketing);
+    if (rewritten == text) continue;
+    page.writeAsStringSync(rewritten);
+    stdout.writeln('  ${page.path}');
+  }
+  stdout.writeln();
   draftReleaseNotes(Directory(root.path), next.marketing);
   stdout
     ..writeln()
@@ -80,6 +90,28 @@ Future<void> main(List<String> arguments) async {
       '  git tag v${next.marketing} && git push origin v${next.marketing}',
     );
 }
+
+/// The pages that name the app's version themselves, for the reader without
+/// the script that fills them in (site/site.js): both languages' front and
+/// download pages.
+const siteVersionPages = [
+  'site/index.html',
+  'site/zh/index.html',
+  'site/download.html',
+  'site/zh/download.html',
+];
+
+/// [html] with the version it says the app is — `data-version`'s text and the
+/// file link's `BaoCode <version>` — as [marketing]; the rest as it was.
+String rewriteSiteVersion(String html, String marketing) => html
+    .replaceAllMapped(
+      RegExp(r'(data-version>)([^<]*?)(\d+\.\d+\.\d+)'),
+      (match) => '${match[1]}${match[2]}$marketing',
+    )
+    .replaceAllMapped(
+      RegExp(r'(>BaoCode )(\d+\.\d+\.\d+)(<)'),
+      (match) => '${match[1]}$marketing${match[3]}',
+    );
 
 Never _fail(String message) {
   stderr.writeln(message);
