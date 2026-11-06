@@ -121,6 +121,15 @@ void FlutterWindow::OnDestroy() {
   open_requests_ = nullptr;
   attention_ = nullptr;
   logs_ = nullptr;
+  // Ended unasked (WM_ENDSESSION), Dart had no say: what it keeps running
+  // is still there, the LAN broadcast first (LinkHost.stopAdvertising, from
+  // onExitRequested). Its plugin lets its channel go only in the engine's
+  // teardown, after the messenger: a crash at every shutdown
+  // (flutter_windows.dll+0x1551f, read of 0x1e8). The system would end the
+  // process next anyway; it ends here, with the native side above done.
+  if (session_ending_) {
+    ::TerminateProcess(::GetCurrentProcess(), 0);
+  }
   if (flutter_controller_) {
     // Native child destruction can re-enter this window's message handler.
     auto controller = std::move(flutter_controller_);
@@ -187,6 +196,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   // with it, which left the app running and the installer unable to close
   // it. What it ran (agents, terminals) is ended at the next launch.
   if (message == WM_ENDSESSION && wparam) {
+    session_ending_ = true;
     ::DestroyWindow(hwnd);
     return 0;
   }
