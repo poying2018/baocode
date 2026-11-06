@@ -181,23 +181,12 @@ class TaskManager {
     task.process = process;
     unawaited(process.stdin.close().catchError((_) {}));
     final sink = File(task.outputFile).openWrite(mode: FileMode.append);
-    final written = Future.wait([
-      process.stdout.listen(sink.add).asFuture<void>(),
-      process.stderr.listen(sink.add).asFuture<void>(),
-    ]);
+    final output = ProcessOutput(process, stdout: sink.add, stderr: sink.add);
     _started(task);
     unawaited(() async {
       final code = await process.exitCode;
       try {
-        // The output is written as it comes; a pipe that stays open (a
-        // child that outlived its shell) does not hold the task's end
-        // back.
-        await written
-            .catchError((_) => <void>[])
-            .timeout(
-              const Duration(seconds: 2),
-              onTimeout: () => <void>[],
-            );
+        await output.ended();
         await sink.flush().catchError((_) {});
         await sink.close().catchError((_) {});
       } catch (_) {
@@ -379,6 +368,8 @@ class TaskManager {
     if (!task.isShell) finish(task, TaskStatus.killed);
     // A shell's end is noted when its process exits: soon after.
     await task.done.timeout(const Duration(seconds: 3), onTimeout: () {});
+    // It may not exit when killed; the host must not show it running on.
+    finish(task, TaskStatus.killed);
     return true;
   }
 

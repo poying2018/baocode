@@ -3,6 +3,44 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+/// The output of a process, read as it comes.
+///
+/// A child that outlives the process can hold the pipes open, so [ended]
+/// stops reading after [grace] instead of waiting for the pipes to close.
+class ProcessOutput {
+  ProcessOutput(
+    this.process, {
+    required this.stdout,
+    required this.stderr,
+  }) {
+    _reading = [
+      process.stdout.listen(stdout),
+      process.stderr.listen(stderr),
+    ];
+    _ended = Future.wait([for (final read in _reading) read.asFuture<void>()]);
+  }
+
+  final Process process;
+  final void Function(List<int> bytes) stdout;
+  final void Function(List<int> bytes) stderr;
+
+  late final List<StreamSubscription<List<int>>> _reading;
+  late final Future<void> _ended;
+
+  /// Waits for the output to close, for [grace] at most.
+  Future<void> ended({
+    Duration grace = const Duration(seconds: 2),
+  }) async {
+    try {
+      await _ended.timeout(grace);
+    } on TimeoutException {
+      await Future.wait([for (final read in _reading) read.cancel()]);
+    } on Object {
+      // A broken pipe: all that came was read.
+    }
+  }
+}
+
 /// Ends the process [pid] and every process it started, as a command's
 /// shell leaves its children running when only it is killed. [windows]
 /// for Windows' way of it (where this runs, when not given).

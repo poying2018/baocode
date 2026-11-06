@@ -204,10 +204,11 @@ End with the pull request's URL, for the user to open.''';
     final shown = Timer(foregroundTaskAfter, () {
       if (running.task == null) session.tasks.registerForeground(running);
     });
-    final streams = Future.wait([
-      process.stdout.listen(running.addStdout).asFuture<void>(),
-      process.stderr.listen(running.addStderr).asFuture<void>(),
-    ]);
+    final output = ProcessOutput(
+      process,
+      stdout: running.addStdout,
+      stderr: running.addStderr,
+    );
     var timedOut = false;
     var interrupted = false;
     final ended = Completer<String>();
@@ -238,14 +239,7 @@ End with the pull request's URL, for the user to open.''';
         final task = running.task!;
         unawaited(() async {
           final code = await process.exitCode;
-          // A pipe that stays open (a child that outlived its shell) does
-          // not hold the task's end back.
-          await streams
-              .catchError((_) => <void>[])
-              .timeout(
-                const Duration(seconds: 2),
-                onTimeout: () => <void>[],
-              );
+          await output.ended();
           await running.closeSink();
           task.exitCode = code;
           session.tasks.finish(
@@ -272,9 +266,7 @@ End with the pull request's URL, for the user to open.''';
         return -9;
       },
     );
-    await streams
-        .timeout(const Duration(seconds: 2), onTimeout: () => [])
-        .catchError((_) => <void>[]);
+    await output.ended();
     session.tasks.foreground.remove(context.toolUseId);
     if (running.registered case final task?) {
       task.exitCode = code;
