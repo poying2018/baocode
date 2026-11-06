@@ -31,10 +31,12 @@ class _Servers {
   /// Each token a request to `/mcp` came with.
   final List<String?> seen = [];
   final List<String?> deletedSessions = [];
+  void Function(HttpRequest request)? onMessage;
   String? challenge;
   bool added = false;
   final Map<String, Completer<Map<String, Object?>>> _answers = {};
   HttpResponse? _sse;
+  final List<int> lengths = [];
 
   Future<void> close() => _http.close(force: true);
 
@@ -110,6 +112,7 @@ class _Servers {
         _sse = response;
         return;
       case ('POST', '/messages'):
+        onMessage?.call(request);
         final message = jsonDecode(await utf8.decodeStream(request)) as Map;
         response.statusCode = 202;
         await response.close();
@@ -153,6 +156,11 @@ class _Servers {
 
   Future<void> _mcp(HttpRequest request) async {
     final response = request.response;
+    final length =
+        request.headers.contentLength >= 0
+        ? request.headers.contentLength
+        : null;
+    lengths.add(length ?? -1);
     final auth = request.headers.value('authorization');
     final token = auth?.replaceFirst('Bearer ', '');
     seen.add(token);
@@ -163,6 +171,11 @@ class _Servers {
         'www-authenticate',
         'Bearer resource_metadata="$base/.well-known/oauth-protected-resource/mcp"',
       );
+      return response.close();
+    }
+    if (length == null) {
+      await utf8.decodeStream(request);
+      response.statusCode = HttpStatus.lengthRequired;
       return response.close();
     }
     final message = (jsonDecode(await utf8.decodeStream(request)) as Map)
@@ -318,6 +331,7 @@ void main() {
     expect((await statusOf('secure'))['status'], 'connected');
     // Its first token had expired: refreshed before it was used.
     expect(servers.seen.whereType<String>(), everyElement('at2'));
+    expect(servers.lengths, everyElement(greaterThan(0)));
 
     final elicited = <Map<String, Object?>>[];
     h.onRequest = (request) async {
@@ -382,6 +396,10 @@ void main() {
   });
 
   test('the older HTTP+SSE transport', () async {
+    final lengths = <int>[];
+    servers.onMessage = (request) {
+      lengths.add(request.headers.contentLength);
+    };
     h = await Harness.start(
       flagSettings: {
         'mcpServers': {
@@ -398,6 +416,8 @@ void main() {
       jsonEncode(h.toolResults.single['content']),
       contains('echo {\\"say\\":\\"hi\\"}'),
     );
+    expect(lengths, isNotEmpty);
+    expect(lengths, everyElement(greaterThan(0)));
   });
 
   test('a server that cannot start is failed, with why', () async {

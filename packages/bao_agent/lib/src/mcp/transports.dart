@@ -216,7 +216,9 @@ class StreamableHttpTransport extends McpTransport {
     request.headers
       ..set(HttpHeaders.contentTypeHeader, 'application/json')
       ..set(HttpHeaders.acceptHeader, 'application/json, text/event-stream');
-    request.add(utf8.encode(jsonEncode(message)));
+    final payload = utf8.encode(jsonEncode(message));
+    request.contentLength = payload.length;
+    request.add(payload);
     final response = await request.close();
     if (response.headers.value('mcp-session-id') case final id?) {
       _sessionId = id;
@@ -376,7 +378,9 @@ class SseTransport extends McpTransport {
     if (endpoint == null) throw const JsonRpcError('Not connected');
     final request = await _request('POST', endpoint);
     request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-    request.add(utf8.encode(jsonEncode(message)));
+    final body = utf8.encode(jsonEncode(message));
+    request.contentLength = body.length;
+    request.add(body);
     final response = await request.close();
     await response.drain<void>();
     if (response.statusCode == 401) {

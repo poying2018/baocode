@@ -235,9 +235,12 @@ Future<McpProbeResult> _probeRemote(
     );
     if (!sse) {
       // `application/json` alone, as Claude Code sends it: some servers
-      // refuse it with a charset (HTTP 415).
+      // refuse it with a charset (HTTP 415), and a body not sized ahead
+      // (HTTP 411).
       request.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-      request.add(utf8.encode(_initialize));
+      final body = utf8.encode(_initialize);
+      request.contentLength = body.length;
+      request.add(body);
     }
     final response = await request.close().timeout(timeout);
     final status = response.statusCode;
