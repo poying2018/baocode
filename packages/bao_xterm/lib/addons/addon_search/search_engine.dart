@@ -296,8 +296,21 @@ class SearchEngine {
   /// substring, [line] the entire string in which the potential whole word
   /// was found, [term] the substring that starts at searchIndex.
   bool _isWholeWord(int searchIndex, String line, String term) {
-    return ((searchIndex == 0) || _isNonWordCharacter(line, searchIndex - 1)) &&
-        (((searchIndex + term.length) == line.length) ||
+    // A boundary only where the term's own edge is a character the non-word
+    // ones are drawn from (ASCII's): beside a Chinese one there is no
+    // boundary to be had, so `订单` in `查看订单列表` demanded a character
+    // that cannot exist and found nothing at all.
+    // A boundary only where the term's own edge is a character the non-word
+    // ones are drawn from (ASCII's): beside a Chinese one there is no
+    // boundary to be had, so `订单` in `查看订单列表` demanded a character
+    // that cannot exist and found nothing at all.
+    final before = term.isNotEmpty && term.codeUnitAt(0) < 0x80;
+    final after = term.isNotEmpty && term.codeUnitAt(term.length - 1) < 0x80;
+    return (!before ||
+            searchIndex == 0 ||
+            _isNonWordCharacter(line, searchIndex - 1)) &&
+        (!after ||
+            (searchIndex + term.length) == line.length ||
             _isNonWordCharacter(line, searchIndex + term.length));
   }
 

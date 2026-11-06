@@ -181,6 +181,22 @@ void main() {
           },
         );
 
+        test('a Chinese word is found beside Chinese characters', () async {
+          // No spaces between the words, and no non-word character to be a
+          // boundary: the term's own edge is not one that a boundary is
+          // drawn around.
+          await writeP(terminal, '查看订单列表');
+
+          final result = searchEngine.find(
+            '订单',
+            0,
+            0,
+            ISearchOptions(wholeWord: true),
+          );
+          expect(result, isNotNull);
+          expect(result!.term, '订单');
+        });
+
         test('should find word at beginning of line with wholeWord', () async {
           await writeP(terminal, 'world is great');
 
