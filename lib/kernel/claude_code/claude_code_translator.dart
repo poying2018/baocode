@@ -18,14 +18,28 @@ import 'turn_stats.dart';
 /// and block, tool use id, message uuid), so translating a message twice,
 /// e.g. streamed and then whole, lands on the same items.
 class ClaudeTranslator {
-  ClaudeTranslator({required this.emit, required this.nextSeq, this.goalSaid});
+  ClaudeTranslator({
+    required this.emit,
+    required this.nextSeq,
+    this.goalSaid,
+    this.ownModel,
+  });
 
   final void Function(KernelEvent event) emit;
   final int Function() nextSeq;
 
+  /// A subagent's model, as its upstream answered it (a bare id), as the
+  /// session's upstream's [modelRef] where that upstream has it: another
+  /// upstream of a model of that id is not the one it ran on.
+  final String Function(String model)? ownModel;
+
   /// Claude Code said something of the goal, live: how it stands is to be
   /// asked afresh (see claude_goal.dart).
   final void Function()? goalSaid;
+
+  String _ownModel(String model) => ownModel?.call(model) ?? model;
+
+  String? _ownModelOf(String? model) => model == null ? null : _ownModel(model);
 
   /// What a question was answered with in full access, the user not asked,
   /// as earlier versions did: a question so answered shows as skipped.
@@ -689,6 +703,17 @@ class ClaudeTranslator {
     final messageId = body['id'] as String? ?? '${message['uuid']}';
     final eventId = message['uuid'] as String? ?? messageId;
     final synthetic = body['model'] == '<synthetic>';
+    // A subagent's: the model it runs on, as the upstream answered.
+    if (_agents[parent] case final agent? when !synthetic) {
+      if (_string(body['model']) case final answered?
+          when answered.isNotEmpty) {
+        final model = _ownModel(answered);
+        if (model != agent.item.model) {
+          agent.item = agent.item.copyWith(model: model);
+          _putAgent(parent!);
+        }
+      }
+    }
     for (final (index, raw) in _list(body['content']).indexed) {
       final block = _map(raw);
       final kind = block['type'] == 'text' ? 'text' : 'thinking';
@@ -1263,7 +1288,7 @@ class ClaudeTranslator {
           // id, where its output goes). It reports in a notification.
           agent.item = agent.item.copyWith(
             prompt: _string(structured?['prompt']),
-            model: _string(structured?['resolvedModel']),
+            model: _ownModelOf(_string(structured?['resolvedModel'])),
             background: true,
           );
           _putAgent(id);
@@ -1284,7 +1309,7 @@ class ClaudeTranslator {
             final int ms => Duration(milliseconds: ms),
             _ => null,
           },
-          model: _string(structured?['resolvedModel']),
+          model: _ownModelOf(_string(structured?['resolvedModel'])),
         );
         _putAgent(id);
         return;
