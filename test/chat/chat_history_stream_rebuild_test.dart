@@ -185,4 +185,36 @@ void main() {
     await tester.pump();
     expect(take(), 1, reason: "a step's news waits for no frame");
   });
+
+  testWidgets("behind another window's, the words come a fourth as often", (
+    tester,
+  ) async {
+    final feed = await _mount(tester);
+    final take = _countRebuilds(tester);
+
+    // The turn starting is news, as ever.
+    feed.streaming = true;
+    feed.notifyListeners();
+    await tester.pump();
+    take();
+
+    // Another window in front: what changes is barely watched, and the CPU
+    // is the agents' — a fourth as often (250 ms, not 66).
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+
+    feed.word(' one');
+    await tester.pump();
+    expect(take(), 0, reason: 'a word asks for no rebuild of its own');
+
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(take(), 0, reason: 'not yet: a quarter as often as in front');
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(take(), 1, reason: 'the words show, once, 250 ms on');
+  });
 }
