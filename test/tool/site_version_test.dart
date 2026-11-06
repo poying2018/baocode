@@ -45,4 +45,24 @@ void main() {
     // A version the page says of something else is its own.
     expect(rewritten, contains('Linux 1.6.0'));
   });
+
+  test('the update date is the manifest\'s, not written into the page', () {
+    // When it is published is a fact of the release (its `pubDate`, in the
+    // manifest): a date written into the page goes stale at once, and the
+    // reader it reaches is the one the script could not reach.
+    for (final file in Directory('site')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.html'))) {
+      for (final match in RegExp(
+        r'<span data-updated>([^<]*)</span>',
+      ).allMatches(file.readAsStringSync())) {
+        expect(
+          match.group(1),
+          isEmpty,
+          reason: '${file.path}: the date comes from the manifest',
+        );
+      }
+    }
+  });
 }
