@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/chat_feed.dart';
@@ -214,6 +215,69 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(take(), 0, reason: 'not yet: a quarter as often as in front');
 
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(take(), 1, reason: 'the words show, once, 250 ms on');
+  });
+
+  testWidgets('read up from the turn under way, the words come that often too', (
+    tester,
+  ) async {
+    // A long conversation, read further up while the agent still streams.
+    List<ChatItem> turn(int n) => [
+      UserMessageItem(text: 'Question $n'),
+      for (var i = 0; i < 40; i++) ...[
+        ToolCallItem(kind: ToolKind.read, target: 't${n}_$i.dart'),
+        AssistantTextItem('Turn $n step $i.'),
+      ],
+      AssistantTextItem('Answer $n.'),
+    ];
+    tester.view.physicalSize = const Size(1000, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final feed = _StreamFeed(
+      [for (var n = 0; n < 40; n++) ...turn(n)],
+      streaming: true,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: Scaffold(body: ChatHistoryView(feed: feed)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Read up: the wheel, as a trackpad's or a mouse's.
+    for (var i = 0; i < 2; i++) {
+      tester.binding.handlePointerEvent(
+        PointerScrollEvent(
+          position: tester.getCenter(find.byType(ChatHistoryView)),
+          scrollDelta: const Offset(0, -900),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+    final position = tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position;
+    expect(
+      position.pixels,
+      lessThan(position.maxScrollExtent),
+      reason: 'read up from the turn, not at its end',
+    );
+
+    final take = _countRebuilds(tester);
+    // News (a new item) resets the wait, as it is built at once.
+    feed.items = [...feed.items, const AssistantTextItem('Live')];
+    feed.notifyListeners();
+    await tester.pump();
+    take();
+
+    feed.word(' one');
+    await tester.pump();
+    expect(take(), 0, reason: 'a word asks for no rebuild of its own');
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(take(), 0, reason: 'not yet: read up, a quarter as often');
     await tester.pump(const Duration(milliseconds: 200));
     expect(take(), 1, reason: 'the words show, once, 250 ms on');
   });
