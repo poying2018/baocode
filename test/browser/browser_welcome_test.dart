@@ -59,7 +59,9 @@ void main() {
   });
 
   testWidgets('the step turns to the browser once it connects', (tester) async {
-    final temp = Directory('/tmp').createTempSync('bao-');
+    // Windows has no /tmp; its own temp is short enough for a socket's path.
+    final temp = (Platform.isWindows ? Directory.systemTemp : Directory('/tmp'))
+        .createTempSync('bao-');
     BrowserBridge.socketFolder = temp.path;
     BrowserBridge.home = temp.path;
     addTearDown(() {

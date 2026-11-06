@@ -161,7 +161,10 @@ void main() {
       });
       final page = 'http://127.0.0.1:${server.port}/';
 
-      final sockets = Directory('/tmp').createTempSync('bao-');
+      // Windows has no /tmp; its own temp is short enough for a socket's path.
+      final sockets =
+          (Platform.isWindows ? Directory.systemTemp : Directory('/tmp'))
+              .createTempSync('bao-');
       addTearDown(() => sockets.deleteSync(recursive: true));
       BrowserBridge.socketFolder = sockets.path;
       final bridge = BrowserBridge.instance;
