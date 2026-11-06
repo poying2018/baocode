@@ -120,13 +120,20 @@ void main() {
     expect(find.text('CRLF'), findsOneWidget);
     expect(find.text('Dart'), findsOneWidget);
 
-    _editorField(tester).controller!.selection = const TextSelection(
-      baseOffset: 5,
-      extentOffset: 7,
+    // Two characters of the second line, wherever its line break falls: the
+    // file's CRLF, kept as the file's, makes an offset counted from the text's
+    // start land inside the break on one platform's reading and past it on
+    // another's, and a selection across a break is two lines, rightly so.
+    final text = _editorField(tester).controller!.text;
+    final two = text.indexOf('two');
+    expect(two, greaterThan(0), reason: text);
+    _editorField(tester).controller!.selection = TextSelection(
+      baseOffset: two,
+      extentOffset: two + 2,
     );
     await tester.pump();
     await tester.pump();
-    expect(find.text('Ln 2, Col 2 (2 selected)'), findsOneWidget);
+    expect(find.text('Ln 2, Col 3 (2 selected)'), findsOneWidget);
 
     await chord(tester, LogicalKeyboardKey.tab, control: true);
     await tester.pump();
