@@ -3,13 +3,17 @@
 BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出问题怎么查，以及以后改代码时要注意什么。版本号怎么定、怎么发版、CI 和 Cloudflare 怎么配，见 [release.md](release.md)。
 
 > **这个 fork 只发 Windows 版。** 下面讲 macOS 的那些段落，说的是上游的做法
-> （`dl.baocode.dev`、R2、dmg 与公证），在这里不适用：更新源是本仓库的
-> `releases/latest/download/latest.json`，只发 Windows 安装包，manifest 里没有
-> `macos-*` 的键。应用代码里的 macOS 分支留着（`lib/update/installer_io.dart` 等），
-> 但没有 macOS 版可发，那条路走不到。
+> （dmg、公证、R2 上的 `dl.baocode.dev` 目录树），对**应用自己的更新**不适用：
+> 更新源是本仓库的 `releases/latest/download/latest.json`，只发 Windows 安装包，
+> manifest 里没有 `macos-*` 的键。应用代码里的 macOS 分支留着
+> （`lib/update/installer_io.dart` 等），但没有 macOS 版可发，那条路走不到。
+>
+> `dl.baocode.dev`（R2）**仍在使用**，但只给**浏览器扩展和手机版**用，应用的更新
+> 不走那里，见 [extensions.md](extensions.md) 与 release.md 7.2 节。
 
 - 更新服务器：本仓库自己的 GitHub Releases（`releases/latest/download/latest.json`）。
-  `dl.baocode.dev` 是上游的域名，这个 fork 不用它
+  应用的更新不走 `dl.baocode.dev`——那个 R2 渠道只给浏览器扩展和手机版（见
+  [extensions.md](extensions.md)）
 - 平台：Windows（x64）一个包（macOS 不再构建，见上）
 - 代码：`lib/update/`，测试：`test/update/`，发布工具：`tool/release_manifest.dart`
 
@@ -43,7 +47,7 @@ BaoCode 的自动检查与升级：怎么工作、服务端约定、签名、出
 | CI 构建与发布 | 已完成：`.github/workflows/release.yml`，见 [release.md](release.md) |
 | macOS 打包（dmg + 更新用 zip） | 上游的做法（`tool/build_macos.dart`）**在这个 fork 里没有** |
 | macOS 代码签名与公证 | 脚本已支持；**等 Apple 开发者账号**，见 [release.md 7.3](release.md#73-applemacos-签名与公证) |
-| dl.baocode.dev（R2） | **不需要**：那是上游的渠道，本仓库发在自己的 GitHub Releases 上 |
+| dl.baocode.dev（R2） | **应用更新不用**：应用发在本仓库的 GitHub Releases 上。扩展与手机版仍走那个渠道，见 [extensions.md](extensions.md) |
 | 真机端到端验证 | **未做**：见第 11 节 |
 
 签名密钥已经生成：私钥在 `~/.baocode-release/update-signing.key`（不在仓库里），公钥写在 `lib/update/update_signature.dart`。
