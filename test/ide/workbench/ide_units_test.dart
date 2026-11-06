@@ -38,6 +38,35 @@ void main() {
       expect(start.score, greaterThan(middle.score));
     });
 
+    test('a Chinese name matches its own characters', () {
+      // This fork's projects are named in Chinese as often as not: a file
+      // in such a folder is found by its characters, and by no other word's.
+      final match = ideFuzzyMatch('订单', 'src/订单列表.vue')!;
+      expect(match.positions, [4, 5]);
+      final name = scoreFilePath('订单', 'src/订单列表.vue')!;
+      expect(name.label, [0, 1]);
+      expect(ideFuzzyMatch('订单', 'src/交付单.vue'), isNull);
+      expect(
+        ideFuzzyMatch('订单列表', '订单列表.vue')!.score,
+        greaterThan(ideFuzzyMatch('订单', '订单列表.vue')!.score),
+      );
+    });
+
+    test("a Windows path typed in: the drive's colon is no line", () {
+      final address = IdeQuickOpenQuery.parse(r'C:\repo\lib\a.dart:12:5');
+      expect(address.filter, 'C:/repo/lib/a.dart');
+      expect(address.line, 12);
+      expect(address.column, 5);
+
+      final chinese = IdeQuickOpenQuery.parse(r'D:\项目\订单列表.vue');
+      expect(chinese.filter, 'D:/项目/订单列表.vue');
+      expect(chinese.line, isNull);
+
+      final atLine = IdeQuickOpenQuery.parse(r'D:\项目\订单束.vue:3');
+      expect(atLine.filter, 'D:/项目/订单束.vue');
+      expect(atLine.line, 3);
+    });
+
     test('file names outrank folder matches; paths split positions', () {
       final name = scoreFilePath('edit', 'lib/ide/ide_editor.dart')!;
       final folder = scoreFilePath('edit', 'lib/editor/x/main.dart')!;
