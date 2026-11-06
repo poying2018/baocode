@@ -1116,7 +1116,15 @@ class ClaudeCodeKernel
 
   @override
   void sendQueuedNow(String turnId) {
-    if (!_queued.contains(turnId) || !_running) return;
+    if (!_queued.contains(turnId)) return;
+    if (!_running) {
+      // The queue is shown before the process finishes starting. Keep the
+      // request behind its pending writes, then check the queue again.
+      _whenReady((_) {
+        if (_running) sendQueuedNow(turnId);
+      });
+      return;
+    }
     final others = [
       for (final id in _queued)
         if (id != turnId) id,
