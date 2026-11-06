@@ -49,6 +49,52 @@ List<(int, int, int, int)> coordinates(List<FindMatch> matches) => [
       );
 
 void main() {
+  group('whole word beside Chinese text', () {
+    // The separators are spaces and ASCII punctuation's: a Chinese character
+    // is not one, and the word it is must not need one beside it.
+    test('a Chinese word in a line of Chinese', () {
+      final b = buffer('查看订单列表');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('订单', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        [(1, 3, 1, 5)],
+      );
+    });
+
+    test("an ASCII word beside a Chinese character is the word's own", () {
+      final b = buffer('订单order列表');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('order', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        [(1, 3, 1, 8)],
+      );
+    });
+
+    test('half an ASCII word is still no whole word', () {
+      final b = buffer('Hello wonderful');
+      expect(
+        coordinates(
+          PieceTreeSearch.findMatches(
+            b,
+            const SearchParams('world', wordSeparators: separators),
+            full(b),
+          ),
+        ),
+        isEmpty,
+      );
+    });
+  });
+
   final regularText = [
     'This is some foo - bar text which contains foo and bar - as in Barcelona.',
     "Now it begins a word fooBar and now it is caps Foo-isn't this great?",

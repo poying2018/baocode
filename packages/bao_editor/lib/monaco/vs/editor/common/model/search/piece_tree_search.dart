@@ -125,15 +125,35 @@ bool isValidMatch(
 ) {
   final left =
       start == 0 ||
-      !separators.isRegular(text.codeUnitAt(start - 1)) ||
-      (length > 0 && !separators.isRegular(text.codeUnitAt(start)));
+      !_isWordCharacter(separators, text.codeUnitAt(start - 1)) ||
+      (length > 0 && !_isWordCharacter(separators, text.codeUnitAt(start)));
   final end = start + length;
   final right =
       end == text.length ||
-      !separators.isRegular(text.codeUnitAt(end)) ||
-      (length > 0 && !separators.isRegular(text.codeUnitAt(end - 1)));
+      !_isWordCharacter(separators, text.codeUnitAt(end)) ||
+      (length > 0 && !_isWordCharacter(separators, text.codeUnitAt(end - 1)));
   return left && right;
 }
+
+/// Whether [unit] is a character a word is made of: ASCII's, and not one of
+/// the separators — or a letter of a script that spaces its words apart
+/// (Cyrillic, accented Latin, as upstream's #3623 has them).
+///
+/// A Chinese character is a word by itself: its script puts no spaces between
+/// words, and the separator list (spaces and ASCII punctuation) offers no
+/// boundary beside it — with which `订单` in `查看订单列表` is found as a whole
+/// word.
+bool _isWordCharacter(WordCharacterClassifier separators, int unit) =>
+    separators.isRegular(unit) && !_isIdeographic(unit);
+
+/// Whether [unit] belongs to a script whose words its characters end and
+/// begin: CJK ideographs and their radicals, kana, hangul, compatibility
+/// ideographs, CJK punctuation and fullwidth forms.
+bool _isIdeographic(int unit) =>
+    (unit >= 0x2e80 && unit <= 0x9fff) ||
+    (unit >= 0xac00 && unit <= 0xd7af) ||
+    (unit >= 0xf900 && unit <= 0xfaff) ||
+    (unit >= 0xff00 && unit <= 0xffef);
 
 /// Stateful non-overlapping regexp scanner; reset before each new line/range.
 class Searcher {
