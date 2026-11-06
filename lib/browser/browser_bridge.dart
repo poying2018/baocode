@@ -57,8 +57,8 @@ class BrowserBridge extends ChangeNotifier {
     changes.addListener(update);
   }
 
-  /// Where the host finds the app: the same folder for both, the user's
-  /// temporary one ([socketFolder] in a test).
+  /// Where the host finds the app: the same folder for both, kept outside
+  /// the environment's temporary folders.
   static String get socketPath => p.join(_folder, _prefix('browser.sock'));
 
   /// Over [loopback], what the host finds the app by instead: the port on
@@ -82,17 +82,67 @@ class BrowserBridge extends ChangeNotifier {
   static String portPathFor(String product) =>
       product == 'baocode' ? 'baocode-browser.port' : '$product-browser.port';
 
-  /// The user's own temporary folder. On Linux, `$XDG_RUNTIME_DIR` (the
-  /// user's alone) before `$TMPDIR` or /tmp (shared with every user): as
-  /// host.c finds it.
+  /// The folder both sides find the bridge in. On Linux,
+  /// `$XDG_RUNTIME_DIR` (the user's alone) before `$TMPDIR` or /tmp
+  /// (shared with every user): as host.c finds it. On Windows, the user's
+  /// local application data folder: unlike TEMP and TMP, it is the same
+  /// for BaoCode and a host started by the browser, whose inherited
+  /// environment can differ.
   static String get _folder {
     if (socketFolder case final folder?) return folder;
+    if (Platform.isWindows) {
+      return windowsDiscoveryFolder(
+        environment: environmentOverride ?? Platform.environment,
+        localAppData: localAppData,
+      );
+    }
     if (Platform.isLinux) {
       final runtime = Platform.environment['XDG_RUNTIME_DIR'];
       if (runtime != null && runtime.isNotEmpty) return runtime;
     }
     return Directory.systemTemp.path;
   }
+
+  /// Where BaoCode and its Windows native messaging host find each other.
+  /// The override is for tests and development builds; otherwise both use
+  /// Windows' local application data folder, never TEMP or TMP. If the
+  /// runner cannot resolve it, `LOCALAPPDATA` is still the same for both
+  /// processes; if that is absent too, the bridge is unsupported rather
+  /// than using a folder the host resolves differently.
+  @visibleForTesting
+  static String windowsDiscoveryFolder({
+    required Map<String, String> environment,
+    String? localAppData,
+  }) {
+    final override = environment['BAOCODE_BROWSER_DISCOVERY_DIR'];
+    if (override != null && override.isNotEmpty) return override;
+    if (localAppData != null && localAppData.isNotEmpty) {
+      return p.join(localAppData, 'baocode-browser');
+    }
+    final local = environment['LOCALAPPDATA'];
+    if (local == null || local.isEmpty) {
+      throw const BrowserBridgeUnsupported(
+        'Windows has no local application data folder for the browser bridge.',
+      );
+    }
+    return p.join(local, 'baocode-browser');
+  }
+
+  /// Windows' local application data folder, as the runner resolved it
+  /// through `SHGetKnownFolderPath`. Unlike TEMP and TMP,
+  /// it does not depend on which process starts a browser's host.
+  static String? localAppData;
+
+  /// The product whose files this bridge uses. Tests set it to a unique
+  /// one so that a real host can run beside an installed copy.
+  @visibleForTesting
+  static String? productOverride;
+
+  /// The environment to resolve the Windows discovery folder from. The
+  /// process's by default; tests give another one instead of changing the
+  /// test runner's environment.
+  @visibleForTesting
+  static Map<String, String>? environmentOverride;
 
   /// A test's own folder for the socket: given as TMPDIR to a browser it
   /// launches, whose host alone finds it there (not the user's browsers').
@@ -113,8 +163,22 @@ class BrowserBridge extends ChangeNotifier {
 
   static String? get _home => home ?? Platform.environment['HOME'];
 
-  bool get supported =>
-      !kIsWeb && (Platform.isMacOS || Platform.isWindows || Platform.isLinux);
+  /// Whether this platform can find a folder both sides share. If it
+  /// cannot, the bridge is not offered, and the rest of the app goes on.
+  bool get supported {
+    if (kIsWeb) {
+      return false;
+    }
+    if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+      return false;
+    }
+    try {
+      _folder;
+      return true;
+    } on BrowserBridgeUnsupported {
+      return false;
+    }
+  }
 
   /// Whether the user lets the agents use the browsers: off, nothing
   /// listens for them, and the browsers find no host to start (it is
@@ -142,6 +206,12 @@ class BrowserBridge extends ChangeNotifier {
   /// its in the data folder).
   bool get connectedBefore => _used ??= supported && File(_mark).existsSync();
   bool? _used;
+
+  /// Whether a browser's host has connected in this run. A test can look
+  /// at the real host's connection before the extension's hello arrives.
+  @visibleForTesting
+  bool get hasHostConnection =>
+      _connections.any((connection) => connection._token == null);
 
   String get _mark => p.join(DataDirectory.current.browserDir, 'connected');
 
@@ -206,7 +276,13 @@ class BrowserBridge extends ChangeNotifier {
     if (_started || !supported || !enabled) return;
     _started = true;
     unawaited(installHost());
-    final server = await (loopback ? _bindLoopback() : _bindSocket());
+    final ServerSocket? server;
+    try {
+      server = await (loopback ? _bindLoopback() : _bindSocket());
+    } on BrowserBridgeUnsupported catch (error) {
+      debugPrint('browser bridge: $error');
+      return;
+    }
     if (server == null) return;
     _server = server;
     server.listen(_accept);
@@ -251,6 +327,7 @@ class BrowserBridge extends ChangeNotifier {
   Future<ServerSocket?> _bindLoopback() async {
     final RandomAccessFile lock;
     try {
+      await Directory(_folder).create(recursive: true);
       // Not truncated: another BaoCode may hold it.
       lock = await File(_lockPath).open(mode: FileMode.append);
     } on FileSystemException catch (error) {
@@ -422,9 +499,8 @@ class BrowserBridge extends ChangeNotifier {
   /// The file is the product's own (its name says so), so that the two
   /// products' hosts are both registered and each browser starts the one
   /// of the product that is running.
-  static File _hostManifest(String folder) => File(
-    p.join(folder, 'NativeMessagingHosts', '${_hostName()}.json'),
-  );
+  static File _hostManifest(String folder) =>
+      File(p.join(folder, 'NativeMessagingHosts', '${_hostName()}.json'));
 
   /// The host's name, as the file it is registered under: the product's
   /// own ("dev.baocode.browser", "dev.baocode-codex.browser").
@@ -441,7 +517,7 @@ class BrowserBridge extends ChangeNotifier {
   /// The product this build is, as the app's own name says (see
   /// [AppPaths.product]).
   static String _product() =>
-      AppPaths.product(Platform.resolvedExecutable);
+      productOverride ?? AppPaths.product(Platform.resolvedExecutable);
 
   /// Writes the host's manifest for each browser installed: the browsers
   /// then start it for the extension.
@@ -490,6 +566,16 @@ class BrowserBridge extends ChangeNotifier {
       }
     }
   }
+}
+
+/// The discovery folder cannot be one BaoCode and a browser's host agree on.
+class BrowserBridgeUnsupported implements Exception {
+  const BrowserBridgeUnsupported(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'BrowserBridgeUnsupported: $message';
 }
 
 /// A tab of a browser's.

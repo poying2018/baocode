@@ -48,6 +48,9 @@ bool FlutterWindow::OnCreate() {
 
   // The data folder's logs\, which Flutter names (see log_folder.h).
   logs_ = log_folder::Listen(messenger);
+  // A folder both BaoCode and a browser's host can find, independent of
+  // the TEMP and TMP the two processes inherited.
+  app_paths_ = ListenAppPaths(messenger);
 
   // Paths the app is asked to open (see open_requests.dart): those it was
   // started with first, then those a second copy of it hands this window
@@ -120,6 +123,7 @@ void FlutterWindow::OnDestroy() {
   }
   open_requests_ = nullptr;
   attention_ = nullptr;
+  app_paths_ = nullptr;
   logs_ = nullptr;
   // Ended unasked (WM_ENDSESSION), Dart had no say: what it keeps running
   // is still there, the LAN broadcast first (LinkHost.stopAdvertising, from

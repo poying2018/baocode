@@ -4,7 +4,12 @@ import 'dart:ui' show AppExitResponse, AppExitType;
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show ServicesBinding;
+import 'package:flutter/services.dart'
+    show
+        MethodChannel,
+        MissingPluginException,
+        PlatformException,
+        ServicesBinding;
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path/path.dart' as p;
 import 'package:bao_editor/textmate/textmate_syntax.dart';
@@ -134,6 +139,13 @@ import 'workspace/workspace.dart';
 bool get _hasClaudeCode => AppPaths.hasClaudeCode();
 
 Future<void> main(List<String> arguments) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // A browser's native messaging host does not inherit this process's
+  // TEMP and TMP. Both sides find the bridge through Windows' local
+  // application data folder instead.
+  if (Platform.isWindows) {
+    BrowserBridge.localAppData = await _windowsLocalAppData();
+  }
   // All the app keeps is in its data folder: found first, once. One the
   // user set that cannot be used (a drive gone) is reported before the app
   // shows, never swapped for the default unasked.
@@ -151,7 +163,6 @@ Future<void> main(List<String> arguments) async {
       // take the file is no reason to be slower to start.
       unawaited(plantRenamedPointer(dataDir: resolution.path));
     } else {
-      WidgetsFlutterBinding.ensureInitialized();
       DataDirectory.current = await recoverDataDirectory(resolution);
     }
     // What goes wrong unseen from here on, kept for the user to send.
@@ -164,7 +175,6 @@ Future<void> main(List<String> arguments) async {
   if (_hasClaudeCode) unawaited(reapClaudeProcesses());
   unawaited(reapLspProcesses());
   unawaited(reapPtyProcesses());
-  WidgetsFlutterBinding.ensureInitialized();
   MemoryBudget.apply();
   if (!kIsWeb) {
     AppEventWatch.start();
@@ -535,6 +545,17 @@ Future<void> main(List<String> arguments) async {
     runWidget(app);
   } else {
     runApp(app);
+  }
+}
+
+Future<String?> _windowsLocalAppData() async {
+  try {
+    return await const MethodChannel('baocode/app_paths')
+        .invokeMethod<String>('localAppData');
+  } on MissingPluginException {
+    return null;
+  } on PlatformException {
+    return null;
   }
 }
 

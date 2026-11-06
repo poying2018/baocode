@@ -6,7 +6,7 @@ import 'package:baocode/browser/browser_bridge.dart';
 import 'package:baocode/platform/app_paths.dart';
 
 /// The two products (BaoCode Claude, the Claude Code one, and the codex
-/// one) keep apart: their data, their files in the temporary folder and
+/// one) keep apart: their data, their discovery files and
 /// their names.
 void main() {
   test('the product is said by the program\'s own name', () {
@@ -31,10 +31,7 @@ void main() {
   test('the browser bridge\'s files are the product\'s own', () {
     // The port and lock files: each product has its own, so that one does
     // not take the browsers from the other.
-    expect(
-      BrowserBridge.portPathFor('baocode'),
-      'baocode-browser.port',
-    );
+    expect(BrowserBridge.portPathFor('baocode'), 'baocode-browser.port');
     expect(
       BrowserBridge.portPathFor('baocode-codex'),
       'baocode-codex-browser.port',
@@ -42,6 +39,49 @@ void main() {
     expect(
       BrowserBridge.portPathFor('baocode'),
       isNot(BrowserBridge.portPathFor('baocode-codex')),
+    );
+  });
+
+  test('Windows discovery does not depend on the temporary directory', () {
+    expect(
+      BrowserBridge.windowsDiscoveryFolder(
+        environment: const {
+          'TEMP': r'C:\WINDOWS\TEMP',
+          'TMP': r'C:\WINDOWS\TEMP',
+        },
+        localAppData: r'C:\Users\me\AppData\Local',
+      ),
+      r'C:\Users\me\AppData\Local\baocode-browser',
+    );
+    expect(
+      BrowserBridge.windowsDiscoveryFolder(
+        environment: const {
+          'TEMP': r'E:\Temp',
+          'TMP': r'E:\Temp',
+          'BAOCODE_BROWSER_DISCOVERY_DIR': r'F:\discovery',
+        },
+        localAppData: r'C:\Users\me\AppData\Local',
+      ),
+      r'F:\discovery',
+    );
+    expect(
+      BrowserBridge.windowsDiscoveryFolder(
+        environment: const {
+          'TEMP': r'C:\WINDOWS\TEMP',
+          'TMP': r'C:\WINDOWS\TEMP',
+          'LOCALAPPDATA': r'C:\Users\me\AppData\Local',
+        },
+      ),
+      r'C:\Users\me\AppData\Local\baocode-browser',
+    );
+    expect(
+      () => BrowserBridge.windowsDiscoveryFolder(
+        environment: const {
+          'TEMP': r'C:\WINDOWS\TEMP',
+          'TMP': r'C:\WINDOWS\TEMP',
+        },
+      ),
+      throwsA(isA<BrowserBridgeUnsupported>()),
     );
   });
 }

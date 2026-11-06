@@ -8,9 +8,11 @@
 //
 // Dart has no Unix sockets on Windows: BaoCode (lib/browser/
 // browser_bridge.dart) listens on 127.0.0.1, at the port its file in the
-// user's temporary folder says, baocode-browser.port: "<port> <token>".
-// Any program may connect there, so the host's hello says the token, which
-// only the user can read; BaoCode lets in no one who does not.
+// user's local application data folder says, baocode-browser.port:
+// "<port> <token>". That folder is the same for both processes, unlike
+// TEMP and TMP, which Chrome may pass differently. Any program may connect
+// there, so the host's hello says the token, which only the user can read;
+// BaoCode lets in no one who does not.
 //
 // Both ways a message is the browser's: its length (4 bytes, this
 // machine's order), then that much JSON. The host says what goes on with
@@ -19,12 +21,14 @@
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <shlobj.h>
 #include <windows.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <string>
 
 #define MAX_MESSAGE (64 * 1024 * 1024)
 
@@ -144,15 +148,35 @@ static bool port_file_name(wchar_t* name, size_t size) {
 // BaoCode's port and token, from its file: false while there is none
 // (BaoCode is not running) or it is not whole yet.
 static bool find_bao(unsigned* port, char* token, size_t size) {
-  wchar_t path[MAX_PATH + 32];
-  const DWORD n = GetTempPathW(MAX_PATH + 1, path);
-  if (n == 0 || n > MAX_PATH) return false;
+  std::wstring folder;
+  wchar_t override[MAX_PATH];
+  const DWORD override_length = GetEnvironmentVariableW(
+      L"BAOCODE_BROWSER_DISCOVERY_DIR", override, MAX_PATH);
+  if (override_length > 0 && override_length < MAX_PATH) {
+    folder = override;
+  } else {
+    PWSTR local = nullptr;
+    const HRESULT found = SHGetKnownFolderPath(
+        FOLDERID_LocalAppData, KF_FLAG_DEFAULT, nullptr, &local);
+    if (SUCCEEDED(found) && local != nullptr) {
+      folder = std::wstring(local) + L"\\baocode-browser";
+      CoTaskMemFree(local);
+    } else {
+      wchar_t local_environment[MAX_PATH];
+      const DWORD local_length = GetEnvironmentVariableW(
+          L"LOCALAPPDATA", local_environment, MAX_PATH);
+      if (local_length == 0 || local_length >= MAX_PATH) return false;
+      folder = std::wstring(local_environment) + L"\\baocode-browser";
+    }
+  }
+  std::wstring path = folder + L"\\";
   wchar_t name[64];
   if (!port_file_name(name, 64)) return false;
-  if (wcscat_s(path, name) != 0) return false;
+  path += name;
   HANDLE file = CreateFileW(
-      path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-      nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+      path.c_str(), GENERIC_READ,
+      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+      OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
   if (file == INVALID_HANDLE_VALUE) return false;
   char text[256];
   DWORD got = 0;

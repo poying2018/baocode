@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "app_windows.h"
+#include "app_paths_channel.h"
 #include "attention.h"
 #include "log_folder.h"
 #include "login_window.h"
@@ -70,6 +71,10 @@ class FlutterWindow : public ViewWindow {
 
   // Where Flutter says the logs go (see log_folder.h).
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> logs_;
+
+  // Windows' local application data folder, which the browser bridge and
+  // its native messaging host both find (see app_paths_channel.h).
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> app_paths_;
 
   // The session ends, or an installer closes the app (WM_ENDSESSION): the
   // process goes without the engine's teardown (see OnDestroy).

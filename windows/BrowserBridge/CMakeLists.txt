@@ -33,4 +33,4 @@ apply_standard_settings(${BROWSER_HOST_NAME})
 target_compile_options(${BROWSER_HOST_NAME} PRIVATE /utf-8)
 target_compile_definitions(${BROWSER_HOST_NAME} PRIVATE
   "NOMINMAX" "WIN32_LEAN_AND_MEAN")
-target_link_libraries(${BROWSER_HOST_NAME} PRIVATE "ws2_32.lib")
+target_link_libraries(${BROWSER_HOST_NAME} PRIVATE "shell32.lib" "ws2_32.lib")

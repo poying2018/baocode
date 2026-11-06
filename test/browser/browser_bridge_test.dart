@@ -13,12 +13,21 @@ void main() {
   final bridge = BrowserBridge.instance;
   late Directory home;
   late File manifest;
+  late String? previousLocalAppData;
+  late String? previousProductOverride;
+  late Map<String, String>? previousEnvironmentOverride;
 
   setUp(() {
+    previousLocalAppData = BrowserBridge.localAppData;
+    previousProductOverride = BrowserBridge.productOverride;
+    previousEnvironmentOverride = BrowserBridge.environmentOverride;
     // Short: a socket's path has a hundred bytes or so.
     final temp = (Platform.isWindows ? Directory.systemTemp : Directory('/tmp'))
         .createTempSync('bao-');
-    addTearDown(() => temp.deleteSync(recursive: true));
+    addTearDown(() async {
+      await bridge.stop();
+      if (temp.existsSync()) temp.deleteSync(recursive: true);
+    });
     BrowserBridge.socketFolder = temp.path;
     home = Directory(p.join(temp.path, 'home'));
     BrowserBridge.home = home.path;
@@ -34,6 +43,9 @@ void main() {
     addTearDown(() async {
       bridge.enabled = true;
       await bridge.stop();
+      BrowserBridge.localAppData = previousLocalAppData;
+      BrowserBridge.productOverride = previousProductOverride;
+      BrowserBridge.environmentOverride = previousEnvironmentOverride;
       BrowserBridge.home = null;
       BrowserBridge.socketFolder = null;
     });
@@ -238,4 +250,90 @@ void main() {
       ],
     });
   });
+
+  test(
+    'on Windows, the port is outside the environment\'s temporary folders',
+    () {
+      final root = Directory(p.join(home.parent.path, 'local-app-data'))
+        ..createSync(recursive: true);
+      addTearDown(() {
+        if (root.existsSync()) root.deleteSync(recursive: true);
+      });
+      BrowserBridge.localAppData = root.path;
+
+      expect(
+        p.windows.isWithin(p.dirname(root.path), BrowserBridge.portPath),
+        isTrue,
+        reason:
+            'A browser host and BaoCode do not always inherit the same '
+            'TEMP and TMP; their discovery folder must not depend on either.',
+      );
+    },
+    skip: !Platform.isWindows,
+  );
+
+  test('on Windows, the native host finds BaoCode with another TEMP', () async {
+    final host = File(
+      p.join(
+        'build',
+        'windows',
+        'x64',
+        'runner',
+        'Release',
+        'baocode-browser-host.exe',
+      ),
+    );
+    if (!host.existsSync()) {
+      markTestSkipped('Build the Windows app first: ${host.path}');
+      return;
+    }
+    final product = 'browser-bridge-test-$pid';
+    BrowserBridge.productOverride = product;
+    final discovery = Directory(p.join(home.parent.path, 'discovery'))
+      ..createSync(recursive: true);
+    BrowserBridge.environmentOverride = {
+      ...Platform.environment,
+      'BAOCODE_BROWSER_DISCOVERY_DIR': discovery.path,
+    };
+    BrowserBridge.socketFolder = null;
+    BrowserBridge.localAppData = null;
+    final port = File(BrowserBridge.portPath);
+    addTearDown(() {
+      if (port.existsSync()) port.deleteSync();
+    });
+    final testHost = File(p.join(discovery.path, '$product-browser-host.exe'));
+    testHost.parent.createSync(recursive: true);
+    host.copySync(testHost.path);
+    final browserTemp = Directory(p.join(home.parent.path, 'browser-temp'))
+      ..createSync(recursive: true);
+    await bridge.start();
+
+    final process = await Process.start(
+      testHost.path,
+      ['chrome-extension://${BrowserBridge.extensionIds.first}/'],
+      environment: {
+        ...Platform.environment,
+        'TEMP': browserTemp.path,
+        'TMP': browserTemp.path,
+        'BAOCODE_BROWSER_DISCOVERY_DIR': discovery.path,
+      },
+    );
+    process.stdout.drain<void>();
+    process.stderr.drain<void>();
+    addTearDown(() async {
+      process.kill();
+      await process.exitCode;
+    });
+    await until(() => bridge.hasHostConnection);
+    expect(
+      bridge.hasHostConnection,
+      isTrue,
+      reason:
+          'The host inherited ${browserTemp.path} as TEMP and TMP, '
+          'while BaoCode used a different environment.',
+    );
+
+    await bridge.stop();
+    expect(File(BrowserBridge.portPath).existsSync(), isFalse);
+  }, skip: !Platform.isWindows);
 }
