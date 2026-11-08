@@ -138,11 +138,16 @@ void main() {
   testWidgets('on macOS the sidebar and the conversation both show the '
       'material through', (tester) async {
     await pumpMacApp(tester);
-    // The window itself paints nothing over the material.
-    expect(colorsUnder(tester, find.byType(Sidebar)), [Colors.transparent]);
+    // The window itself paints nothing over the material; the theme's
+    // transition holds a transparent layer as it changes it.
+    expect(colorsUnder(tester, find.byType(Sidebar)), [
+      Colors.transparent,
+      Colors.transparent,
+    ]);
     expect(sidebarColor(tester).a, lessThan(0.85));
     expect(colorsUnder(tester, find.byType(ChatScreen)), [
       AppColors.conversationSurface,
+      Colors.transparent,
       Colors.transparent,
     ]);
     expect(AppColors.conversationSurface.a, lessThan(1));
@@ -161,12 +166,16 @@ void main() {
     'material through',
     (tester) async {
       await pumpMacApp(tester);
-      expect(colorsUnder(tester, find.byType(Sidebar)), [Colors.transparent]);
+      expect(colorsUnder(tester, find.byType(Sidebar)), [
+        Colors.transparent,
+        Colors.transparent,
+      ]);
       // Acrylic is a thinner blur than macOS's sidebar material: 96% over
       // the sidebar, 98% over the conversation (see AppColors).
       expect(sidebarColor(tester).a, closeTo(0.96, 0.001));
       expect(colorsUnder(tester, find.byType(ChatScreen)), [
         AppColors.conversationSurface,
+        Colors.transparent,
         Colors.transparent,
       ]);
       expect(AppColors.conversationSurface.a, closeTo(0.98, 0.001));
