@@ -24,7 +24,7 @@ class FiniteSelectionEdges extends StatefulWidget {
 }
 
 class _FiniteSelectionEdgesState extends State<FiniteSelectionEdges> {
-  final _delegate = _FiniteEdgesDelegate();
+  final _delegate = FiniteEdgesDelegate();
 
   @override
   void dispose() {
@@ -37,7 +37,9 @@ class _FiniteSelectionEdgesState extends State<FiniteSelectionEdges> {
       SelectionContainer(delegate: _delegate, child: widget.child);
 }
 
-class _FiniteEdgesDelegate extends StaticSelectionContainerDelegate
+/// [FiniteSelectionEdges]'s: an edge sent at infinity put just past the
+/// content.
+class FiniteEdgesDelegate extends StaticSelectionContainerDelegate
     with SafeSelectionIndexes {
   @override
   SelectionResult dispatchSelectionEvent(SelectionEvent event) {
