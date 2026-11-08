@@ -33,6 +33,23 @@ void main() {
 
   const timeout = Duration(seconds: 10);
 
+  /// The registry file's content, once [matches] says it is the one
+  /// wanted: the pty's process writes it as it spawns and reaps, and a
+  /// busy machine may be a while at either.
+  Future<dynamic> registryWhen(bool Function(dynamic) matches) async {
+    final deadline = DateTime.now().add(timeout);
+    for (;;) {
+      try {
+        final content = jsonDecode(registryFile.readAsStringSync());
+        if (matches(content)) return content;
+      } on PathNotFoundException {
+        // Not written yet.
+      }
+      expect(DateTime.now().isBefore(deadline), isTrue);
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+  }
+
   /// A terminal running `/bin/sh -c script`, with what it printed so far.
   Future<(Pty, StringBuffer)> sh(
     String script, {
@@ -75,14 +92,18 @@ void main() {
   test('is recorded while it runs', () async {
     final (pty, _) = await sh('read x');
     await PtyProcesses.registry.reaped;
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(jsonDecode(registryFile.readAsStringSync()), [
-      {'pid': pty.pid, 'parent': pid},
-    ]);
+    expect(
+      await registryWhen((content) => content is List && content.isNotEmpty),
+      [
+        {'pid': pty.pid, 'parent': pid},
+      ],
+    );
     pty.writeText('\n');
     await pty.exitCode.timeout(timeout);
-    await Future<void>.delayed(const Duration(milliseconds: 100));
-    expect(jsonDecode(registryFile.readAsStringSync()), isEmpty);
+    expect(
+      await registryWhen((content) => content is List && content.isEmpty),
+      isEmpty,
+    );
   });
 
   test('stopPtyProcesses hangs up every terminal and waits', () async {
