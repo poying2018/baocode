@@ -2529,6 +2529,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String turnStopped(String duration) {
+    return '处理 $duration 后停止';
+  }
+
+  @override
   String get planCardLabel => '计划';
 
   @override

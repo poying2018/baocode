@@ -26,6 +26,16 @@ abstract final class ChatCodec {
             },
         ],
       'worked': ?item.worked?.inMilliseconds,
+      if (item.stopped) 'stopped': true,
+      'at': ?item.sentAt?.millisecondsSinceEpoch,
+      'agent': ?item.fromAgent,
+      if (item.usage case final usage?)
+        'usage': {
+          'in': ?usage.inputTokens,
+          'out': ?usage.outputTokens,
+          'speed': ?usage.tokensPerSecond,
+          'cost': ?usage.costUsd,
+        },
     },
     AssistantTextItem() => {'t': 'text', 'text': item.text},
     ThinkingItem() => {
@@ -140,6 +150,18 @@ abstract final class ChatCodec {
               ),
         ],
         worked: duration('worked'),
+        stopped: json['stopped'] == true,
+        sentAt: time('at'),
+        fromAgent: json['agent'] as String?,
+        usage: switch (json['usage']) {
+          final Map<String, Object?> usage => TurnUsage(
+            inputTokens: (usage['in'] as num?)?.toInt(),
+            outputTokens: (usage['out'] as num?)?.toInt(),
+            tokensPerSecond: (usage['speed'] as num?)?.toDouble(),
+            costUsd: (usage['cost'] as num?)?.toDouble(),
+          ),
+          _ => null,
+        },
       ),
       'text' => AssistantTextItem(text('text')),
       'thinking' => ThinkingItem(

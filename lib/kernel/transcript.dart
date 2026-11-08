@@ -148,7 +148,9 @@ class Transcript {
         lastTurnInterrupted = interrupted;
         _pending.clear();
         _settleStreaming();
-        if (!interrupted && worked != null) _timeTurn(turnId, worked, usage);
+        if (worked != null) {
+          _timeTurn(turnId, worked, usage, stopped: interrupted);
+        }
       case ItemUpserted(:final id, :final item, :final streaming):
         _put(id, item);
         streaming ? _streaming.add(id) : _streaming.remove(id);
@@ -203,7 +205,24 @@ class Transcript {
   void _put(String id, ChatItem item) {
     final index = _indexOf[id];
     if (index != null) {
-      _items[index] = item;
+      _items[index] = switch ((_items[index], item)) {
+        // Taken up where it was sent: when it was.
+        (
+          UserMessageItem(queued: true, sentAt: final sent?),
+          final UserMessageItem taken,
+        )
+            when !taken.queued =>
+          UserMessageItem(
+            text: taken.text,
+            images: taken.images,
+            worked: taken.worked,
+            usage: taken.usage,
+            stopped: taken.stopped,
+            sentAt: sent,
+            fromAgent: taken.fromAgent,
+          ),
+        _ => item,
+      };
       return;
     }
     if (item case UserMessageItem(queued: true)) {
@@ -295,11 +314,20 @@ class Transcript {
     null => null,
   };
 
-  void _timeTurn(String id, Duration worked, TurnUsage? usage) {
+  void _timeTurn(
+    String id,
+    Duration worked,
+    TurnUsage? usage, {
+    required bool stopped,
+  }) {
     final index = _indexOf[id];
     if (index == null) return;
     if (_items[index] case final UserMessageItem message) {
-      _items[index] = message.copyWith(worked: worked, usage: usage);
+      _items[index] = message.copyWith(
+        worked: worked,
+        usage: usage,
+        stopped: stopped,
+      );
     }
   }
 

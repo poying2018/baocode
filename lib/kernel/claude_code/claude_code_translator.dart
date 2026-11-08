@@ -383,12 +383,40 @@ class ClaudeTranslator {
   /// When the replayed turn last showed anything.
   DateTime? _replayedUntil;
 
-  /// The user stopped the replayed turn: it is not timed.
+  /// The user stopped the replayed turn: timed all the same, to where it
+  /// stopped, and marked so (see [UserMessageItem.stopped]).
   bool _replayedStopped = false;
 
+  /// What is replayed is still of a turn whose prompt is on an earlier page:
+  /// no prompt yet, nor the agent taking up a notice of its own.
+  bool _headOpen = true;
+  DateTime? _headUntil;
+  bool _headStopped = false;
+
+  /// Of a page that begins within a turn (see [_headOpen]): when what it
+  /// shows of that turn last showed anything, and whether the user stopped
+  /// it; for the page before, which has its prompt, to time it by (see
+  /// [endPage]).
+  ({DateTime? until, bool stopped}) get head =>
+      (until: _headUntil, stopped: _headStopped);
+
   /// A page of the kept session is replayed, not all of it: times its last
-  /// turn, nothing else.
-  void endPage() => _timeReplayed();
+  /// turn, nothing else. Where the page after it begins within that turn,
+  /// its [head] says how the turn went on: it is timed to where that ends.
+  void endPage({({DateTime? until, bool stopped})? after}) {
+    if (after != null) {
+      if (_headOpen) {
+        // All of this page within the turn: the head goes on to the next.
+        _headUntil = after.until ?? _headUntil;
+        _headStopped |= after.stopped;
+      }
+      if (after.until case final until?) _replayedUntil = until;
+      if (after.stopped) _replayedStopped = true;
+    }
+    final open = _headOpen;
+    _timeReplayed();
+    _headOpen = open;
+  }
 
   /// The kept session is all replayed: times its last turn, and has its
   /// goal as it stood (one met or given up on, nothing to show any more).
@@ -399,11 +427,14 @@ class ClaudeTranslator {
   }
 
   void _replayedAt(Map<String, Object?> message) {
-    if (!replaying || _replayed == null) return;
-    if (message['uuid'] == _replayed!.id) return;
-    if (DateTime.tryParse('${message['timestamp']}') case final at?) {
-      _replayedUntil = at;
+    if (!replaying) return;
+    final at = DateTime.tryParse('${message['timestamp']}');
+    if (_replayed == null) {
+      if (_headOpen && at != null) _headUntil = at;
+      return;
     }
+    if (message['uuid'] == _replayed!.id) return;
+    if (at != null) _replayedUntil = at;
   }
 
   /// Replaying [id], a prompt: times the turn before it.
@@ -424,20 +455,24 @@ class ClaudeTranslator {
     final turn = _replayed;
     final until = _replayedUntil;
     final stopped = _replayedStopped;
+    _headOpen = false;
     _replayed = null;
     _replayedUntil = null;
     _replayedStopped = false;
-    if (turn == null || stopped) return;
+    if (turn == null) return;
     // As its footer showed it when it ended, where that was kept.
     if (keptTurns[turn.id] case (:final worked, :final usage)) {
-      _put(turn.id, turn.item.copyWith(worked: worked, usage: usage));
+      _put(
+        turn.id,
+        turn.item.copyWith(worked: worked, usage: usage, stopped: stopped),
+      );
       return;
     }
     final at = turn.at;
     if (until == null || at == null) return;
     final worked = until.difference(at);
     if (worked > Duration.zero) {
-      _put(turn.id, turn.item.copyWith(worked: worked));
+      _put(turn.id, turn.item.copyWith(worked: worked, stopped: stopped));
     }
   }
 
@@ -992,7 +1027,10 @@ class ClaudeTranslator {
     }
     // The CLI's note to the model that the user stopped it: not shown.
     if (trimmed.startsWith('[Request interrupted by user')) {
-      if (replaying) _replayedStopped = true;
+      if (replaying) {
+        _replayedStopped = true;
+        if (_replayed == null && _headOpen) _headStopped = true;
+      }
       return;
     }
     final item = UserMessageItem(text: trimmed, images: images);
