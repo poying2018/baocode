@@ -1,6 +1,7 @@
 // This repository builds and publishes the Claude Code product alone. That
 // fact is written in three places that have to agree: the release workflow's
-// matrix (product: [baocode-claude], twice), its publish step's PRODUCT
+// matrix (product: [baocode-claude], once, in the windows job that builds
+// the installer), the PRODUCT the remote server and publish steps carry
 // (baocode-claude), and the release guide's sentence that names them.
 import 'dart:io';
 
@@ -11,13 +12,14 @@ void main() {
   final guide = File('docs/release.md').readAsStringSync();
 
   test('the workflow builds the Claude Code product', () {
-    // The matrix says so, in both jobs that build it.
+    // The matrix says so, in the one job that builds the installer.
     expect(
       RegExp(r'product: \[baocode-claude\]').allMatches(workflow).length,
-      2,
+      1,
       reason: '.github/workflows/release.yml matrix',
     );
-    // And the publish step's PRODUCT, which names the same product.
+    // And the PRODUCT the remote server and publish steps carry, which
+    // names the same product.
     expect(
       workflow,
       contains('PRODUCT: baocode-claude'),

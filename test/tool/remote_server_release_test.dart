@@ -49,10 +49,7 @@ void main() {
       // leave a release queued indefinitely. The Linux server builds are
       // cross-compiled on Ubuntu; the standalone server-* workflow remains
       // the place that builds macOS servers on a Mac.
-      expect(
-        lines,
-        isNot(contains('uses: ./.github/workflows/remote.yml')),
-      );
+      expect(lines, isNot(contains('uses: ./.github/workflows/remote.yml')));
       expect(
         lines.where((line) => line.startsWith('runs-on: macos-')),
         isEmpty,
@@ -62,7 +59,7 @@ void main() {
         lines,
         contains(
           'run: dart run tool/build_remote_server.dart --out build/remote '
-          '--product "$PRODUCT"',
+          r'--product "$PRODUCT"',
         ),
       );
     });

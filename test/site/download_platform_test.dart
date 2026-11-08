@@ -10,18 +10,19 @@ import 'package:baocode/update/installer_io.dart' show windowsUpdatePlatform;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
-Iterable<File> _pages() => Directory('site')
-    .listSync(recursive: true)
-    .whereType<File>()
-    .where((file) => file.path.endsWith('.html'));
+Iterable<File> _pages() =>
+    Directory('site')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.html'));
 
 void main() {
   final script = File(p.join('site', 'site.js')).readAsStringSync();
 
   test("the page's platform key is the app's own", () {
-    final key = RegExp(
-      r"platforms\?\.\[?'([^']+)'\]?",
-    ).firstMatch(script)?.group(1);
+    final key = RegExp(r"platforms\?\.\[?'([^']+)'\]?")
+        .firstMatch(script)
+        ?.group(1);
     expect(key, isNotNull, reason: 'site/site.js');
     // The x64 build is the one this repository makes (docs/release.md): an
     // x64 Windows on Arm runs it emulated, and picks Arm's from the site.
@@ -52,7 +53,12 @@ void main() {
     expect(links, greaterThan(4));
 
     // The pages that offer the desktop build name it.
-    for (final name in ['index.html', 'download.html', 'zh/index.html', 'zh/download.html']) {
+    for (final name in [
+      'index.html',
+      'download.html',
+      'zh/index.html',
+      'zh/download.html',
+    ]) {
       expect(
         File(p.join('site', name)).readAsStringSync(),
         contains('data-file="windows"'),
@@ -64,11 +70,18 @@ void main() {
   test('the download page offers the architecture the build makes', () {
     // This fork builds and publishes the Windows build for x64 alone
     // (docs/release.md). A page promising Arm64 too sends that reader to the
-    // same x64 installer, which runs emulated at best.
-    final workflow = File(
-      p.join('.github', 'workflows', 'release.yml'),
-    ).readAsStringSync();
-    expect(workflow, isNot(contains('arm64')), reason: 'x64 alone is built');
+    // same x64 installer, which runs emulated at best. The workflow's Arm64
+    // is the remote server's Linux build, which no installer ever is: the
+    // job that builds the installer is the one that must not name it.
+    final workflow = File(p.join('.github', 'workflows', 'release.yml'))
+        .readAsStringSync();
+    final windows = RegExp(
+      r'^  windows:.*?(?=^  \w+:)',
+      multiLine: true,
+      dotAll: true,
+    ).firstMatch(workflow)?.group(0);
+    expect(windows, isNotNull, reason: 'the workflow\'s windows job');
+    expect(windows!, isNot(contains('arm64')), reason: 'x64 alone is built');
     for (final name in ['download.html', 'zh/download.html']) {
       final html = File(p.join('site', name)).readAsStringSync();
       final section = RegExp(
