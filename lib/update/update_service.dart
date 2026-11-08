@@ -101,6 +101,12 @@ abstract interface class UpdateStore {
 
   /// Kept by the time it completes: the app quits right after.
   Future<void> setInstallingVersion(String? version);
+
+  /// The newest version this installation has run or installed, as a
+  /// version string (`1.9.6+32`): a manifest of an older one is a replay
+  /// of a manifest seen before, and is not an update.
+  String? get highWaterVersion;
+  set highWaterVersion(String? version);
 }
 
 /// Kept for the run only (under test).
@@ -113,6 +119,9 @@ class MemoryUpdateStore implements UpdateStore {
 
   @override
   String? installingVersion;
+
+  @override
+  String? highWaterVersion;
 
   @override
   Future<void> setInstallingVersion(String? version) async =>
@@ -216,7 +225,15 @@ class UpdateService extends ChangeNotifier {
        manifestUrl = manifestUrl ?? Uri.parse(manifestUrlFor(product)),
        _mode = mode ?? (() => UpdateMode.defaultMode),
        store = store ?? MemoryUpdateStore(),
-       _now = now ?? DateTime.now;
+       _now = now ?? DateTime.now {
+    // The version running is the floor for what a manifest may offer:
+    // anything under the high-water was seen before (a replayed manifest,
+    // or an install that was rolled back), and is not an update.
+    final highWater = AppVersion.tryParse(this.store.highWaterVersion ?? '');
+    if (highWater == null || highWater < current) {
+      this.store.highWaterVersion = '$current';
+    }
+  }
 
   /// The version running.
   final AppVersion current;
@@ -419,7 +436,11 @@ class UpdateService extends ChangeNotifier {
       _installed = manifest.version.marketing == current.marketing
           ? manifest
           : null;
-      final asset = manifest.version > current
+      // A manifest under the high-water was seen before, and is not an
+      // update even past an install that was rolled back.
+      final highWater = AppVersion.tryParse(store.highWaterVersion ?? '');
+      final replayed = highWater != null && manifest.version < highWater;
+      final asset = manifest.version > current && !replayed
           ? manifest.assetFor(platform!)
           : null;
       if (asset == null) {
@@ -614,6 +635,13 @@ class UpdateService extends ChangeNotifier {
     if (version != null) {
       try {
         await store.setInstallingVersion('$version');
+        // The install is under way: its version is the floor now, even
+        // where the app rolls back.
+        final installed = AppVersion.tryParse('$version');
+        final highWater = AppVersion.tryParse(store.highWaterVersion ?? '');
+        if (installed != null && (highWater == null || installed > highWater)) {
+          store.highWaterVersion = '$version';
+        }
       } on Object catch (error) {
         debugPrint('update: the install under way not kept: $error');
       }

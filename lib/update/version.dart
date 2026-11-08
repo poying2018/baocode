@@ -42,6 +42,7 @@ class AppVersion implements Comparable<AppVersion> {
       if (text == null) return 0;
       return int.tryParse(text);
     }
+
     final major = part(1);
     final minor = part(2);
     final patch = part(3);

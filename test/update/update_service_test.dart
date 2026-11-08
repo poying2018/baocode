@@ -39,23 +39,26 @@ void main() {
       expect(backend.downloads, isEmpty);
     });
 
-    test('a release of the other product is not an update of this one', () async {
-      // The two products (BaoCode, the Claude Code one, and the codex one)
-      // are separate programs: each is offered only its own releases.
-      final codex = serviceOf(
-        FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
-        product: 'baocode-codex',
-      );
-      expect(await codex.check(manual: true), isA<UpdateFound>());
+    test(
+      'a release of the other product is not an update of this one',
+      () async {
+        // The two products (BaoCode, the Claude Code one, and the codex one)
+        // are separate programs: each is offered only its own releases.
+        final codex = serviceOf(
+          FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
+          product: 'baocode-codex',
+        );
+        expect(await codex.check(manual: true), isA<UpdateFound>());
 
-      // The same release, asked for by BaoCode: not its own.
-      final baocode = serviceOf(
-        FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
-      );
-      expect(await baocode.check(manual: true), isA<UpdateUpToDate>());
-      expect(baocode.release, isNull);
-      expect(baocode.status, UpdateStatus.upToDate);
-    });
+        // The same release, asked for by BaoCode: not its own.
+        final baocode = serviceOf(
+          FakeBackend(manifestOf('1.2.0+12', product: 'baocode-codex')),
+        );
+        expect(await baocode.check(manual: true), isA<UpdateUpToDate>());
+        expect(baocode.release, isNull);
+        expect(baocode.status, UpdateStatus.upToDate);
+      },
+    );
 
     test('is up to date with the same, an older, or no download', () async {
       for (final manifest in [
@@ -327,37 +330,41 @@ void main() {
       expect(backend.downloads, hasLength(2));
     });
 
-    test('a newer version found while downloading is downloaded in its turn',
-        () async {
-      final first = Completer();
-      final second = Completer();
-      final backend = FakeBackend(manifestOf('1.2.0'))..gate = first;
-      final service = serviceOf(backend);
-      await service.check(manual: true);
-      final download = service.download();
-      await pumpEventQueue();
-      expect(service.status, UpdateStatus.downloading);
-      // A newer version arrives while the older one is still coming.
-      backend.manifest = manifestOf('1.3.0');
-      backend.gate = second;
-      await service.check(manual: true);
-      expect(service.release!.version, AppVersion.parse('1.3.0'));
-      // The download of the older one ends: what it brought is of no
-      // use, and the wanted one is downloaded in its turn.
-      first.complete();
-      await pumpEventQueue();
-      expect(backend.downloads.last.version, AppVersion.parse('1.3.0'));
-      second.complete();
-      expect(await download, contains('1.3.0'));
-      expect(service.status, UpdateStatus.ready);
-      expect(service.offer!.downloaded, isTrue);
-    });
+    test(
+      'a newer version found while downloading is downloaded in its turn',
+      () async {
+        final first = Completer();
+        final second = Completer();
+        final backend = FakeBackend(manifestOf('1.2.0'))..gate = first;
+        final service = serviceOf(backend);
+        await service.check(manual: true);
+        final download = service.download();
+        await pumpEventQueue();
+        expect(service.status, UpdateStatus.downloading);
+        // A newer version arrives while the older one is still coming.
+        backend.manifest = manifestOf('1.3.0');
+        backend.gate = second;
+        await service.check(manual: true);
+        expect(service.release!.version, AppVersion.parse('1.3.0'));
+        // The download of the older one ends: what it brought is of no
+        // use, and the wanted one is downloaded in its turn.
+        first.complete();
+        await pumpEventQueue();
+        expect(backend.downloads.last.version, AppVersion.parse('1.3.0'));
+        second.complete();
+        expect(await download, contains('1.3.0'));
+        expect(service.status, UpdateStatus.ready);
+        expect(service.offer!.downloaded, isTrue);
+      },
+    );
 
     test('prepares, arms and launches the install as the app quits', () async {
       final installer = FakeInstaller();
+      final store = MemoryUpdateStore();
       final service = serviceOf(
         FakeBackend(manifestOf('1.2.0')),
         installer: installer,
+        store: store,
       );
       await expectLater(service.prepare(), throwsStateError);
       await service.check(manual: true);
@@ -375,6 +382,52 @@ void main() {
       expect(await service.launchArmed(), isTrue);
       expect(installer.launches, 1);
       expect(service.armed, isFalse);
+      // The install is under way: its version is the high-water now, so a
+      // manifest of it replayed later is not an update again.
+      expect(store.highWaterVersion, '1.2.0');
+    });
+
+    test('a manifest under the high-water is not an update', () async {
+      // The app ran 1.1.0+15 (its install rolled back to 1.0.0+1): a
+      // manifest of 1.1.0+12 was seen before, replayed, and is not an
+      // update even though it is newer than the version running.
+      final store = MemoryUpdateStore()..highWaterVersion = '1.1.0+15';
+      final service = serviceOf(
+        FakeBackend(manifestOf('1.1.0+12')),
+        store: store,
+      );
+      expect(await service.check(manual: true), isA<UpdateUpToDate>());
+      expect(service.release, isNull);
+      expect(service.status, UpdateStatus.upToDate);
+    });
+
+    test('a manifest at the high-water is offered (a re-release)', () async {
+      // The same version published again, a new file signed for it: taken
+      // where the install rolled back, so the user can get on it again.
+      final store = MemoryUpdateStore()..highWaterVersion = '1.1.0+15';
+      final service = serviceOf(
+        FakeBackend(manifestOf('1.1.0+15')),
+        store: store,
+      );
+      expect(await service.check(manual: true), isA<UpdateFound>());
+      expect(service.release!.version, AppVersion.parse('1.1.0+15'));
+    });
+
+    test('the version running seeds the high-water', () async {
+      final fresh = MemoryUpdateStore();
+      serviceOf(FakeBackend(manifestOf('1.0.0+1')), store: fresh);
+      expect(fresh.highWaterVersion, '1.0.0+1');
+
+      // One written under an older scheme (or by an older app) is raised
+      // to the version running.
+      final stale = MemoryUpdateStore()..highWaterVersion = '0.9.0+5';
+      serviceOf(FakeBackend(manifestOf('1.0.0+1')), store: stale);
+      expect(stale.highWaterVersion, '1.0.0+1');
+
+      // A high-water at or over the version running stands.
+      final ahead = MemoryUpdateStore()..highWaterVersion = '1.1.0+15';
+      serviceOf(FakeBackend(manifestOf('1.0.0+1')), store: ahead);
+      expect(ahead.highWaterVersion, '1.1.0+15');
     });
 
     test('an install that did not finish is told at the next launch', () async {
