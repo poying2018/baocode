@@ -1729,6 +1729,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidebarNewAgent => '新对话';
 
   @override
+  String get sidebarProjectSortRecent => '最近活动';
+
+  @override
+  String get sidebarProjectSortManual => '手动';
+
+  @override
   String get sidebarGroupingProject => '项目';
 
   @override

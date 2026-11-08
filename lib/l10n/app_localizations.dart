@@ -3254,6 +3254,18 @@ abstract class AppLocalizations {
   /// **'New Chat'**
   String get sidebarNewAgent;
 
+  /// Sidebar menu: projects ordered by their latest agent, the most recent first.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent activity'**
+  String get sidebarProjectSortRecent;
+
+  /// Sidebar menu: projects in the order the user dragged them.
+  ///
+  /// In en, this message translates to:
+  /// **'Manual'**
+  String get sidebarProjectSortManual;
+
   /// No description provided for @sidebarGroupingProject.
   ///
   /// In en, this message translates to:

@@ -1768,6 +1768,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarNewAgent => 'New Chat';
 
   @override
+  String get sidebarProjectSortRecent => 'Recent activity';
+
+  @override
+  String get sidebarProjectSortManual => 'Manual';
+
+  @override
   String get sidebarGroupingProject => 'Project';
 
   @override
