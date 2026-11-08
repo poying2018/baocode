@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 
 import '../platform/data_dir.dart';
 import '../theme/workbench_theme.dart';
 import 'app_locale.dart';
+import 'jsonc.dart';
 import 'jsonc_file.dart';
 
 /// `User/settings.json`: the user's settings as VS Code keeps them, one
@@ -141,6 +143,15 @@ class ColorThemeSettings implements ColorThemeStorage {
   final ColorThemeStorage state;
 
   static const key = 'workbench.colorTheme';
+  static const autoKey = 'window.autoDetectColorScheme';
+
+  /// Whether the theme follows the system's appearance (Auto).
+  @override
+  bool get autoDetectColorScheme => settings[autoKey] == true;
+
+  /// The theme being written, until it is: read back to keep a change
+  /// from being applied over its own write (a file change echoes).
+  ({String setting, bool automatic})? _writing;
 
   @override
   String? get colorThemeSetting => switch (settings[key]) {
@@ -152,18 +163,81 @@ class ColorThemeSettings implements ColorThemeStorage {
   String? get colorThemeData => state.colorThemeData;
 
   @override
-  void storeColorTheme({required String setting, String? data}) {
-    state.storeColorTheme(setting: setting, data: data);
-    // Unset is the default theme: the file is not written for it.
-    final current = colorThemeSetting ?? ThemeSettingDefaults.colorThemeDark;
-    if (migrateThemeSettingsId(current) == setting) return;
-    unawaited(
-      settings.update(key, setting).catchError((Object error) {
-        // A settings file that does not parse is left as it is; its error
-        // is shown.
-        debugPrint('workbench.colorTheme not kept: $error');
-      }),
-    );
+  Future<void> storeColorTheme({
+    required String setting,
+    String? data,
+    bool autoDetectColorScheme = false,
+    bool cacheOnly = false,
+  }) async {
+    if (cacheOnly) {
+      await state.storeColorTheme(
+        setting: setting,
+        data: data,
+        autoDetectColorScheme: autoDetectColorScheme,
+        cacheOnly: true,
+      );
+      return;
+    }
+    _writing = (setting: setting, automatic: autoDetectColorScheme);
+    try {
+      // Both in one read and write, its comments and indentation kept;
+      // Auto leaves the fixed theme as it is.
+      await settings.transform((source) {
+        final text = source ?? '';
+        final errors = <JsoncParseError>[];
+        final parsed = parseJsonc(text, errors: errors);
+        if (errors.isNotEmpty) {
+          throw JsoncFileException(settings.path, errors.first.describe(text));
+        }
+        final values = parsed is Map ? parsed : const {};
+        final current = switch (values[key]) {
+          final String id when id.trim().isNotEmpty => migrateThemeSettingsId(
+            id.trim(),
+          ),
+          _ => ThemeSettingDefaults.colorThemeDark,
+        };
+        _writing = (
+          setting: autoDetectColorScheme ? current : setting,
+          automatic: autoDetectColorScheme,
+        );
+        var next = text;
+        try {
+          for (final (name, value) in [
+            if (!autoDetectColorScheme && current != setting) (key, setting),
+            if ((values[autoKey] == true) != autoDetectColorScheme)
+              (autoKey, autoDetectColorScheme),
+          ]) {
+            next = applyJsoncEdits(
+              next,
+              modifyJsonc(
+                next,
+                [name],
+                value,
+                formatting: source == null && Platform.isWindows
+                    ? const JsoncFormatting(eol: '\r\n')
+                    : null,
+              ),
+            );
+          }
+        } on FormatException catch (error) {
+          throw JsoncFileException(settings.path, error.message);
+        }
+        return next == text ? null : next;
+      });
+      // The settings are written: the colors' cache failing does not make
+      // that a failure.
+      await state
+          .storeColorTheme(
+            setting: _writing!.setting,
+            data: data,
+            autoDetectColorScheme: autoDetectColorScheme,
+          )
+          .catchError((Object error) {
+            debugPrint('Color theme cache not kept: $error');
+          });
+    } finally {
+      _writing = null;
+    }
   }
 
   WorkbenchThemeService? _themes;
@@ -181,7 +255,21 @@ class ColorThemeSettings implements ColorThemeStorage {
     final id = migrateThemeSettingsId(
       colorThemeSetting ?? ThemeSettingDefaults.colorThemeDark,
     );
-    if (id != themes.colorThemeId) unawaited(themes.setColorTheme(id));
+    final automatic = autoDetectColorScheme;
+    if (_writing == (setting: id, automatic: automatic)) return;
+    if (id != themes.colorThemeSetting ||
+        automatic != themes.autoDetectColorScheme) {
+      unawaited(
+        themes
+            .applyColorThemeSettings(
+              setting: id,
+              autoDetectColorScheme: automatic,
+            )
+            .catchError((Object error) {
+              debugPrint('Color theme setting not applied: $error');
+            }),
+      );
+    }
   }
 
   void dispose() {

@@ -2248,13 +2248,56 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   String? _colorThemeData;
   bool _colorThemeStored = false;
 
+  /// Whether the theme follows the system's appearance (Auto).
   @override
-  void storeColorTheme({required String setting, String? data}) {
+  bool get autoDetectColorScheme => _autoDetectColorScheme;
+  bool _autoDetectColorScheme = false;
+
+  @override
+  Future<void> storeColorTheme({
+    required String setting,
+    String? data,
+    bool autoDetectColorScheme = false,
+    bool cacheOnly = false,
+  }) async {
+    if (cacheOnly) {
+      await _restoring;
+      if (_colorThemeData == data) return;
+      final old = _colorThemeData;
+      _colorThemeData = data;
+      try {
+        await _writePreferences();
+      } catch (_) {
+        if (_colorThemeData == data) _colorThemeData = old;
+        rethrow;
+      }
+      return;
+    }
+    final old = (
+      _colorTheme,
+      _colorThemeData,
+      _autoDetectColorScheme,
+      _colorThemeStored,
+    );
     _colorTheme = setting;
     _colorThemeData = data;
+    _autoDetectColorScheme = autoDetectColorScheme;
     _colorThemeStored = true;
-    // Not before what was kept is read: that would be written over.
-    unawaited(_restoring.then((_) => _save()));
+    try {
+      // Not before what was kept is read: that would be written over.
+      await _restoring;
+      await _writePreferences();
+    } catch (_) {
+      if (_colorTheme == setting &&
+          _colorThemeData == data &&
+          _autoDetectColorScheme == autoDetectColorScheme) {
+        _colorTheme = old.$1;
+        _colorThemeData = old.$2;
+        _autoDetectColorScheme = old.$3;
+        _colorThemeStored = old.$4;
+      }
+      rethrow;
+    }
   }
 
   /// What was kept, read once [load] has read it.
@@ -2414,6 +2457,7 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _sidePanelView = panel.cast<String, Object?>();
     }
     if (!_colorThemeStored) {
+      _autoDetectColorScheme = kept['autoDetectColorScheme'] == true;
       if (kept['colorTheme'] case final String setting) _colorTheme = setting;
       if (kept['colorThemeData'] case final String data) {
         _colorThemeData = data;
@@ -2422,7 +2466,13 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   }
 
   void _save() => unawaited(
-    _store?.write({
+    _writePreferences().catchError((Object error) {
+      debugPrint('Workspace preferences not kept: $error');
+    }),
+  );
+
+  Future<void> _writePreferences() async {
+    await _store?.write({
       'kernel': _preferredKernel.id,
       'editor': _preferredEditor.name,
       'layout': _layout.name,
@@ -2488,10 +2538,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       'emojiStyle': ?_emojiStyle?.name,
       'chat': ?_chatViewToSave(),
       'sidePanel': ?_sidePanelView,
+      if (_autoDetectColorScheme) 'autoDetectColorScheme': true,
       'colorTheme': ?_colorTheme,
       'colorThemeData': ?_colorThemeData,
-    }),
-  );
+    });
+  }
 
   /// The panes to save: as kept, until [load] has shown them again.
   Object? _chatViewToSave() {
