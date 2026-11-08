@@ -226,7 +226,9 @@ void main() {
       ..apply(const TurnStarted(1, 'u'))
       ..apply(const ItemUpserted(2, 'u', UserMessageItem(text: 'hi')))
       ..apply(const TurnEnded(3, 'u', interrupted: true, worked: worked));
-    expect(workedOn(stopped), isNull);
+    // A stopped turn keeps its time: its fold line says "Stopped after…".
+    expect(workedOn(stopped), worked);
+    expect((stopped.itemAt(0) as UserMessageItem).stopped, isTrue);
   });
 
   test('tasks and todos are replaced whole', () {
