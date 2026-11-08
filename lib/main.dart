@@ -66,6 +66,7 @@ import 'keybindings/keymap.dart';
 import 'keybindings/vscode_import.dart';
 import 'l10n/l10n.dart';
 import 'models/featured_upstreams.dart';
+import 'models/magpie_follow.dart';
 import 'models/model_icons.dart';
 import 'models/model_providers.dart';
 import 'models/model_runtime.dart';
@@ -261,6 +262,9 @@ Future<void> main(List<String> arguments) async {
     }
     // Settings → Models: the upstreams, kept in settings.json.
     ModelProviders.current = ModelProviders.settings(files.settings);
+    // The upstream that follows magpie: its models got again as it starts,
+    // and now and then.
+    MagpieFollow.current = MagpieFollow()..start();
     // Whether the welcome to setting a model up has shown by itself.
     ModelWelcome.storage = files.storage;
     // The channel build's first start: set up before anything else shows.

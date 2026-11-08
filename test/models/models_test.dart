@@ -5,6 +5,7 @@ import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
 import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/claude_code/claude_environment.dart';
 import 'package:baocode/icons/project_icon.dart';
+import 'package:baocode/models/codex/codex_api.dart';
 import 'package:baocode/models/launch_environment.dart';
 import 'package:baocode/models/model_provider.dart';
 import 'package:baocode/models/model_providers.dart';
@@ -139,10 +140,10 @@ void main() {
           'x-session-id': 's',
           'Authorization': 'Bearer nope',
           'x-api-key': 'nope',
-          'User-Agent': 'nope',
+          'User-Agent': 'opencode/1.17.12',
           'Host': 'nope',
         }),
-        {'x-session-id': 's'},
+        {'x-session-id': 's', 'User-Agent': 'opencode/1.17.12'},
       );
       // The Codex CLI's own, set by the app for each account and
       // conversation: kept from a Codex upstream only.
@@ -150,6 +151,7 @@ void main() {
         'chatgpt-account-id': 'other',
         'Originator': 'nope',
         'session-id': 'nope',
+        'User-Agent': 'nope',
         'x-tenant': 't',
       };
       expect(sanitizeHeaders(codexOwn, ProviderProtocol.codex), {
@@ -567,11 +569,8 @@ void main() {
       expect(UpstreamUrls.anthropicBase('not a url'), isNull);
       // The key goes as `x-api-key` on Anthropic's own only: a host
       // that merely ends with the domain is another party's.
-      ModelProvider ofHost(String host) => ModelProvider(
-        id: 'p',
-        name: 'p',
-        baseUrl: 'https://$host',
-      );
+      ModelProvider ofHost(String host) =>
+          ModelProvider(id: 'p', name: 'p', baseUrl: 'https://$host');
       expect(sendsApiKeyHeader(ofHost('api.anthropic.com')), isTrue);
       expect(sendsApiKeyHeader(ofHost('anthropic.com')), isTrue);
       expect(sendsApiKeyHeader(ofHost('notanthropic.com')), isFalse);
@@ -655,6 +654,104 @@ void main() {
         'https://x.example/v4/responses',
       );
       expect(UpstreamUrls.conversation(at('https://x.example')), isNull);
+    });
+
+    test('an upstream\'s own addresses over its base URL\'s, a model\'s '
+        'over its upstream\'s whatever its endpoint type', () {
+      final chat =
+          at(
+            'http://10.0.0.1/api/v1/openai/v1',
+            ProviderProtocol.openaiChat,
+          ).copyWith(
+            modelsUrl: () => ' http://10.0.0.1/api/models ',
+            endpointUrl: () => 'http://10.0.0.1/api/chat',
+            models: const [
+              ProviderModel(id: 'a'),
+              ProviderModel(id: 'b', endpointUrl: 'http://10.0.0.1/b'),
+              ProviderModel(
+                id: 'c',
+                protocol: ProviderProtocol.openaiResponses,
+              ),
+              ProviderModel(
+                id: 'd',
+                protocol: ProviderProtocol.anthropic,
+                endpointUrl: 'http://10.0.0.1/d/messages',
+              ),
+            ],
+          );
+      expect(chat.modelsUrl, 'http://10.0.0.1/api/models');
+      expect(UpstreamUrls.models(chat).join(' '), 'http://10.0.0.1/api/models');
+      expect(
+        UpstreamUrls.modelsByBase(chat).join(' '),
+        'http://10.0.0.1/api/v1/openai/v1/models',
+      );
+      expect('${UpstreamUrls.conversation(chat)}', 'http://10.0.0.1/api/chat');
+      expect(
+        '${UpstreamUrls.endpointByBase(chat)}',
+        'http://10.0.0.1/api/v1/openai/v1/chat/completions',
+      );
+      String? endpoint(String model) =>
+          UpstreamUrls.endpoint(chat.speakingFor(model))?.toString();
+      expect(endpoint('a'), 'http://10.0.0.1/api/chat');
+      expect(endpoint('b'), 'http://10.0.0.1/b');
+      // Of another type, no address of its own: as the base URL says.
+      expect(endpoint('c'), 'http://10.0.0.1/api/v1/openai/v1/responses');
+      expect(endpoint('d'), 'http://10.0.0.1/d/messages');
+      expect(chat.speakingFor('d').protocol, ProviderProtocol.anthropic);
+      // Kept as they are set.
+      expect(ModelProvider.fromJson(chat.toJson()), isNotNull);
+      final read = ModelProvider.fromJson(chat.toJson())!;
+      expect(read.modelsUrl, chat.modelsUrl);
+      expect(read.endpointUrl, chat.endpointUrl);
+      expect(read.models, chat.models);
+      // Emptied, none.
+      expect(chat.copyWith(endpointUrl: () => ' ').endpointUrl, isNull);
+      expect(
+        chat.copyWith(modelsUrl: () => '').toJson().containsKey('modelsUrl'),
+        isFalse,
+      );
+
+      // Anthropic's at an address of its own goes through the proxy.
+      final claude = at('https://x.example');
+      expect(claude.throughProxy, isFalse);
+      expect(
+        '${UpstreamUrls.messages(claude)}',
+        'https://x.example/v1/messages',
+      );
+      final relayed = claude.copyWith(
+        endpointUrl: () => 'https://x.example/relay/messages',
+      );
+      expect(relayed.throughProxy, isTrue);
+      expect(
+        '${UpstreamUrls.messages(relayed)}',
+        'https://x.example/relay/messages',
+      );
+      expect(
+        claude
+            .withModel(
+              const ProviderModel(id: 'm', endpointUrl: 'https://y.example/m'),
+            )
+            .throughProxy,
+        isTrue,
+      );
+      // A host from its addresses, with no base URL.
+      expect(
+        at(
+          '',
+          ProviderProtocol.openaiChat,
+        ).copyWith(endpointUrl: () => 'https://z.example/chat').connected,
+        isTrue,
+      );
+      // ChatGPT's (Codex) go where its accounts are, whatever is set.
+      final codex = at('', ProviderProtocol.codex).copyWith(
+        modelsUrl: () => 'https://x.example/models',
+        endpointUrl: () => 'https://x.example/chat',
+      );
+      expect(
+        UpstreamUrls.conversation(codex),
+        const CodexEndpoints().responses,
+      );
+      expect(UpstreamUrls.models(codex), UpstreamUrls.modelsByBase(codex));
     });
 
     test(

@@ -127,7 +127,10 @@ void main() {
       expect(find.text(why), findsNothing);
       await click(find.text('Why am I seeing this?'));
       await click(find.text('List My Site Too'));
-      expect(opened.last, Uri.parse('https://github.com/poying2018/baocode/issues/new'));
+      expect(
+        opened.last,
+        Uri.parse('https://github.com/poying2018/baocode/issues/new'),
+      );
       expect(find.text(why), findsNothing);
     });
 
@@ -483,8 +486,8 @@ void main() {
       }
       await tester.tap(find.text(button ?? 'Cancel').last);
       await tester.pumpAndSettle();
-      // It says it is fetching the models for two seconds at least, however
-      // soon they come: that time passes before the list is looked for.
+      // Its models got ready for 2s at least: a timer, not a frame, which
+      // pumpAndSettle does not wait for.
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       // A new upstream's models, fetched, to check.

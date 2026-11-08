@@ -6480,6 +6480,61 @@ class AppLocalizationsEn extends AppLocalizations {
   String get modelsAddProvider => 'Add Upstream';
 
   @override
+  String get modelsCustomUrls => 'Custom URLs';
+
+  @override
+  String get modelsCustomUrlsDescription =>
+      'Where models are listed and conversations go is made from the Base URL. When the upstream has them elsewhere, give them in full here.';
+
+  @override
+  String get modelsModelsUrl => 'Models URL';
+
+  @override
+  String get modelsModelsUrlDescription =>
+      'Testing the connection and fetching models GET it. Empty, the one in grey (from the Base URL) is used.';
+
+  @override
+  String get modelsEndpointUrl => 'Endpoint URL';
+
+  @override
+  String get modelsEndpointUrlDescription =>
+      'Every conversation is POSTed to it. Empty, the one in grey (from the Base URL) is used. A model of another endpoint type still goes by the Base URL.';
+
+  @override
+  String get modelsEndpointUrlAnthropicDescription =>
+      'Every conversation is POSTed to it, Claude Code through the local proxy. Empty, the one in grey (from the Base URL) is used. A model of another endpoint type still goes by the Base URL.';
+
+  @override
+  String get modelsModelEndpointUrlDescription =>
+      'Where this model\'s requests go, in full. Apart from the endpoint type: that says how a request is made, this only where it goes. Empty, the one in grey is used.';
+
+  @override
+  String get modelsMagpieJoin => 'Connect magpie';
+
+  @override
+  String get modelsMagpieBadge => 'Follows magpie';
+
+  @override
+  String get modelsMagpieGateway => 'magpie Gateway';
+
+  @override
+  String get modelsMagpieGatewayDescription =>
+      'Models, accounts and routing are set up in magpie, and this list follows it. New routing groups, image models and the models magpie gives Claude Code are turned on as they come; tick any other below.';
+
+  @override
+  String get modelsMagpieRunning => 'Running';
+
+  @override
+  String get modelsMagpieNotRunning => 'magpie isn\'t running';
+
+  @override
+  String get modelsMagpieNotRunningDetail =>
+      'Open magpie, or run magpie serve. Sessions on its models fail until it runs.';
+
+  @override
+  String get modelsMagpieSync => 'Sync Models';
+
+  @override
   String get modelsNewProviderName => 'New Upstream';
 
   @override

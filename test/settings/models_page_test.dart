@@ -8,6 +8,8 @@ import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/claude_code/claude_haiku.dart';
 import 'package:baocode/models/codex/codex_service.dart';
 import 'package:baocode/models/codex/codex_usage.dart';
+import 'package:baocode/models/magpie.dart';
+import 'package:baocode/models/magpie_follow.dart';
 import 'package:baocode/models/model_provider.dart';
 import 'package:baocode/models/model_providers.dart';
 import 'package:baocode/models/secret_store.dart';
@@ -140,6 +142,7 @@ void main() {
     CodexService? codex,
     ModelTester testModel = testModelThroughClaudeCode,
     Workspace? workspace,
+    MagpieFollow? magpie,
   }) async {
     tester.view.physicalSize = const Size(1000, 1600);
     tester.view.devicePixelRatio = 1;
@@ -153,6 +156,7 @@ void main() {
             testModel: testModel,
             codex: codex,
             workspace: workspace,
+            magpie: magpie,
           ),
         ),
       ),
@@ -420,10 +424,7 @@ void main() {
     await tester.tap(find.text('Gateway').last);
     await tester.pumpAndSettle();
     expect(find.text('GPT-6.1 Terra (congee)'), findsOneWidget);
-    expect(
-      find.text('GPT-6.1 Terra (github-copilot)'),
-      findsOneWidget,
-    );
+    expect(find.text('GPT-6.1 Terra (github-copilot)'), findsOneWidget);
   });
 
   testWidgets('a model is added by hand, and edited', (tester) async {
@@ -454,7 +455,8 @@ void main() {
     );
     await tester.enterText(fields.at(0), 'my-model');
     await tester.enterText(fields.at(1), 'Mine');
-    await tester.enterText(fields.at(2), '128k');
+    // Its endpoint URL (2) left to its upstream's.
+    await tester.enterText(fields.at(3), '128k');
     // An effort taken off, a context added: its own lists.
     await tester.tap(
       find.byWidgetPredicate(
@@ -462,7 +464,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.enterText(fields.at(4), '64k');
+    await tester.enterText(fields.at(5), '64k');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
     await tester.ensureVisible(find.text('Does not take images'));
@@ -874,6 +876,79 @@ void main() {
     });
   });
 
+  testWidgets('an upstream\'s own addresses, folded under its connection, '
+      'and a model\'s own apart from its endpoint type', (tester) async {
+    await providers.save(
+      const ModelProvider(
+        id: 'gw',
+        name: 'Gateway',
+        protocol: ProviderProtocol.openaiChat,
+        baseUrl: 'http://10.0.0.1/api/v1/openai/v1',
+        models: [ProviderModel(id: 'm')],
+      ),
+    );
+    await pump(tester);
+    await tester.tap(find.text('Gateway'));
+    await tester.pumpAndSettle();
+    expect(find.text('Models URL'), findsNothing);
+    await tester.ensureVisible(find.text('Custom URLs'));
+    await tester.tap(find.text('Custom URLs'));
+    await tester.pumpAndSettle();
+    // What the base URL makes, while none is set.
+    expect(
+      find.text('http://10.0.0.1/api/v1/openai/v1/models'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('http://10.0.0.1/api/v1/openai/v1/chat/completions'),
+      findsOneWidget,
+    );
+    await type(tester, 'Models URL', 'http://10.0.0.1/api/models');
+    await type(tester, 'Endpoint URL', 'http://10.0.0.1/api/chat');
+    var provider = providers.provider('gw')!;
+    expect(provider.modelsUrl, 'http://10.0.0.1/api/models');
+    expect(provider.endpointUrl, 'http://10.0.0.1/api/chat');
+
+    await tester.ensureVisible(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IdeActionButton && widget.tooltip == 'More Actions',
+      ),
+    );
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IdeActionButton && widget.tooltip == 'More Actions',
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit…'));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(ModelEditDialog);
+    // Its upstream's endpoint, while it has none of its own.
+    expect(
+      find.descendant(
+        of: dialog,
+        matching: find.text('http://10.0.0.1/api/chat'),
+      ),
+      findsOneWidget,
+    );
+    final input = find.descendant(
+      of: find.descendant(
+        of: dialog,
+        matching: find.bySemanticsLabel('Endpoint URL'),
+      ),
+      matching: find.byType(EditableText),
+    );
+    await tester.enterText(input.first, ' http://10.0.0.1/m ');
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    provider = providers.provider('gw')!;
+    expect(provider.models.single.endpointUrl, 'http://10.0.0.1/m');
+    // Its endpoint type as it was: the upstream's.
+    expect(provider.models.single.protocol, isNull);
+  });
+
   testWidgets('deleting an upstream asks first, and takes its key', (
     tester,
   ) async {
@@ -1124,5 +1199,69 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(find.text('Address after sign-in'), findsNothing);
+  });
+
+  group('magpie', () {
+    var status = const MagpieStatus(installed: true, version: '0.13.0');
+    MagpieFollow follow() => MagpieFollow(
+      providers: providers,
+      probe: () async => status,
+      list: (provider, key) async => const [
+        RemoteModel('auto/claude-opus-5-5', label: 'Opus · routing group'),
+        RemoteModel('deepseek/deepseek-v4', label: 'DeepSeek V4 · DeepSeek'),
+        RemoteModel('yiyuan/gpt-image-2', kind: ModelKind.image),
+      ],
+      claudeSettings: () async => null,
+    );
+
+    setUp(() {
+      status = const MagpieStatus(installed: true, version: '0.13.0');
+    });
+
+    testWidgets('not here: not offered', (tester) async {
+      status = const MagpieStatus();
+      await pump(tester, magpie: follow());
+      await tester.pump();
+      expect(find.text('Connect magpie'), findsNothing);
+    });
+
+    testWidgets('here: connected in one click, its models followed', (
+      tester,
+    ) async {
+      final magpie = follow();
+      await pump(tester, magpie: magpie);
+      await tester.pump();
+      await tester.tap(find.text('Connect magpie'));
+      await tester.pumpAndSettle();
+      final provider = providers.providers.single;
+      expect(provider.followsMagpie, isTrue);
+      expect(await providers.key(provider.id), Magpie.key);
+      expect(
+        {
+          for (final model in provider.models)
+            if (model.enabled) model.id,
+        },
+        {'auto/claude-opus-5-5', 'yiyuan/gpt-image-2'},
+      );
+      // Its page: the gateway, not an address or a key to fill in.
+      expect(find.text('magpie Gateway'), findsOneWidget);
+      expect(find.textContaining('Running · 127.0.0.1:3425'), findsOneWidget);
+      expect(find.text('Base URL'), findsNothing);
+      expect(find.text('Fetch from Upstream…'), findsNothing);
+      expect(find.text('Add Model…'), findsNothing);
+      // Back in the list: marked as following, and offered no more.
+      await tester.tap(find.byType(IdeBackButton));
+      await tester.pumpAndSettle();
+      expect(find.text('Follows magpie'), findsOneWidget);
+      expect(find.text('Connect magpie'), findsNothing);
+    });
+
+    testWidgets('not running: said so in the list', (tester) async {
+      await providers.save(Magpie.provider('magpie'));
+      status = const MagpieStatus(installed: true);
+      await pump(tester, magpie: follow());
+      await tester.pumpAndSettle();
+      expect(find.textContaining("magpie isn't running"), findsOneWidget);
+    });
   });
 }

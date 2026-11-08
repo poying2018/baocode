@@ -71,14 +71,23 @@ abstract final class UpstreamUrls {
 
   static final _version = RegExp(r'^v\d+[a-z0-9.]*$', caseSensitive: false);
 
-  /// Where [provider] may list its models, to be tried in order; empty
-  /// when its base URL is not an http(s) URL. An Anthropic-compatible
-  /// endpoint under a prefix of another API
+  /// Where [provider] may list its models, to be tried in order: its own
+  /// list's address ([ModelProvider.modelsUrl]) alone, when it has one,
+  /// else as its base URL says ([modelsByBase]).
+  static List<Uri> models(ModelProvider provider) => switch (provider) {
+    ModelProvider(protocol: ProviderProtocol.codex) => modelsByBase(provider),
+    ModelProvider(:final modelsUrl?) => [?parse(modelsUrl)],
+    _ => modelsByBase(provider),
+  };
+
+  /// Where [provider] may list its models as its base URL says, to be
+  /// tried in order; empty when its base URL is not an http(s) URL. An
+  /// Anthropic-compatible endpoint under a prefix of another API
   /// (`https://api.deepseek.com/anthropic`) often lists none of its own:
   /// the API's `/v1/models` above it follows, each prefix shorter. Those
   /// whose list is elsewhere ([_modelLists]) are asked there first, the
   /// rest still after: should they move it, or list at the endpoint.
-  static List<Uri> models(ModelProvider provider) =>
+  static List<Uri> modelsByBase(ModelProvider provider) =>
       switch (provider.protocol) {
         ProviderProtocol.codex => [
           const CodexEndpoints().models(codexVersionOf(provider)),
@@ -127,8 +136,19 @@ abstract final class UpstreamUrls {
   }
 
   /// Where [provider] takes a conversation: Chat Completions or
-  /// Responses (Anthropic's is Claude Code's to call).
+  /// Responses (Anthropic's is Claude Code's to call, or [messages]); its
+  /// own endpoint ([ModelProvider.endpointUrl]), when it has one.
   static Uri? conversation(ModelProvider provider) =>
+      switch (provider.endpointUrl) {
+        final url? when provider.protocol != ProviderProtocol.codex => parse(
+          url,
+        ),
+        _ => conversationByBase(provider),
+      };
+
+  /// Where [provider] takes a conversation as its base URL says, its own
+  /// endpoint aside.
+  static Uri? conversationByBase(ModelProvider provider) =>
       provider.protocol == ProviderProtocol.codex
       ? const CodexEndpoints().responses
       : switch (openaiBase(provider.baseUrl)) {
@@ -139,6 +159,37 @@ abstract final class UpstreamUrls {
           },
           null => null,
         };
+
+  /// Where [provider], one of Anthropic's API, takes a conversation (its
+  /// tokens counted at `/count_tokens` under it): its own endpoint
+  /// ([ModelProvider.endpointUrl]), else `/v1/messages` under its base.
+  static Uri? messages(ModelProvider provider) =>
+      switch (provider.endpointUrl) {
+        final url? => parse(url),
+        _ => messagesByBase(provider),
+      };
+
+  /// Where [provider], one of Anthropic's API, takes a conversation as its
+  /// base URL says.
+  static Uri? messagesByBase(ModelProvider provider) =>
+      switch (anthropicBase(provider.baseUrl)) {
+        final base? => Uri.parse('$base/v1/messages'),
+        null => null,
+      };
+
+  /// Where a conversation goes to [provider], its protocol Anthropic's or
+  /// OpenAI's.
+  static Uri? endpoint(ModelProvider provider) =>
+      provider.protocol == ProviderProtocol.anthropic
+      ? messages(provider)
+      : conversation(provider);
+
+  /// Where a conversation goes as [provider]'s base URL says, its protocol
+  /// Anthropic's or OpenAI's: what its own endpoint stands in for.
+  static Uri? endpointByBase(ModelProvider provider) =>
+      provider.protocol == ProviderProtocol.anthropic
+      ? messagesByBase(provider)
+      : conversationByBase(provider);
 }
 
 /// Whether [provider]'s key goes as `x-api-key`: asked for, or left to
@@ -237,7 +288,10 @@ String openCodeSession(String? session) {
 
 /// The models in a `/v1/models` answer: OpenAI's `data` (or a bare list),
 /// Anthropic's `data` with `display_name`; a context window where the
-/// upstream says (OpenRouter's `context_length`, and others').
+/// upstream says (OpenRouter's `context_length`, and others'). magpie's
+/// gateway says more: a name with its provider's (`magpie_label`), the
+/// efforts (`reasoning_levels`), whether it reads images and what it
+/// makes (`modalities`, `kind`).
 List<RemoteModel> parseModelList(Object? json) {
   final list = switch (json) {
     {'data': final List data} => data,
@@ -254,7 +308,9 @@ List<RemoteModel> parseModelList(Object? json) {
       _ => null,
     };
     if (id == null || !seen.add(id)) continue;
-    final label = switch (item['display_name'] ?? item['displayName']) {
+    final label = switch (item['magpie_label'] ??
+        item['display_name'] ??
+        item['displayName']) {
       final String label when label.trim().isNotEmpty && label != id =>
         label.trim(),
       _ => null,
@@ -279,21 +335,41 @@ List<RemoteModel> parseModelList(Object? json) {
       }
     }
     models.add(
-      RemoteModel(id, label: label, contextWindow: window, kind: _kindOf(item)),
+      RemoteModel(
+        id,
+        label: label,
+        contextWindow: window,
+        efforts: switch (item['reasoning_levels']) {
+          final List levels when levels.isNotEmpty => [
+            for (final level in levels)
+              if (level is String && level.trim().isNotEmpty) level.trim(),
+          ],
+          _ => null,
+        },
+        images: switch (item['modalities']) {
+          {'input': final List inputs} => inputs.any(
+            (input) => input is String && input.startsWith('image'),
+          ),
+          _ => null,
+        },
+        kind: _kindOf(item),
+      ),
     );
   }
   return models;
 }
 
-/// What a listed model is for, where its entry says: what it answers with
-/// (OpenRouter's `architecture.output_modalities`, others'
-/// `output_modalities`), or its type (SiliconFlow's `image`,
-/// `text-to-image`). Null when it does not say.
+/// What a listed model is for, where its entry says: magpie's `kind`, what
+/// it answers with (OpenRouter's `architecture.output_modalities`, others'
+/// `output_modalities`, magpie's `modalities.output`), or its type
+/// (SiliconFlow's `image`, `text-to-image`). Null when it does not say.
 ModelKind? _kindOf(Map item) {
+  if (item['kind'] == 'image') return ModelKind.image;
   final outputs = switch (item['architecture']) {
     {'output_modalities': final List outputs} => outputs,
-    _ => switch (item['output_modalities']) {
-      final List outputs => outputs,
+    _ => switch ((item['output_modalities'], item['modalities'])) {
+      (final List outputs, _) => outputs,
+      (_, {'output': final List outputs}) => outputs,
       _ => null,
     },
   };
@@ -319,15 +395,30 @@ ModelKind? _kindOf(Map item) {
 /// unless in [enable]; known ones kept as the user set them (on if in
 /// [enable]); those no longer listed marked [ProviderModel.missing] (kept;
 /// added by hand, left alone).
+///
+/// With [follow] (an upstream that follows an app, magpie), known ones take
+/// what the list says of them, its names, window, efforts and kind over
+/// what was there: whether they are on stays the user's.
 List<ProviderModel> mergeModelList(
   List<ProviderModel> models,
   List<RemoteModel> listed, {
   Set<String> enable = const {},
+  bool follow = false,
 }) {
   final byId = {for (final model in listed) model.id: model};
   final merged = <ProviderModel>[
     for (final model in models)
-      if (byId[model.id] case final remote?)
+      if (byId[model.id] case final remote? when follow)
+        model.copyWith(
+          missing: false,
+          label: () => remote.label,
+          contextWindow: () => remote.contextWindow,
+          efforts: () => remote.efforts,
+          images: remote.images ?? true,
+          kind: () => _listedKind(remote),
+          enabled: enable.contains(model.id) ? true : null,
+        )
+      else if (byId[model.id] case final remote?)
         model.copyWith(
           missing: false,
           contextWindow: model.contextWindow == null

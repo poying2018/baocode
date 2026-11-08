@@ -6102,6 +6102,61 @@ class AppLocalizationsZh extends AppLocalizations {
   String get modelsAddProvider => '添加上游';
 
   @override
+  String get modelsCustomUrls => '自定义地址';
+
+  @override
+  String get modelsCustomUrlsDescription =>
+      '拉模型列表和对话请求的地址默认由 Base URL 拼出；上游不按惯例时，在这里填完整地址。';
+
+  @override
+  String get modelsModelsUrl => '模型列表地址';
+
+  @override
+  String get modelsModelsUrlDescription =>
+      '测试连接和获取模型时 GET 这个地址。留空用灰字所示、由 Base URL 拼出的地址。';
+
+  @override
+  String get modelsEndpointUrl => '端点地址';
+
+  @override
+  String get modelsEndpointUrlDescription =>
+      '每次对话 POST 到这个完整地址。留空用灰字所示、由 Base URL 拼出的地址。单独设了其他端点类型的模型仍按 Base URL。';
+
+  @override
+  String get modelsEndpointUrlAnthropicDescription =>
+      '每次对话 POST 到这个完整地址，Claude Code 改经本地代理转发。留空用灰字所示、由 Base URL 拼出的地址。单独设了其他端点类型的模型仍按 Base URL。';
+
+  @override
+  String get modelsModelEndpointUrlDescription =>
+      '这个模型的请求发到这个完整地址。与端点类型互不影响：类型决定请求格式，地址只决定发到哪里。留空用灰字所示的地址。';
+
+  @override
+  String get modelsMagpieJoin => '接入 magpie';
+
+  @override
+  String get modelsMagpieBadge => '跟随 magpie';
+
+  @override
+  String get modelsMagpieGateway => 'magpie 网关';
+
+  @override
+  String get modelsMagpieGatewayDescription =>
+      '模型、账号和路由都在 magpie 里管理，这里的列表跟着它自动更新。新出现的路由组、图片模型，以及 magpie 给 Claude Code 选的模型会自动启用，其他的在下面勾选。';
+
+  @override
+  String get modelsMagpieRunning => '运行中';
+
+  @override
+  String get modelsMagpieNotRunning => 'magpie 未运行';
+
+  @override
+  String get modelsMagpieNotRunningDetail =>
+      '打开 magpie，或运行 magpie serve。它没运行时，用它的模型的会话会失败。';
+
+  @override
+  String get modelsMagpieSync => '同步模型';
+
+  @override
   String get modelsNewProviderName => '新上游';
 
   @override

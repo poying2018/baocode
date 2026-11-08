@@ -10464,6 +10464,102 @@ abstract class AppLocalizations {
   /// **'Add Upstream'**
   String get modelsAddProvider;
 
+  /// No description provided for @modelsCustomUrls.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom URLs'**
+  String get modelsCustomUrls;
+
+  /// No description provided for @modelsCustomUrlsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Where models are listed and conversations go is made from the Base URL. When the upstream has them elsewhere, give them in full here.'**
+  String get modelsCustomUrlsDescription;
+
+  /// No description provided for @modelsModelsUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Models URL'**
+  String get modelsModelsUrl;
+
+  /// No description provided for @modelsModelsUrlDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Testing the connection and fetching models GET it. Empty, the one in grey (from the Base URL) is used.'**
+  String get modelsModelsUrlDescription;
+
+  /// No description provided for @modelsEndpointUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Endpoint URL'**
+  String get modelsEndpointUrl;
+
+  /// No description provided for @modelsEndpointUrlDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Every conversation is POSTed to it. Empty, the one in grey (from the Base URL) is used. A model of another endpoint type still goes by the Base URL.'**
+  String get modelsEndpointUrlDescription;
+
+  /// No description provided for @modelsEndpointUrlAnthropicDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Every conversation is POSTed to it, Claude Code through the local proxy. Empty, the one in grey (from the Base URL) is used. A model of another endpoint type still goes by the Base URL.'**
+  String get modelsEndpointUrlAnthropicDescription;
+
+  /// No description provided for @modelsModelEndpointUrlDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Where this model\'s requests go, in full. Apart from the endpoint type: that says how a request is made, this only where it goes. Empty, the one in grey is used.'**
+  String get modelsModelEndpointUrlDescription;
+
+  /// No description provided for @modelsMagpieJoin.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect magpie'**
+  String get modelsMagpieJoin;
+
+  /// No description provided for @modelsMagpieBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Follows magpie'**
+  String get modelsMagpieBadge;
+
+  /// No description provided for @modelsMagpieGateway.
+  ///
+  /// In en, this message translates to:
+  /// **'magpie Gateway'**
+  String get modelsMagpieGateway;
+
+  /// No description provided for @modelsMagpieGatewayDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Models, accounts and routing are set up in magpie, and this list follows it. New routing groups, image models and the models magpie gives Claude Code are turned on as they come; tick any other below.'**
+  String get modelsMagpieGatewayDescription;
+
+  /// No description provided for @modelsMagpieRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get modelsMagpieRunning;
+
+  /// No description provided for @modelsMagpieNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'magpie isn\'t running'**
+  String get modelsMagpieNotRunning;
+
+  /// No description provided for @modelsMagpieNotRunningDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Open magpie, or run magpie serve. Sessions on its models fail until it runs.'**
+  String get modelsMagpieNotRunningDetail;
+
+  /// No description provided for @modelsMagpieSync.
+  ///
+  /// In en, this message translates to:
+  /// **'Sync Models'**
+  String get modelsMagpieSync;
+
   /// No description provided for @modelsNewProviderName.
   ///
   /// In en, this message translates to:
