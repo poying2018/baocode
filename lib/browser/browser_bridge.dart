@@ -109,6 +109,10 @@ class BrowserBridge extends ChangeNotifier {
   /// runner cannot resolve it, `LOCALAPPDATA` is still the same for both
   /// processes; if that is absent too, the bridge is unsupported rather
   /// than using a folder the host resolves differently.
+  ///
+  /// The result is a Windows path wherever the code runs: the folder is
+  /// read by the Windows host, so the name is joined with `\` by hand
+  /// instead of the running platform's separator.
   @visibleForTesting
   static String windowsDiscoveryFolder({
     required Map<String, String> environment,
@@ -117,7 +121,7 @@ class BrowserBridge extends ChangeNotifier {
     final override = environment['BAOCODE_BROWSER_DISCOVERY_DIR'];
     if (override != null && override.isNotEmpty) return override;
     if (localAppData != null && localAppData.isNotEmpty) {
-      return p.join(localAppData, 'baocode-browser');
+      return '$localAppData\\baocode-browser';
     }
     final local = environment['LOCALAPPDATA'];
     if (local == null || local.isEmpty) {
@@ -125,7 +129,7 @@ class BrowserBridge extends ChangeNotifier {
         'Windows has no local application data folder for the browser bridge.',
       );
     }
-    return p.join(local, 'baocode-browser');
+    return '$local\\baocode-browser';
   }
 
   /// Windows' local application data folder, as the runner resolved it
