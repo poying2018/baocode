@@ -89,9 +89,13 @@ class ToolCallRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final files = FileOpenScope.maybeOf(context);
     final file = _file(files);
+    final objectName = switch (kind) {
+      ToolKind.read || ToolKind.edit || ToolKind.listDir => fileNameOf(target),
+      _ => target,
+    };
     Widget header = StepHeader(
       verb: label ?? toolVerb(kind, status: status, l10n: context.l10n),
-      object: target,
+      object: objectName,
       detail: detail,
       running: _running,
       expanded: expanded,
@@ -119,8 +123,8 @@ class ToolCallRow extends StatelessWidget {
         _ => null,
       },
     );
-    // A file read shows only its name: the whole path on hover.
-    if (kind == ToolKind.read && path != null) {
+    // A file read or edit shows only its name: the whole path on hover.
+    if ((kind == ToolKind.read || kind == ToolKind.edit) && path != null) {
       header = HoverTooltip(content: _pathTooltip, child: header);
     }
     if (file != null) {

@@ -4,7 +4,6 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 
 import '../../chat/chat_models.dart';
 import '../../workspace/editor_launcher.dart' show openExternal;
@@ -2650,7 +2649,7 @@ class CodexKernel
       final path = actions.first['path'] as String? ?? '';
       return ToolCallItem(
         kind: ToolKind.read,
-        target: p.basename(path),
+        target: path.split(RegExp(r'[/\\]')).last,
         path: path,
       );
     }
