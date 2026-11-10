@@ -1146,14 +1146,14 @@ void main() {
             .replaceFirst('browser: true', 'browser: false'),
       );
       // A bot it made, saying it is the assistant, on the computer.
-      folders.make(p.normalize('/bots/cat'));
+      folders.make(p.join('/bots', 'cat'));
       write(
-        p.normalize('/bots/cat/BOT.md'),
+        p.join('/bots', 'cat', 'BOT.md'),
         '---\nname: 阿猫\navatar: 🐱\nagents: true\nassistant: true\n'
             '---\n\n你是一只懒猫\n',
       );
-      write(p.normalize('/bots/cat/LATER.md'), '- 2026-10-29 16:00 喊用户喝水\nmine\n');
-      write(p.normalize('/bots/USER.md'), '---\nname: Leo\n---\n');
+      write(p.join('/bots', 'cat', 'LATER.md'), '- 2026-10-29 16:00 喊用户喝水\nmine\n');
+      write(p.join('/bots', 'USER.md'), '---\nname: Leo\n---\n');
       // Its turn, done.
       final session = bots.threadFor(assistant).session;
       session.send(const ComposerMessage(text: 'hi'));
@@ -1176,16 +1176,16 @@ void main() {
       expect(cat.assistant, isFalse);
       expect(cat.abilities, isEmpty);
       expect(cat.created, now);
-      expect(read(p.normalize('/bots/cat/BOT.md')), contains('agents: false'));
+      expect(read(p.join('/bots', 'cat', 'BOT.md')), contains('agents: false'));
       expect(bots.threadOf(cat), isNotNull);
       expect(bots.laters(cat).single.at, DateTime(2026, 10, 29, 16));
       expect(bots.me.name, 'Leo');
       // Come due: its line gone, what else it wrote kept.
       now = DateTime(2026, 10, 29, 16, 1);
       bots.deliver();
-      expect(read(p.normalize('/bots/cat/LATER.md')), 'mine\n');
+      expect(read(p.join('/bots', 'cat', 'LATER.md')), 'mine\n');
       // Gone with its folder.
-      folders.delete(p.normalize('/bots/cat'));
+      folders.delete(p.join('/bots', 'cat'));
       bots.reload(by: self);
       expect(bots.byId('cat'), isNull);
       // The user, by hand: as they wrote it.
