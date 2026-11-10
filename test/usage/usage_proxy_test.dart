@@ -462,9 +462,14 @@ void main() {
         ..contentType = ContentType.json;
       asked.write(jsonEncode(request(model: 'claude-x')));
       if (answering) {
-        // Its answer begun, the rest held upstream.
+        // Its answer begun, the rest held upstream: read up to the first
+        // of the answer itself, not an event line that precedes it.
         final answer = await asked.close();
-        await answer.first;
+        var seen = '';
+        await for (final chunk in answer) {
+          seen += utf8.decode(chunk, allowMalformed: true);
+          if (seen.contains('"text_delta"')) break;
+        }
       } else {
         unawaited(asked.close().then((_) {}, onError: (_) {}));
         while (upstream.ended.isEmpty) {
