@@ -114,7 +114,9 @@ void main() {
         final served = target != null
             ? _served(target.startsWith('/') ? target.substring(1) : target)
             : _served(
-                p.join(p.dirname(file.path).substring('site'.length), path),
+                // From the site's folder: a relative path, whatever the
+                // machine's separators are.
+                p.relative(p.join(p.dirname(file.path), path), from: 'site'),
               );
         if (!served) missing.add('${p.basename(file.path)}: $url');
       }
