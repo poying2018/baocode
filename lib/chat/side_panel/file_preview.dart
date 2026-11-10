@@ -832,9 +832,8 @@ class _FilePreviewState extends State<FilePreview> {
       files: files,
       l10n: l10n,
       root: widget.root,
-      context:
-          widget.paths ??
-          (remote ? hostPathsFor(widget.root ?? '') : p.context),
+      // The project's own spelling: a POSIX root's, on Windows too.
+      context: widget.paths ?? hostPathsFor(widget.root ?? _request.path),
       remote: remote,
       confirmLarge: (name, size) async {
         if (!mounted) return false;
