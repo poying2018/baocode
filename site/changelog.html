@@ -30,6 +30,47 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.9.7">
+    <h2 class="plain"><a href="#v1.9.7">1.9.7</a></h2>
+    <p>BaoCode Claude 1.9.7</p>
+    <p>A feature release: themes that follow the system, project ordering, and
+    steadier sessions when a turn is stopped or its stream is cut.</p>
+    <p>New</p>
+    <ul>
+    <li>The theme can be set to Auto, following the system's light or dark
+    appearance; switching is smooth rather than a hard repaint.</li>
+    <li>Projects in the sidebar are ordered by recent activity, or in the order
+    you arrange them.</li>
+    <li>A stopped turn's work folds like a turn read back from the session file,
+    so a long conversation stays compact.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>Upstream addresses are shown in full, and Magpie's gateway is followed
+    as an upstream: its models are taken again on start, every ten minutes
+    and as its page opens.</li>
+    <li>Update checks keep a high-water version: a manifest older than the one
+    already run or installed is a replay, not a downgrade, while the same
+    version published again with a new file is still offered.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A stopped turn no longer takes the next one with it: a result come late
+    for it, or a stale <code>started</code> message, does not end the turn sent since.</li>
+    <li>A proxy's authentication challenge is not mistaken for Claude Code being
+    logged out, so a dropped process is retried as it should be.</li>
+    <li>What Claude Code abandons in a cut stream goes, instead of staying in the
+    conversation.</li>
+    <li>A tool call on Windows names the file, not its whole path.</li>
+    <li>A table's text selects like the text around it.</li>
+    <li>A removed SSH host is not connected to at startup.</li>
+    <li>The numpad's 1 and 7 type digits with NumLock on.</li>
+    <li>The browser extension joins the Windows discovery folder with Windows'
+    separator, so it finds the app reliably.</li>
+    </ul>
+    <p>This update carries the current Claude Code.</p>
+  </section>
+
   <section class="release" id="v1.9.6">
     <h2 class="plain"><a href="#v1.9.6">1.9.6</a></h2>
     <p>BaoCode Claude 1.9.6</p>
