@@ -970,9 +970,11 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   /// [path] absolute, on the project's host (a remote project's paths are
   /// its host's).
   /// How the project's paths are spelled: its host's way (POSIX) for a
-  /// remote one, this machine's otherwise.
+  /// remote one, the style its own root is written in otherwise.
   p.Context get paths => switch (kernelContext.cwd) {
-    final cwd? => RemoteLocation.pathsOf(cwd),
+    final cwd? => RemoteLocation.isRemote(cwd)
+        ? RemoteLocation.pathsOf(cwd)
+        : PathStyle.of(cwd),
     null => p.context,
   };
 
