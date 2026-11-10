@@ -4240,6 +4240,12 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     // the way to the other layout at the end, so each is where it was after
     // a switch.
     final tools = [
+      // Gone on with elsewhere since read here: read anew, in place.
+      if (!embedded && _reloadable(thread))
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: _reloadButton(thread),
+        ),
       if (!place.alone) ...[
         // With Close Pane's keys, which close the focused pane: as each of
         // upstream's tabs titles its close button with Close's.
@@ -4513,6 +4519,30 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       under: chat,
       leaving: leaving == null ? null : chatOf(leaving),
     );
+  }
+
+  /// Whether [thread]'s kept session was talked in elsewhere since it was
+  /// read here, and can be read anew now (see [Workspace.reload]).
+  bool _reloadable(AgentThread thread) =>
+      thread.goneOnElsewhere && _workspace.canReload(thread);
+
+  Widget _reloadButton(AgentThread thread) => SidebarIconButton(
+    icon: Codicons.refresh,
+    tooltip: context.l10n.chatReload,
+    onTap: () => _reload(thread),
+    size: 22,
+  );
+
+  /// Reads [thread]'s kept session anew, its chat and side panel as they
+  /// were.
+  void _reload(AgentThread thread) {
+    final was = thread.session;
+    _workspace.reload(thread);
+    if (identical(thread.session, was)) return;
+    _sidePanel.carryOver(was, thread.session);
+    // A chat of the conversation before is not shown again: built anew.
+    _chatKeys[thread] = GlobalKey();
+    _ideChatWidgets.remove(thread);
   }
 
   /// The file in front on the side panel, while it shows [thread]'s: on
