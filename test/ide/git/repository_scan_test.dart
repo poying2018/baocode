@@ -198,7 +198,8 @@ void main() {
               '--is-inside-work-tree',
               '--show-prefix',
             ]);
-            expect(workingDirectory, p.normalize('/w/site'));
+            // The root's spelling: POSIX, wherever the test runs.
+            expect(workingDirectory, '/w/site');
             return output;
           },
     ).isRepositoryTop();

@@ -2432,7 +2432,6 @@
   "mobileStatus": "状态",
   "mobileStatusOff": "已关闭",
   "mobileStatusStarting": "正在启动…",
-  "mobileStatusListening": "正在监听端口 {port}",
   "mobileStatusFailed": "无法监听：{error}",
   "mobileAddresses": "地址",
   "mobileAddressesDescription": "手机按此顺序尝试连接这台电脑：先局域网，再公网。",

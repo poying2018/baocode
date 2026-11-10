@@ -27,6 +27,9 @@ void main() {
   late Directory temp;
   late String root;
 
+  /// [relative], spelled with [root]'s separators.
+  String at(String relative) => p.joinAll([root, ...relative.split('/')]);
+
   Future<void> git(List<String> arguments) async {
     final result = await Process.run('git', arguments, workingDirectory: root);
     expect(result.exitCode, 0, reason: '${result.stderr}');
@@ -44,12 +47,15 @@ void main() {
     // Not `init -b` (Git 2.28+): the tests run on older Gits too (#311).
     await git(['init', '-q']);
     await git(['symbolic-ref', 'HEAD', 'refs/heads/main']);
-    final hooks = await Directory(p.join(root, '.no-hooks')).create();
+    final hooks = await Directory(at('.no-hooks')).create();
     for (final (key, value) in [
       ('user.name', 'Ada'),
       ('user.email', 'ada@example.com'),
       ('commit.gpgsign', 'false'),
       ('core.hooksPath', hooks.path),
+      // The files as written: Windows' Git would otherwise make the
+      // checkout's line endings its own.
+      ('core.autocrlf', 'false'),
     ]) {
       await git(['config', key, value]);
     }
@@ -62,7 +68,7 @@ void main() {
   tearDown(() => temp.delete(recursive: true));
 
   test('status, stage, unstage, discard and commit', () async {
-    final service = IdeGitService(p.join(root, 'lib'));
+    final service = IdeGitService(at('lib'));
     expect(await service.repositoryRoot(), root);
 
     await write('lib/a.dart', 'changed\n');
@@ -75,24 +81,24 @@ void main() {
       [('a.dart', IdeGitStatus.modified), ('new.dart', IdeGitStatus.untracked)],
     );
     expect(
-      state.decorations.folder(p.join(root, 'build'))!.colorId,
+      state.decorations.folder(at('build'))!.colorId,
       'gitDecoration.ignoredResourceForeground',
     );
 
-    await service.stage([p.join(root, 'lib/new.dart')]);
+    await service.stage([at('lib/new.dart')]);
     state = (await service.status())!;
     expect(
       state.group(IdeGitGroup.staged).single.status,
       IdeGitStatus.indexAdded,
     );
 
-    await service.unstage([p.join(root, 'lib/new.dart')]);
+    await service.unstage([at('lib/new.dart')]);
     state = (await service.status())!;
     expect(state.group(IdeGitGroup.staged), isEmpty);
 
     await service.discard(state.resources);
-    expect(await File(p.join(root, 'lib/a.dart')).readAsString(), 'a\n');
-    expect(await File(p.join(root, 'lib/new.dart')).exists(), isFalse);
+    expect(await File(at('lib/a.dart')).readAsString(), 'a\n');
+    expect(await File(at('lib/new.dart')).exists(), isFalse);
     expect((await service.status())!.resources, isEmpty);
 
     await write('lib/a.dart', 'second\n');
@@ -105,12 +111,12 @@ void main() {
     expect(log.first.references.single.name, 'main');
     expect(log.first.parentIds, [log.last.id]);
 
-    final history = await service.fileLog(p.join(root, 'lib/a.dart'));
+    final history = await service.fileLog(at('lib/a.dart'));
     expect(history, hasLength(2));
     final changes = await service.commitChanges(log.first.id);
     expect(
       [for (final c in changes) (c.path, c.status)],
-      [(p.join(root, 'lib/a.dart'), 'M')],
+      [(at('lib/a.dart'), 'M')],
     );
   }, skip: hasGit ? false : 'Git is not installed');
 
@@ -123,7 +129,7 @@ void main() {
     await git(['branch', 'older', first]);
     await git(['tag', '-a', 'v1', '-m', 'Version 1', second]);
     // A remote's branch as a fetch would have left it (never fetched).
-    await git(['remote', 'add', 'origin', p.join(root, 'nowhere')]);
+    await git(['remote', 'add', 'origin', at('nowhere')]);
     await git(['update-ref', 'refs/remotes/origin/topic', first]);
 
     final refs = await service.refs();
@@ -254,12 +260,12 @@ void main() {
     // Text, where Git takes it for that.
     expect(
       utf8.decode(
-        await service.showBytes('HEAD', p.join(root, 'img/icon.svg')),
+        await service.showBytes('HEAD', at('img/icon.svg')),
       ),
       '<svg>\n</svg>',
     );
     await expectLater(
-      service.showBytes('HEAD', p.join(root, 'img/none.png')),
+      service.showBytes('HEAD', at('img/none.png')),
       throwsA(isA<IdeGitException>()),
     );
   }, skip: hasGit ? false : 'Git is not installed');
@@ -267,7 +273,7 @@ void main() {
   test('blame gives the commits of the lines on disk', () async {
     final service = IdeGitService(root);
     await write('lib/a.dart', 'a\nb\n');
-    final blame = (await service.blame(p.join(root, 'lib/a.dart')))!;
+    final blame = (await service.blame(at('lib/a.dart')))!;
     final commit = blame.singleWhere((b) => !b.uncommitted);
     expect(commit.subject, 'Initial commit');
     expect(commit.authorName, 'Ada');
@@ -279,7 +285,7 @@ void main() {
     ]);
 
     await write('lib/new.dart', 'new\n');
-    expect(await service.blame(p.join(root, 'lib/new.dart')), isNull);
+    expect(await service.blame(at('lib/new.dart')), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 
   test('a rebase goes on with what is checked staged; changes left '
@@ -302,7 +308,7 @@ void main() {
     await write('lib/a.dart', 'both\n');
     await write('lib/b.dart', 'b, edited\n');
     final service = IdeGitService(root);
-    final a = p.join(root, 'lib/a.dart');
+    final a = at('lib/a.dart');
     await expectLater(
       service.continueOperation(IdeGitOperation.rebase, include: [a]),
       throwsA(
@@ -316,7 +322,7 @@ void main() {
 
     await service.continueOperation(
       IdeGitOperation.rebase,
-      include: [a, p.join(root, 'lib/b.dart')],
+      include: [a, at('lib/b.dart')],
     );
     final state = (await service.status())!;
     // Done, though Git leaves REBASE_HEAD.
@@ -329,3 +335,4 @@ void main() {
     expect(await File(a).readAsString(), 'both\n');
   }, skip: hasGit ? false : 'Git is not installed');
 }
+
