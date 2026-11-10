@@ -14605,7 +14605,7 @@ abstract class AppLocalizations {
   /// No description provided for @mobileRelay.
   ///
   /// In en, this message translates to:
-  /// **'Relay'**
+  /// **'Relays'**
   String get mobileRelay;
 
   /// Reach this computer through BaoCode's relay when none of its addresses can be reached. Coming later.
