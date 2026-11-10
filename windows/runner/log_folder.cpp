@@ -9,8 +9,6 @@
 #include <vector>
 
 #include "app_identity.h"
-#include <cstdio>
-#include <vector>
 
 #include "crash_report.h"
 #include "hang_watchdog.h"
@@ -200,6 +198,8 @@ void WriteTrayLog(const char* format, ...) {
       break;
     }
   }
+}
+
 void AppendExit(const char* how) {
   crash_report::AppendExit(Path(), how);
 }
