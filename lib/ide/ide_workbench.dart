@@ -100,6 +100,7 @@ import 'ide_dates.dart' show ideFromNow;
 import 'ide_folder_compare.dart';
 import 'ide_local_history.dart';
 import 'ide_hover.dart';
+import 'ide_command_center.dart';
 import 'ide_layout.dart';
 import 'ide_list.dart' show IdeKeyboardList;
 import 'ide_modern_ui.dart';
@@ -631,6 +632,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   MarkerList<LspDiagnostic>? _markers;
   final List<_NavigationEntry> _backStack = [];
   final List<_NavigationEntry> _forwardStack = [];
+
+  /// Whether Go Back and Go Forward have somewhere to go: the title bar's
+  /// arrows (see [IdeCommandCenter]) and the window header's.
+  void _noteNavigation() => widget.workspace.navigation.value = (
+    back: _backStack.isNotEmpty,
+    forward: _forwardStack.isNotEmpty,
+  );
 
   /// `editor.formatOnSave`, kept in settings.json as VS Code keeps it.
   bool get _formatOnSave => _setting('editor.formatOnSave', false);
@@ -1221,6 +1229,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _markers = null;
     _backStack.clear();
     _forwardStack.clear();
+    _noteNavigation();
     _navigationHere = null;
     _navigationFile = null;
     _references = null;
@@ -2492,6 +2501,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       if (_backStack.length > 50) _backStack.removeAt(0);
     }
     _forwardStack.clear();
+    _noteNavigation();
   }
 
   /// The caret moved to [position] in the active file.
@@ -2543,6 +2553,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (!_backStack.any(closed) && !_forwardStack.any(closed)) return;
     _backStack.removeWhere(closed);
     _forwardStack.removeWhere(closed);
+    _noteNavigation();
   }
 
   /// Opens [location] (another file too), recording where the caret was
@@ -2596,6 +2607,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       }),
     );
     if (mounted) setState(() {});
+    _noteNavigation();
   }
 
   /// F8 / ⇧F8: the next or previous problem across files, with its hover.
@@ -5181,7 +5193,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
             const SizedBox(width: 12),
             Expanded(
               child: Center(
-                child: _CommandCenter(
+                child: IdeCommandCenter(
                   label: widget.workspace.hasFolder
                       ? widget.project.name
                       : l10n.ideSearchOpenFiles,
@@ -5191,7 +5203,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                         : l10n.ideSearchOpenFiles,
                     'workbench.action.quickOpen',
                   ),
-                  onTap: () => _showQuickInput(''),
+                  onSearch: () => _showQuickInput(''),
+                  navigation: widget.workspace.navigation,
+                  onNavigate: (back) => _navigate(back: back),
                 ),
               ),
             ),
@@ -5459,83 +5473,6 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   }
 }
 
-/// VS Code's title bar search box: opens Quick Open.
-class _CommandCenter extends StatefulWidget {
-  const _CommandCenter({
-    required this.label,
-    required this.tooltip,
-    required this.onTap,
-  });
-
-  final String label;
-
-  /// `Search baocode (⌘P)`: upstream's `CommandCenterCenterViewItem
-  /// .getTooltip` (commandCenterControl.ts), but the window title after it.
-  final String tooltip;
-  final VoidCallback onTap;
-
-  @override
-  State<_CommandCenter> createState() => _CommandCenterState();
-}
-
-class _CommandCenterState extends State<_CommandCenter> {
-  bool _hover = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = themeColors;
-    final foreground =
-        colors[_hover
-            ? 'commandCenter.activeForeground'
-            : 'commandCenter.foreground'];
-    return IdeHover(
-      message: widget.tooltip,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.onTap,
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 380, minWidth: 160),
-            height: 22,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            // `.command-center-center` (titlebarpart.css).
-            decoration: BoxDecoration(
-              color:
-                  colors[_hover
-                      ? 'commandCenter.activeBackground'
-                      : 'commandCenter.background'],
-              borderRadius: BorderRadius.circular(5),
-              border: Border.all(
-                color:
-                    colors[_hover
-                        ? 'commandCenter.activeBorder'
-                        : 'commandCenter.border'],
-              ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Codicons.search, size: 14, color: foreground),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    widget.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: foreground),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 /// A draggable line between two parts, over it: invisible at rest,
 /// `sash.hoverBorder` while hovered or dragged. Its cursor says which ways it can go (`.monaco-sash.minimum`,
