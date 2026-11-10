@@ -696,7 +696,11 @@ class ChatComposerState extends State<ChatComposer>
     final root = widget.session.root;
     _insertTags([
       for (final lines in code)
-        ComposerCodeEmbed.of(lines.withPath(displayPath(lines.path, root))),
+        ComposerCodeEmbed.of(
+          lines.withPath(
+            displayPath(lines.path, root, widget.session.paths),
+          ),
+        ),
     ], at: _controller.length);
   }
 

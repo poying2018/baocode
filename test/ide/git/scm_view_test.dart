@@ -318,14 +318,14 @@ void main() {
     expect(workspace.active, isNull);
     // Back to the log after.
     // As the list has them: a step to the next, selected there too.
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('2 / 3'), findsOneWidget);
     IdeGitCommitPanelState panel() =>
         tester.state(find.byType(IdeGitCommitPanel));
     expect(panel().selectedFile, endsWith('a.dart'));
     await tester.tap(find.byTooltip(RegExp('^Next File')));
     await tester.pumpAndSettle();
-    expect(find.text('2 / 3'), findsOneWidget);
-    expect(panel().selectedFile, endsWith('staged.dart'));
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(panel().selectedFile, endsWith('notes.md'));
     await tester.tap(find.byTooltip(RegExp('^Back to Log')));
     await tester.pumpAndSettle();
     expect(find.byType(IdeCodeDiff), findsNothing);
