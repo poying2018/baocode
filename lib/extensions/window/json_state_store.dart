@@ -103,7 +103,11 @@ final class JsonStateStore {
     if (!_dirty) return _writing;
     _dirty = false;
     final snapshot = jsonEncode(_map);
-    return _writing = _writing.then((_) => writeAtomically(path, snapshot));
+    final write = _writing.then((_) => writeAtomically(path, snapshot));
+    // One write failing (a folder gone, a file another program holds) must
+    // not keep the changes after it from being written.
+    _writing = write.catchError((Object _) {});
+    return write;
   }
 
   Future<void> dispose() async {
@@ -113,18 +117,29 @@ final class JsonStateStore {
 }
 
 /// Writes [contents] to [path] through a temporary file beside it renamed
-/// over it, so a reader never sees half of it.
+/// over it, so a reader never sees half of it. Where the rename cannot
+/// replace the file (Windows, while another program has it open) it is
+/// written in place instead.
 Future<void> writeAtomically(String path, String contents) async {
   final dir = Directory(p.dirname(path));
   await dir.create(recursive: true);
-  final temp = File(
-    '$path.${pid}_${DateTime.now().microsecondsSinceEpoch}.tmp',
-  );
+  // Two stores of the same file (a window's old and new one, say) may write
+  // at once: the counter keeps their temporary files apart.
+  final temp = File('$path.$pid.${_asides++}.tmp');
   try {
     await temp.writeAsString(contents, flush: true);
-    await temp.rename(path);
-  } on Object {
-    if (await temp.exists()) await temp.delete();
-    rethrow;
+    try {
+      await temp.rename(path);
+    } on FileSystemException {
+      await File(path).writeAsString(contents, flush: true);
+    }
+  } finally {
+    try {
+      if (await temp.exists()) await temp.delete();
+    } on FileSystemException {
+      // Gone already, or a later sweep finds it.
+    }
   }
 }
+
+int _asides = 0;
