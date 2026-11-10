@@ -63,7 +63,8 @@ import 'file_service.dart'
         IdeFileService,
         IdeHostFiles,
         localizedFileError,
-        readFileBytes;
+        readFileBytes,
+        readBytesThrough;
 import 'git/commit_message.dart';
 import 'git/git_branch_actions.dart';
 import 'git/git_branch_tree.dart' show IdeGitFavoriteBranches;
@@ -2028,6 +2029,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
             change,
             files.read,
             l10n,
+            readBytes: (path) => readBytesThrough(files, path),
             onOpenInEditor: () {
               _leaveGitLog();
               unawaited(_openChange(change, focusEditor: true));
