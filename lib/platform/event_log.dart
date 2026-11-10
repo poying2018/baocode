@@ -152,13 +152,13 @@ class EventLog {
   void _rollIfFull(int adding) {
     if (_size == 0 || _size + adding <= maxBytes) return;
     _size = 0;
-    _writing = _writing.then<void>((_) async {
+    try {
       final previous = File(previousPath);
-      if (await previous.exists()) await previous.delete();
-      await File(path).rename(previousPath);
-    }).catchError((Object _) {
+      if (previous.existsSync()) previous.deleteSync();
+      File(path).renameSync(previousPath);
+    } on Object {
       // A folder gone, a file in use: the next events start a new file.
-    });
+    }
   }
 
   void _append(String text) {
@@ -166,11 +166,11 @@ class EventLog {
     // for a reader at once; only a power cut before the system writes it
     // out loses it.
     _size += text.length;
-    _writing = _writing.then<void>((_) async {
-      await File(path).writeAsString(text, mode: FileMode.append);
-    }).catchError((Object _) {
+    try {
+      File(path).writeAsStringSync(text, mode: FileMode.append);
+    } on Object {
       // The log is no reason to fail.
-    });
+    }
   }
 }
 
