@@ -1,12 +1,14 @@
 import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/git_service.dart';
+import 'package:baocode/platform/path_style.dart';
 import 'package:path/path.dart' as p;
 
 /// Git as widget tests need it: no processes, canned output, and the
 /// commands it was asked to run.
 class FakeGit {
-  FakeGit(this.root, {p.Context? paths}) : paths = paths ?? p.context;
+  FakeGit(this.root, {p.Context? paths})
+    : paths = paths ?? PathStyle.of(root);
 
   final String root;
 

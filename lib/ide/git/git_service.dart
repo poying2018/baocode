@@ -21,6 +21,7 @@ import 'dart:typed_data';
 import 'package:bao_remote/git.dart';
 import 'package:path/path.dart' as p;
 
+import '../../platform/path_style.dart';
 import 'git_model.dart';
 import 'git_service_stub.dart'
     if (dart.library.io) 'git_service_io.dart'
@@ -135,8 +136,8 @@ class IdeGitService {
     IdeGitRunner? runner,
     IdeGitWatcher? watcher,
     p.Context? pathContext,
-  }) : pathContext = pathContext ?? p.context,
-       root = (pathContext ?? p.context).normalize(root),
+  }) : pathContext = pathContext ?? PathStyle.of(root),
+       root = (pathContext ?? PathStyle.of(root)).normalize(root),
        _run = runner ?? platform.runGit,
        _watch = watcher ?? platform.watchRepository;
 

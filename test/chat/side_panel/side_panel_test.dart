@@ -177,6 +177,8 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
           worktreesOf: worktreesOf,
           titleBarInset: titleBarInset,
           leading: leading,
+          // The projects are POSIX paths, as a host's are.
+          paths: p.posix,
         ),
         child: ChatScreen(
           session: session,
