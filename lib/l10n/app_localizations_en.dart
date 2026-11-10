@@ -9071,7 +9071,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'A domain or IP this computer can be reached at from the internet (with the port forwarded), put in the QR code; several separated by commas. Behind a proxy that only takes HTTPS (such as a Cloudflare Tunnel), write it as wss://domain. Public IPv6 addresses are found by themselves.';
 
   @override
-  String get mobileRelay => 'Relay';
+  String get mobileRelay => 'Relays';
 
   @override
   String mobileRelayDescription(String product) {

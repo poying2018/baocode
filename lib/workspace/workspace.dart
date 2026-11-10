@@ -1637,19 +1637,10 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
   void addSshHost(String host) {
     if (_sshHosts.contains(host)) return;
     _sshHosts.add(host);
-    final hidden = {
-      for (final project in _projects)
-        if (project.host == host) project.path: ?_hiddenProjects[project.path],
-    };
-    if (hidden.isNotEmpty) {
-      // Taken off with the host: at the time it went, the last.
-      final removed = hidden.values.reduce((a, b) => a.isAfter(b) ? a : b);
-      hidden.forEach((path, since) {
-        if (since == removed) {
-          _hiddenProjects.remove(path);
-          _listUnlisted(path);
-        }
-      });
+    // What went off with it, by what went together: not guessed by when
+    // they went.
+    for (final path in _hostRemoved.remove(host) ?? const <String>[]) {
+      if (_hiddenProjects.remove(path) != null) _listUnlisted(path);
     }
     _save();
     notifyListeners();
@@ -1674,7 +1665,11 @@ class Workspace extends ChangeNotifier implements ColorThemeStorage {
       _hiddenProjects[project.path] = DateTime.now();
       removed.add(project.path);
     }
-    if (removed.isNotEmpty) _hostRemoved[host] = removed;
+    if (removed.isNotEmpty) {
+      _hostRemoved[host] = removed;
+    } else {
+      _hostRemoved.remove(host);
+    }
     if (_sidebarHost == host) _sidebarHost = null;
     _save();
     notifyListeners();
