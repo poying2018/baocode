@@ -21,7 +21,8 @@ import '../extensions/ui/extensions_model.dart';
 import '../extensions/ui/extensions_view.dart';
 import '../extensions/ui/vsix_drop.dart';
 import '../platform/data_dir.dart';
-import '../chat/composer/composer_files.dart' show ComposerFile;
+import '../chat/composer/composer_files.dart' show CodeReference, ComposerFile;
+import '../keybindings/chat_keybindings.dart' show ChatCommandIds;
 import '../chat/composer/file_drop.dart';
 import '../chat/open_editor.dart';
 import '../keybindings/default_keybindings.dart'
@@ -145,6 +146,7 @@ class IdeWorkbench extends StatefulWidget {
     required this.visible,
     required this.chat,
     this.onAddToChat,
+    this.onAddCodeToChat,
     this.onAskInChat,
     required this.onBack,
     this.backLabel,
@@ -213,6 +215,10 @@ class IdeWorkbench extends StatefulWidget {
   /// Puts files and folders in [chat]'s composer (Source Control's Add to
   /// Chat); none offered when null.
   final ValueChanged<List<ComposerFile>>? onAddToChat;
+
+  /// Puts the editor's lines selected in [chat]'s composer (Add Selection
+  /// to Chat); none offered when null.
+  final ValueChanged<List<CodeReference>>? onAddCodeToChat;
 
   /// Puts a request in [chat]'s composer, to be sent once looked over
   /// (Ask AI about a commit, changes, a conflict); none offered when null.
@@ -2831,6 +2837,14 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     if (!_chatShown) _toggleChat();
   }
 
+  /// The editor's lines selected in the chat's composer, the chat shown
+  /// (Add Selection to Chat, as Cursor's ⌘L).
+  void _addSelectionToChat() {
+    final code = _editor?.selectedCode() ?? const <CodeReference>[];
+    if (!_chatShown) _toggleChat();
+    widget.onAddCodeToChat?.call(code);
+  }
+
   /// VS Code's Toggle Panel: the panel as it was last, or hidden.
   void _togglePanelVisibility() =>
       setState(() => _panel = _panel == null ? _lastPanel : null);
@@ -3440,6 +3454,14 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     final terminals = _terminals;
     final terminal = terminals?.active;
     return [
+      // As Cursor's ⌘L: the editor's lines, in the chat's composer.
+      IdeCommand(
+        id: ChatCommandIds.attachSelection,
+        category: 'Chat',
+        label: 'Add Selection to Chat',
+        enabled: widget.onAddCodeToChat != null && _editor != null,
+        run: _addSelectionToChat,
+      ),
       IdeCommand(
         id: 'workbench.action.showCommands',
         label: 'Show All Commands',

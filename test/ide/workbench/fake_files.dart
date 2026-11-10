@@ -236,6 +236,7 @@ Future<IdeWorkspace> pumpWorkbench(
         onAddFolder: onAddFolder,
         onRemoveFolder: onRemoveFolder,
         onAskInChat: onAskInChat,
+        onAddCodeToChat: onAddCodeToChat,
         commands: commands,
         visible: true,
         chat: chat,
