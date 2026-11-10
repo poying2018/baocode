@@ -500,6 +500,13 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   void _showNow() {
     _wordsWaiting = false;
     setState(() {});
+    // The words after it wait their turn, as they do after streamed ones:
+    // a rebuild just made is not made again a word later.
+    _wordsCooldown?.cancel();
+    _wordsCooldown = Timer(
+      _watched ? _wordsGap : _wordsGapUnwatched,
+      _wordsCooledDown,
+    );
   }
 
   /// Shows streamed words now, or at the end of the cooldown under way.

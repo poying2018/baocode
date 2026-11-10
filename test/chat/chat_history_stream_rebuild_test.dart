@@ -197,12 +197,6 @@ void main() {
     final feed = await _mount(tester);
     final take = _countRebuilds(tester);
 
-    // The turn starting is news, as ever.
-    feed.streaming = true;
-    feed.notifyListeners();
-    await tester.pump();
-    take();
-
     // Another window in front: what changes is barely watched, and the CPU
     // is the agents' — a fourth as often (250 ms, not 66).
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
@@ -211,6 +205,12 @@ void main() {
         AppLifecycleState.resumed,
       ),
     );
+
+    // The turn starting is news, as ever.
+    feed.streaming = true;
+    feed.notifyListeners();
+    await tester.pump();
+    take();
 
     feed.word(' one');
     await tester.pump();

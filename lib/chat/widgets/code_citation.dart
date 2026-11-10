@@ -9,6 +9,7 @@ import 'package:markdown/markdown.dart' as md;
 
 import '../../ide/ide_hover.dart';
 import '../../l10n/l10n.dart';
+import '../../platform/path_style.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/codicons.dart';
 import '../../theme/material_file_icons.dart';
@@ -52,7 +53,8 @@ class CodeCitation {
 
   /// [path] made absolute from [root], the folder the agent works in (see
   /// [FileLink.resolvePath]).
-  String? pathIn(String root) => FileLink.resolvePath(path, root);
+  String? pathIn(String root) =>
+      FileLink.resolvePath(path, root, paths: PathStyle.of(root));
 
   @override
   bool operator ==(Object other) =>

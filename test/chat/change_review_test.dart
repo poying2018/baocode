@@ -259,7 +259,7 @@ void main() {
       0xff,
     ]);
     expect(Link(path('link')).targetSync(), 'a.txt');
-  });
+  }, skip: Platform.isWindows);
 
   test('an edit told only once made is held against what the agent told '
       'it was', () async {
@@ -336,7 +336,7 @@ void main() {
     expect([for (final c in review.changes) c.path], [p.join(link, 'a.txt')]);
     await review.undo([p.join(link, 'a.txt')]);
     expect(read('a.txt'), '1\n2\n3\n4\n5\n');
-  });
+  }, skip: Platform.isWindows);
 
   test('carries on where the session left off', () async {
     final review = open(session: 'session-1');

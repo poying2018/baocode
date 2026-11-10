@@ -342,7 +342,7 @@ class FileOpenScope extends InheritedWidget {
   String? resolveShown(String path) {
     final full = resolve(path);
     if (full == null) return null;
-    final context = paths ?? p.context;
+    final context = paths ?? PathStyle.of(root);
     final inside = [
       ...roots,
       root,
@@ -357,7 +357,12 @@ class FileOpenScope extends InheritedWidget {
   List<String> _candidates(String path) {
     final found = <String>{};
     for (final folder in [...roots, root]) {
-      if (FileLink.resolvePath(path, folder, paths: paths, home: home)
+      if (FileLink.resolvePath(
+            path,
+            folder,
+            paths: paths ?? PathStyle.of(folder),
+            home: home,
+          )
           case final full?) {
         found.add(full);
       }
