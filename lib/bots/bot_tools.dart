@@ -848,7 +848,7 @@ abstract final class BotTools {
             final file when file.existsSync() => await file.readAsBytes(),
             _ => null,
           }
-        : bots.folders.readFile(p.join(bot.folder, path));
+        : bots.folders.readFile(p.join(bot.folder, p.normalize(path)));
     if (bytes == null) throw StateError('No file $path');
     return squarePicture(bytes);
   }
