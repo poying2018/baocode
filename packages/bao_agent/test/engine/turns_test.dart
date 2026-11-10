@@ -138,7 +138,7 @@ void main() {
     final first = jsonEncode(messages.first);
     expect(first, contains('Always answer in French.'));
     expect((messages[1] as Map)['role'], 'system');
-    expect(jsonEncode(messages[1]), contains(h.cwd));
+    expect(jsonEncode(messages[1]), contains(h.cwd.replaceAll('\\', '\\\\')));
     expect(jsonEncode(messages[1]), contains('Today is'));
     final tools = [
       for (final t in request.body['tools'] as List) (t as Map)['name'],

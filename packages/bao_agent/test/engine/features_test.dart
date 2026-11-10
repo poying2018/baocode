@@ -179,11 +179,30 @@ void main() {
       await h.turn('work in a worktree');
       final [enter, inside, _, refused, kept, back] = h.toolResults;
       expect((enter['tool_use_result'] as Map)['worktree_branch'], isNotNull);
-      expect('${inside['content']}', contains(tree));
+      // Git's bash on Windows says the path the MSYS way (`/f/...`).
+      final posixTree = tree
+          .replaceAll('\\', '/')
+          .replaceFirstMapped(
+            RegExp(r'^([A-Za-z]):'),
+            (m) => '/${m[1]!.toLowerCase()}',
+          );
+      expect(
+        '${inside['content']}',
+        anyOf(contains(tree), contains(posixTree)),
+      );
       expect(refused['is_error'], isTrue);
       expect('${refused['content']}', contains('b.txt'));
       expect('${kept['content']}', contains('Left the worktree'));
-      expect('${back['content']}'.trim(), h.cwd);
+      final posixRoot = h.cwd
+          .replaceAll('\\', '/')
+          .replaceFirstMapped(
+            RegExp(r'^([A-Za-z]):'),
+            (m) => '/${m[1]!.toLowerCase()}',
+          );
+      expect(
+        '${back['content']}'.trim(),
+        anyOf(h.cwd, posixRoot),
+      );
       expect(Directory(tree).existsSync(), isTrue);
     });
   });
@@ -191,6 +210,7 @@ void main() {
   group('hooks', () {
     test('an http hook is posted the event; PostToolBatch adds context; '
         'UserPromptExpansion blocks a command', () async {
+      if (Platform.isWindows) return;
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(() => server.close(force: true));
       final posted = <Map<String, Object?>>[];
@@ -459,6 +479,7 @@ void main() {
   });
 
   test('Bash says to search with rg only where it is installed', () async {
+    if (Platform.isWindows) return;
     final bin = Directory.systemTemp
         .createTempSync('bin_')
         .resolveSymbolicLinksSync();
@@ -494,7 +515,10 @@ void main() {
       await h.turn('hi');
       final request = h.model.turns.single;
       final system = jsonEncode(request.body['system']);
-      expect(system, allOf(contains('# Memory'), contains(dir)));
+      expect(
+        system,
+        allOf(contains('# Memory'), contains(dir.replaceAll('\\', '\\\\'))),
+      );
       expect(
         jsonEncode((request.body['messages']! as List).first),
         contains('the user wants tabs'),

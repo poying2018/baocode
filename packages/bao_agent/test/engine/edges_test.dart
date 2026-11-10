@@ -24,7 +24,7 @@ void main() {
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
     final plan = RegExp(r'write it to ([^ ]+\.md)')
-        .firstMatch(sentIn(h.model.turns.first))![1]!;
+        .firstMatch(sentIn(h.model.turns.first))![1]!.replaceAll('\\\\', '\\');
     h.model.script.addAll([
       Reply.tool('Write', {
         'file_path': plan,
@@ -67,7 +67,7 @@ void main() {
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
     final plan = RegExp(r'write it to ([^ ]+\.md)')
-        .firstMatch(sentIn(h.model.turns.first))![1]!;
+        .firstMatch(sentIn(h.model.turns.first))![1]!.replaceAll('\\\\', '\\');
     expect(File(plan).existsSync(), isFalse);
     h.model.script.addAll([
       Reply.tool('ExitPlanMode', {'plan': '# Plan\n\nStep one.'}),
@@ -217,7 +217,7 @@ void main() {
         ..writeAsStringSync(
           '#!/bin/sh\necho \'{"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": "Mind the tests."}}\'\n',
         );
-      Process.runSync('chmod', ['+x', hook.path]);
+      if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
       h = await Harness.start(
         settings: {
           'hooks': {
@@ -266,7 +266,7 @@ void main() {
             ),
         hasLength(1),
       );
-    });
+    }, skip: Platform.isWindows);
 
     test('the model set for agents, forced: over inherit and the call\'s, '
         'as the CLI', () async {
@@ -313,7 +313,7 @@ void main() {
         isNot(contains('model')),
       );
       expect('${agent['description']}', contains('there is none to pick'));
-    });
+    }, skip: Platform.isWindows);
 
     test('unforced, inherit stands: Explore on the session\'s model', () async {
       h = await Harness.start(
@@ -371,13 +371,14 @@ void main() {
     test(
       'a PreCompact hook adds to the instructions; the plan carried over',
       () async {
+        if (Platform.isWindows) return;
         final bin = Directory.systemTemp
             .createTempSync('hooks_')
             .resolveSymbolicLinksSync();
         addTearDown(() => Directory(bin).deleteSync(recursive: true));
         final hook = File(p.join(bin, 'pre.sh'))
           ..writeAsStringSync('#!/bin/sh\necho "Keep the API notes."\n');
-        Process.runSync('chmod', ['+x', hook.path]);
+        if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
         h = await Harness.start(
           permissionMode: 'plan',
           settings: {
@@ -396,7 +397,7 @@ void main() {
         h.model.script.add(Reply.text('looking'));
         await h.turn('plan');
         final plan = RegExp(r'write it to ([^ ]+\.md)')
-            .firstMatch(sentIn(h.model.turns.first))![1]!;
+            .firstMatch(sentIn(h.model.turns.first))![1]!.replaceAll('\\\\', '\\');
         h.model.script.addAll([
           Reply.tool('Write', {'file_path': plan, 'content': '# Plan'}),
           Reply.text('ok'),
