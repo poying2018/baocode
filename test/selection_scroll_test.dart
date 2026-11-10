@@ -22,6 +22,11 @@ void main() {
     addTearDown(
       () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
     );
+    // Room for the history's summaries whole: the drag below goes over a
+    // line, and a line cut short by an ellipsis selects only what shows.
+    tester.view.physicalSize = const Size(1600, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(BaoCodeApp(workspace: Workspace.mock()));
     await tester.pump();
     final list = find.byType(SuperListView);
