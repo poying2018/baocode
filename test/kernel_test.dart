@@ -2072,6 +2072,95 @@ void main() {
       kernel.dispose();
     });
 
+    test(
+      'a result come late for a stopped turn does not end the next',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+        await pumpEventQueue();
+        cli.push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+        await pumpEventQueue();
+        kernel.cancel();
+        await pumpEventQueue();
+        expect(transcript.activeTurn, isNull);
+
+        kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u2');
+        // The CLI's last word for u1, which it had not finished answering:
+        // it comes after u2 began, and must not end it.
+        cli.push({
+          'type': 'result',
+          'subtype': 'error_during_execution',
+          'is_error': false,
+          'duration_ms': 240000,
+        });
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u2');
+        kernel.dispose();
+      },
+    );
+
+    test('an exit whose stderr only says a proxy wants its own login is '
+        'taken up again', () async {
+      final clis = [FakeCli(), FakeCli()];
+      var next = 0;
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (_) async => clis[next++],
+      );
+      final transcript = Transcript();
+      kernel.events.listen(transcript.apply);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      clis[0].push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+      await pumpEventQueue();
+      // A proxy's challenge, not the account being out: the process is
+      // started again over the session, as any fluke is.
+      clis[0].push(ClaudeExit.message(1, 'Proxy Authentication Required'));
+      await pumpEventQueue();
+      await pumpEventQueue();
+      expect(transcript.activeTurn, 'u1');
+      expect(clis[1].users.single['uuid'], 'u1');
+      kernel.dispose();
+    });
+
+    test(
+      'a started for a turn already over does not end the one running',
+      () async {
+        final cli = FakeCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        kernel.send(const KernelTurn(id: 'u1', text: 'first'));
+        await pumpEventQueue();
+        cli.push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
+        await pumpEventQueue();
+        cli.push({
+          'type': 'result',
+          'subtype': 'success',
+          'is_error': false,
+          'duration_ms': 10,
+        });
+        await pumpEventQueue();
+        expect(transcript.activeTurn, isNull);
+
+        kernel.send(const KernelTurn(id: 'u2', text: 'second'));
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u2');
+        // u1's word that it started, long after it ended: not a turn taken
+        // up now, and none to end u2 over.
+        cli.push({
+          'type': 'command_lifecycle',
+          'command_uuid': 'u1',
+          'state': 'started',
+        });
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u2');
+        kernel.dispose();
+      },
+    );
+
     test('a question comes as can_use_tool and is answered in kind', () async {
       final cli = FakeCli();
       final (:kernel, :transcript, events: _) = claude(cli);

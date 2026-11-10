@@ -283,6 +283,10 @@ class ClaudeCodeKernel
   /// turn ended or a process started clean: the one chance a flaky exit
   /// gets before the failure is shown plain (see [_exited]).
   int _resumeAttempts = 0;
+
+  /// Turns stopped here whose result the CLI still owes: its last word for
+  /// each, come after the turn sent since began (see [_result]).
+  int _stoppedAwaitingResult = 0;
   final Map<String, _Permission> _permissions = {};
   String? _pendingTitle;
 
@@ -694,6 +698,8 @@ class ClaudeCodeKernel
   }
 
   void _teardown() {
+    // The process gone, no last word of a turn stopped here comes.
+    _stoppedAwaitingResult = 0;
     unawaited(_subscription?.cancel());
     _subscription = null;
     // The CLI is waiting for an answer to each of the questions it
@@ -1074,6 +1080,8 @@ class ClaudeCodeKernel
     final turn = _turn;
     if (turn == null) return;
     _stoppedTurns.add(turn);
+    // Its result comes after the interrupt, and is not the next turn's.
+    if (_running) _stoppedAwaitingResult++;
     _tell('interrupt');
     _endTurn(interrupted: true);
   }
@@ -1913,7 +1921,11 @@ class ClaudeCodeKernel
     if (id == null) return;
     switch (message['state']) {
       case 'started':
-        if (_queued.remove(id)) {
+        // Taken up from the queue here: a `started` for a turn that is
+        // neither running nor waiting is one already over (its result may
+        // come late), and it must not end the turn running now.
+        final wasQueued = _queued.remove(id);
+        if (wasQueued) {
           emit(
             ItemUpserted(
               nextSeq,
@@ -1926,6 +1938,7 @@ class ClaudeCodeKernel
           );
         }
         if (_turn != id &&
+            wasQueued &&
             _sent.containsKey(id) &&
             !_stoppedTurns.contains(id)) {
           // The CLI took up this turn while another was running: that one
@@ -1961,6 +1974,13 @@ class ClaudeCodeKernel
           _modelWindows[model] = window;
         }
       }
+    }
+    // The CLI's last word for a turn stopped here, come after the turn sent
+    // since began: it must not end that one. Its cost is counted all the
+    // same (above); what it says of a failure is not the new turn's.
+    if (_stoppedAwaitingResult > 0) {
+      _stoppedAwaitingResult--;
+      return;
     }
     if (message['is_error'] == true) {
       final error = switch (message['result']) {
@@ -2631,11 +2651,21 @@ class ClaudeCodeKernel
   String? get _remoteHost => RemoteLocation.hostOf(_cwd);
 
   /// Whether [text] says Claude Code is not logged in.
+  ///
+  /// The CLI's own words, and not a bare "login" or "authenticat": a proxy
+  /// asking for its own credentials, or a line saying it signed in, is not
+  /// the account being out.
   static bool _notLoggedIn(String text) {
     final lower = text.toLowerCase();
-    return lower.contains('login') ||
-        lower.contains('api key') ||
-        lower.contains('authenticat');
+    return lower.contains('not logged in') ||
+        lower.contains('logged out') ||
+        lower.contains('/login') ||
+        lower.contains('login again') ||
+        lower.contains('invalid api key') ||
+        lower.contains('invalid x-api-key') ||
+        lower.contains('authentication error') ||
+        lower.contains('authentication_error') ||
+        lower.contains('unauthenticated');
   }
 
   /// Why Claude Code on [host] may say it is not logged in when it is: on a
