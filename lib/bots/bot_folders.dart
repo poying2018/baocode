@@ -43,7 +43,7 @@ class MemoryBotFolders implements BotFolders {
   @override
   List<String> folders() => [
     for (final folder in made)
-      if (p.dirname(folder) == root) folder,
+      if (root == null || p.equals(p.dirname(folder), root!)) folder,
   ]..sort();
 
   @override
@@ -52,7 +52,8 @@ class MemoryBotFolders implements BotFolders {
   @override
   void delete(String folder) {
     made.remove(folder);
-    files.removeWhere((path, _) => p.isWithin(folder, path));
+    final target = p.normalize(folder);
+    files.removeWhere((path, _) => p.isWithin(target, p.normalize(path)));
   }
 
   @override
