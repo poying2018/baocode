@@ -30,6 +30,22 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.10.2">
+    <h2 class="plain"><a href="#v1.10.2">1.10.2</a></h2>
+    <p>BaoCode Claude 1.10.2</p>
+    <p>The context panel counts what the model reports, not an estimate.</p>
+    <p>Fixed</p>
+    <ul>
+    <li>The context used and its breakdown follow the model's own token counts;
+    Claude Code's estimate, which counted a screenshot's base64 as text, no
+    longer inflates them.</li>
+    <li>Tool results are counted per call, with each image or document as one
+    item, so a conversation full of screenshots no longer reads as mostly
+    tool output.</li>
+    <li>The IDE's bottom panel keeps its theme background when islands are off.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.10.1">
     <h2 class="plain"><a href="#v1.10.1">1.10.1</a></h2>
     <p>BaoCode Claude 1.10.1</p>
