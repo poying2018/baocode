@@ -367,7 +367,9 @@ void main() {
       expect(assistant.name, '小宝');
       expect(assistant.abilities, {BotAbility.agents, BotAbility.browser});
       // Its card, a file of its folder.
-      final card = utf8.decode(folders.files[p.join(assistant.folder, 'BOT.md')]!);
+      final card = utf8.decode(
+        folders.files[p.join(assistant.folder, 'BOT.md')]!,
+      );
       expect(card, contains('name: 小宝'));
       expect(card, contains('agents: true'));
       expect(card, contains('proactive: false'));
@@ -1150,9 +1152,12 @@ void main() {
       write(
         p.join('/bots', 'cat', 'BOT.md'),
         '---\nname: 阿猫\navatar: 🐱\nagents: true\nassistant: true\n'
-            '---\n\n你是一只懒猫\n',
+        '---\n\n你是一只懒猫\n',
       );
-      write(p.join('/bots', 'cat', 'LATER.md'), '- 2026-10-29 16:00 喊用户喝水\nmine\n');
+      write(
+        p.join('/bots', 'cat', 'LATER.md'),
+        '- 2026-10-29 16:00 喊用户喝水\nmine\n',
+      );
       write(p.join('/bots', 'USER.md'), '---\nname: Leo\n---\n');
       // Its turn, done.
       final session = bots.threadFor(assistant).session;
@@ -1301,7 +1306,7 @@ void main() {
             ],
           ),
         );
-        final kept = p.join(mia.folder, '${Bots.receivedPicture(3)}');
+        final kept = p.join(mia.folder, Bots.receivedPicture(3));
         for (var i = 0; i < 300 && !folders.files.containsKey(kept); i++) {
           await Future<void>.delayed(const Duration(milliseconds: 10));
         }

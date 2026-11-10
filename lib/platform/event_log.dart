@@ -66,7 +66,7 @@ class EventLog {
   /// What is written, one write after another, off the thread that draws:
   /// a write to the disk takes milliseconds here, and the events come in
   /// bursts (a window dragged, views laid out).
-  Future<void> _writing = Future.value();
+  final Future<void> _writing = Future.value();
 
   /// Writes [message] under [category] (`window`, `theme`…), timed.
   void record(String category, String message) {
