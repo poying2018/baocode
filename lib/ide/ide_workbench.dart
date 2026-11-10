@@ -37,6 +37,7 @@ import '../theme/app_theme.dart';
 import '../theme/workbench_theme.dart' show themeColors;
 import '../workspace/back_to_chat_button.dart';
 import '../workspace/editor_launcher.dart';
+import '../workspace/islands.dart';
 import '../workspace/pin_window_button.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/window_controls.dart';
@@ -134,6 +135,7 @@ import 'terminal/terminal_tasks.dart';
 import 'terminal/terminal_profile_service.dart';
 import 'terminal/terminal_profiles.dart';
 import 'terminal/terminal_service.dart';
+import 'workbench/style.dart';
 
 part 'ide_workbench_extensions.dart';
 part 'ide_workbench_keys.dart';
@@ -5080,54 +5082,61 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                 // panelPart.ts' `panel.background` (the editor's by
                 // default), `panel.border` above.
                 child: IdePart(
-                  color: themeColors['panel.background'],
-                  border: Border(top: IdePart.side('panel.border')),
-                  child: IdeBottomPanel(
-                    tab: _panel ?? _lastPanel,
-                    root: widget.workspace.root,
-                    languages: _languages,
-                    references: _references,
-                    // TERMINAL, clicked, gives its terminal the keyboard.
-                    onTab: (tab) => tab == IdePanelTab.terminal
-                        ? _showTerminal()
-                        : _selectPanel(tab),
-                    onClose: () => setState(() => _panel = null),
-                    onOpen: (location, {select = false}) =>
-                        unawaited(_openLocation(location, select: select)),
-                    onOpenFocused: (location) =>
-                        unawaited(_openFocused(location)),
-                    problemsList: _problemsList,
-                    referencesList: _referencesList,
-                    textOf: _textOf,
-                    terminal: switch (_terminals) {
-                      final terminals? => TerminalPanel(
-                        terminals: terminals,
-                        tasks: widget.terminalTasks,
-                        files: widget.workspace.files,
-                        shownTask: _terminalTask,
-                        onShowTask: (id) => setState(() => _terminalTask = id),
-                        onNew: _newTerminal,
-                        onOpenLink: _openTerminalLink,
-                        shouldSkipShell: _terminalSkipsShell,
-                        resolveKey: _terminalFindKey,
-                      ),
-                      null => null,
-                    },
-                    debugConsole: switch (_debug) {
-                      final debug? => DebugConsolePanel(service: debug),
-                      null => null,
-                    },
-                    terminalActions: switch (_terminals) {
-                      final terminals? => TerminalTitleActions(
-                        terminals: terminals,
-                        onNew: _newTerminal,
-                        onNewWithProfile: (profile) =>
-                            _newTerminal(profile: profile),
-                        onSelectDefaultProfile: () =>
-                            unawaited(_selectDefaultProfile()),
-                      ),
-                      null => null,
-                    },
+                  border: WorkbenchStyle.islands
+                      ? null
+                      : Border(top: IdePart.side('panel.border')),
+                  child: Island(
+                    color: WorkbenchStyle.islands
+                        ? AppColors.code
+                        : themeColors['panel.background'],
+                    child: IdeBottomPanel(
+                      tab: _panel ?? _lastPanel,
+                      root: widget.workspace.root,
+                      languages: _languages,
+                      references: _references,
+                      // TERMINAL, clicked, gives its terminal the keyboard.
+                      onTab: (tab) => tab == IdePanelTab.terminal
+                          ? _showTerminal()
+                          : _selectPanel(tab),
+                      onClose: () => setState(() => _panel = null),
+                      onOpen: (location, {select = false}) =>
+                          unawaited(_openLocation(location, select: select)),
+                      onOpenFocused: (location) =>
+                          unawaited(_openFocused(location)),
+                      problemsList: _problemsList,
+                      referencesList: _referencesList,
+                      textOf: _textOf,
+                      terminal: switch (_terminals) {
+                        final terminals? => TerminalPanel(
+                          terminals: terminals,
+                          tasks: widget.terminalTasks,
+                          files: widget.workspace.files,
+                          shownTask: _terminalTask,
+                          onShowTask: (id) =>
+                              setState(() => _terminalTask = id),
+                          onNew: _newTerminal,
+                          onOpenLink: _openTerminalLink,
+                          shouldSkipShell: _terminalSkipsShell,
+                          resolveKey: _terminalFindKey,
+                        ),
+                        null => null,
+                      },
+                      debugConsole: switch (_debug) {
+                        final debug? => DebugConsolePanel(service: debug),
+                        null => null,
+                      },
+                      terminalActions: switch (_terminals) {
+                        final terminals? => TerminalTitleActions(
+                          terminals: terminals,
+                          onNew: _newTerminal,
+                          onNewWithProfile: (profile) =>
+                              _newTerminal(profile: profile),
+                          onSelectDefaultProfile: () =>
+                              unawaited(_selectDefaultProfile()),
+                        ),
+                        null => null,
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -5360,119 +5369,122 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   @override
   Widget build(BuildContext context) {
     _keepViewSoon();
-    return ListenableBuilder(
-      listenable: widget.workspace,
-      builder: (context, _) {
-        final commands = _allCommands();
-        final focus = Focus(
-          focusNode: _workbenchFocus,
-          onKeyEvent: _onWorkbenchKey,
-          // The explorer's uploads and downloads show their progress here.
-          child: IdeNotificationsScope(
-            notifications: _notifications,
-            child: Material(
-              color: IdeModernUI.shell,
-              child: Stack(
-                children: [
-                  Column(
-                    children: [
-                      if (!WindowControls.drawsHeader) _titleBar(),
-                      Expanded(
-                        child: LayoutBuilder(
-                          builder: (context, constraints) =>
-                              _split(constraints.biggest, commands),
+    // The IDE's parts are flush unless islands are turned on.
+    return IslandStyle(
+      on: WorkbenchStyle.islands,
+      child: ListenableBuilder(
+        listenable: widget.workspace,
+        builder: (context, _) {
+          final commands = _allCommands();
+          final focus = Focus(
+            focusNode: _workbenchFocus,
+            onKeyEvent: _onWorkbenchKey,
+            // The explorer's uploads and downloads show their progress here.
+            child: IdeNotificationsScope(
+              notifications: _notifications,
+              child: Material(
+                color: IdeModernUI.shell,
+                child: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        if (!WindowControls.drawsHeader) _titleBar(),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, constraints) =>
+                                _split(constraints.biggest, commands),
+                          ),
                         ),
-                      ),
-                      // Typing moves the caret and edits the document, and
-                      // the status bar is all that shows either; as it is
-                      // all that shows a language server's progress.
-                      ListenableBuilder(
-                        listenable: Listenable.merge([
-                          _caret,
-                          widget.workspace.edits,
-                          _languages?.progressChanges,
-                        ]),
-                        builder: (context, _) => _statusBar(),
-                      ),
-                    ],
-                  ),
-                  // VS Code's toasts and center: 8px from the right, 36px
-                  // from the bottom (`notificationsDialogs.css`).
-                  Positioned(
-                    right: 8,
-                    bottom: 36,
-                    top: AppMetrics.titleBarHeight,
-                    left: 8,
-                    child: Align(
-                      alignment: Alignment.bottomRight,
-                      child: IdeNotificationsCenter(
-                        notifications: _notifications,
+                        // Typing moves the caret and edits the document, and
+                        // the status bar is all that shows either; as it is
+                        // all that shows a language server's progress.
+                        ListenableBuilder(
+                          listenable: Listenable.merge([
+                            _caret,
+                            widget.workspace.edits,
+                            _languages?.progressChanges,
+                          ]),
+                          builder: (context, _) => _statusBar(),
+                        ),
+                      ],
+                    ),
+                    // VS Code's toasts and center: 8px from the right, 36px
+                    // from the bottom (`notificationsDialogs.css`).
+                    Positioned(
+                      right: 8,
+                      bottom: 36,
+                      top: AppMetrics.titleBarHeight,
+                      left: 8,
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        child: IdeNotificationsCenter(
+                          notifications: _notifications,
+                        ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    right: 8,
-                    bottom: 36,
-                    left: 8,
-                    child: Align(
-                      alignment: Alignment.bottomRight,
-                      child: IdeNotificationToasts(
-                        notifications: _notifications,
+                    Positioned(
+                      right: 8,
+                      bottom: 36,
+                      left: 8,
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        child: IdeNotificationToasts(
+                          notifications: _notifications,
+                        ),
                       ),
                     ),
-                  ),
-                  if (_quickModel != null || _quickInput != null)
-                    Positioned.fill(
-                      top: WindowControls.drawsHeader
-                          ? 0
-                          : AppMetrics.titleBarHeight,
-                      child: switch (_quickModel) {
-                        final IdeQuickPick pick => IdeQuickInput.pick(
-                          key: _quickInputKey,
-                          pick: pick,
-                          onClose: _closeQuickInput,
-                        ),
-                        final IdeQuickInputBox box => IdeQuickInput.input(
-                          key: _quickInputKey,
-                          inputBox: box,
-                          onClose: _closeQuickInput,
-                        ),
-                        null => IdeQuickInput(
-                          key: _quickInputKey,
-                          initialText: _quickInput!,
-                          itemsFor: _quickItems,
-                          placeholderFor: _quickPlaceholder,
-                          onClose: _closeQuickInput,
-                          refresh: _quickRefresh,
-                          itemActivation: _quickActivation,
-                          quickNavigate: _quickNavigateChords,
-                          hideInput: _quickHideInput,
-                        ),
-                      },
-                    ),
-                ],
+                    if (_quickModel != null || _quickInput != null)
+                      Positioned.fill(
+                        top: WindowControls.drawsHeader
+                            ? 0
+                            : AppMetrics.titleBarHeight,
+                        child: switch (_quickModel) {
+                          final IdeQuickPick pick => IdeQuickInput.pick(
+                            key: _quickInputKey,
+                            pick: pick,
+                            onClose: _closeQuickInput,
+                          ),
+                          final IdeQuickInputBox box => IdeQuickInput.input(
+                            key: _quickInputKey,
+                            inputBox: box,
+                            onClose: _closeQuickInput,
+                          ),
+                          null => IdeQuickInput(
+                            key: _quickInputKey,
+                            initialText: _quickInput!,
+                            itemsFor: _quickItems,
+                            placeholderFor: _quickPlaceholder,
+                            onClose: _closeQuickInput,
+                            refresh: _quickRefresh,
+                            itemActivation: _quickActivation,
+                            quickNavigate: _quickNavigateChords,
+                            hideInput: _quickHideInput,
+                          ),
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        );
-        // The mouse's back and forward buttons go back and forward, as
-        // upstream's `registerMouseNavigationListener` has them.
-        return Listener(
-          behavior: HitTestBehavior.translucent,
-          onPointerDown: (event) {
-            if (event.buttons & kBackMouseButton != 0) {
-              _navigate(back: true);
-            } else if (event.buttons & kForwardMouseButton != 0) {
-              _navigate(back: false);
-            }
-          },
-          child: focus,
-        );
-      },
+          );
+          // The mouse's back and forward buttons go back and forward, as
+          // upstream's `registerMouseNavigationListener` has them.
+          return Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (event) {
+              if (event.buttons & kBackMouseButton != 0) {
+                _navigate(back: true);
+              } else if (event.buttons & kForwardMouseButton != 0) {
+                _navigate(back: false);
+              }
+            },
+            child: focus,
+          );
+        },
+      ),
     );
   }
 }
-
 
 /// A draggable line between two parts, over it: invisible at rest,
 /// `sash.hoverBorder` while hovered or dragged. Its cursor says which ways it can go (`.monaco-sash.minimum`,
