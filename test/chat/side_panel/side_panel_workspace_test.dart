@@ -18,6 +18,7 @@ import 'package:baocode/ide/ide_explorer.dart';
 import 'package:baocode/ide/ide_list.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/theme/app_theme.dart';
+import 'package:baocode/theme/codicons.dart';
 import 'package:flutter/gestures.dart' show kSecondaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -224,6 +225,42 @@ void main() {
     );
   });
 
+  testWidgets('the files page has each folder\'s Git status, as the IDE\'s '
+      'explorer', (tester) async {
+    final site = FakeGit(_site)..status = '## main\x00';
+    final api = FakeGit(_api)..status = '## dev\x00 M main.go\x00?? new.go\x00';
+    final repositories = [(_site, site.repository()), (_api, api.repository())];
+    for (final (_, git) in repositories) {
+      addTearDown(git.dispose);
+      await git.refresh();
+    }
+    await _pump(
+      tester,
+      section: SidePanelSection.files,
+      repositories: repositories,
+    );
+    Finder letterOf(String name) => find.descendant(
+      of: find.ancestor(of: _inList(name), matching: find.byType(IdeListRow)),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data != name,
+      ),
+    );
+    expect(tester.widget<Text>(letterOf('main.go')).data, 'M');
+    expect(tester.widget<Text>(letterOf('new.go')).data, 'U');
+    expect(letterOf('index.html'), findsNothing);
+    // The folder with changes: its dot.
+    expect(
+      find.descendant(
+        of: find.ancestor(
+          of: _inList('api'),
+          matching: find.byType(IdeListRow),
+        ),
+        matching: find.byIcon(Codicons.circleFilled),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('a workspace with no folders asks for one', (tester) async {
     var added = 0;
     await _pump(
@@ -376,9 +413,9 @@ void main() {
       await pumpEventQueue();
       expect(files.resolve('main.go'), '$_api/main.go');
       expect(files.resolve('index.html'), '$_site/index.html');
-      // An absolute path in any folder; none outside them.
+      // An absolute path in any folder, or out of them.
       expect(files.resolve('$_api/new.go'), '$_api/new.go');
-      expect(files.resolve('/elsewhere/a.go'), isNull);
+      expect(files.resolve('/elsewhere/a.go'), '/elsewhere/a.go');
     });
 
     test('a link opens where it is found, though not known before', () async {

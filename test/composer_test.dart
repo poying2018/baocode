@@ -28,6 +28,7 @@ import 'package:baocode/chat/widgets/user_message_bubble.dart';
 import 'package:baocode/chat/chat_find.dart';
 import 'package:baocode/chat/chat_history_view.dart';
 import 'package:baocode/chat/chat_session.dart';
+import 'package:baocode/kernel/agent_kernel.dart' show KernelContext;
 import 'package:baocode/chat/chat_screen.dart';
 import 'package:baocode/chat/composer/composer.dart';
 import 'package:baocode/chat/composer/composer_caret.dart';
@@ -41,6 +42,7 @@ import 'package:baocode/chat/panels/activity_strip.dart';
 import 'package:baocode/chat/panels/interaction_panel.dart';
 import 'package:baocode/chat/panels/context_usage_panel.dart';
 import 'package:baocode/keybindings/keybinding_service.dart';
+import 'package:baocode/platform/native_md_clipboard.dart';
 import 'package:baocode/theme/app_theme.dart';
 
 Future<ChatSession> pumpScreen(
@@ -112,6 +114,10 @@ Matcher isSelection(int base, int extent) => isA<TextSelection>()
 void main() {
   testWidgets('the answers sit inset from the user\'s messages by their '
       'corner radius', (tester) async {
+    // Tall enough for a message of the user's and an answer to show.
+    tester.view.physicalSize = const Size(800, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     await pumpScreen(tester);
     final items = tester.widgetList<ChatItemView>(find.byType(ChatItemView));
     double width(bool user) => tester
@@ -662,6 +668,41 @@ void main() {
     expect(session.draft.pendingFiles, isEmpty);
   });
 
+  testWidgets('code put in the draft (Add Selection to Chat) goes in as '
+      'tags of its lines, after what is typed', (tester) async {
+    final session = ChatSession(
+      historyCount: 16,
+      kernelContext: const KernelContext(cwd: '/work'),
+    );
+    addTearDown(session.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildAppTheme(),
+        home: ChatScreen(session: session),
+      ),
+    );
+    await tester.pump();
+    await typeText(tester, 'why');
+    final controller = composerController(tester);
+    controller.selection = const TextSelection.collapsed(offset: 0);
+
+    const code = CodeReference(
+      path: '/work/lib/a.dart',
+      start: 3,
+      end: 5,
+      code: 'a\nb\nc',
+    );
+    session.draft.insertCode(const [code]);
+    await tester.pump();
+    expect(session.draft.pendingCode, isEmpty);
+    expect(controller.shownText, 'why \uFFFC ');
+    expect(controller.selection.baseOffset, controller.length);
+    expect(
+      composerEmbedsIn(controller.text).single.embed,
+      ComposerCodeEmbed.of(code.withPath('lib/a.dart')),
+    );
+  });
+
   testWidgets('accepting a suggestion inserts exactly one space', (
     tester,
   ) async {
@@ -986,6 +1027,76 @@ void main() {
         reason: 'only the first (plain) paste is a tag',
       );
       expect(composerController(tester).text, contains('line 29'));
+    }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+    testWidgets('a long paste copies as its text, for other apps, and pastes '
+        'back from the clipboard as a tag numbered on', (tester) async {
+      MdClipboard.instance = const NativeMdClipboard();
+      addTearDown(() => MdClipboard.instance = const MdClipboard());
+      await pumpScreen(tester);
+      final long = List.generate(30, (i) => 'line $i').join('\n');
+      // The clipboard as the host has it: its text, and the app's own copy
+      // beside it.
+      String? text = long;
+      String? copy;
+      tester.binding.defaultBinaryMessenger
+        ..setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async =>
+              call.method == 'Clipboard.getData' ? {'text': text} : null,
+        )
+        ..setMockMethodCallHandler(const MethodChannel('baocode/window'), (
+          call,
+        ) async {
+          switch (call.method) {
+            case 'writePasteboardMarkdown':
+              final arguments = call.arguments as Map;
+              text = arguments['text'] as String;
+              copy = arguments['copy'] as String;
+              return true;
+            case 'readPasteboardMarkdown':
+              return copy;
+          }
+          return null;
+        });
+      addTearDown(() {
+        tester.binding.defaultBinaryMessenger
+          ..setMockMethodCallHandler(SystemChannels.platform, null)
+          ..setMockMethodCallHandler(
+            const MethodChannel('baocode/window'),
+            null,
+          );
+      });
+      final editor = tester.state<MarkdownEditorState>(composerEditor());
+      final controller = composerController(tester);
+
+      await editor.paste();
+      await tester.pump();
+      await typeText(tester, 'read it');
+      expect(content(tester), '[[Pasted text #1 +29 lines]] read it');
+
+      controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: controller.length,
+      );
+      await editor.copy();
+      expect(text, '$long read it', reason: 'the tag as what was pasted');
+
+      controller.selection = TextSelection.collapsed(offset: controller.length);
+      await editor.paste();
+      await tester.pump();
+      expect(
+        content(tester),
+        '[[Pasted text #1 +29 lines]] read it'
+        '[[Pasted text #2 +29 lines]] read it',
+      );
+      expect(
+        [
+          for (final (:embed, start: _, end: _) in controller.embeds)
+            ComposerPastedTextEmbed.decode(embed.data).text,
+        ],
+        [long, long],
+      );
     }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
   });
 
@@ -1312,21 +1423,38 @@ void main() {
     );
     // The history opens at the bottom; bring the message into view.
     Future<void> reveal(WidgetTester tester, String text) async {
-      // Mid-view: at the top, the message's copy stuck there would cover it.
-      await Scrollable.ensureVisible(
-        tester.element(
-          find.descendant(
-            of: find.byType(SuperListView),
-            matching: find.textContaining(
-              text,
-              findRichText: true,
-              skipOffstage: false,
-            ),
-            skipOffstage: false,
-          ),
+      final message = find.descendant(
+        of: find.byType(SuperListView),
+        matching: find.textContaining(
+          text,
+          findRichText: true,
+          skipOffstage: false,
         ),
-        alignment: 0.5,
+        skipOffstage: false,
       );
+      // Up the list until it is built: the list builds what is near the view.
+      final position = tester
+          .state<ScrollableState>(
+            find
+                .descendant(
+                  of: find.byType(SuperListView),
+                  matching: find.byType(Scrollable),
+                )
+                .first,
+          )
+          .position;
+      while (message.evaluate().isEmpty &&
+          position.pixels > position.minScrollExtent) {
+        position.jumpTo(
+          (position.pixels - 400).clamp(
+            position.minScrollExtent,
+            position.maxScrollExtent,
+          ),
+        );
+        await tester.pump();
+      }
+      // Mid-view: at the top, the message's copy stuck there would cover it.
+      await Scrollable.ensureVisible(tester.element(message), alignment: 0.5);
       await tester.pump();
     }
 
@@ -1620,6 +1748,41 @@ void main() {
       expect(editorInHistory(), findsNothing);
     });
 
+    testWidgets('the editor is outside the history\'s selection: a drag in '
+        'it selects its own text', (tester) async {
+      await pumpScreen(tester);
+      await reveal(tester, '第 2 轮');
+      await tester.tap(bubble('第 2 轮'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      // Not in the history's selection, whose gestures, keys (⌘C with
+      // nothing selected in the editor) and menu would be the editor's too.
+      expect(
+        find.ancestor(
+          of: editorInHistory(),
+          matching: find.byType(SelectionArea),
+        ),
+        findsNothing,
+      );
+      final controller = editController(tester);
+      final state = tester.state<MarkdownEditorState>(editorInHistory());
+      final from = state.caretRect(0)!.center;
+      final to = state.caretRect(4)!.center;
+      final drag = await tester.startGesture(
+        from,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump();
+      await drag.moveTo(to);
+      await tester.pump();
+      await drag.up();
+      await tester.pump();
+      expect(
+        controller.selection,
+        const TextSelection(baseOffset: 0, extentOffset: 4),
+      );
+    });
+
     testWidgets('a message with inline tags copies as its text', (
       tester,
     ) async {
@@ -1671,6 +1834,7 @@ void main() {
       await reveal(tester, '第 3 轮');
       await reveal(tester, '第 2 轮');
       final list = tester.getRect(find.byType(SuperListView));
+      final inset = chatGutter(list.width);
       final position = tester
           .state<ScrollableState>(
             find
@@ -1702,7 +1866,7 @@ void main() {
       position.jumpTo(position.pixels + 60);
       await tester.pump();
       expect(stuck.hitTestable(), findsOneWidget);
-      expect(tester.getTopLeft(stuck).dy, list.top + 8);
+      expect(tester.getTopLeft(stuck).dy, list.top + inset);
       final stuckAt = position.pixels;
 
       // The next message, arriving, pushes it up: the copy's fade ends at it.
@@ -1718,7 +1882,7 @@ void main() {
         tester.getTopLeft(bubble('第 3 轮')).dy,
         closeTo(list.top + 40, 0.01),
       );
-      expect(tester.getTopLeft(stuck).dy, lessThan(list.top + 8));
+      expect(tester.getTopLeft(stuck).dy, lessThan(list.top + inset));
       expect(tester.getBottomLeft(stuck).dy + 16, closeTo(list.top + 40, 0.01));
 
       // Clicked, it opens the message to edit, stuck to the top in its place.
@@ -1743,6 +1907,7 @@ void main() {
       // The editor opens over a moment.
       await tester.pump(const Duration(milliseconds: 300));
       final list = tester.getRect(find.byType(SuperListView));
+      final inset = chatGutter(list.width);
       final composer = find.descendant(
         of: find.byType(ChatHistoryView),
         matching: find.byType(ChatComposer),
@@ -1763,12 +1928,12 @@ void main() {
       await tester.pump();
       final start = position.pixels;
       final inPlace = tester.getTopLeft(composer).dy;
-      expect(inPlace, greaterThan(list.top + 8));
+      expect(inPlace, greaterThan(list.top + inset));
 
       // Scrolled past: pinned just below the top of the list.
       position.jumpTo(position.maxScrollExtent);
       await tester.pump();
-      expect(tester.getTopLeft(composer).dy, list.top + 8);
+      expect(tester.getTopLeft(composer).dy, list.top + inset);
       // Still usable there: the wheel over it scrolls the list.
       final wheel = TestPointer(7, PointerDeviceKind.mouse);
       wheel.hover(tester.getCenter(composer));

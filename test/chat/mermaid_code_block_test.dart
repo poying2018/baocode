@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:baocode/chat/widgets/code_citation.dart';
 import 'package:baocode/chat/widgets/content_image.dart';
+import 'package:baocode/chat/widgets/finite_selection_edges.dart';
 import 'package:baocode/chat/widgets/markdown_view.dart';
 import 'package:baocode/chat/widgets/mermaid_code_block.dart';
 import 'package:baocode/chat/widgets/mermaid_theme.dart';
@@ -372,7 +373,14 @@ void main() {
         reason: code.substring(0, code.length.clamp(0, 40)),
       );
       expect(find.byType(MarkdownCodeBlock), findsOneWidget);
-      expect(find.text(code), findsOneWidget);
+      // All of it, a few lines to a paragraph.
+      final shown = tester.widgetList<RichText>(
+        find.descendant(
+          of: find.byType(FiniteSelectionEdges),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(shown.map((text) => text.text.toPlainText()).join('\n'), code);
       expect(find.byIcon(Codicons.copy), findsOneWidget);
       expect(tester.takeException(), isNull);
     }
@@ -432,6 +440,33 @@ void main() {
       mermaidSquare('---\ntitle: T\n---\ngraph LR\nA-->B'),
       '---\ntitle: T\n---\n${elk}graph LR\nA-->B',
     );
+  });
+
+  test('a link\'s label run straight on from it spaced, as mermaid.js '
+      'reads it', () {
+    expect(mermaidLinksSpaced('A-.完成.->B'), 'A-. 完成 .->B');
+    expect(mermaidLinksSpaced('A--text-->B'), 'A-- text -->B');
+    expect(mermaidLinksSpaced('A==big==>B'), 'A== big ==>B');
+    expect(mermaidLinksSpaced('A<--two-->B'), 'A<-- two -->B');
+    expect(mermaidLinksSpaced('A-."q.->".->B'), 'A-. "q.->" .->B');
+    // Already spaced, no label, or not a link: as written.
+    for (final code in [
+      'A -- spaced --> B',
+      'A-.->B; B---C; C--xD; E==>F',
+      'A["a-.b.->c"]-->B',
+      'A-->|x-.y.->z|B',
+      '%% A-.c.->B',
+      'A-.unended',
+    ]) {
+      expect(mermaidLinksSpaced(code), code);
+    }
+  });
+
+  testWidgets('a dotted link labelled with no spaces is drawn', (tester) async {
+    await _pump(tester, 'flowchart LR\n  S1 -.完成才解锁.-> S2');
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(_paint, findsOneWidget);
+    expect(find.byType(MarkdownCodeBlock), findsNothing);
   });
 
   testWidgets('a flowchart\'s lines are square', (tester) async {

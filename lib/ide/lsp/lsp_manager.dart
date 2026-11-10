@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
+import '../host_paths.dart';
 import 'json_rpc.dart';
 import 'language_features.dart';
 import 'lsp_client.dart';
@@ -11,6 +12,7 @@ import 'lsp_glob.dart';
 import 'lsp_process.dart';
 import 'lsp_protocol.dart';
 import 'lsp_server_definition.dart';
+import 'vue_language_tools.dart';
 
 class _Document {
   _Document(this.path, this.uri, this.language, this.text, this.version);
@@ -24,6 +26,9 @@ class _Document {
   /// The language's servers in order: those that serve it, and the ids
   /// with no definition (null).
   final List<(String, _Server?)> entries = [];
+
+  /// Remote root markers are still being read before servers can attach.
+  final List<Future<void>> attaching = [];
 
   Iterable<_Server> get servers => entries.map((e) => e.$2).nonNulls;
 
@@ -42,6 +47,7 @@ class _Server {
   LanguageServerState state = LanguageServerState.idle;
   LspClient? client;
   Future<LspClient?>? starting;
+  DateTime? runningAt;
 
   /// Bumped to abandon a start or restart under way.
   int generation = 0;
@@ -158,7 +164,12 @@ class LspManager extends ChangeNotifier
   /// Whether it was shut down: it runs no servers again.
   bool get isShutDown => _shutDown;
 
-  String _normalize(String path) => _paths.normalize(_paths.absolute(path));
+  /// [path] as the documents are kept by: on Windows its drive in capitals
+  /// (see [capitalDrive]).
+  String _normalize(String path) {
+    final normalized = _paths.normalize(_paths.absolute(path));
+    return _windowsPaths ? capitalDrive(normalized) : normalized;
+  }
 
   String _uriOf(String path) =>
       Uri.file(path, windows: _windowsPaths).toString();
@@ -204,8 +215,8 @@ class LspManager extends ChangeNotifier
       final folder = _workspaceFolder(path, definition, language!);
       if (folder is Future<String?>) {
         // Its markers looked for on another machine: matched once found.
-        unawaited(
-          folder.then((folder) {
+        doc.attaching.add(
+          folder.then<void>((folder) {
             if (_shutDown || !identical(_documents[path], doc)) return;
             _attach(doc, id, definition, folder);
             _notify();
@@ -414,6 +425,8 @@ class LspManager extends ChangeNotifier
         case LspServerFound():
           executable = location.executable;
       }
+      final definition = await _launchDefinition(server);
+      if (stale()) return null;
       final process = await _startProcess(
         LspLaunch(
           serverId: server.id,
@@ -429,7 +442,7 @@ class LspManager extends ChangeNotifier
       }
       late final LspClient started;
       started = client = LspClient(
-        definition: server.definition,
+        definition: definition,
         rootPath: server.root,
         processId: _processId?.call(),
         windowsPaths: _windowsPaths,
@@ -446,12 +459,17 @@ class LspManager extends ChangeNotifier
         onApplyEdit: _applyEdit,
         onExit: (code, {required crashed}) =>
             _exited(server, started, code, crashed: crashed),
+        notifications: {
+          'tsserver/request': (params) =>
+              _tsserverRequests(server, started, params),
+        },
       );
       server.client = started;
       await started.initialize(timeout: initializeTimeout);
       if (stale() || !identical(server.client, started)) return null;
       server
         ..state = LanguageServerState.running
+        ..runningAt = _clock()
         ..message = null;
       for (final doc in server.documents) {
         started.didOpen(doc.uri, doc.languageId, doc.version, doc.text);
@@ -500,6 +518,130 @@ class LspManager extends ChangeNotifier
     };
     final tail = client?.stderrTail ?? '';
     return tail.isEmpty ? reason : '$reason\n$tail';
+  }
+
+  // Vue (see vue_language_tools.dart).
+
+  /// How long a `tsserver/request` may take: the first loads the whole
+  /// project, and vue-language-server keeps the answer.
+  static const tsserverRequestTimeout = Duration(minutes: 5);
+
+  /// What [server] starts with: a TypeScript server with Vue's tsserver
+  /// plugin, when there is one to load.
+  Future<LspServerDefinition> _launchDefinition(_Server server) async {
+    final definition = server.definition;
+    if (!isTypeScriptServer(definition)) return definition;
+    final location = await _vuePluginLocation(server.root);
+    return location == null
+        ? definition
+        : withTypeScriptPlugin(
+            definition,
+            name: vuePluginName,
+            location: location,
+            languages: const ['vue'],
+          );
+  }
+
+  /// Where `@vue/typescript-plugin` loads from for a TypeScript server at
+  /// [root]: beside the Vue language server `.vue` files use, so the two
+  /// speak the same version; else the project's own `node_modules`.
+  Future<String?> _vuePluginLocation(String root) async {
+    try {
+      final vue = catalog.languageFor(_paths.join(root, 'index.vue'));
+      for (final id in vue?.servers ?? const <String>[]) {
+        final definition = catalog.server(id);
+        if (definition == null || !isVueLanguageServer(definition)) continue;
+        if (await provider.locate(definition) case LspServerFound(
+          :final executable,
+        )) {
+          final package = await vueLanguageServerPackage(
+            executable,
+            paths: _paths,
+            exists: _pathExists,
+          );
+          if (package != null) return package;
+        }
+      }
+      return await projectVuePlugin(root, paths: _paths, exists: _pathExists);
+    } on Object {
+      return null;
+    }
+  }
+
+  /// Answers [from]'s `tsserver/request`s with `tsserver/response`s, from
+  /// the TypeScript server of the same documents; null when there is none
+  /// or it fails, as [from] waits for an answer to each.
+  void _tsserverRequests(_Server from, LspClient client, Object? params) {
+    for (final (id, command, args) in tsserverRequests(params)) {
+      unawaited(
+        _tsserver(from, command, args).then((body) {
+          if (identical(from.client, client) && client.isRunning) {
+            client.notify('tsserver/response', [
+              [id, body],
+            ]);
+          }
+        }),
+      );
+    }
+  }
+
+  Future<Object?> _tsserver(_Server from, String command, Object? args) async {
+    final hosts = <_Server>{
+      for (final doc in from.documents)
+        for (final server in doc.servers)
+          if (!identical(server, from) &&
+              (isTypeScriptServer(server.definition) ||
+                  (server.client?.commands.contains(tsserverRequestCommand) ??
+                      false)))
+            server,
+    };
+    for (final host in hosts) {
+      final client = await _ensure(host);
+      if (client == null || !identical(host.client, client)) continue;
+      final answer = await _ask(client, 'workspace/executeCommand', {
+        'command': tsserverRequestCommand,
+        'arguments': [
+          command,
+          args,
+          {'isAsync': true, 'lowPriority': true},
+        ],
+      }, timeout: tsserverRequestTimeout);
+      return answer is Map ? answer['body'] : null;
+    }
+    return null;
+  }
+
+  /// Restarts the servers that started with what [installed] had not
+  /// installed yet: a TypeScript server without Vue's plugin, a Vue server
+  /// that had no TypeScript server to ask.
+  void _restartPartners(Iterable<_Server> installed) {
+    final partners = <_Server>{
+      for (final target in installed)
+        for (final doc in target.documents)
+          for (final server in doc.servers)
+            if (server.client != null &&
+                (isVueLanguageServer(target.definition) &&
+                        isTypeScriptServer(server.definition) ||
+                    isTypeScriptServer(target.definition) &&
+                        isVueLanguageServer(server.definition)))
+              server,
+    };
+    for (final server in partners) {
+      final client = server.client;
+      server
+        ..idleTimer?.cancel()
+        ..retryTimer?.cancel()
+        ..generation += 1
+        ..starting = null
+        ..client = null
+        ..state = LanguageServerState.idle;
+      _clearDiagnostics(server);
+      if (client != null) {
+        unawaited(client.shutdown(timeout: shutdownTimeout));
+      }
+      unawaited(_ensure(server));
+    }
+    if (partners.isNotEmpty) _updateWatching();
   }
 
   void _exited(
@@ -685,6 +827,7 @@ class LspManager extends ChangeNotifier
         ..crashes.clear();
       if (server.documents.isNotEmpty) unawaited(_ensure(server));
     }
+    _restartPartners(targets);
     _notify();
   }
 
@@ -957,15 +1100,51 @@ class LspManager extends ChangeNotifier
   /// starting stopped ones).
   Future<(_Document, List<LspClient>)?> _clients(
     String path,
-    LanguageRequest request,
-  ) async {
+    LanguageRequest request, {
+    bool waitForRegistration = false,
+  }) async {
     final doc = _documents[_normalize(path)];
     if (doc == null) return null;
+    await Future.wait(doc.attaching);
+    if (_shutDown || !identical(_documents[doc.path], doc)) return null;
     await Future.wait([
       for (final server in doc.servers)
         if (server.definition.provides(_featureOf(request))) _ensure(server),
     ]);
     if (!identical(_documents[doc.path], doc)) return null;
+    final now = _clock();
+    final deadlines = [
+      if (waitForRegistration)
+        for (final server in doc.servers)
+          if (server.state == LanguageServerState.running &&
+              server.definition.provides(_featureOf(request)) &&
+              server.runningAt != null)
+            server.runningAt!.add(const Duration(seconds: 2)),
+    ].where((deadline) => deadline.isAfter(now)).toList()..sort();
+    if (deadlines.isNotEmpty && _runningFor(doc, request).isEmpty) {
+      // Dart registers navigation after initialized/didOpen. Allow that
+      // brief startup window; unsupported commands must not wait forever.
+      final remaining = deadlines.last.difference(now);
+      final wait = remaining < requestTimeout ? remaining : requestTimeout;
+      final ready = Completer<void>();
+      void changed() {
+        if (_shutDown ||
+            !identical(_documents[doc.path], doc) ||
+            _runningFor(doc, request).isNotEmpty ||
+            doc.servers.every((s) => s.state != LanguageServerState.running)) {
+          if (!ready.isCompleted) ready.complete();
+        }
+      }
+
+      addListener(changed);
+      try {
+        changed();
+        await ready.future.timeout(wait, onTimeout: () {});
+      } finally {
+        removeListener(changed);
+      }
+    }
+    if (_shutDown || !identical(_documents[doc.path], doc)) return null;
     return (doc, _runningFor(doc, request).toList());
   }
 
@@ -988,9 +1167,14 @@ class LspManager extends ChangeNotifier
     String path,
     LanguageRequest request,
     String method,
-    Object? Function(_Document doc) params,
-  ) async {
-    final found = await _clients(path, request);
+    Object? Function(_Document doc) params, {
+    bool waitForRegistration = false,
+  }) async {
+    final found = await _clients(
+      path,
+      request,
+      waitForRegistration: waitForRegistration,
+    );
     if (found == null) return const [];
     final (doc, clients) = found;
     final answers = await Future.wait([
@@ -999,17 +1183,23 @@ class LspManager extends ChangeNotifier
     return [for (var i = 0; i < clients.length; i++) (clients[i], answers[i])];
   }
 
-  /// Asks the first client able to answer [request].
+  /// Asks the first client able to answer [request]; with [answered], the
+  /// next one in turn while its answer is not one [answered] takes (e.g.
+  /// Vue's server, which renames none of a template's TypeScript).
   Future<(LspClient, Object?)?> _askFirst(
     String path,
     LanguageRequest request,
     String method,
-    Object? Function(_Document doc) params,
-  ) async {
+    Object? Function(_Document doc) params, {
+    bool Function(Object? answer)? answered,
+  }) async {
     final found = await _clients(path, request);
-    if (found == null || found.$2.isEmpty) return null;
-    final client = found.$2.first;
-    return (client, await _ask(client, method, params(found.$1)));
+    if (found == null) return null;
+    for (final client in found.$2) {
+      final answer = await _ask(client, method, params(found.$1));
+      if (answered == null || answered(answer)) return (client, answer);
+    }
+    return null;
   }
 
   static JsonMap _position(_Document doc, LspPosition position) => {
@@ -1091,7 +1281,13 @@ class LspManager extends ChangeNotifier
     String method,
     Object? Function(_Document doc) params,
   ) async {
-    final answers = await _askAll(path, request, method, params);
+    final answers = await _askAll(
+      path,
+      request,
+      method,
+      params,
+      waitForRegistration: true,
+    );
     final seen = <String>{};
     return [
       for (final (_, answer) in answers)
@@ -1249,35 +1445,38 @@ class LspManager extends ChangeNotifier
     LspPosition position,
   ) async {
     final found = await _clients(path, LanguageRequest.rename);
-    if (found == null || found.$2.isEmpty) return null;
+    if (found == null) return null;
     final (doc, clients) = found;
-    final client = clients.first;
-    final options = client.optionsFor(
-      LanguageRequest.rename,
-      path: doc.path,
-      languageId: doc.languageId,
-    );
-    if (options?['prepareProvider'] != true) {
-      return _wordAt(doc.text, position);
-    }
-    final answer = await _ask(
-      client,
-      'textDocument/prepareRename',
-      _position(doc, position),
-    );
-    if (answer is! Map) return null;
-    final map = answer.cast<String, Object?>();
-    if (map['defaultBehavior'] == true) return _wordAt(doc.text, position);
-    if (map['range'] case final Map range) {
-      final parsed = LspRange.fromJson(range.cast());
-      return (
-        range: parsed,
-        placeholder: map['placeholder'] as String? ?? _textIn(doc.text, parsed),
+    // In the language's order, the first that can rename here.
+    for (final client in clients) {
+      final options = client.optionsFor(
+        LanguageRequest.rename,
+        path: doc.path,
+        languageId: doc.languageId,
       );
-    }
-    if (map.containsKey('start')) {
-      final parsed = LspRange.fromJson(map);
-      return (range: parsed, placeholder: _textIn(doc.text, parsed));
+      if (options?['prepareProvider'] != true) {
+        return _wordAt(doc.text, position);
+      }
+      final answer = await _ask(
+        client,
+        'textDocument/prepareRename',
+        _position(doc, position),
+      );
+      if (answer is! Map) continue;
+      final map = answer.cast<String, Object?>();
+      if (map['defaultBehavior'] == true) return _wordAt(doc.text, position);
+      if (map['range'] case final Map range) {
+        final parsed = LspRange.fromJson(range.cast());
+        return (
+          range: parsed,
+          placeholder:
+              map['placeholder'] as String? ?? _textIn(doc.text, parsed),
+        );
+      }
+      if (map.containsKey('start')) {
+        final parsed = LspRange.fromJson(map);
+        return (range: parsed, placeholder: _textIn(doc.text, parsed));
+      }
     }
     return null;
   }
@@ -1293,6 +1492,7 @@ class LspManager extends ChangeNotifier
       LanguageRequest.rename,
       'textDocument/rename',
       (doc) => {..._position(doc, position), 'newName': newName},
+      answered: (answer) => answer is Map,
     );
     final edit = answer?.$2;
     return edit is Map

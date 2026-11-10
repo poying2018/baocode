@@ -1,3 +1,5 @@
+import 'bots.dart';
+
 /// What a phone asks a desktop ([LinkPeer.call]).
 abstract final class LinkMethods {
   /// The first request: `{"name", "system", "token"?, "request"?}`;
@@ -37,13 +39,24 @@ abstract final class LinkMethods {
   /// `{"session"}`: no longer followed.
   static const close = 'close';
 
-  /// `{"session"?, "project"?, "text", "images"?, "mentions"?, "now"?}`: a
-  /// message to the session; with no session, to a new one in the project.
+  /// `{"session"?, "project"?, "bot"?, "text", "images"?, "mentions"?,
+  /// "now"?, "id"?}`: a message to the bot's conversation ([LinkBot.id]),
+  /// started if it has none; else to the session; with neither, to a new
+  /// one in the project. With `id` (the phone's for it), one sent again
+  /// (its answer lost) is answered as before, not taken twice.
   /// Images are `{"data" (base64), "type", "name"?}`; mentions, the
   /// project's files the text names (`@path`), from its root. With `now`,
   /// taken up at once, the turn running stopped for it, rather than queued
   /// behind it. Answered with `{"session"}`.
   static const send = 'send';
+
+  /// `{"session", "index", "text", "images"?, "mentions"?}`: the user's
+  /// message at `index` (counted from the phone's first item, as an
+  /// update's `start` is) sent again as this, as the desktop's edit of a
+  /// message: everything after it is discarded, and the turn runs again
+  /// from there. `notFound` where there is no message of the user's;
+  /// `unsupported` where the agent cannot go back.
+  static const edit = 'edit';
 
   /// `{"session"}`: stops the turn under way.
   static const stop = 'stop';
@@ -67,8 +80,20 @@ abstract final class LinkMethods {
   /// `{"session", "pinned"}`.
   static const pin = 'pin';
 
+  /// `{"project", "pinned"}`: on top of the projects (see
+  /// [ProjectInfo.pinned]), as the desktop's Pin.
+  static const pinProject = 'pinProject';
+
   /// `{"session"}`: off the list (archived on the desktop).
   static const archive = 'archive';
+
+  /// `{"session"}`: deleted, with its conversation, as the desktop's
+  /// Delete.
+  static const delete = 'delete';
+
+  /// `{"project"}`: off the list, as the desktop's Remove from list: its
+  /// folder and its agents stay.
+  static const hideProject = 'hideProject';
 
   /// `{"session", "paths"?}`: keeps the changes to those files (all of
   /// them, with no paths), as the desktop's Keep.
@@ -85,10 +110,25 @@ abstract final class LinkMethods {
   /// [LinkLimits.output] characters: `{"text"}`.
   static const output = 'output';
 
+  /// `{"session", "task"}`: a command task's output as it grows: its last
+  /// [LinkLimits.output] characters now, `{"text", "offset"}` (where the
+  /// text ends in all of it), then [LinkEvents.output] with what is added
+  /// ([LinkOutput]), until [unwatchOutput] or the connection ends.
+  static const watchOutput = 'watchOutput';
+
+  /// `{"session", "task"}`: no more [LinkEvents.output] for it.
+  static const unwatchOutput = 'unwatchOutput';
+
   /// `{"project"}`: the project's files, `/`-separated from its root:
   /// `{"paths", "truncated"?, "changes": {path: "added" | "modified"}}`, the
   /// changes being its agents' not kept yet.
   static const files = 'files';
+
+  /// `{"project", "path"}`: what is in a folder of the project (`""` its
+  /// root), as it is on disk, what [files] leaves out with it (what Git
+  /// ignores, build outputs): `{"folders", "files"}`, their names.
+  /// `unknown` from a desktop before it.
+  static const folder = 'folder';
 
   /// `{"project", "path"}`: a file of the project: `{"text", "original"?}`
   /// (`original`, what it was before its agents changed it: empty when they
@@ -110,6 +150,63 @@ abstract final class LinkMethods {
   /// `{"type": "image", "id"}`): `{"kind": "png"|"gif"|"svg", "data"}`
   /// (base64). The id is of its content: the same id, the same picture.
   static const icon = 'icon';
+
+  /// `{"project", "path"}`: a picture of the project (PNG, JPEG, GIF,
+  /// WebP), as a reply names it: `{"type", "data"}` (its media type, and
+  /// base64), or `{"tooLarge": true, "size"}` past [LinkLimits.image].
+  /// `bad` for a file that is not a picture.
+  static const image = 'image';
+
+  /// `{"project", "path"}`: any file of the machine, its bytes, for the
+  /// phone to open in an app of its own (a video, a PDF, an archive):
+  /// `{"data"}` (base64), or `{"tooLarge": true, "size"}` past
+  /// [LinkLimits.download].
+  static const download = 'download';
+
+  /// `{"bot"?, "name", "avatar"?, "avatarImage"?, "identity", "abilities",
+  /// "proactive", "chatOnly"?}` (as [LinkBot]'s JSON; `chatOnly` not said,
+  /// as it was): the bot changed, or a new one (no
+  /// `bot`): `{"bot": LinkBot}`. `avatarImage`, `{"data" (base64), "type"}`
+  /// (at most [LinkLimits.avatar]), is a new picture for it; else `avatar`
+  /// is an emoji, or the picture it has, kept.
+  static const saveBot = 'saveBot';
+
+  /// `{"bot"}`: its picture ([LinkBot.avatar], [isAvatarImage]):
+  /// `{"type", "data"}` (its media type, and base64); `notFound` when it
+  /// has none.
+  static const botAvatar = 'botAvatar';
+
+  /// `{"bot"}`: the bot deleted, its conversation and memory with it;
+  /// `unsupported` for the assistant.
+  static const deleteBot = 'deleteBot';
+
+  /// `{"bot"}`: the bot's conversation deleted, a new one started in its
+  /// place ([LinkBot.session] another): what it remembers and who it is
+  /// stay; what it meant to come back to goes with it. `unknown` from a
+  /// desktop before it.
+  static const clearBotChat = 'clearBotChat';
+
+  /// `{"bot"}`: what the bot remembers of the user, as it keeps it (kept
+  /// on the desktop, never sent elsewhere): `{"text", "self"}`, `self`
+  /// what it noted of itself (a desktop before those has no `self`).
+  static const botMemory = 'botMemory';
+
+  /// `{"bot", "text"}`: its memory as the user wrote it; empty clears it.
+  static const setBotMemory = 'setBotMemory';
+
+  /// `{"bot", "text"}`: its notes of itself as the user left them; empty
+  /// clears them.
+  static const setBotSelf = 'setBotSelf';
+
+  /// `{"name", "gender", "signature", "picture"?}`: who the user is, as
+  /// their phone's profile says, for their bots to know (`picture`,
+  /// `{"data" (base64), "type"}` at most [LinkLimits.avatar], none for
+  /// none). Sent when it changes, and on connecting.
+  static const setMe = 'setMe';
+
+  /// Those whose answers can be large: each goes on a stream of its own
+  /// (see [LinkPeer]), holding up nothing else.
+  static const bulk = {read, image, icon, files, folder, botAvatar, extensions};
 }
 
 /// How much of what a phone asks for it gets, at most.
@@ -122,6 +219,16 @@ abstract final class LinkLimits {
 
   /// A project's files listed.
   static const files = 20000;
+
+  /// A picture's bytes.
+  static const image = 8 * 1024 * 1024;
+
+  /// A bot's picture's bytes.
+  static const avatar = 1024 * 1024;
+
+  /// A file's bytes, opened in another app: base64, under the relay's
+  /// burst (16 MiB).
+  static const download = 8 * 1024 * 1024;
 }
 
 /// A task an agent left running beside the conversation: a command, a
@@ -243,6 +350,65 @@ abstract final class LinkEvents {
 
   /// The desktop unpaired the phone; the connection ends.
   static const unpaired = 'unpaired';
+
+  /// A [LinkOutput]: what a task watched ([LinkMethods.watchOutput]) wrote.
+  static const output = 'output';
+
+  /// `{"session"}`: not sent: the phone's [LinkPeer] tells its app so when
+  /// a session's update does not fit what it has (see
+  /// [LinkSessionMirror]). The session should be opened again.
+  static const resync = 'resync';
+
+  /// `{"session", "items", "earlier"}`: not sent: the phone's [LinkPeer]
+  /// tells its app of the items an `earlier` answer put before the first,
+  /// in step with the session's updates (as an `open` answer is told as
+  /// [session]): each lands on the items as they were when it was sent.
+  static const earlier = 'earlier';
+}
+
+/// What a watched task wrote ([LinkEvents.output]): [text], ending at
+/// [offset] in all its output. With [reset], [text] is its last
+/// [LinkLimits.output] characters, in place of what the phone has (the
+/// output was cut, or too much came at once); else it follows on.
+class LinkOutput {
+  const LinkOutput({
+    required this.session,
+    required this.task,
+    required this.offset,
+    required this.text,
+    this.reset = false,
+  });
+
+  static LinkOutput? fromJson(Object? json) => switch (json) {
+    {
+      'session': final String session,
+      'task': final String task,
+      'offset': final int offset,
+      'text': final String text,
+    } =>
+      LinkOutput(
+        session: session,
+        task: task,
+        offset: offset,
+        text: text,
+        reset: json['reset'] == true,
+      ),
+    _ => null,
+  };
+
+  final String session;
+  final String task;
+  final int offset;
+  final String text;
+  final bool reset;
+
+  Map<String, Object?> toJson() => {
+    'session': session,
+    'task': task,
+    'offset': offset,
+    'text': text,
+    if (reset) 'reset': true,
+  };
 }
 
 /// Error codes of [LinkRemoteException].
@@ -259,6 +425,16 @@ abstract final class LinkErrors {
 
   /// The desktop's user turned the pairing down.
   static const rejected = 'rejected';
+
+  /// The desktop cannot do that here (an agent that cannot go back).
+  static const unsupported = 'unsupported';
+
+  /// The request was not one the desktop knows: one from before it could.
+  static const unknown = 'unknown';
+
+  /// The project is on a machine the desktop cannot reach now (a server
+  /// over SSH): what is asked of its files could not be.
+  static const unreachable = 'unreachable';
 }
 
 /// The desktop, as the phone lists it.
@@ -268,7 +444,9 @@ class DeviceInfo {
     required this.kind,
     required this.system,
     this.laptop = true,
-    this.endpoints = const [],
+    this.relays = const [],
+    this.addrs = const [],
+    this.direct = false,
   });
 
   factory DeviceInfo.fromJson(Map<String, Object?> json) => DeviceInfo(
@@ -276,7 +454,9 @@ class DeviceInfo {
     kind: json['kind'] as String? ?? 'mac',
     system: json['system'] as String? ?? '',
     laptop: json['laptop'] as bool? ?? true,
-    endpoints: [...?(json['endpoints'] as List?)?.whereType<String>()],
+    relays: [...?(json['relays'] as List?)?.whereType<String>()],
+    addrs: [...?(json['addrs'] as List?)?.whereType<String>()],
+    direct: json['direct'] == true,
   );
 
   final String name;
@@ -288,16 +468,37 @@ class DeviceInfo {
   final String system;
   final bool laptop;
 
-  /// Where it can be reached now (see [DirectEndpoint.parse]): the phone
-  /// keeps them, for next time.
-  final List<String> endpoints;
+  /// The relays it keeps to now, and its addresses (`ip:port`): the phone
+  /// keeps them for next time (see [LinkAddress]).
+  final List<String> relays;
+  final List<String> addrs;
+
+  /// It keeps to no relay: phones reach it at [addrs] alone. Its relays
+  /// are then empty on purpose, not because it has none yet.
+  final bool direct;
+
+  DeviceInfo copyWith({
+    List<String>? relays,
+    List<String>? addrs,
+    bool? direct,
+  }) => DeviceInfo(
+    name: name,
+    kind: kind,
+    system: system,
+    laptop: laptop,
+    relays: relays ?? this.relays,
+    addrs: addrs ?? this.addrs,
+    direct: direct ?? this.direct,
+  );
 
   Map<String, Object?> toJson() => {
     'name': name,
     'kind': kind,
     'system': system,
     'laptop': laptop,
-    'endpoints': endpoints,
+    'relays': relays,
+    'addrs': addrs,
+    if (direct) 'direct': true,
   };
 }
 
@@ -309,6 +510,7 @@ class ProjectInfo {
     required this.path,
     this.branch,
     this.icon,
+    this.pinned,
   });
 
   factory ProjectInfo.fromJson(Map<String, Object?> json) => ProjectInfo(
@@ -320,6 +522,7 @@ class ProjectInfo {
       final Map<String, Object?> icon => icon,
       _ => null,
     },
+    pinned: json['pinned'] as bool?,
   );
 
   final String id;
@@ -334,12 +537,18 @@ class ProjectInfo {
   /// model maker's logo). Null for its folder.
   final Map<String, Object?>? icon;
 
+  /// Pinned on top of the projects, as the desktop's sidebar has it
+  /// (changed by [LinkMethods.pinProject]); null from a desktop from
+  /// before it said.
+  final bool? pinned;
+
   Map<String, Object?> toJson() => {
     'id': id,
     'name': name,
     'path': path,
     'branch': ?branch,
     'icon': ?icon,
+    'pinned': ?pinned,
   };
 }
 
@@ -411,6 +620,7 @@ class LinkState {
     required this.device,
     this.projects = const [],
     this.sessions = const [],
+    this.bots = const [],
   });
 
   factory LinkState.fromJson(Map<String, Object?> json) => LinkState(
@@ -423,16 +633,25 @@ class LinkState {
       for (final session in (json['sessions'] as List?) ?? const [])
         SessionSummary.fromJson(_map(session)),
     ],
+    bots: [
+      for (final bot in (json['bots'] as List?) ?? const [])
+        LinkBot.fromJson(_map(bot)),
+    ],
   );
 
   final DeviceInfo device;
   final List<ProjectInfo> projects;
   final List<SessionSummary> sessions;
 
+  /// The bots, the assistant first; their conversations are not among
+  /// [sessions].
+  final List<LinkBot> bots;
+
   Map<String, Object?> toJson() => {
     'device': device.toJson(),
     'projects': [for (final project in projects) project.toJson()],
     'sessions': [for (final session in sessions) session.toJson()],
+    if (bots.isNotEmpty) 'bots': [for (final bot in bots) bot.toJson()],
   };
 }
 
@@ -516,6 +735,7 @@ class LinkSessionUpdate {
     this.changes = const [],
     this.tasks = const [],
     this.earlier,
+    this.goal,
   });
 
   factory LinkSessionUpdate.fromJson(Map<String, Object?> json) =>
@@ -542,6 +762,10 @@ class LinkSessionUpdate {
             LinkTask.fromJson(_map(task)),
         ],
         earlier: json['earlier'] as bool?,
+        goal: switch (json['goal']) {
+          final Map<String, Object?> map => map,
+          _ => null,
+        },
       );
 
   final String session;
@@ -572,6 +796,11 @@ class LinkSessionUpdate {
   /// asked to).
   final bool? earlier;
 
+  /// The goal the agent works toward (Claude Code's `/goal`), as JSON,
+  /// if any: `{"condition", "state", "checks", "reason", "setAt",
+  /// "duration", "tokens"}`, its times in milliseconds.
+  final Map<String, Object?>? goal;
+
   Map<String, Object?> toJson() => {
     'session': session,
     'start': start,
@@ -583,6 +812,7 @@ class LinkSessionUpdate {
     'changes': changes,
     if (tasks.isNotEmpty) 'tasks': [for (final task in tasks) task.toJson()],
     'earlier': ?earlier,
+    'goal': ?goal,
   };
 }
 

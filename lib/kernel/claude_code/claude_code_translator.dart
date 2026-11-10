@@ -12,7 +12,7 @@ import 'turn_stats.dart';
 
 /// Translates Claude Code's conversation messages (stream-json output, or
 /// the lines of a kept session) into [KernelEvent]s: text, thoughts, tool
-/// calls and their results, subagents, tasks, todos and runtime notices.
+/// calls and their results, subagents, tasks and runtime notices.
 ///
 /// Turns, settings and control requests are the kernel's; this only knows
 /// the conversation. Items are addressed by the CLI's own ids (message id
@@ -38,22 +38,12 @@ class ClaudeTranslator {
   /// asked afresh (see claude_goal.dart).
   final void Function()? goalSaid;
 
-  String _ownModel(String model) => ownModel?.call(model) ?? model;
-
-  String? _ownModelOf(String? model) => model == null ? null : _ownModel(model);
-
   /// What a question was answered with in full access, the user not asked,
   /// as earlier versions did: a question so answered shows as skipped.
   static const unattendedAnswer =
       'The user has given full access and is not here to answer questions. '
       'Do not ask again: go with what seems best, say what you assumed, '
       'and carry on.';
-
-  /// What the CLI sends itself, after a turn whose answer had nothing in it
-  /// the user could see, to make the model try again. The retry is the
-  /// CLI's, not a message the user sent: it is not shown as one.
-  static const noVisibleOutput =
-      "[Your previous response had no visible output.";
 
   /// The turn changes belong to (the user message uuid that began it).
   String? turnId;
@@ -62,6 +52,10 @@ class ClaudeTranslator {
   /// assistant message of its own, `<synthetic>`): the turn's result says
   /// the same words, and they are not said twice.
   String? apiErrorSaid;
+
+  String _ownModel(String model) => ownModel?.call(model) ?? model;
+
+  String? _ownModelOf(String? model) => model == null ? null : _ownModel(model);
 
   /// What the agent is busy with out of sight (see [ActivityReported]).
   KernelActivity? _activity;
@@ -74,7 +68,6 @@ class ClaudeTranslator {
 
   /// A turn was sent: the agent is at work from now, before the CLI says so.
   void begin() {
-    apiErrorSaid = null;
     _resetUsage();
     _report(_waiting());
   }
@@ -151,7 +144,13 @@ class ClaudeTranslator {
 
   final Map<String, KernelTask> _tasks = {};
   final Map<String, String> _taskOutputs = {};
-  final Map<String, TodoEntry> _todos = {};
+
+  /// The subjects of the todos created (TaskCreate), by their ids.
+  final Map<String, String> _taskSubjects = {};
+
+  /// What the user answered to questions asked (AskUserQuestion), by the
+  /// call's id: each answer by its question's text.
+  final Map<String, Map<String, String>> _answers = {};
 
   /// The session's goal (`/goal`), as last reported.
   KernelGoal? _goal;
@@ -426,6 +425,11 @@ class ClaudeTranslator {
     _goalRecords.clear();
   }
 
+  /// When [message] (the user's) was sent: as kept; live, now.
+  DateTime? _sentAt(Map<String, Object?> message) =>
+      DateTime.tryParse('${message['timestamp']}')?.toLocal() ??
+      (replaying ? null : DateTime.now());
+
   void _replayedAt(Map<String, Object?> message) {
     if (!replaying) return;
     final at = DateTime.tryParse('${message['timestamp']}');
@@ -506,11 +510,6 @@ class ClaudeTranslator {
     return false;
   }
 
-  /// What the call [id] is kept of: what it was called with, once it is
-  /// answered, is let go of (see [_toolResult]).
-  Map<String, Object?> keptInput(String id) =>
-      _tools[id]?.input ?? const <String, Object?>{};
-
   // --- Items -------------------------------------------------------------------
 
   /// Adds or replaces [id], at the top level or in the subagent [parent].
@@ -572,10 +571,7 @@ class ClaudeTranslator {
         }
         _endMessage();
       case 'content_block_start':
-        // What is not there is skipped: a CLI or a proxy may send an
-        // event that is not whole, and the session goes on.
-        final index = claudeInt(event['index']);
-        if (index == null) return;
+        final index = claudeInt(event['index']) ?? 0;
         final block = _map(event['content_block']);
         final id = '$_messageId:$index';
         switch (block['type']) {
@@ -606,9 +602,8 @@ class ClaudeTranslator {
           case 'tool_use':
             // Its input may come all at once as it ends: timed from here.
             if (!replaying) _meter.startBlock();
-            final toolId = block['id'];
-            final name = block['name'];
-            if (toolId is! String || name is! String) return;
+            final toolId = block['id'] as String;
+            final name = block['name'] as String;
             _messageBlocks[index] = toolId;
             if (!_tools.containsKey(toolId)) {
               _streamedCalls.add(toolId);
@@ -624,9 +619,7 @@ class ClaudeTranslator {
       case 'content_block_delta':
         final delta = _map(event['delta']);
         _meterDelta(delta);
-        final index = claudeInt(event['index']);
-        if (index == null) return;
-        final id = _streamed[index];
+        final id = _streamed[claudeInt(event['index']) ?? 0];
         if (id == null) return;
         switch (delta['type']) {
           case 'thinking_delta':
@@ -653,7 +646,7 @@ class ClaudeTranslator {
         }
       case 'content_block_stop':
         _blockSince = DateTime.now();
-        final id = _streamed.remove(claudeInt(event['index']));
+        final id = _streamed.remove(claudeInt(event['index']) ?? 0);
         if (id == null) return;
         if (_thoughts.containsKey(id)) {
           _completeThought(id, null);
@@ -759,6 +752,67 @@ class ClaudeTranslator {
     );
   }
 
+  // --- Whole messages -----------------------------------------------------------
+
+  void _assistant(Map<String, Object?> message, String? parent) {
+    final body = _map(message['message']);
+    final messageId = body['id'] as String? ?? '${message['uuid']}';
+    final eventId = message['uuid'] as String? ?? messageId;
+    final synthetic = body['model'] == '<synthetic>';
+    // A subagent's: the model it runs on, as the upstream answered.
+    if (_agents[parent] case final agent? when !synthetic) {
+      if (_string(body['model']) case final answered?
+          when answered.isNotEmpty) {
+        final model = _ownModel(answered);
+        if (model != agent.item.model) {
+          agent.item = agent.item.copyWith(model: model);
+          _putAgent(parent!);
+        }
+      }
+    }
+    for (final (index, raw) in _list(body['content']).indexed) {
+      final block = _map(raw);
+      final kind = block['type'] == 'text' ? 'text' : 'thinking';
+      final key = '$eventId:$index';
+      final id = _blockIds[key] ??= switch (_unclaimed['$messageId:$kind']) {
+        final ids? when ids.isNotEmpty => ids.removeAt(0),
+        _ => key,
+      };
+      switch (block['type']) {
+        case 'text':
+          final text = block['text'] as String? ?? '';
+          if (synthetic) {
+            if (parent == null && _goalReply(text)) continue;
+            if (text.isNotEmpty) {
+              _put(id, NoticeItem(NoticeKind.command, text), parent: parent);
+            }
+          } else if (_textLength.remove(id) != null) {
+            emit(ItemCompleted(nextSeq(), id, item: AssistantTextItem(text)));
+          } else if (text.trim().isNotEmpty) {
+            _put(id, AssistantTextItem(text), parent: parent);
+          }
+        case 'thinking' || 'redacted_thinking':
+          final text = block['thinking'] as String? ?? '';
+          if (_thoughts.containsKey(id)) {
+            _completeThought(id, text);
+          } else if (parent == null && text.trim().isNotEmpty) {
+            _put(
+              id,
+              ThinkingItem(text: text, tokens: text.length ~/ 4, seconds: 1),
+            );
+          }
+        case 'tool_use':
+          _streamedCalls.remove(block['id']);
+          _toolUse(
+            block['id'] as String,
+            block['name'] as String,
+            _map(block['input']),
+            parent,
+          );
+      }
+    }
+  }
+
   /// The blocks of [messageId] (the current message) from [from] on, which
   /// Claude Code gave up on: shown as they streamed, no whole message will
   /// bring them. They go, unless one did bring them; what it asks next may
@@ -815,84 +869,6 @@ class ClaudeTranslator {
     _agents.remove(id);
     _unanswered.remove(id);
     emit(ItemRemoved(nextSeq(), id));
-  }
-
-  // --- Whole messages -----------------------------------------------------------
-
-  void _assistant(Map<String, Object?> message, String? parent) {
-    final body = _map(message['message']);
-    final messageId = body['id'] as String? ?? '${message['uuid']}';
-    final eventId = message['uuid'] as String? ?? messageId;
-    final synthetic = body['model'] == '<synthetic>';
-    // A subagent's: the model it runs on, as the upstream answered.
-    if (_agents[parent] case final agent? when !synthetic) {
-      if (_string(body['model']) case final answered?
-          when answered.isNotEmpty) {
-        final model = _ownModel(answered);
-        if (model != agent.item.model) {
-          agent.item = agent.item.copyWith(model: model);
-          _putAgent(parent!);
-        }
-      }
-    }
-    for (final (index, raw) in _list(body['content']).indexed) {
-      final block = _map(raw);
-      final kind = block['type'] == 'text' ? 'text' : 'thinking';
-      final key = '$eventId:$index';
-      final id = _blockIds[key] ??= switch (_unclaimed['$messageId:$kind']) {
-        final ids? when ids.isNotEmpty => ids.removeAt(0),
-        _ => key,
-      };
-      // The list of what is left is let go of once there is none: a long
-      // session would keep a list for every message it had.
-      if (_unclaimed['$messageId:$kind']?.isEmpty ?? false) {
-        _unclaimed.remove('$messageId:$kind');
-      }
-      switch (block['type']) {
-        case 'text':
-          final text = block['text'] as String? ?? '';
-          if (synthetic) {
-            if (parent == null && _goalReply(text)) continue;
-            if (text.isNotEmpty) {
-              // What the CLI says an upstream answered with: an error the
-              // user is meant to see, not a line of the runtime's own.
-              final apiError = message['is_api_error_message'] == true;
-              // Only the turn's own error: a subagent's says nothing of the
-              // turn's result, and must not keep it from being said.
-              if (apiError && parent == null) apiErrorSaid = text;
-              _put(
-                id,
-                NoticeItem(
-                  apiError ? NoticeKind.error : NoticeKind.command,
-                  text,
-                ),
-                parent: parent,
-              );
-            }
-          } else if (_textLength.remove(id) != null) {
-            emit(ItemCompleted(nextSeq(), id, item: AssistantTextItem(text)));
-          } else if (text.trim().isNotEmpty) {
-            _put(id, AssistantTextItem(text), parent: parent);
-          }
-        case 'thinking' || 'redacted_thinking':
-          final text = block['thinking'] as String? ?? '';
-          if (_thoughts.containsKey(id)) {
-            _completeThought(id, text);
-          } else if (parent == null && text.trim().isNotEmpty) {
-            _put(
-              id,
-              ThinkingItem(text: text, tokens: text.length ~/ 4, seconds: 1),
-            );
-          }
-        case 'tool_use':
-          final toolId = block['id'];
-          final name = block['name'];
-          // A block that is not whole is skipped: the session goes on.
-          if (toolId is! String || name is! String) return;
-          _streamedCalls.remove(toolId);
-          _toolUse(toolId, name, _map(block['input']), parent);
-      }
-    }
   }
 
   void _user(Map<String, Object?> message, String? parent) {
@@ -977,9 +953,6 @@ class ClaudeTranslator {
       return;
     }
     if (message['isMeta'] == true) return;
-    // The CLI asking the model again, after an answer with nothing visible
-    // in it: not a message the user sent.
-    if (text.trimLeft().startsWith(noVisibleOutput)) return;
     final id = message['uuid'] as String?;
     if (id == null) return;
     final trimmed = text.trim();
@@ -1012,6 +985,7 @@ class ClaudeTranslator {
       final item = UserMessageItem(
         text: args.isEmpty ? command : '$command $args',
         images: images,
+        sentAt: _sentAt(message),
       );
       _answerPlan(feedback: item.text);
       _put(id, item);
@@ -1033,7 +1007,24 @@ class ClaudeTranslator {
       }
       return;
     }
-    final item = UserMessageItem(text: trimmed, images: images);
+    // A subagent's message to the agent (SendMessage), not the user's: by
+    // what it was given to do.
+    if (_agentMessage.firstMatch(trimmed) case final match?) {
+      final from = match[1]!;
+      final item = UserMessageItem(
+        text: match[2]!.trim(),
+        sentAt: _sentAt(message),
+        fromAgent: _agents[_agentCalls[from]]?.item.description ?? from,
+      );
+      _put(id, item);
+      if (replaying) _replayPrompt(id, item, message);
+      return;
+    }
+    final item = UserMessageItem(
+      text: trimmed,
+      images: images,
+      sentAt: _sentAt(message),
+    );
     // Said with a plan awaiting: what should change in it.
     _answerPlan(feedback: trimmed);
     _put(id, item);
@@ -1085,40 +1076,6 @@ class ClaudeTranslator {
         }
         _putAgent(id);
         return;
-      case 'TodoWrite':
-        if (input['todos'] case final List<Object?> todos) {
-          _todos
-            ..clear()
-            ..addEntries([
-              for (final (i, raw) in todos.indexed)
-                MapEntry('$i', _todo(_map(raw))),
-            ]);
-          _reportTodos();
-        }
-      case 'TaskCreate' when input['subject'] != null:
-        final subject = input['subject'];
-        if (subject is! String) return;
-        _todos[id] = TodoEntry(
-          subject,
-          TodoStatus.pending,
-          activeForm: _string(input['activeForm']),
-        );
-        _reportTodos();
-      case 'TaskUpdate':
-        final key = _string(input['taskId']);
-        final entry = key == null ? null : _todos[key];
-        if (key != null && entry != null) {
-          if (input['status'] == 'deleted') {
-            _todos.remove(key);
-          } else {
-            _todos[key] = TodoEntry(
-              _string(input['subject']) ?? entry.content,
-              _todoStatus(input['status']) ?? entry.status,
-              activeForm: _string(input['activeForm']) ?? entry.activeForm,
-            );
-          }
-          _reportTodos();
-        }
       // Not written to a file (see [_planCall]): the plan is said.
       case 'ExitPlanMode':
         if (_string(input['plan']) case final plan?) {
@@ -1151,7 +1108,8 @@ class ClaudeTranslator {
     String tense(String done, String doing) =>
         outcome == _Outcome.running ? doing : done;
     String? path(String key) => _string(input[key]);
-    String base(String? path) => path == null ? '' : fileNameOf(path);
+    String base(String? path) =>
+        path == null ? '' : path.split(RegExp(r'[/\\]')).last;
     final name = tool.name;
     // The app's own, shown as it says.
     if (ClaudeSdkTools.called(name) case ClaudeSdkTool(
@@ -1260,9 +1218,9 @@ class ClaudeTranslator {
         target: _summary(input),
         status: status,
       ),
+      // Its verb the web kind's, in the app's language.
       'WebFetch' => ToolCallItem(
         kind: ToolKind.web,
-        label: tense('Fetched', 'Fetching'),
         target: _string(input['url']) ?? '',
         status: status,
         output: output,
@@ -1286,16 +1244,42 @@ class ClaudeTranslator {
         target: _string(input['query']) ?? '',
         status: status,
       ),
-      'TodoWrite' ||
-      'TaskCreate' ||
-      'TaskUpdate' ||
-      'TaskList' ||
-      'TaskGet' => ToolCallItem(
+      // The list written, as text: not kept anywhere else. Its line says
+      // what is in progress; what it does, by [tool] and [input] (see
+      // todoStep).
+      'TodoWrite' => ToolCallItem(
         kind: ToolKind.todo,
-        label: tense('Updated todos', 'Updating todos'),
-        target: _string(input['subject']) ?? '',
+        tool: name,
+        input: input,
+        target:
+            [
+              for (final raw in _list(input['todos']))
+                if (_map(raw)['status'] == 'in_progress')
+                  _string(_map(raw)['content']) ?? '',
+            ].firstOrNull ??
+            '',
         status: status,
+        output: status == ToolStatus.failed
+            ? output
+            : _todoList(input['todos']),
       ),
+      // One item a call: named by its subject, the one it was created
+      // with when the call gives only its id.
+      'TaskCreate' || 'TaskUpdate' || 'TaskList' || 'TaskGet' => ToolCallItem(
+        kind: ToolKind.todo,
+        tool: name,
+        input: input,
+        target:
+            _string(input['subject']) ??
+            switch (_string(input['taskId'])) {
+              final id? => _taskSubjects[id] ?? '#$id',
+              null => '',
+            },
+        status: status,
+        output: output,
+      ),
+      // The questions, and once answered, the answers (see [_answers]),
+      // for the history to show what was asked and said.
       'AskUserQuestion' => ToolCallItem(
         kind: ToolKind.question,
         target: [
@@ -1304,6 +1288,8 @@ class ClaudeTranslator {
         ].join(' · '),
         status: status,
         output: output,
+        tool: name,
+        input: {'questions': input['questions'], 'answers': ?_answers[tool.id]},
       ),
       // "Said …": what it says, on a line; opened, all of it (what sending
       // it returned only if it failed).
@@ -1364,31 +1350,6 @@ class ClaudeTranslator {
     final tool = id == null ? null : _tools[id];
     if (id == null || tool == null) return;
     _unanswered.remove(id);
-    try {
-      _toolResultOf(block, result, tool);
-    } finally {
-      // The call is answered: the file it wrote is not needed any more,
-      // and a long session would keep every one of them in memory. What
-      // says what it did is kept.
-      tool.input = _slim(tool.input);
-    }
-  }
-
-  /// [input] without what is long: the file it wrote, the lines it read.
-  static Map<String, Object?> _slim(Map<String, Object?> input) => {
-    for (final MapEntry(:key, :value) in input.entries)
-      if (!const {
-        'content',
-        'new_string',
-        'newSource',
-        'old_string',
-        'patch',
-      }.contains(key))
-        key: value,
-  };
-
-  void _toolResultOf(Map<String, Object?> block, Object? result, _Tool tool) {
-    final id = tool.id;
     final error = block['is_error'] == true;
     final text = _resultText(block['content']);
     final structured = result is Map ? result.cast<String, Object?>() : null;
@@ -1414,15 +1375,15 @@ class ClaudeTranslator {
           // id, where its output goes). It reports in a notification.
           agent.item = agent.item.copyWith(
             prompt: _string(structured?['prompt']),
-            model: _ownModelOf(_string(structured?['resolvedModel'])),
+            // What the CLI resolved, if its messages did not say.
+            model: agent.item.model == null
+                ? _ownModelOf(_string(structured?['resolvedModel']))
+                : null,
             background: true,
           );
           _putAgent(id);
           return;
         }
-        // What it did by commands, or edits whose patches it did not
-        // send, is looked for.
-        if (!replaying) emit(FilesMayHaveChanged(nextSeq()));
         agent.item = agent.item.copyWith(
           status: outcome == _Outcome.done
               ? CommandStatus.succeeded
@@ -1435,7 +1396,9 @@ class ClaudeTranslator {
             final ms? => Duration(milliseconds: ms),
             _ => null,
           },
-          model: _ownModelOf(_string(structured?['resolvedModel'])),
+          model: agent.item.model == null
+              ? _ownModelOf(_string(structured?['resolvedModel']))
+              : null,
         );
         _putAgent(id);
         return;
@@ -1501,7 +1464,6 @@ class ClaudeTranslator {
           );
           return;
         }
-        if (!replaying) emit(FilesMayHaveChanged(nextSeq()));
         final stdout = _string(structured?['stdout']) ?? '';
         final stderr = _string(structured?['stderr']) ?? '';
         final output = structured == null
@@ -1518,12 +1480,16 @@ class ClaudeTranslator {
           parent: tool.parent,
         );
         return;
+      case 'AskUserQuestion' when outcome == _Outcome.done:
+        _answers[id] = questionAnswers(structured?['answers'], text);
       case 'ExitPlanMode':
         if (_string(tool.input['plan']) != null) return;
       case 'TaskCreate':
-        if (structured?['task'] case final Map<Object?, Object?> task) {
-          final entry = _todos.remove(id);
-          if (entry != null) _todos['${task['id']}'] = entry;
+        if ((structured?['task'], _string(tool.input['subject'])) case (
+          final Map<Object?, Object?> task,
+          final subject?,
+        )) {
+          _taskSubjects['${task['id']}'] = subject;
         }
     }
     _put(
@@ -1658,11 +1624,12 @@ class ClaudeTranslator {
       }
     }
     if (lines.isEmpty) return false;
+    final slash = path.lastIndexOf(RegExp(r'[/\\]'));
     _put(
       id,
       CodeDiffItem(
-        fileName: fileNameOf(path),
-        directory: directoryOf(path),
+        fileName: path.substring(slash + 1),
+        directory: slash < 0 ? '' : path.substring(0, slash),
         lines: lines,
         added: added,
         removed: removed,
@@ -1847,9 +1814,7 @@ class ClaudeTranslator {
           ),
         );
       case 'task_started' when !replaying:
-        final taskId = message['task_id'];
-        // A message that is not whole is skipped: the session goes on.
-        if (taskId is! String) return;
+        final taskId = message['task_id'] as String;
         final agent = message['task_type'] == 'local_agent';
         final call = message['tool_use_id'] as String?;
         // A subagent's task is its card's, continued or not.
@@ -1881,8 +1846,7 @@ class ClaudeTranslator {
           _agentToBackground(card ?? call);
         }
       case 'task_progress' when !replaying:
-        final taskId = message['task_id'];
-        if (taskId is! String) return;
+        final taskId = message['task_id'] as String;
         final usage = _map(message['usage']);
         final summary =
             _string(message['summary']) ?? _string(message['description']);
@@ -1902,8 +1866,7 @@ class ClaudeTranslator {
           _putAgent(toolUseId!);
         }
       case 'task_updated' when !replaying:
-        final taskId = message['task_id'];
-        if (taskId is! String) return;
+        final taskId = message['task_id'] as String;
         final patch = _map(message['patch']);
         if (_tasks[taskId] case final task?) {
           _tasks[taskId] = task.copyWith(
@@ -1918,10 +1881,8 @@ class ClaudeTranslator {
           }
         }
       case 'task_notification' when !replaying:
-        final taskId = message['task_id'];
-        if (taskId is! String) return;
         _taskEnded(
-          taskId,
+          message['task_id'] as String,
           _taskStatus(message['status']) ?? CommandStatus.succeeded,
           toolUseId: message['tool_use_id'] as String?,
           summary: _string(message['summary']),
@@ -1931,7 +1892,7 @@ class ClaudeTranslator {
       case 'background_tasks_changed' when !replaying:
         final live = {
           for (final raw in _list(message['tasks']))
-            if (_map(raw)['task_id'] case final String id) id,
+            _map(raw)['task_id'] as String,
         };
         var changed = false;
         for (final id in live) {
@@ -2029,8 +1990,6 @@ class ClaudeTranslator {
 
   void _reportTasks() => emit(TasksReported(nextSeq(), [..._tasks.values]));
 
-  void _reportTodos() => emit(TodosReported(nextSeq(), [..._todos.values]));
-
   // --- Helpers ------------------------------------------------------------------------
 
   static Map<String, Object?> _map(Object? value) =>
@@ -2092,6 +2051,12 @@ class ClaudeTranslator {
     return true;
   }
 
+  /// A subagent's message as the agent is given it: its id, and what it
+  /// says.
+  static final _agentMessage = RegExp(
+    r'^<agent-message from="([^"]*)">([\s\S]*)</agent-message>$',
+  );
+
   static String? _tag(String text, String tag) {
     final start = text.indexOf('<$tag>');
     final end = text.indexOf('</$tag>');
@@ -2103,19 +2068,11 @@ class ClaudeTranslator {
     final String text => text,
     final List<Object?> blocks => [
       for (final block in blocks)
-        if (_map(block)['text'] case final String text) ?_shownResult(text),
+        if (_map(block)['text'] case final String text)
+          ?_withoutImageSaved(text),
     ].join('\n'),
     _ => '',
   };
-
-  /// A result block's text as shown: nothing for a note sent the model
-  /// along the result (`<system-reminder>…</system-reminder>`: the
-  /// engine's to-do reminder and the like are not the tool's output).
-  static String? _shownResult(String text) =>
-      text.trimLeft().startsWith('<system-reminder>') &&
-          text.trimRight().endsWith('</system-reminder>')
-      ? null
-      : _withoutImageSaved(text);
 
   /// [text] without the lines where the CLI says it saved a picture a tool
   /// returned (`[Image: source: /…/tool-results/….png]`, for the agent):
@@ -2204,18 +2161,15 @@ class ClaudeTranslator {
     return report.isEmpty ? null : report;
   }
 
-  static TodoEntry _todo(Map<String, Object?> raw) => TodoEntry(
-    _string(raw['content']) ?? '',
-    _todoStatus(raw['status']) ?? TodoStatus.pending,
-    activeForm: _string(raw['activeForm']),
-  );
-
-  static TodoStatus? _todoStatus(Object? status) => switch (status) {
-    'pending' => TodoStatus.pending,
-    'in_progress' => TodoStatus.inProgress,
-    'completed' => TodoStatus.completed,
-    _ => null,
-  };
+  /// A todo list written, one line an item marked by its status.
+  static String _todoList(Object? todos) => [
+    for (final raw in _list(todos))
+      '${switch (_map(raw)['status']) {
+        'completed' => '☒',
+        'in_progress' => '◐',
+        _ => '☐',
+      }} ${_string(_map(raw)['content']) ?? ''}',
+  ].join('\n');
 
   static CommandStatus? _taskStatus(Object? status) => switch (status) {
     'running' || 'pending' => CommandStatus.running,
@@ -2237,11 +2191,7 @@ class _Tool {
   /// Its tool use's.
   final String id;
   final String name;
-
-  /// What it was called with. The heavy parts of it are let go of once the
-  /// call is answered (see [_toolResult]): a long session would keep every
-  /// file it wrote in memory.
-  Map<String, Object?> input;
+  final Map<String, Object?> input;
 
   /// The subagent's tool use id, for a subagent's tool.
   final String? parent;
@@ -2254,3 +2204,25 @@ class _Agent {
   AgentItem item;
   final Map<String, ChatItem> children = {};
 }
+
+/// What the user answered to questions asked (AskUserQuestion), each
+/// answer by its question's text: from the call's result ([structured]'s
+/// `answers`, the CLI's and BaoCode's own core's alike), else read from
+/// what it said to the model (`"question"="answer", …`).
+Map<String, String> questionAnswers(Object? structured, String text) {
+  if (structured is Map && structured.isNotEmpty) {
+    return {
+      for (final MapEntry(:key, :value) in structured.entries)
+        if (key is String && value != null) key: '$value',
+    };
+  }
+  return {
+    for (final match in _answered.allMatches(text))
+      _unquote(match[1]!): _unquote(match[2]!),
+  };
+}
+
+final _answered = RegExp(r'"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"');
+
+String _unquote(String text) =>
+    text.replaceAllMapped(RegExp(r'\\(.)'), (match) => match[1]!);

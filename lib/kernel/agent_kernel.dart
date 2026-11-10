@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 import 'kernel_event.dart';
+import 'queued_messages.dart';
 import 'kernel_types.dart';
 
 /// An agent runtime (Claude Code, Codex, …) behind one interface: the
@@ -79,12 +80,59 @@ class KernelContext {
 /// The folders an agent works in besides its directory, those of a
 /// multi-folder workspace, and what it is told of them.
 class KernelWorkspace {
-  const KernelWorkspace({required this.folders, this.instructions = ''});
+  const KernelWorkspace({
+    required this.folders,
+    this.instructions = '',
+    this.ownPrompt = false,
+    this.tools,
+    this.userServers = false,
+    this.allowedTools = const [],
+    this.approvesAll = false,
+    this.reaches = const [],
+    this.queuedMessages,
+    this.queuedInPlace = false,
+  });
 
   final List<String> folders;
 
-  /// Added to the agent's system prompt.
+  /// Added to the agent's system prompt; or, when [ownPrompt], all of it.
   final String instructions;
+
+  /// Whether [instructions] are its whole system prompt, in place of the
+  /// agent's own (a coding agent's): for one that is not one.
+  final bool ownPrompt;
+
+  /// When the messages sent while it works are taken up, over the user's
+  /// setting; theirs when null.
+  final QueuedMessages? queuedMessages;
+
+  /// The only built-in tools it has (none for an empty list), the app's
+  /// own aside; all when null. Set, the app's MCP servers are its only
+  /// ones: none of the user's, but with [userServers].
+  final List<String>? tools;
+
+  /// Whether, with [tools] set, the user's own MCP servers are its all the
+  /// same: [tools] there only to keep some of Claude Code's own from it.
+  final bool userServers;
+
+  /// Built-in tools it uses without asking, whatever its permission mode
+  /// (permission rules: `WebFetch`, say).
+  final List<String> allowedTools;
+
+  /// Whether in full access it is let do all it would do, what Claude
+  /// Code asks about all the same too (its safety checks): no one is
+  /// there to ask. A bot's.
+  final bool approvesAll;
+
+  /// Folders it works in besides, not of a workspace of its own: working
+  /// directories (`--add-dir`), their `CLAUDE.md` not read, nor their
+  /// changes reviewed. A bot's reach into the user's projects.
+  final List<String> reaches;
+
+  /// Whether what the user writes while it works shows where they wrote
+  /// it, as a chat app's messages do, from the moment it is sent: not
+  /// apart, until taken up.
+  final bool queuedInPlace;
 }
 
 /// A setting the kernel offers a choice for. What is in effect is what the
@@ -232,11 +280,32 @@ abstract interface class QueuesMessages {
   /// Takes up the queued message [turnId] at once, before any queued ahead
   /// of it: the turn running is stopped for it.
   void sendQueuedNow(String turnId);
+
+  /// Puts the queued message [turnId] at [index] among those queued, the
+  /// next first: the ones before it wait for it.
+  void moveQueued(String turnId, int index);
 }
 
 abstract interface class RevertsChanges {
   /// Puts back the files changed since turn [turnId] began.
   void revertChanges({required String sinceTurn});
+}
+
+/// Told of each file the agent (or one of its subagents) edits as it edits
+/// it: what the review of its changes keeps.
+abstract interface class EditWatch {
+  /// The agent is about to write [path] (absolute): it writes once this
+  /// completes.
+  Future<void> beforeEdit(String path);
+
+  /// It wrote [path], or gave up writing it.
+  Future<void> afterEdit(String path);
+}
+
+/// A kernel that tells an [EditWatch] of its edits, before and after each:
+/// set before it starts.
+abstract interface class WatchesEdits {
+  set editWatch(EditWatch? watch);
 }
 
 abstract interface class RewindsConversation {

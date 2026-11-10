@@ -6,8 +6,10 @@
 //   dart run tool/symbolize_jank_sample.dart <sample.txt> --app <symbols>
 //       [--engine <FlutterMacOS symbols>] [--out <file>]
 //
-// - macOS (`sample`'s own report): its `??? (in App) load address … +
-//   0x…` frames, with App.macos.symbols (tool/build_macos.dart), by `atos`,
+// - macOS (`sample`'s own report, a jank sample's or a hang's: macos/
+//   Runner/HangWatchdog.swift): its `??? (in App) load address … + 0x…`
+//   frames, or `kDartSnapshotText  (in App) + …  [0x…]` as a stripped
+//   release's are, with App.macos.symbols (tool/build_macos.dart), by `atos`,
 //   so on a Mac; and, given its symbols too, the engine's, `??? (in
 //   FlutterMacOS)`. Those are in the engine's framework.zip, for the
 //   Flutter that built that version (FLUTTER_VERSION in
@@ -31,6 +33,20 @@ import 'dart:io';
 final _macFrame = RegExp(
   r'\?\?\?  \(in (App|FlutterMacOS)\)  load address (0x[0-9a-f]+) \+ '
   r'0x[0-9a-f]+  \[(0x[0-9a-f]+)\]',
+);
+
+/// A frame of the Dart code as a release's `sample` names it: by the one
+/// symbol the stripped App keeps (`kDartSnapshotText  (in App) + 237176
+/// [0x116ba5e78]`), its load address in the Binary Images ([_appImage]).
+final _macAppSymbolFrame = RegExp(
+  r'[A-Za-z_]\w*  \(in App\) \+ \d+  \[(0x[0-9a-f]+)\]',
+);
+
+/// The App framework's line in a sample's Binary Images: where it loaded.
+final _appImage = RegExp(
+  r'^\s*(0x[0-9a-f]+)\s+-\s+0x[0-9a-f]+\s.*/App\.framework/'
+  r'(?:Versions/A/)?App\s*$',
+  multiLine: true,
 );
 
 /// A frame of the Dart code, by its offset in the ELF file of it.
@@ -62,7 +78,10 @@ Future<void> main(List<String> arguments) async {
   }
   final input = File(inputs.single);
   final text = input.readAsStringSync();
-  final (out, named, total) = _macFrame.hasMatch(text)
+  final mac =
+      _macFrame.hasMatch(text) ||
+      (_macAppSymbolFrame.hasMatch(text) && _appImage.hasMatch(text));
+  final (out, named, total) = mac
       ? await _mac(text, {'App': app, 'FlutterMacOS': ?option('--engine')})
       : await _elf(text, app);
   final path = option('--out') ?? '${input.path}.symbolized.txt';
@@ -90,9 +109,29 @@ Future<(String, int, int)> _mac(
     if (!symbols.containsKey(match[1])) continue;
     (wanted[(match[1]!, match[2]!)] ??= {}).add(match[3]!);
   }
+  final appLoad = _appImage.firstMatch(text)?[1];
+  if (appLoad != null) {
+    for (final match in _macAppSymbolFrame.allMatches(text)) {
+      (wanted[('App', appLoad)] ??= {}).add(match[1]!);
+    }
+  }
   final names = <(String, String), String>{};
   for (final MapEntry(key: (module, load), value: addresses)
       in wanted.entries) {
+    if (module == 'App') {
+      // Not atos: it takes the stripped App's one symbol left,
+      // kDartSnapshotText, which starts the Dart code, for all of it.
+      final table = await _appSymbols(symbols[module]!, arch);
+      final base = int.parse(load.substring(2), radix: 16);
+      for (final address in addresses) {
+        final offset = int.parse(address.substring(2), radix: 16) - base;
+        // A return address, but for the innermost: the call is before it.
+        if (_nearest(table, offset - 1) case (final start, final name)?) {
+          names[(module, address)] = '$name  (in App) + ${offset - start}';
+        }
+      }
+      continue;
+    }
     final list = addresses.toList();
     for (var from = 0; from < list.length; from += 500) {
       final chunk = list.sublist(from, (from + 500).clamp(0, list.length));
@@ -123,13 +162,51 @@ Future<(String, int, int)> _mac(
   }
 
   var named = 0;
-  final out = text.replaceAllMapped(_macFrame, (match) {
+  var out = text.replaceAllMapped(_macFrame, (match) {
     final name = names[(match[1]!, match[3]!)];
     if (name == null) return match[0]!;
     named++;
     return '$name  [${match[3]}]';
   });
-  return (out, named, _macFrame.allMatches(text).length);
+  out = out.replaceAllMapped(_macAppSymbolFrame, (match) {
+    final name = names[('App', match[1]!)];
+    if (name == null) return match[0]!;
+    named++;
+    return '$name  [${match[1]}]';
+  });
+  final total =
+      _macFrame.allMatches(text).length +
+      (appLoad == null ? 0 : _macAppSymbolFrame.allMatches(text).length);
+  return (out, named, total);
+}
+
+/// The Dart code's functions in [symbols] (App.macos.symbols, its [arch]),
+/// by their start in the file, which loads at the App's load address.
+Future<List<(int, String)>> _appSymbols(String symbols, String arch) async {
+  final result = await Process.run('nm', ['-arch', arch, '-n', symbols]);
+  if (result.exitCode != 0) _fail('nm failed: ${result.stderr}');
+  final line = RegExp(r'^([0-9a-f]+) [tT] (.+)$');
+  return [
+    for (final text in const LineSplitter().convert('${result.stdout}'))
+      if (line.firstMatch(text) case final match?
+          when !match[2]!.startsWith('_kDart'))
+        (int.parse(match[1]!, radix: 16), match[2]!),
+  ];
+}
+
+/// The function of [table] (sorted) that [offset] is in: the last that
+/// starts at it or before.
+(int, String)? _nearest(List<(int, String)> table, int offset) {
+  var low = 0, high = table.length;
+  while (low < high) {
+    final middle = (low + high) >> 1;
+    if (table[middle].$1 <= offset) {
+      low = middle + 1;
+    } else {
+      high = middle;
+    }
+  }
+  return low == 0 ? null : table[low - 1];
 }
 
 /// package:bao_sampler's (and a hang report's): `app.so+0x…`, by

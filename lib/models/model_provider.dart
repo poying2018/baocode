@@ -621,6 +621,8 @@ class ModelProvider {
     this.headers = const {},
     this.accounts = const [],
     this.balance = AccountBalance.roundRobin,
+    this.autoResetCredits = false,
+    this.resetCreditsFiveHours = false,
     this.clientVersion,
     this.icon,
     this.follows,
@@ -683,6 +685,12 @@ class ModelProvider {
   /// Which of [accounts] a request goes to.
   final AccountBalance balance;
 
+  /// Codex: an account whose quota is used up for longer than five hours
+  /// (or for five, with [resetCreditsFiveHours]) uses up a reset credit
+  /// of its own, if it has one, and goes on.
+  final bool autoResetCredits;
+  final bool resetCreditsFiveHours;
+
   /// Codex: the Codex CLI's version it speaks as (`0.159.0`), for models
   /// the backend offers only to a newer one; the app's when null.
   final String? clientVersion;
@@ -744,6 +752,12 @@ class ModelProvider {
           if (model.enabled && !model.kind.generatesImages) model,
       ]);
 
+  /// The image models turned on: the agents' `generate_image`'s.
+  List<ProviderModel> get imageModels => [
+    for (final model in sortedModels)
+      if (model.enabled && model.kind.generatesImages) model,
+  ];
+
   /// [model]'s name in a list of this upstream's: its [ProviderModel.
   /// displayName], unless another of [enabledModels] goes by the same,
   /// then with what tells their ids apart: `GPT-6.1 Terra (congee)` and
@@ -788,12 +802,6 @@ class ModelProvider {
       );
     }
   }
-
-  /// The image models turned on: the agents' `generate_image`'s.
-  List<ProviderModel> get imageModels => [
-    for (final model in sortedModels)
-      if (model.enabled && model.kind.generatesImages) model,
-  ];
 
   // Each upstream's, worked out once: it does not change (another is made
   // for a change), and the model picker's choices read them for every
@@ -878,6 +886,8 @@ class ModelProvider {
     Map<String, String>? headers,
     List<ProviderAccount>? accounts,
     AccountBalance? balance,
+    bool? autoResetCredits,
+    bool? resetCreditsFiveHours,
     String? Function()? clientVersion,
     ProjectIcon? Function()? icon,
   }) => ModelProvider(
@@ -899,6 +909,8 @@ class ModelProvider {
     headers: headers ?? this.headers,
     accounts: accounts ?? this.accounts,
     balance: balance ?? this.balance,
+    autoResetCredits: autoResetCredits ?? this.autoResetCredits,
+    resetCreditsFiveHours: resetCreditsFiveHours ?? this.resetCreditsFiveHours,
     clientVersion: clientVersion == null ? this.clientVersion : clientVersion(),
     icon: icon == null ? this.icon : icon(),
     follows: follows,
@@ -943,6 +955,8 @@ class ModelProvider {
     if (accounts.isNotEmpty)
       'accounts': [for (final account in accounts) account.toJson()],
     if (balance != AccountBalance.roundRobin) 'balance': balance.id,
+    if (autoResetCredits) 'autoResetCredits': true,
+    if (resetCreditsFiveHours) 'resetCreditsFiveHours': true,
     'clientVersion': ?clientVersion,
     'icon': ?icon?.toJson(),
     'follows': ?follows,
@@ -987,6 +1001,8 @@ class ModelProvider {
           ?ProviderAccount.fromJson(account),
       ],
       balance: AccountBalance.parse(json['balance']),
+      autoResetCredits: json['autoResetCredits'] == true,
+      resetCreditsFiveHours: json['resetCreditsFiveHours'] == true,
       clientVersion: switch (json['clientVersion']) {
         final String version when isClientVersion(version.trim()) =>
           version.trim(),

@@ -23,23 +23,27 @@ import 'package:baocode/chat/side_panel/side_panel_controller.dart';
 import 'package:baocode/chat/chat_column.dart';
 import 'package:baocode/chat/side_panel/side_panel_view.dart';
 import 'package:baocode/chat/widgets/edit_step.dart';
+import 'package:baocode/chat/widgets/step_header.dart' show StepBody;
 import 'package:baocode/chat/widgets/fold_line.dart';
 import 'package:baocode/chat/widgets/markdown_view.dart';
 import 'package:baocode/chat/widgets/tool_call_row.dart';
 import 'package:baocode/ide/file_service.dart';
 import 'package:baocode/ide/git/ide_git_commit_panel.dart';
+import 'package:baocode/ide/ide_diff_options.dart';
 import 'package:baocode/ide/git/commit_message.dart';
 import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/ide_git_log_view.dart';
 import 'package:baocode/ide/ide_code_diff.dart';
+import 'package:baocode/ide/editor_word_wrap.dart';
 import 'package:baocode/ide/ide_code_editor.dart';
 import 'package:baocode/ide/ide_explorer.dart';
+import 'package:baocode/ide/ide_hover.dart';
 import 'package:baocode/ide/ide_list.dart';
-import 'package:baocode/ide/ide_tab_bar.dart';
 import 'package:baocode/ide/terminal/terminal_instance.dart';
 import 'package:baocode/ide/terminal/terminal_service.dart';
 import 'package:baocode/ide/terminal/terminal_view.dart';
+import 'package:baocode/ide/tab_reorder.dart';
 import 'package:baocode/ide/tab_strip_scroll.dart';
 import 'package:baocode/chat/side_panel/terminal_preview.dart';
 import 'package:baocode/chat/panels/activity_strip.dart';
@@ -48,6 +52,9 @@ import 'package:baocode/theme/app_theme.dart';
 import 'package:baocode/theme/code_font.dart';
 import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/theme/material_file_icons.dart';
+import 'package:baocode/usage/usage_ledger.dart';
+import 'package:baocode/usage/usage_record.dart';
+import 'package:baocode/workspace/islands.dart';
 import 'package:baocode/workspace/preference_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -62,6 +69,9 @@ import '../../ide/terminal/fake_terminal.dart';
 import '../../workspace/chat_window_keys_test.dart' show press;
 import '../../workspace_test.dart' show pumpLoaded;
 import '../../kernel_ui_test.dart' show pumpScripted;
+
+import 'package:baocode/theme/svg_icons.dart';
+import 'package:baocode/chat/side_panel/chat_layout_picker.dart';
 
 /// A project's files, in memory.
 class _Files implements IdeFileService {
@@ -138,12 +148,12 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
   IdeGitWorktreeChoice Function(IdeGitRepository git)? worktreesOf,
   double titleBarInset = 0,
   Widget? leading,
+  bool roomComing = false,
 }) async {
   _bigWindow(tester);
   final session = ChatSession(
     historyCount: 8,
-    // The project is on a host: its paths are POSIX, as a host's are.
-    kernelContext: const KernelContext(cwd: 'ssh://dev/p'),
+    kernelContext: const KernelContext(cwd: '/p'),
     openReview: (root, {session}) async => null,
   );
   addTearDown(session.dispose);
@@ -154,14 +164,13 @@ Future<({AgentSidePanel panel, ChatSession session, _Files files})> _pumpChat(
     _app(
       AgentSidePanelArea(
         panel: panel,
+        roomComing: roomComing,
         builder: (context) => AgentSidePanelView(
           notifications: IdeNotifications(),
           panel: panel,
           session: session,
           files: files,
           watchDirectory: (_) => const Stream.empty(),
-          // The project is a POSIX path, as a host's is.
-          paths: p.posix,
           terminals: terminals,
           git: git,
           commitMessage: commitMessage,
@@ -556,6 +565,47 @@ void main() {
     await check(const FileOpenRequest('/p/a.dart', diff: true));
   });
 
+  testWidgets('text only shown wraps as the editors do, toggled in its bar', (
+    tester,
+  ) async {
+    addTearDown(() => EditorWordWrap.on.value = false);
+    final long = List.filled(60, 'word').join(' ');
+    final files = _Files({'/p/paste.txt': 'one\n$long\nthree'});
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/paste.txt', readOnly: true),
+          files: files,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final sideways = find.byWidgetPredicate(
+      (widget) =>
+          widget is SingleChildScrollView &&
+          widget.scrollDirection == Axis.horizontal,
+    );
+    expect(sideways, findsOneWidget);
+    final oneLine = tester.getSize(find.text('one')).height;
+    expect(tester.getSize(find.text(long)).height, closeTo(oneLine, 0.1));
+
+    await tester.tap(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is IdeActionButton && widget.icon == Codicons.wordWrap,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(EditorWordWrap.on.value, isTrue);
+    expect(sideways, findsNothing);
+    // The long line on rows of its own, the next under them.
+    expect(tester.getSize(find.text(long)).height, greaterThan(oneLine * 2));
+    expect(
+      tester.getTopLeft(find.text('three')).dy,
+      greaterThanOrEqualTo(tester.getBottomLeft(find.text(long)).dy),
+    );
+  });
+
   testWidgets('short preview lines do not create horizontal overflow', (
     tester,
   ) async {
@@ -636,6 +686,90 @@ void main() {
     expect(copied, 'one\n\ntwo\n\n\nthree');
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
 
+  testWidgets('the lines selected where the focus is, for Add Selection to '
+      'Chat: of the lines shown, the file edited, its changes', (tester) async {
+    addTearDown(CopiedCode.clear);
+    List<CodeReference> selected() =>
+        FilePreview.selectedAt(FocusManager.instance.primaryFocus?.context);
+    final files = _Files({'/p/a.dart': 'one\n\ntwo\n\n\nthree'});
+
+    // Its lines, read only.
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: const FileOpenRequest('/p/a.dart', diff: true),
+          files: files,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(selected(), isEmpty);
+    final from = tester.getTopLeft(find.text('two')) + const Offset(0.5, 4);
+    final to = tester.getTopRight(find.text('three')) + const Offset(1, 4);
+    final drag = await tester.startGesture(from, kind: PointerDeviceKind.mouse);
+    await tester.pump();
+    await drag.moveTo(to);
+    await tester.pump();
+    await drag.up();
+    await tester.pump();
+    expect(selected(), [
+      const CodeReference(
+        path: '/p/a.dart',
+        start: 3,
+        end: 6,
+        code: 'two\n\n\nthree',
+      ),
+    ]);
+
+    // The file, edited.
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          key: const ValueKey('edit'),
+          request: const FileOpenRequest('/p/a.dart'),
+          files: files,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(IdeCodeEditor));
+    await tester.pump();
+    tester
+        .widget<IdeCodeEditor>(find.byType(IdeCodeEditor))
+        .controller
+        .select(0, 3);
+    await tester.pump();
+    expect(selected(), [
+      const CodeReference(path: '/p/a.dart', start: 1, end: 1, code: 'one'),
+    ]);
+
+    // Its changes: the lines of the file as it is now.
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          key: const ValueKey('diff'),
+          request: FileOpenRequest(
+            '/p/a.dart',
+            diff: true,
+            original: () async => 'one\ntwo\nthree',
+          ),
+          files: _Files({'/p/a.dart': 'one\nTWO\nthree'}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(EditorSurface).last);
+    await tester.pump();
+    tester
+        .widget<EditorSurface>(find.byType(EditorSurface).last)
+        .controller
+        .select(4, 7);
+    await tester.pump();
+    expect(selected(), [
+      const CodeReference(path: '/p/a.dart', start: 2, end: 2, code: 'TWO'),
+    ]);
+  });
+
   testWidgets('a diff shows in the IDE\'s diff editor; its lines copied '
       'paste into the composer as a reference to them', (tester) async {
     addTearDown(CopiedCode.clear);
@@ -696,11 +830,8 @@ void main() {
     panel.showSection(first, SidePanelSection.files);
     expect(panel.tabsOf(first).active!.path, '/p/a.dart');
     panel.openTerminal(first, 'bash-2');
-    expect(panel.tabsOf(first).terminals, ['bash-1', 'bash-2']);
-    panel.closeTerminal(first, 'bash-2');
-    expect(panel.tabsOf(first).terminals, ['bash-1']);
-    expect(panel.tabsOf(first).terminal, 'bash-1');
-    expect(panel.tabsOf(second).terminals, isEmpty);
+    expect(panel.tabsOf(first).terminal, 'bash-2');
+    expect(panel.tabsOf(second).terminal, isNull);
   });
 
   test('files and changes open on their own pages, each with its tabs', () {
@@ -719,6 +850,45 @@ void main() {
     panel.close(chat, tabs.diffs.single);
     expect(tabs.activeDiff, isNull);
     expect(tabs.active, isNotNull);
+  });
+
+  testWidgets('one change shows at a time: another takes its place; asked '
+      'for again, at its change', (tester) async {
+    String lines(String name) =>
+        [for (var i = 1; i <= 300; i++) '$name $i'].join('\n');
+    final (:panel, :session, files: _) = await _pumpChat(
+      tester,
+      texts: {'/p/a.dart': lines('a'), '/p/b.dart': lines('b')},
+    );
+    FileOpenRequest diff(String path, String name) => FileOpenRequest(
+      path,
+      diff: true,
+      original: () async => lines(name).replaceFirst('$name 20\n', '\n'),
+    );
+    panel.open(session, diff('/p/a.dart', 'a'));
+    await tester.pumpAndSettle();
+    EditorSurfaceView modified() =>
+        tester.state(find.byType(EditorSurface).last) as EditorSurfaceView;
+    final at = tester
+        .widget<EditorSurface>(find.byType(EditorSurface).last)
+        .controller
+        .document
+        .snapshot
+        .lineStarts[249];
+    modified().revealRange(at, at, center: true);
+    await tester.pumpAndSettle();
+    final scrolled = modified().scrollOffset;
+    expect(scrolled.dy, greaterThan(0));
+
+    panel.open(session, diff('/p/b.dart', 'b'));
+    await tester.pumpAndSettle();
+    final tabs = panel.tabsOf(session);
+    expect(tabs.diffs.single.path, '/p/b.dart');
+
+    panel.open(session, diff('/p/a.dart', 'a'));
+    await tester.pumpAndSettle();
+    expect(tabs.diffs.single.path, '/p/a.dart');
+    expect(modified().scrollOffset.dy, lessThan(scrolled.dy));
   });
 
   test('the plan opens on a page of its own, there while it is', () {
@@ -791,7 +961,7 @@ void main() {
 
   testWidgets('the rail counts what the pages\' bar counts: the changes, the '
       'commands running', (tester) async {
-    final fake = FakeGit('/p', paths: p.posix)
+    final fake = FakeGit('/p')
       ..status =
           '## main...origin/main\x00'
           ' M lib/main.dart\x00'
@@ -835,6 +1005,56 @@ void main() {
       find.byKey(const ValueKey(('rail', SidePanelSection.changes))),
       findsNothing,
     );
+  });
+
+  testWidgets('the rail offers the usage page once the conversation has '
+      'calls kept', (tester) async {
+    final session = _NamedSession('s-usage');
+    addTearDown(session.dispose);
+    final before = UsageLedger.current;
+    final ledger = UsageLedger.current = UsageLedger(MemoryUsageStorage());
+    addTearDown(() {
+      ledger.dispose();
+      UsageLedger.current = before;
+    });
+    await tester.pumpWidget(
+      _app(
+        Align(
+          alignment: Alignment.topLeft,
+          child: SidePanelRail(onSelect: (_) {}, session: session),
+        ),
+      ),
+    );
+    await tester.pump();
+    final rail = find.byKey(const ValueKey('side-panel-rail'));
+    Finder usage() => find.descendant(
+      of: rail,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is AppIcon && widget.icon == SvgIcons.usage,
+      ),
+    );
+    expect(usage(), findsNothing);
+    expect(
+      find.descendant(of: rail, matching: find.byIcon(Codicons.terminal)),
+      findsOneWidget,
+    );
+
+    ledger.record(
+      UsageCall(
+        at: DateTime.now(),
+        duration: const Duration(seconds: 1),
+        status: 200,
+        provider: 'gw',
+        providerName: 'GW',
+        model: 'gpt-5',
+        session: session.sessionId,
+        requestClass: UsageClass.main,
+      ),
+    );
+    ledger.flush();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump();
+    expect(usage(), findsOneWidget);
   });
 
   testWidgets('the terminal rail badge counts running background commands', (
@@ -934,6 +1154,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Select a file to preview it'), findsOneWidget);
+    // The list's toggle leads the files' tabs, there with none open; the
+    // other pages, without a list, have none.
+    final toggle = find.byKey(const ValueKey('side-panel-list-toggle'));
+    expect(toggle, findsOneWidget);
+    panel.showSection(session, SidePanelSection.changes);
+    await tester.pumpAndSettle();
+    expect(toggle, findsNothing);
+    panel.showSection(session, SidePanelSection.files);
+    await tester.pumpAndSettle();
     await tester.tap(find.descendant(of: list, matching: find.text('b.dart')));
     await tester.pumpAndSettle();
     expect(_active(panel, session)!.path, '/p/b.dart');
@@ -975,7 +1204,7 @@ void main() {
 
   testWidgets('the changes page lists the local changes as JetBrains IDEs '
       'do, and opens their diffs against HEAD and the index', (tester) async {
-    final fake = FakeGit('/p', paths: p.posix)
+    final fake = FakeGit('/p')
       ..status =
           '## main\x00'
           'M  lib/staged.dart\x00'
@@ -1086,11 +1315,9 @@ void main() {
       find.descendant(of: list, matching: find.text('main.dart')),
     );
     await tester.pumpAndSettle();
-    final preview = find.byType(FilePreview);
+    // In the log's place, as the IDE's Source Control shows it: no tab.
     (String, String) compared() {
-      final diff = tester.widget<IdeCodeDiff>(
-        find.descendant(of: preview, matching: find.byType(IdeCodeDiff)),
-      );
+      final diff = tester.widget<IdeCodeDiff>(find.byType(IdeCodeDiff).last);
       return (diff.original, diff.modified);
     }
 
@@ -1104,12 +1331,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(compared(), ('before staging\n', 'staged text\n'));
-    expect(panel.tabsOf(session).diffs, hasLength(2));
+    expect(panel.tabsOf(session).diffs, isEmpty);
 
     // Not grouped by directory: each file with its folder, and the panel
     // remembers it.
     await tester.tap(
-      find.descendant(of: list, matching: find.byTooltip('Group by Directory')),
+      find.descendant(of: list, matching: find.byIcon(Codicons.listFlat)),
     );
     await tester.pumpAndSettle();
     expect(panel.changesAsTree, isFalse);
@@ -1123,22 +1350,6 @@ void main() {
     );
     expect(main.description, 'lib');
 
-    // A tab's menu closes the others.
-    await tester.tap(
-      find.descendant(
-        of: find.byType(TabStripScroll),
-        matching: find.text('staged.dart'),
-      ),
-      buttons: kSecondaryButton,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Close Others'));
-    await tester.pumpAndSettle();
-    expect(
-      [for (final tab in panel.tabsOf(session).diffs) tab.path],
-      ['/p/lib/staged.dart'],
-    );
-
     // An unversioned file's menu adds it to Git.
     await tester.tap(row('notes.md'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
@@ -1151,7 +1362,7 @@ void main() {
       'copies its path; a click folds it; a file\'s menu opens it too', (
     tester,
   ) async {
-    final fake = FakeGit('/p', paths: p.posix)
+    final fake = FakeGit('/p')
       ..status =
           '## main\x00'
           ' M lib/a/main.dart\x00'
@@ -1227,7 +1438,7 @@ void main() {
 
   testWidgets('the changes page is the Git log: a commit tapped shows its '
       'files, and a file its changes in the log\'s place', (tester) async {
-    final fake = FakeGit('/p', paths: p.posix)
+    final fake = FakeGit('/p')
       ..status = '## main\x00 M lib/main.dart\x00'
       ..log =
           '${gitLogRecord('c2', ['c1'], 'Second', refs: 'HEAD -> refs/heads/main')}\n'
@@ -1259,29 +1470,22 @@ void main() {
     );
     await tester.tap(file.last);
     await tester.pumpAndSettle();
-    final tab = panel.tabsOf(session).activeDiff!;
-    expect(tab.path, '/p/lib/main.dart');
-    expect(tab.request.readOnly, isTrue);
-    final diff = tester.widget<IdeCodeDiff>(
-      find.descendant(
-        of: find.byType(FilePreview),
-        matching: find.byType(IdeCodeDiff),
-      ),
-    );
+    // In the log's place, as the IDE's Source Control shows it: no tab.
+    expect(panel.tabsOf(session).diffs, isEmpty);
+    final diff = tester.widget<IdeCodeDiff>(find.byType(IdeCodeDiff).last);
     expect((diff.original, diff.modified), ('first\n', 'second\n'));
+    expect(diff.onEdit, isNull);
 
-    // Back to the log, the change's tab kept.
-    await tester.tap(find.byTooltip('Back to Log'));
+    // Back to the log.
+    await tester.tap(find.byTooltip('Back to Log (Esc)'));
     await tester.pumpAndSettle();
-    expect(panel.tabsOf(session).activeDiff, isNull);
-    expect(panel.tabsOf(session).diffs, hasLength(1));
     // In the table, and as the message of the commit still selected.
     expect(find.text('Second'), findsNWidgets(2));
   });
 
   testWidgets('in a worktree where the agent works: its name, its branch '
       'marked, the others to pick from', (tester) async {
-    final fake = FakeGit('/p-wt', paths: p.posix)
+    final fake = FakeGit('/p-wt')
       ..status = '## feature\x00 M lib/main.dart\x00'
       ..worktrees =
           'worktree /p\nHEAD ${'1' * 40}\nbranch refs/heads/main\n\n'
@@ -1325,7 +1529,7 @@ void main() {
   testWidgets('the changes page commits as JetBrains IDEs do: a message '
       'wanted, written by the sparkle from the files checked, then those '
       'committed', (tester) async {
-    final fake = FakeGit('/p', paths: p.posix)
+    final fake = FakeGit('/p')
       ..status =
           '## main\x00'
           'M  lib/staged.dart\x00'
@@ -1348,10 +1552,13 @@ void main() {
     expect(find.byType(IdeGitCommitPanel), findsOneWidget);
     // The panel's own title, not the view's.
     expect(find.text('Source Control'), findsNothing);
-    final commit = find.descendant(
-      of: find.byType(IdeGitCommitPanel),
-      matching: find.text('Commit'),
-    );
+    // The button, after the Commit and Stash tabs (as the IDE's).
+    final commit = find
+        .descendant(
+          of: find.byType(IdeGitCommitPanel),
+          matching: find.text('Commit'),
+        )
+        .last;
 
     // No message: said so, nothing committed.
     await tester.tap(commit);
@@ -1368,7 +1575,7 @@ void main() {
       fake.callsTo('diff').single,
       containsAllInOrder(['HEAD', '--', 'lib/main.dart', 'lib/staged.dart']),
     );
-    expect(panel.scmOf(git).message.text, 'Stage the staged file');
+    expect(panel.scmOf(session, git).message.text, 'Stage the staged file');
 
     await tester.tap(commit);
     await tester.pumpAndSettle();
@@ -1382,7 +1589,57 @@ void main() {
       'lib/main.dart',
       'lib/staged.dart',
     ]);
-    expect(panel.scmOf(git).message.text, isEmpty);
+    expect(panel.scmOf(session, git).message.text, isEmpty);
+  });
+
+  test('each conversation has its own Git log and changes of a repository, '
+      'the favorite branches the same', () {
+    final git = FakeGit('/p').repository();
+    addTearDown(git.dispose);
+    final panel = AgentSidePanel();
+    addTearDown(panel.dispose);
+    final one = Object();
+    final other = Object();
+    final scm = panel.scmOf(one, git);
+    expect(panel.scmOf(one, git), same(scm));
+    expect(panel.scmOf(other, git), isNot(same(scm)));
+    scm.log.selected = 'c1';
+    expect(panel.scmOf(other, git).log.selected, isNull);
+    scm.log.toggleFavorite(git, 'refs/heads/main');
+    expect(
+      panel.scmOf(other, git).log.isFavorite(git, 'refs/heads/main'),
+      isTrue,
+    );
+  });
+
+  testWidgets('under the log, the changes fold to their tabs\' row, and '
+      'unfold from it', (tester) async {
+    // Under it as picked: the panel is wide enough to have them beside.
+    IdeDiffOptions.instance.detailsLayout = IdeGitDetailsLayout.below;
+    addTearDown(IdeDiffOptions.instance.reset);
+    final fake = FakeGit('/p')
+      ..status = '## main\x00 M lib/main.dart\x00'
+      ..log = '';
+    final git = fake.repository();
+    addTearDown(git.dispose);
+    final (:panel, :session, files: _) = await _pumpChat(tester, git: git);
+    panel.showSection(session, SidePanelSection.changes);
+    await tester.pumpAndSettle();
+    final changes = find.byType(IdeGitCommitPanel);
+    final open = tester.getSize(changes).height;
+    expect(find.text('Commit and Push'), findsOneWidget);
+
+    await tester.tap(find.text('Fold'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(changes).height, IdeGitCommitPanel.foldedHeight);
+    expect(find.text('Commit and Push'), findsNothing);
+    expect(panel.scmOf(session, git).log.detailsFolded, isTrue);
+
+    // Anywhere on the row.
+    await tester.tapAt(tester.getCenter(changes));
+    await tester.pumpAndSettle();
+    expect(find.text('Fold'), findsOneWidget);
+    expect(tester.getSize(changes).height, open);
   });
 
   testWidgets('dragging the panel\'s edge past where it goes over the '
@@ -1441,7 +1698,10 @@ void main() {
 
   testWidgets('a room short a while only (the sidebar giving way) does not '
       'put the panel over the conversations', (tester) async {
-    final (:panel, :session, files: _) = await _pumpChat(tester);
+    final (:panel, :session, files: _) = await _pumpChat(
+      tester,
+      roomComing: true,
+    );
     tester.view.physicalSize = const Size(1600, 800);
     panel.show();
     await tester.pumpAndSettle();
@@ -1473,47 +1733,80 @@ void main() {
     expect(_scrim, findsOneWidget);
   });
 
-  testWidgets('moved to the conversations\' left: its page, tab and width '
-      'kept, its edge toward them dragged; kept for the next run (#145)', (
-    tester,
-  ) async {
+  testWidgets('shown where the room is short for good, the panel is over '
+      'the conversations at once, not beside them first', (tester) async {
     final (:panel, :session, files: _) = await _pumpChat(tester);
-    panel.open(session, const FileOpenRequest('/p/lib/main.dart'));
-    await tester.pumpAndSettle();
-    final width = tester.getSize(find.byType(AgentSidePanelView)).width;
-    expect(tester.getTopRight(find.byType(AgentSidePanelView)).dx, 1600);
-
-    await tester.tap(find.byKey(const ValueKey('side-panel-move')));
-    await tester.pumpAndSettle();
-    expect(panel.atLeft, isTrue);
-    final view = find.byType(AgentSidePanelView);
-    expect(tester.getTopLeft(view).dx, 0);
-    expect(tester.getSize(view).width, width);
-    expect(find.byType(FilePreview), findsOneWidget);
-    // The conversations at its right, up to the sash's line.
-    expect(tester.getTopLeft(find.byType(ChatScreen)).dx, width + 1);
-
-    // Its right edge dragged right: wider.
-    final sash = find.byKey(const ValueKey('side-panel-sash'));
-    expect(tester.getTopLeft(sash).dx, width);
-    await tester.drag(sash, const Offset(100, 0));
-    await tester.pumpAndSettle();
-    expect(panel.width, closeTo(width + 100, 1));
-
-    final kept = AgentSidePanel(state: panel.toJson());
-    addTearDown(kept.dispose);
-    expect(kept.atLeft, isTrue);
-
-    panel.atLeft = false;
-    await tester.pumpAndSettle();
-    expect(tester.getTopRight(view).dx, 1600);
-    expect(panel.toJson(), isNot(contains('atLeft')));
+    await tester.pump(AgentSidePanelArea.overlayDelay);
+    tester.view.physicalSize = const Size(600, 800);
+    await tester.pump();
+    panel.show();
+    await tester.pump();
+    expect(_scrim, findsOneWidget);
+    expect(find.byType(ChatScreen), findsOneWidget);
+    expect(
+      tester.getSize(find.byType(AgentSidePanelView)).width,
+      greaterThan(600 - AgentSidePanelArea.minChat),
+    );
   });
+
+  testWidgets(
+    'moved to the conversations\' left from the layouts: its page, tab and width '
+    'kept, its edge toward them dragged; kept for the next run (#145)',
+    (tester) async {
+      final (:panel, :session, files: _) = await _pumpChat(tester);
+      panel.open(session, const FileOpenRequest('/p/lib/main.dart'));
+      await tester.pumpAndSettle();
+      final width = tester.getSize(find.byType(AgentSidePanelView)).width;
+      expect(tester.getTopRight(find.byType(AgentSidePanelView)).dx, 1600);
+
+      // From the layouts, by the panel's Layout button.
+      await tester.tap(find.byKey(const ValueKey('side-panel-layout')));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatLayoutPicker), findsOneWidget);
+      await tester.tap(find.text('Sidebar · Panel · Chat'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChatLayoutPicker), findsNothing);
+      expect(panel.layout, ChatLayout.sidebarPanelChat);
+      expect(panel.atLeft, isTrue);
+      final view = find.byType(AgentSidePanelView);
+      expect(tester.getTopLeft(view).dx, 0);
+      expect(tester.getSize(view).width, width);
+      expect(find.byType(FilePreview), findsOneWidget);
+      // The conversations at its right, past the gap the sash is in.
+      expect(
+        tester.getTopLeft(find.byType(ChatScreen)).dx,
+        width + AgentSidePanelArea.sashWidth,
+      );
+
+      // Its right edge dragged right: wider.
+      final sash = find.byKey(const ValueKey('side-panel-sash'));
+      expect(tester.getTopLeft(sash).dx, width);
+      await tester.drag(sash, const Offset(100, 0));
+      await tester.pumpAndSettle();
+      expect(panel.width, closeTo(width + 100, 1));
+
+      final kept = AgentSidePanel(state: panel.toJson());
+      addTearDown(kept.dispose);
+      expect(kept.layout, ChatLayout.sidebarPanelChat);
+      // As an earlier run kept it.
+      final earlier = AgentSidePanel(state: {'atLeft': true});
+      addTearDown(earlier.dispose);
+      expect(earlier.layout, ChatLayout.sidebarPanelChat);
+
+      panel.atLeft = false;
+      await tester.pumpAndSettle();
+      expect(tester.getTopRight(view).dx, 1600);
+      expect(panel.toJson(), isNot(contains('layout')));
+    },
+  );
 
   testWidgets('at the window\'s top left, its tabs clear of the traffic '
       'lights, the sidebar\'s toggle by them (#227)', (tester) async {
     final (:panel, :session, files: _) = await _pumpChat(tester);
+    // Wide enough for the pages' names beside the traffic lights, in the
+    // tests' font (each letter a square).
     panel
+      ..width = 760
       ..atLeft = true
       ..open(session, const FileOpenRequest('/p/lib/main.dart'));
     await tester.pumpAndSettle();
@@ -1527,11 +1820,16 @@ void main() {
       leading: const SizedBox(key: toggle, width: 22, height: 22),
     );
     inset
+      ..width = 760
       ..atLeft = true
       ..open(insetSession, const FileOpenRequest('/p/lib/main.dart'));
     await tester.pumpAndSettle();
     expect(tester.getTopLeft(find.byKey(toggle)).dx, 78);
-    expect(tester.getTopLeft(find.text('Files')).dx, files + 78 + 22 + 6);
+    // Not flush with the card's edge then: clear of its corner.
+    expect(
+      tester.getTopLeft(find.text('Files')).dx,
+      files + 78 + 22 + 6 + IslandTab.lead,
+    );
   });
 
   testWidgets('hidden at their left, its rail is at the conversations\' top '
@@ -1608,6 +1906,40 @@ void main() {
       await mouse.removePointer();
     },
   );
+
+  testWidgets('a file tab dragged along the tabs goes where it is let go', (
+    tester,
+  ) async {
+    final (:panel, :session, files: _) = await _pumpChat(tester);
+    for (final name in ['a', 'b', 'c']) {
+      panel.open(session, FileOpenRequest('/p/$name.dart'));
+    }
+    await tester.pumpAndSettle();
+    Finder tab(String name) => find.descendant(
+      of: find.byType(TabStripScroll),
+      matching: find.text(name),
+    );
+    List<String> names() => [
+      for (final tab in panel.tabsOf(session).files) p.basename(tab.path),
+    ];
+    expect(names(), ['a.dart', 'b.dart', 'c.dart']);
+
+    final start = tester.getCenter(tab('a.dart'));
+    final end = tester.getCenter(tab('c.dart')) + const Offset(30, 0);
+    final gesture = await tester.startGesture(
+      start,
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var i = 1; i <= 8; i++) {
+      await gesture.moveTo(Offset.lerp(start, end, i / 8)!);
+      await tester.pump();
+    }
+    expect(find.byType(TabDropLine), findsOneWidget);
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(names(), ['b.dart', 'c.dart', 'a.dart']);
+    expect(find.byType(TabDropLine), findsNothing);
+  });
 
   testWidgets(
     'background rows open multiple terminal tabs, poll output and stop through the kernel',
@@ -1696,18 +2028,14 @@ void main() {
         await _previewScreen(tester),
         '\$ sleep 120 && echo one\nfirst output\nnew output',
       );
-      // Each command is a row of the list; its output opens in a tab.
-      final list = find.byKey(const ValueKey('side-panel-terminals'));
-      expect(
-        find.descendant(of: list, matching: find.text('Background Tasks')),
-        findsOneWidget,
-      );
-      await tester.tap(
-        find.descendant(of: list, matching: find.text('command two')),
-      );
+      // The commands share a tab; its dropdown chooses which shows.
+      await tester.tap(find.byKey(const ValueKey('terminal-deck-tasks')));
+      await tester.pump();
+      await tester.tap(find.text('command two').last);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(panel.tabsOf(session).terminals, ['one', 'two']);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(panel.tabsOf(session).terminal, 'two');
       // Its command not known, its output alone.
       expect(await _previewScreen(tester), 'second output');
       final preview = find.byType(TerminalPreview);
@@ -1733,7 +2061,7 @@ void main() {
         find.descendant(of: preview, matching: find.byIcon(Codicons.debugStop)),
         findsNothing,
       );
-      panel.closeTerminal(session, 'two');
+      panel.openTerminal(session, 'one');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(await _previewScreen(tester), contains('first output'));
@@ -1744,8 +2072,9 @@ void main() {
     },
   );
 
-  testWidgets('the terminal page lists the project\'s terminals beside the '
-      'background tasks; each opens in a tab', (tester) async {
+  testWidgets('the terminal page\'s tabs are the project\'s terminals: New '
+      'Terminal adds one, a tab brings its own to the front, its Close kills '
+      'it', (tester) async {
     final started = <FakePty>[];
     final terminals = TerminalService(
       root: '/p',
@@ -1758,31 +2087,22 @@ void main() {
     );
     panel.showSection(session, SidePanelSection.terminal);
     await tester.pump();
-    final list = find.byKey(const ValueKey('side-panel-terminals'));
-    for (final group in ['Terminals', 'Background Tasks']) {
-      expect(
-        find.descendant(of: list, matching: find.text(group)),
-        findsOneWidget,
-      );
-    }
+    expect(find.text('No terminals'), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('terminal-tabs-new')));
+    await tester.tap(find.byKey(const ValueKey('terminal-deck-new')));
     await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('terminal-tabs-new')));
+    await tester.tap(find.byKey(const ValueKey('terminal-deck-new')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
     final [first, second] = terminals.instances;
     expect(started, hasLength(2));
-    expect(panel.tabsOf(session).terminals, [first, second]);
+    expect(panel.tabsOf(session).terminal, second);
     expect(
       tester.widget<TerminalView>(find.byType(TerminalView)).instance,
       second,
     );
 
-    // A row of the list brings its terminal to the front.
-    Finder row(TerminalInstance shell) =>
-        find.descendant(of: list, matching: find.byKey(ObjectKey(shell)));
-    await tester.tap(row(first));
+    await tester.tap(find.byKey(ObjectKey(first)));
     await tester.pump();
     expect(panel.tabsOf(session).terminal, first);
     expect(
@@ -1790,27 +2110,18 @@ void main() {
       first,
     );
 
-    // Its tab closes and it runs on, in the list; killed, it is gone.
-    panel.closeTerminal(session, first);
+    // The tab in front has its Close, which kills its terminal.
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(ObjectKey(first)),
+        matching: find.byIcon(Codicons.close),
+      ),
+    );
     await tester.pump();
-    expect(terminals.instances, [first, second]);
+    expect(terminals.instances, [second]);
     expect(
       tester.widget<TerminalView>(find.byType(TerminalView)).instance,
       second,
-    );
-    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    addTearDown(mouse.removePointer);
-    await mouse.addPointer(location: tester.getCenter(row(second)));
-    await tester.pump();
-    await tester.tap(
-      find.descendant(of: row(second), matching: find.byIcon(Codicons.trash)),
-    );
-    await tester.pump();
-    expect(terminals.instances, [first]);
-    expect(find.byType(TerminalView), findsNothing);
-    expect(
-      find.text('Select a background task to see its output'),
-      findsOneWidget,
     );
   });
 
@@ -1826,7 +2137,7 @@ void main() {
       await press(tester, key, meta: true, shift: shift, alt: alt);
       await tester.pumpAndSettle();
       expect(
-        tester.widget<IdeEditorTab>(find.byKey(ValueKey(section))).active,
+        tester.widget<IslandTab>(find.byKey(ValueKey(section))).active,
         isTrue,
       );
     }
@@ -1858,15 +2169,14 @@ void main() {
     expect(_edited(tester).text, _main);
   });
 
-  testWidgets('an edit opens to its diff in place; the file\'s name over it '
+  testWidgets('an edit shows its diff in place; the file\'s name over it '
       'shows its changes in the side panel', (tester) async {
     final (:panel, :session, files: _) = await _pumpChat(tester);
     final edit = find.byType(EditStep).last;
-    await tester.tap(
-      find.descendant(of: edit, matching: find.byType(RichText)).first,
+    expect(
+      find.descendant(of: edit, matching: find.byType(StepBody)),
+      findsOne,
     );
-    await tester.pumpAndSettle();
-    expect(tester.widget<EditStep>(edit).expanded, isTrue);
     expect(_active(panel, session), isNull);
 
     await tester.tap(
@@ -1882,7 +2192,10 @@ void main() {
     // The text before the agent's edit is not known here: the file.
     expect(find.textContaining('not known'), findsOneWidget);
     expect(find.text('main line 1'), findsOneWidget);
-    expect(tester.widget<EditStep>(edit).expanded, isTrue);
+    expect(
+      find.descendant(of: edit, matching: find.byType(StepBody)),
+      findsOne,
+    );
   });
 
   testWidgets('a search\'s match opens its file at its line', (tester) async {
@@ -2099,29 +2412,32 @@ void main() {
     expect(tab.request.range, const FileLineRange(12));
   });
 
-  testWidgets('files outside the project do not open; web links stay the '
-      'browser\'s', (tester) async {
+  testWidgets('files outside the project open too, as the agent\'s tools '
+      'reach them; web links stay the browser\'s', (tester) async {
     final (:panel, :session) = await _pumpReply(
       tester,
-      '[secrets](../outside/key.pem), [passwd](/etc/passwd), '
-      '`/etc/hosts` and [the site](https://github.com/poying2018/baocode).',
+      '[key](../outside/key.pem), [passwd](/etc/passwd), '
+      '`/etc/hosts` and [the site](https://baocode.dev).',
       texts: {'/etc/hosts': 'x', '/outside/key.pem': 'x'},
     );
-    expect(_span(tester, 'secrets')?.recognizer, isNull);
-    expect(_span(tester, 'passwd')?.recognizer, isNull);
-    expect(_span(tester, '/etc/hosts')?.recognizer, isNull);
+    expect(_span(tester, 'key')?.recognizer, isNotNull);
+    expect(_span(tester, 'passwd')?.recognizer, isNotNull);
+    expect(_span(tester, '/etc/hosts')?.recognizer, isNotNull);
     // The web link keeps its own (the browser's), which no file takes.
     expect(_span(tester, 'the site')?.recognizer, isA<TapGestureRecognizer>());
     final scope = tester.element(find.byType(MarkdownView));
     expect(
-      FileOpenScope.maybeOf(scope)!.linkRecognizer('https://github.com/poying2018/baocode'),
+      FileOpenScope.maybeOf(scope)!.linkRecognizer('https://baocode.dev'),
       isNull,
     );
     expect(panel.shown, isFalse);
     expect(_active(panel, session), isNull);
+    _tapSpan(tester, '/etc/hosts');
+    await tester.pumpAndSettle();
+    expect(_active(panel, session)!.path, '/etc/hosts');
   });
 
-  testWidgets('a read outside the project is not a link', (tester) async {
+  testWidgets('a read outside the project opens as one in it', (tester) async {
     final panel = AgentSidePanel();
     addTearDown(panel.dispose);
     final existence = FileExistence(null);
@@ -2151,9 +2467,11 @@ void main() {
       ),
     );
     await tester.tap(find.byType(ToolCallRow).first);
-    expect(opened, isEmpty);
     await tester.tap(find.byType(ToolCallRow).last);
-    expect([for (final request in opened) request.path], ['/p/a.dart']);
+    expect(
+      [for (final request in opened) request.path],
+      ['/etc/passwd', '/p/a.dart'],
+    );
   });
 
   testWidgets('the side panel is toggled from the title bar, and kept shown '
@@ -2278,18 +2596,21 @@ void main() {
       final chat = tester.getRect(find.byType(ChatScreen));
       final rail = tester.getRect(find.byType(SidePanelRail));
       final composer = tester.getRect(find.byType(ChatComposer));
-      expect(chat.right, 1400);
-      expect(rail.right, 1400 - AgentSidePanelArea.railRight);
+      // A gap from the window's edge, its card's.
+      expect(chat.right, 1400 - Islands.gap);
+      expect(rail.right, chat.right - AgentSidePanelArea.railRight);
       expect(composer.right, lessThan(rail.left));
       // Room enough: the column in the middle, as without the rail.
       expect(composer.center.dx, closeTo(chat.center.dx, 0.5));
-      // Just under the conversation's title bar; at the top under
-      // Windows' header.
+      // As far under the row along the top of its card as in from its
+      // right; that row at the top under Windows' header, none over it.
       expect(
         rail.top - chat.top,
-        defaultTargetPlatform == TargetPlatform.windows
-            ? 12
-            : AppMetrics.titleBarHeight + 4,
+        (defaultTargetPlatform == TargetPlatform.windows
+                ? 0
+                : AppMetrics.titleBarHeight) +
+            ChatScreen.cardHeaderHeight +
+            AgentSidePanelArea.railRight,
       );
 
       // A narrow window has no room to spare: no rail.
@@ -2303,22 +2624,58 @@ void main() {
     }),
   );
 
-  test('closing the tab in front on the terminal page closes its terminal\'s '
-      'or command\'s tab', () {
+  testWidgets(
+    'the panel at the left, the conversation\'s buttons on its card are '
+    'before its title, their left edge on the rail\'s under them',
+    (tester) async {
+      final workspace = await pumpLoaded(tester);
+      await tester.pumpAndSettle();
+      workspace.select(
+        workspace.threads.firstWhere((thread) => thread.record != null),
+      );
+      await tester.pumpAndSettle();
+      tester
+              .widget<AgentSidePanelArea>(find.byType(AgentSidePanelArea))
+              .panel
+              .atLeft =
+          true;
+      await tester.pumpAndSettle();
+      final chat = tester.getRect(find.byType(ChatScreen));
+      final rail = tester.getRect(find.byType(SidePanelRail));
+      final toggle = tester.getRect(
+        find.descendant(
+          of: find.byType(ChatScreen),
+          matching: find.byType(SidePanelToggle),
+        ),
+      );
+      final title = tester.getRect(
+        find
+            .descendant(
+              of: find.byType(ChatScreen),
+              matching: find.text(
+                tester.widget<ChatScreen>(find.byType(ChatScreen)).title,
+              ),
+            )
+            .first,
+      );
+      expect(rail.left, chat.left + AgentSidePanelArea.railRight);
+      // The side panel's nearest the edge, over its rail; then the title.
+      expect(toggle.left, rail.left);
+      expect(title.left, greaterThan(toggle.right));
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+  );
+
+  test('Close Editor on the terminal page hides the panel: its tabs are '
+      'terminals, which only their own Close kills', () {
     final panel = AgentSidePanel();
     addTearDown(panel.dispose);
     final chat = Object();
-    panel
-      ..openTerminal(chat, 'one')
-      ..openTerminal(chat, 'two')
-      ..closeCurrent(chat);
-    expect(panel.tabsOf(chat).terminals, ['one']);
-    expect(panel.tabsOf(chat).terminal, 'one');
-    panel.closeCurrent(chat);
-    expect(panel.tabsOf(chat).terminals, isEmpty);
+    panel.openTerminal(chat, 'one');
     expect(panel.shown, isTrue);
     panel.closeCurrent(chat);
     expect(panel.shown, isFalse);
+    expect(panel.tabsOf(chat).terminal, 'one');
   });
 
   testWidgets('Toggle Side Panel\'s keys, as upstream\'s secondary side '
@@ -2435,6 +2792,60 @@ void main() {
     expect(find.byType(MarkdownEditor), findsNothing);
   });
 
+  testWidgets('a markdown file\'s changes (Git\'s) show it rendered as it is '
+      'after them, the changes a click away; a deleted one\'s, the '
+      'changes', (tester) async {
+    _bigWindow(tester);
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          request: FileOpenRequest(
+            '/p/notes.md',
+            diff: true,
+            original: () async => '# Notes\n\nbefore\n',
+            readOnly: true,
+          ),
+          files: _Files({'/p/notes.md': '# Notes\n\nafter\n'}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final preview = find.byType(MarkdownEditor);
+    expect(preview, findsOneWidget);
+    expect(tester.widget<MarkdownEditor>(preview).readOnly, isTrue);
+    expect(
+      tester.widget<MarkdownEditor>(preview).controller.text,
+      '# Notes\n\nafter\n',
+    );
+    expect(find.byType(IdeCodeDiff), findsNothing);
+
+    await tester.tap(find.text('Changes'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkdownEditor), findsNothing);
+    expect(find.byType(IdeCodeDiff), findsOneWidget);
+    await tester.tap(find.text('Preview'));
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkdownEditor), findsOneWidget);
+
+    await tester.pumpWidget(
+      _app(
+        FilePreview(
+          key: const ValueKey('deleted'),
+          request: FileOpenRequest(
+            '/p/gone.md',
+            diff: true,
+            original: () async => '# Gone\n',
+            readOnly: true,
+          ),
+          files: _Files({}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MarkdownEditor), findsNothing);
+    expect(find.byType(IdeCodeDiff), findsOneWidget);
+  });
+
   testWidgets('files dropped on a markdown file\'s preview are copied '
       'beside it and linked to, where they are let go', (tester) async {
     _bigWindow(tester);
@@ -2447,8 +2858,6 @@ void main() {
           request: const FileOpenRequest('/p/docs/notes.md'),
           files: files,
           root: '/p',
-          // The project is on a host: its paths are POSIX.
-          paths: p.posix,
           onEdit: (made) => edit = made,
         ),
       ),
@@ -2536,4 +2945,58 @@ void main() {
     await command(LogicalKeyboardKey.keyZ);
     expect(edit!.controller.document.text, text);
   }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+
+  testWidgets('the pages\' bar is the window\'s title bar on macOS: its '
+      'empty part drags the window, its tabs do not', (tester) async {
+    _bigWindow(tester);
+    const window = MethodChannel('baocode/window');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    var drags = 0;
+    messenger.setMockMethodCallHandler(window, (call) async {
+      if (call.method == 'dragWindow') drags++;
+      return null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(window, null));
+    final session = ChatSession(historyCount: 0);
+    addTearDown(session.dispose);
+    final panel = AgentSidePanel();
+    addTearDown(panel.dispose);
+    await tester.pumpWidget(
+      _app(
+        AgentSidePanelView(
+          notifications: IdeNotifications(),
+          panel: panel,
+          session: session,
+          files: _Files({}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    Future<void> dragFrom(Offset start) async {
+      final drag = await tester.startGesture(
+        start,
+        kind: PointerDeviceKind.mouse,
+      );
+      await drag.moveBy(const Offset(40, 0));
+      await drag.up();
+      await tester.pump();
+    }
+
+    // Between the tabs and the buttons.
+    final move = find.byKey(const ValueKey('side-panel-layout'));
+    await dragFrom(tester.getCenter(move) - const Offset(60, 0));
+    expect(drags, 1);
+    await dragFrom(tester.getCenter(find.byType(IslandTab).first));
+    expect(drags, 1);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.macOS));
+}
+
+/// A conversation the kernel has given its id.
+class _NamedSession extends ChatSession {
+  _NamedSession(this._id) : super(historyCount: 0);
+
+  final String _id;
+
+  @override
+  String? get sessionId => _id;
 }

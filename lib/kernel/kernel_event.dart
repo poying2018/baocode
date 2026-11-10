@@ -98,6 +98,14 @@ final class ItemRemoved extends KernelEvent {
   final String id;
 }
 
+/// The queued messages, in the order [ids] gives: the next first. Those
+/// not named keep their places after them.
+final class QueueReordered extends KernelEvent {
+  const QueueReordered(super.seq, this.ids);
+
+  final List<String> ids;
+}
+
 final class InteractionRequested extends KernelEvent {
   const InteractionRequested(super.seq, this.request);
 
@@ -120,13 +128,6 @@ final class FileEdited extends KernelEvent {
 
   /// What the file was before; null when the agent did not tell.
   final FileOriginal? original;
-}
-
-/// Something ran that may have written files without telling which: a
-/// command, a subagent. The project is looked at again for the review, a
-/// little later rather than at once (the turn's end looks anyway).
-final class FilesMayHaveChanged extends KernelEvent {
-  const FilesMayHaveChanged(super.seq);
 }
 
 /// The agent wrote its plan, the file at [path]: not a change to review,
@@ -179,13 +180,6 @@ final class TasksReported extends KernelEvent {
   const TasksReported(super.seq, this.tasks);
 
   final List<KernelTask> tasks;
-}
-
-/// The agent's todo list, as it last wrote it.
-final class TodosReported extends KernelEvent {
-  const TodosReported(super.seq, this.todos);
-
-  final List<TodoEntry> todos;
 }
 
 /// The session's goal, as it now stands; null with none.

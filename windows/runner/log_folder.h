@@ -37,6 +37,11 @@ std::wstring Path();
 //
 // From any thread.
 void WriteTrayLog(const char* format, ...);
+// Writes how the app is ending to the event log (lib/platform/
+// event_log.dart's events.log), as Flutter's lines: "<time> [exit] |how|".
+// For the ends Flutter is not told of: the session's, a crash. From any
+// thread.
+void AppendExit(const char* how);
 
 }  // namespace log_folder
 

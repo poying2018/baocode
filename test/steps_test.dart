@@ -2,14 +2,20 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:baocode/chat/widgets/tool_call_row.dart'
+    show todoDoingIcon, todoDoneIcon, todoOpenIcon;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/chat/edit_detail.dart';
+import 'package:baocode/ide/ide_code_diff.dart';
 import 'package:baocode/chat/panels/activity_strip.dart';
+import 'package:baocode/chat/widgets/agent_message_card.dart';
 import 'package:baocode/chat/widgets/agent_step.dart';
 import 'package:baocode/chat/widgets/chat_item_view.dart';
 import 'package:baocode/chat/widgets/shell_highlight.dart';
 import 'package:baocode/chat/widgets/shimmer_text.dart';
 import 'package:baocode/chat/widgets/step_header.dart';
+import 'package:baocode/chat/widgets/user_message_bubble.dart';
 import 'package:baocode/chat/widgets/wheel_latch.dart';
 import 'package:baocode/ide/terminal/terminal_colors.dart';
 import 'package:baocode/kernel/kernel_types.dart';
@@ -38,6 +44,30 @@ Finder header(String text) => find.text(text, findRichText: true);
 
 void main() {
   group('steps', () {
+    testWidgets("a subagent's message: a card under its name, not the "
+        "user's bubble, and not to be edited", (tester) async {
+      var edits = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatItemView(
+              item: const UserMessageItem(
+                text: 'B is **done**.',
+                fromAgent: 'Count entries',
+              ),
+              onEdit: () => edits++,
+            ),
+          ),
+        ),
+      );
+      expect(find.byType(AgentMessageCard), findsOneWidget);
+      expect(find.byType(UserMessageBubble), findsNothing);
+      expect(find.text('Count entries'), findsOneWidget);
+      expect(find.textContaining('<agent-message'), findsNothing);
+      await tester.tap(find.byType(AgentMessageCard));
+      expect(edits, 0);
+    });
+
     testWidgets('a command: its description, opening to the command and '
         'what it printed', (tester) async {
       await pumpStep(
@@ -198,28 +228,46 @@ void main() {
       expect(text.style, stepMono);
     });
 
-    testWidgets('an edit: one line with its counts, opening to the diff', (
-      tester,
-    ) async {
-      await pumpStep(
-        tester,
-        const CodeDiffItem(
-          fileName: 'main.dart',
-          directory: 'lib',
-          lines: [
-            DiffLine(DiffLineType.removed, 3, 'old line'),
-            DiffLine(DiffLineType.added, 3, 'new line'),
-          ],
-          added: 12,
-          removed: 1,
-        ),
+    const edit = CodeDiffItem(
+      fileName: 'main.dart',
+      directory: 'lib',
+      lines: [
+        DiffLine(DiffLineType.removed, 3, 'old line'),
+        DiffLine(DiffLineType.added, 3, 'new line'),
+      ],
+      added: 12,
+      removed: 1,
+    );
+
+    testWidgets('an edit: a card of its file and counts over the diff, '
+        'always open', (tester) async {
+      await pumpStep(tester, edit);
+      expect(find.byType(StepHeader), findsNothing);
+      expect(header('Edited main.dart'), findsNothing);
+      expect(find.text('main.dart'), findsOneWidget);
+      expect(find.text('+12 -1', findRichText: true), findsOneWidget);
+      expect(
+        tester.widget<IdeCodeDiff>(find.byType(IdeCodeDiff)).modified,
+        'new line',
       );
+      expect(
+        chatItemPlainText(edit),
+        'main.dart +12 -1\n3 - old line\n3 + new line',
+      );
+    });
+
+    testWidgets('an edit, compact: one line with its counts, opening to '
+        'the diff', (tester) async {
+      EditDetail.current.value = EditDetail.compact;
+      addTearDown(() => EditDetail.current.value = EditDetail.card);
+      await pumpStep(tester, edit);
       expect(header('Edited main.dart'), findsOneWidget);
       expect(find.text('+12 -1', findRichText: true), findsOneWidget);
-      expect(find.text('new line'), findsNothing);
+      expect(find.byType(IdeCodeDiff), findsNothing);
+      expect(chatItemPlainText(edit), 'Edited main.dart +12 -1');
       await tester.tap(header('Edited main.dart'));
       await tester.pump();
-      expect(find.text('new line'), findsOneWidget);
+      expect(find.byType(IdeCodeDiff), findsOneWidget);
     });
 
     testWidgets('an edit leaves out a count of none', (tester) async {
@@ -534,6 +582,41 @@ void main() {
       expect(header('Said Report back'), findsOneWidget);
     });
 
+    testWidgets('todos written: their count and the one in progress, opening '
+        'to the list, each item marked', (tester) async {
+      await pumpStep(
+        tester,
+        const ToolCallItem(
+          kind: ToolKind.todo,
+          tool: 'TodoWrite',
+          input: {
+            'todos': [
+              {'content': 'Read it', 'status': 'completed'},
+              {'content': 'Fix it', 'status': 'in_progress'},
+              {'content': 'Test it', 'status': 'pending'},
+            ],
+          },
+          target: 'Fix it',
+          output: '☒ Read it\n◐ Fix it\n☐ Test it',
+        ),
+      );
+      expect(header('Todos 1/3 Fix it'), findsOneWidget);
+      await tester.tap(header('Todos 1/3 Fix it'));
+      await tester.pump();
+      expect(find.text('Read it'), findsOneWidget);
+      expect(find.text('Test it'), findsOneWidget);
+      expect(find.textContaining('☒'), findsNothing);
+      expect(
+        [
+          for (final svg in tester.widgetList<SvgPicture>(
+            find.byType(SvgPicture),
+          ))
+            (svg.bytesLoader as SvgAssetLoader).assetName,
+        ],
+        [todoDoneIcon, todoDoingIcon, todoOpenIcon],
+      );
+    });
+
     testWidgets('a proposed goal offers to set it, once', (tester) async {
       final set = <String>[];
       await tester.pumpWidget(
@@ -724,8 +807,8 @@ void main() {
     expect(find.text('task 0'), findsNothing);
     await tester.tap(find.text('10 background tasks running'));
     await tester.pump();
-    // That line and four rows, the strip's padding and top border.
-    expect(tester.getSize(find.byType(ActivityStrip)).height, 28 * 5 + 6 + 1);
+    // That line and four rows, the strip's padding and its border.
+    expect(tester.getSize(find.byType(ActivityStrip)).height, 28 * 5 + 6 + 2);
     expect(find.text('task 0').hitTestable(), findsOneWidget);
     expect(find.text('task 9').hitTestable(), findsNothing);
 
@@ -819,12 +902,18 @@ void main() {
     }
 
     var clock = Duration.zero;
-    Future<void> wheel(WidgetTester tester, Offset at, double dy) async {
-      clock += const Duration(milliseconds: 50);
+    Future<void> wheel(
+      WidgetTester tester,
+      Offset at,
+      double dy, {
+      double dx = 0,
+      Duration elapsed = const Duration(milliseconds: 50),
+    }) async {
+      clock += elapsed;
       final pointer = TestPointer(1, PointerDeviceKind.mouse);
       await tester.sendEventToBinding(pointer.hover(at, timeStamp: clock));
       await tester.sendEventToBinding(
-        pointer.scroll(Offset(0, dy), timeStamp: clock),
+        pointer.scroll(Offset(dx, dy), timeStamp: clock),
       );
       await tester.pump();
     }
@@ -859,6 +948,84 @@ void main() {
       await wheel(tester, const Offset(400, 200), 30);
       expect(inner.offset, 0);
       expect(outer.offset, 50);
+    });
+
+    for (final elapsed in [Duration.zero, const Duration(milliseconds: 10)]) {
+      for (final dy in [3.0, -3.0]) {
+        testWidgets('a zero-delta start leaves the inner gesture undecided '
+            '($elapsed, $dy)', (tester) async {
+          await pumpNested(tester);
+          inner.jumpTo(20);
+          await tester.pump();
+          pause();
+          const over = Offset(400, 200);
+          await wheel(tester, over, 0);
+          await wheel(tester, over, dy, elapsed: elapsed);
+          expect(inner.offset, 20 + dy);
+          expect(outer.offset, 0);
+        });
+      }
+    }
+
+    testWidgets('a zero-delta event outside does not claim an inner start', (
+      tester,
+    ) async {
+      await pumpNested(tester);
+      pause();
+      await wheel(tester, const Offset(400, 50), 0);
+      await wheel(tester, const Offset(400, 200), 30);
+      expect(inner.offset, 30);
+      expect(outer.offset, 0);
+    });
+
+    testWidgets('zero-delta events do not transfer an outer gesture inward', (
+      tester,
+    ) async {
+      await pumpNested(tester);
+      pause();
+      await wheel(tester, const Offset(400, 50), 20);
+      const over = Offset(400, 200);
+      await wheel(tester, over, 0);
+      await wheel(tester, over, 30, elapsed: Duration.zero);
+      expect(inner.offset, 0);
+      expect(outer.offset, 50);
+    });
+
+    testWidgets('a zero-delta event at the inner end does not release it', (
+      tester,
+    ) async {
+      await pumpNested(tester);
+      pause();
+      const over = Offset(400, 200);
+      await wheel(tester, over, 200);
+      await wheel(tester, over, 0);
+      await wheel(tester, over, 30);
+      expect(inner.offset, 200);
+      expect(outer.offset, 0);
+    });
+
+    testWidgets('zero-delta events do not extend an old gesture', (
+      tester,
+    ) async {
+      await pumpNested(tester);
+      pause();
+      await wheel(tester, const Offset(400, 50), 20);
+      const over = Offset(400, 200);
+      await wheel(tester, over, 0, elapsed: const Duration(milliseconds: 250));
+      await wheel(tester, over, 30, elapsed: const Duration(milliseconds: 100));
+      expect(inner.offset, 30);
+      expect(outer.offset, 20);
+    });
+
+    testWidgets('horizontal wheel events still mark an outer gesture', (
+      tester,
+    ) async {
+      await pumpNested(tester);
+      pause();
+      await wheel(tester, const Offset(400, 50), 0, dx: 20);
+      await wheel(tester, const Offset(400, 200), 30);
+      expect(inner.offset, 0);
+      expect(outer.offset, 30);
     });
 
     testWidgets('a reversed inner view (live output) scrolls the way the '

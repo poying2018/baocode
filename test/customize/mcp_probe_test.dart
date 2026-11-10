@@ -23,7 +23,11 @@ void main() {
     addTearDown(() => server.close(force: true));
     final seen = <String?>[];
     final lengths = <int>[];
+    final sessions = <String?>[];
     server.listen((request) async {
+      final body =
+          jsonDecode(await utf8.decoder.bind(request).join())
+              as Map<String, Object?>;
       final type = request.headers.value(HttpHeaders.contentTypeHeader);
       final length =
           request.headers.contentLength >= 0
@@ -39,11 +43,29 @@ void main() {
         request.response
           ..statusCode = HttpStatus.lengthRequired
           ..write('Content-Length is required');
+      } else if (body['method'] == 'notifications/initialized') {
+        request.response.statusCode = HttpStatus.accepted;
+      } else if (body['method'] == 'tools/list') {
+        sessions.add(request.headers.value('mcp-session-id'));
+        request.response
+          ..headers.set(HttpHeaders.contentTypeHeader, 'text/event-stream')
+          ..write(
+            'event: message\ndata: ${jsonEncode({
+              'jsonrpc': '2.0',
+              'id': body['id'],
+              'result': {
+                'tools': [
+                  {'name': 'search', 'description': ' Finds things '},
+                ],
+              },
+            })}\n\n',
+          );
       } else {
         final body = jsonDecode(await utf8.decodeStream(request)) as Map;
         expect(body['method'], 'initialize');
         request.response
           ..headers.set(HttpHeaders.contentTypeHeader, 'application/json')
+          ..headers.set('mcp-session-id', 's1')
           ..write(
             jsonEncode({
               'jsonrpc': '2.0',
@@ -65,8 +87,34 @@ void main() {
     });
     expect(seen, ['application/json']);
     expect(lengths.single, greaterThan(0));
+    expect(seen.toSet(), {'application/json'});
     expect(result.status, McpProbeStatus.connected, reason: result.message);
+    // Its tools then, in the session it opened: for their switches.
+    expect(sessions, ['s1']);
+    expect(result.tools, [(name: 'search', description: 'Finds things')]);
   });
+
+  test('a command: its tools listed once it answers initialize', () async {
+    // Answers each request by its id; tools/list with two tools.
+    const script = r'''
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"t","version":"2"}}}' ;;
+    *tools/list*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"tools":[{"name":"one","description":"First"},{"name":"two"}]}}' ;;
+  esac
+done
+''';
+    final result = await platformMcpProber!({
+      'command': 'sh',
+      'args': ['-c', script],
+    });
+    expect(result.status, McpProbeStatus.connected, reason: result.message);
+    expect(result.server, 't 2');
+    expect(result.tools, [
+      (name: 'one', description: 'First'),
+      (name: 'two', description: ''),
+    ]);
+  }, testOn: '!windows');
 
   test('a command that fails: its exit code and what it said, as said, '
       'lines whole however they come', () async {

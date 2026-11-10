@@ -30,7 +30,7 @@ enum DataDirectorySource {
 /// <path>/keymaps/
 /// <path>/state/{state.json,storage.json,*-processes.json}
 /// <path>/servers/  <path>/language-packs/
-/// <path>/checkpoints/             snapshots of the projects agents change
+/// <path>/checkpoints/             what files were before agents changed them
 /// <path>/workspaces/              the folders of multi-folder workspaces
 /// <path>/cache/                   what can be made again, to start faster
 /// <path>/pastes/                  pastes too long to send, which agents read
@@ -127,6 +127,10 @@ class DataDirectory {
   /// What the browser's bridge keeps (see lib/browser/): `connected`, the
   /// mark that a browser has connected once.
   String get browserDir => p.join(path, 'browser');
+
+  /// The bots: `bots.json` listing them, and a folder each, where its
+  /// conversation runs and its memory is kept (see lib/bots/).
+  String get botsDir => p.join(path, 'bots');
 
   /// The pictures agents made where they did not say where (see
   /// lib/images/image_tools.dart): kept, as the conversations that show

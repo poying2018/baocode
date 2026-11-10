@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart' show ChangeNotifier, Icons;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:bao_remote/claude.dart'
     show ClaudeHistoryPage, ClaudeNotInstalled;
 import 'package:baocode/chat/chat_models.dart';
+import 'package:baocode/chat/widgets/agent_step.dart' show AgentStep;
+import 'package:baocode/models/model_provider.dart' show ModelProvider;
+import 'package:baocode/models/model_providers.dart' show ModelProviders;
 import 'package:baocode/chat/widgets/tool_call_row.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
@@ -16,20 +19,21 @@ import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
 import 'package:baocode/kernel/claude_code/claude_code_translator.dart';
 import 'package:baocode/kernel/claude_code/claude_environment.dart';
-import 'package:baocode/kernel/claude_code/claude_goal.dart';
+import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
 import 'package:baocode/kernel/claude_code/claude_storage_io.dart';
 import 'package:baocode/kernel/claude_code/cli_locator.dart';
 import 'package:baocode/kernel/claude_code/control_channel.dart';
 import 'package:baocode/kernel/claude_code/turn_stats.dart';
-import 'package:baocode/kernel/codex/codex_kernel.dart';
-import 'package:baocode/kernel/codex/codex_catalog.dart';
-import 'package:baocode/kernel/codex/codex_transport.dart';
 import 'package:baocode/kernel/commit_attribution.dart';
+import 'package:baocode/kernel/extension_switches.dart';
 import 'package:baocode/kernel/kernel_event.dart';
 import 'package:baocode/kernel/kernel_types.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
 import 'package:baocode/kernel/queued_messages.dart';
 import 'package:baocode/kernel/transcript.dart';
+import 'package:baocode/link/chat_codec.dart' show ChatCodec;
+import 'package:baocode/usage/usage_ledger.dart';
+import 'package:baocode/usage/usage_prices.dart';
 
 /// Lines Claude Code 2.1.311 printed (recorded, with paths and account
 /// details replaced).
@@ -148,30 +152,6 @@ class FakeCli implements ClaudeCodeTransport {
 }
 
 /// A CLI whose answers to `get_usage` are [replies], in turn (the last
-/// one again once they run out).
-class _UsageCli extends FakeCli {
-  _UsageCli(this.replies);
-
-  final List<Map<String, Object?>> replies;
-  var _asked = 0;
-
-  @override
-  void write(Map<String, Object?> message) {
-    final request = message['request'];
-    if (request is! Map || request['subtype'] != 'get_usage') {
-      return super.write(message);
-    }
-    written.add(message);
-    push({
-      'type': 'control_response',
-      'response': {
-        'subtype': 'success',
-        'request_id': message['request_id'],
-        'response': replies[(_asked++).clamp(0, replies.length - 1)],
-      },
-    });
-  }
-}
 
 /// A CLI that answers `initialize` only once [initialized] is called.
 class _SlowStartCli extends FakeCli {
@@ -335,93 +315,9 @@ void main() {
           ],
         },
       });
-      final kept = translator.keptInput('w1');
-      expect(kept.containsKey('content'), isFalse);
-      expect(kept['file_path'], '/p/a.txt');
     });
 
-    test('a malformed event does not take the session down', () {
-      final transcript = Transcript();
-      var seq = 0;
-      final translator = ClaudeTranslator(
-        emit: transcript.apply,
-        nextSeq: () => ++seq,
-      );
-      // What a CLI or a proxy may send: an event with no index, a block
-      // with no id, one of a kind nobody knows.
-      for (final event in [
-        {'type': 'content_block_start'},
-        {
-          'type': 'content_block_start',
-          'index': 0,
-          'content_block': {'type': 'tool_use'},
-        },
-        {
-          'type': 'content_block_start',
-          'index': 1,
-          'content_block': {'type': 'tool_use', 'id': 't1'},
-        },
-        {
-          'type': 'content_block_start',
-          'index': 2,
-          'content_block': {'type': 'tool_use', 'id': 't2', 'name': 'Bash'},
-        },
-        {
-          'type': 'content_block_start',
-          'index': 3,
-          'content_block': {'type': 'something_new'},
-        },
-        {'type': 'content_block_delta', 'index': 0},
-        {'type': 'message_delta'},
-      ]) {
-        expect(
-          () => translator.translate({'type': 'stream_event', 'event': event}),
-          returnsNormally,
-          reason: '$event',
-        );
-      }
-      // The session is still there, and works.
-      translator.translate({
-        'type': 'stream_event',
-        'event': {
-          'type': 'content_block_start',
-          'index': 4,
-          'content_block': {'type': 'text'},
-        },
-      });
-      expect(transcript.length, greaterThan(0));
-    });
 
-    test("a subagent's upstream error is not taken for the turn's own", () {
-      final transcript = Transcript();
-      var seq = 0;
-      final translator = ClaudeTranslator(
-        emit: transcript.apply,
-        nextSeq: () => ++seq,
-      )..begin();
-      Map<String, Object?> error(String uuid, String text) => {
-        'type': 'assistant',
-        'uuid': uuid,
-        'parent_tool_use_id': 'tool-1',
-        'is_api_error_message': true,
-        'message': {
-          'model': '<synthetic>',
-          'role': 'assistant',
-          'content': [
-            {'type': 'text', 'text': text},
-          ],
-        },
-      };
-      translator.translate(error('a1', 'API Error: 400 no'));
-      // The turn's result says the same words; a subagent's is not what
-      // would keep it from being said.
-      expect(translator.apiErrorSaid, isNull);
-      translator.translate({
-        ...error('a2', 'API Error: 400 no'),
-        'parent_tool_use_id': null,
-      });
-      expect(translator.apiErrorSaid, 'API Error: 400 no');
-    });
 
     test('the summary a compacted conversation goes on from is not shown '
         'as a message: live or kept', () {
@@ -518,57 +414,6 @@ void main() {
       expect(toolVerb(ToolKind.question), 'Asked');
     });
 
-    test('a note sent the model along a result is not the tool\'s output', () {
-      final transcript = Transcript();
-      var seq = 0;
-      final translator = ClaudeTranslator(
-        emit: transcript.apply,
-        nextSeq: () => ++seq,
-      )..turnId = '11111111-1111-4111-8111-111111111111';
-      translator
-        ..translate({
-          'type': 'assistant',
-          'parent_tool_use_id': null,
-          'message': {
-            'id': 'msg-1',
-            'role': 'assistant',
-            'content': [
-              {
-                'type': 'tool_use',
-                'id': 'tool-1',
-                'name': 'Bash',
-                'input': {'command': 'echo hi', 'description': 'Say hi'},
-              },
-            ],
-          },
-        })
-        ..translate({
-          'type': 'user',
-          'parent_tool_use_id': null,
-          'message': {
-            'role': 'user',
-            'content': [
-              {
-                'type': 'tool_result',
-                'tool_use_id': 'tool-1',
-                'content': [
-                  {'type': 'text', 'text': 'hi\n'},
-                  {
-                    'type': 'text',
-                    'text':
-                        '<system-reminder>\nThe to-do list has not been written '
-                        'for a while.\n</system-reminder>',
-                  },
-                ],
-              },
-            ],
-          },
-        });
-      final terminal = [
-        for (var i = 0; i < transcript.length; i++) transcript.itemAt(i),
-      ].whereType<TerminalItem>().single;
-      expect(terminal.output.trim(), 'hi');
-    });
 
     test('a message sent to an agent reads on its line, in full opened', () {
       final transcript = Transcript();
@@ -631,6 +476,224 @@ void main() {
       // It says it in words of its own: "Said …".
       expect(items.map((item) => item.label), everyElement(isNull));
       expect(toolVerb(ToolKind.message), 'Said');
+    });
+
+    test('todos written read as a step: the list its text', () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      )..turnId = '11111111-1111-4111-8111-111111111111';
+      void call(
+        String id,
+        String name,
+        Map<String, Object?> input,
+        String result, {
+        Map<String, Object?>? structured,
+      }) => translator
+        ..translate({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': 'msg-$id',
+            'role': 'assistant',
+            'content': [
+              {'type': 'tool_use', 'id': id, 'name': name, 'input': input},
+            ],
+          },
+        })
+        ..translate({
+          'type': 'user',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'user',
+            'content': [
+              {'type': 'tool_result', 'tool_use_id': id, 'content': result},
+            ],
+          },
+          'tool_use_result': ?structured,
+        });
+      call('t1', 'TodoWrite', {
+        'todos': [
+          {
+            'content': 'Read it',
+            'status': 'completed',
+            'activeForm': 'Reading',
+          },
+          {
+            'content': 'Fix it',
+            'status': 'in_progress',
+            'activeForm': 'Fixing',
+          },
+          {'content': 'Test it', 'status': 'pending', 'activeForm': 'Testing'},
+        ],
+      }, 'Todos have been modified successfully.');
+      call(
+        't2',
+        'TaskCreate',
+        {'subject': 'Ship it'},
+        'Task #1 created successfully: Ship it',
+        structured: {
+          'task': {'id': '1', 'subject': 'Ship it'},
+        },
+      );
+      call('t3', 'TaskUpdate', {
+        'taskId': '1',
+        'status': 'completed',
+      }, 'Updated task #1 status');
+      call('t4', 'TaskUpdate', {
+        'taskId': '7',
+        'status': 'deleted',
+      }, 'Updated task #7 deleted');
+      final items = [
+        for (var i = 0; i < transcript.length; i++) transcript.itemAt(i),
+      ].whereType<ToolCallItem>().toList();
+      expect(items.map((item) => (item.kind, item.target, item.output)), [
+        (ToolKind.todo, 'Fix it', '☒ Read it\n◐ Fix it\n☐ Test it'),
+        (ToolKind.todo, 'Ship it', 'Task #1 created successfully: Ship it'),
+        (ToolKind.todo, 'Ship it', 'Updated task #1 status'),
+        (ToolKind.todo, '#7', 'Updated task #7 deleted'),
+      ]);
+      // What each did, said by its line.
+      expect(
+        [
+          for (final item in items)
+            todoStep(item.tool, item.input, item.target),
+        ],
+        [
+          (verb: 'Todos 1/3', object: 'Fix it', detail: null),
+          (verb: 'Added todo', object: 'Ship it', detail: null),
+          (verb: 'Completed todo', object: 'Ship it', detail: null),
+          (verb: 'Removed todo', object: '#7', detail: null),
+        ],
+      );
+      expect(
+        todoStep('TodoWrite', {
+          'todos': [
+            {'content': 'Read it', 'status': 'completed'},
+          ],
+        }, ''),
+        (verb: 'Todos 1/1', object: 'All done', detail: null),
+      );
+      // A list read: from the lines it returned.
+      const listed =
+          '#1 [completed] Ship it\n'
+          '#2 [in_progress] Tag it (alice)\n'
+          '#3 [pending] Tell them [blocked by #2]';
+      expect(todoItems('TaskList', const {}, listed), [
+        (content: 'Ship it', status: 'completed'),
+        (content: 'Tag it (alice)', status: 'in_progress'),
+        (content: 'Tell them [blocked by #2]', status: 'pending'),
+      ]);
+      expect(todoStep('TaskList', const {}, '', output: listed), (
+        verb: 'Checked todos',
+        object: 'Tag it (alice)',
+        detail: '1/3',
+      ));
+      expect(
+        todoStep('TaskList', const {}, '', output: '#1 [completed] Ship it'),
+        (verb: 'Checked todos', object: 'All done', detail: '1/1'),
+      );
+      expect(todoStep('TaskList', const {}, '', output: 'No tasks found'), (
+        verb: 'Checked todos',
+        object: 'List empty',
+        detail: null,
+      ));
+    });
+
+    test('a subagent shows the model its messages ran on, as it runs; '
+        'the one the CLI resolved only without them', () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      )..turnId = '11111111-1111-4111-8111-111111111111';
+      void start(String id) => translator.translate({
+        'type': 'assistant',
+        'parent_tool_use_id': null,
+        'message': {
+          'id': 'msg-$id',
+          'role': 'assistant',
+          'content': [
+            {
+              'type': 'tool_use',
+              'id': id,
+              'name': 'Agent',
+              'input': {'description': 'Look $id', 'prompt': 'look'},
+            },
+          ],
+        },
+      });
+      void said(String parent, String model) => translator.translate({
+        'type': 'assistant',
+        'parent_tool_use_id': parent,
+        'message': {
+          'id': 'msg-$parent-$model',
+          'role': 'assistant',
+          'model': model,
+          'content': [
+            {'type': 'text', 'text': 'looking'},
+          ],
+        },
+      });
+      void done(String id) => translator.translate({
+        'type': 'user',
+        'parent_tool_use_id': null,
+        'message': {
+          'role': 'user',
+          'content': [
+            {'type': 'tool_result', 'tool_use_id': id, 'content': 'ok'},
+          ],
+        },
+        'tool_use_result': {'resolvedModel': 'claude-sonnet-5-5'},
+      });
+      String? model(String id) => [
+        for (final (key, item) in transcript.liveItems)
+          if (key == id && item is AgentItem) item.model,
+      ].single;
+
+      start('a1');
+      expect(model('a1'), isNull);
+      said('a1', 'claude-haiku-5-5');
+      expect(model('a1'), 'claude-haiku-5-5');
+      // A synthetic message (an error) is no model's.
+      said('a1', '<synthetic>');
+      done('a1');
+      expect(model('a1'), 'claude-haiku-5-5');
+
+      start('a2');
+      done('a2');
+      expect(model('a2'), 'claude-sonnet-5-5');
+    });
+
+    test('a subagent\'s model reads as people read it', () {
+      final providers = ModelProviders.memory(
+        providers: [
+          ModelProvider.fromJson({
+            'id': 'od',
+            'name': 'open-design',
+            'protocol': 'openai',
+            'baseUrl': 'https://example.com/v1',
+            'models': [
+              {'id': 'deepseek-v4.1-flash', 'label': 'DeepSeek V4.1 Flash'},
+            ],
+          })!,
+        ],
+      );
+      ({String label, String? upstream}) name(String model) =>
+          AgentStep.modelName(model, providers: providers);
+      expect(name('deepseek-v4.1-flash'), (
+        label: 'DeepSeek V4.1 Flash',
+        upstream: 'open-design',
+      ));
+      expect(name('@od/deepseek-v4.1-flash').label, 'DeepSeek V4.1 Flash');
+      expect(name('claude-opus-5-5'), (label: 'Opus 5.5', upstream: null));
+      expect(name('claude-haiku-4-5-20251001').label, 'Haiku 4.5');
+      expect(name('claude-3-5-sonnet-20241022').label, 'Sonnet 3.5');
+      expect(name('claude-sonnet-4-20250514[1m]').label, 'Sonnet 4');
+      expect(name('glm-5.3').label, 'glm-5.3');
     });
 
     test('a notebook edit shows its cell changed, line by line', () {
@@ -798,8 +861,7 @@ void main() {
     });
 
     test("a subagent's edits, sent without their patches, are told from "
-        'their input; its commands and its end, as files that may have '
-        'changed', () {
+        'their input', () {
       final events = <KernelEvent>[];
       var seq = 0;
       final translator = ClaudeTranslator(
@@ -878,25 +940,147 @@ void main() {
       expect((originals.last! as OriginalByEdits).edits, [
         (before: 'x', after: 'y\nz'),
       ]);
-      expect(events.whereType<FilesMayHaveChanged>(), isEmpty);
 
-      call('b1', 'Bash', {'command': 'echo c > c.txt'}, parent: 'agent-1');
-      expect(events.whereType<FilesMayHaveChanged>(), hasLength(1));
-      call(
-        'agent-1',
-        'Agent',
-        {'description': 'Make files', 'prompt': 'make them'},
-        result: {'status': 'completed', 'content': []},
-      );
-      expect(events.whereType<FilesMayHaveChanged>(), hasLength(2));
-
-      // A kept session's, replayed: nothing to look at.
+      // A kept session's, replayed: nothing to review.
       events.clear();
       translator.replaying = true;
       call('w2', 'Write', {'file_path': '/p/d.txt', 'content': 'd'});
-      call('b2', 'Bash', {'command': 'true'});
       expect(events.whereType<FileEdited>(), isEmpty);
-      expect(events.whereType<FilesMayHaveChanged>(), isEmpty);
+    });
+
+    test("a subagent's message shows as its, by what it was given to do", () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      );
+      translator
+        ..translate({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': 'msg-agent',
+            'role': 'assistant',
+            'content': [
+              {
+                'type': 'tool_use',
+                'id': 'agent-1',
+                'name': 'Agent',
+                'input': {
+                  'description': 'Count entries',
+                  'prompt': 'count them',
+                  'run_in_background': true,
+                },
+              },
+            ],
+          },
+        })
+        ..translate({
+          'type': 'user',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'user',
+            'content': [
+              {
+                'type': 'tool_result',
+                'tool_use_id': 'agent-1',
+                'content': 'launched',
+              },
+            ],
+          },
+          'tool_use_result': {
+            'status': 'async_launched',
+            'agentId': 'amup9hacc',
+          },
+        });
+      void say(String uuid, String text) => translator.translate({
+        'type': 'user',
+        'parent_tool_use_id': null,
+        'uuid': uuid,
+        'message': {'role': 'user', 'content': text},
+      });
+      say(
+        'm1',
+        '<agent-message from="amup9hacc">\nB is done.\n</agent-message>',
+      );
+      say('m2', '<agent-message from="zz9">\nHi\n</agent-message>');
+      final messages = [
+        for (var i = 0; i < transcript.length; i++)
+          if (transcript.itemAt(i) case final UserMessageItem message) message,
+      ];
+      expect(
+        [for (final m in messages) (m.fromAgent, m.text)],
+        [('Count entries', 'B is done.'), ('zz9', 'Hi')],
+      );
+      // As the phone gets it.
+      final decoded =
+          ChatCodec.decode(ChatCodec.encode(messages.first)) as UserMessageItem;
+      expect(decoded.fromAgent, 'Count entries');
+    });
+
+    test("a Windows path's file shows by its name", () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      );
+      void call(
+        String id,
+        String name,
+        Map<String, Object?> input, {
+        Object? result,
+      }) => translator
+        ..translate({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': 'msg-$id',
+            'role': 'assistant',
+            'content': [
+              {'type': 'tool_use', 'id': id, 'name': name, 'input': input},
+            ],
+          },
+        })
+        ..translate({
+          'type': 'user',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'user',
+            'content': [
+              {'type': 'tool_result', 'tool_use_id': id, 'content': 'ok'},
+            ],
+          },
+          'tool_use_result': ?result,
+        });
+
+      call('r1', 'Read', {'file_path': r'C:\p\lib\a.dart'});
+      call('l1', 'LS', {'path': r'C:\p\lib'});
+      call(
+        'e1',
+        'Edit',
+        {'file_path': r'C:\p\lib\b.dart', 'old_string': 'x', 'new_string': 'y'},
+        result: {
+          'filePath': r'C:\p\lib\b.dart',
+          'structuredPatch': [
+            {
+              'oldStart': 1,
+              'oldLines': 1,
+              'newStart': 1,
+              'newLines': 1,
+              'lines': ['-x', '+y'],
+            },
+          ],
+        },
+      );
+      expect(shown(transcript), [
+        'tool: read a.dart',
+        'tool: listDir lib',
+        'diff: b.dart +2',
+      ]);
+      final diff = transcript.itemAt(2) as CodeDiffItem;
+      expect(diff.directory, r'C:\p\lib');
     });
 
     test('each round of planning is one card; a plan sent back gives way '
@@ -1242,6 +1426,13 @@ void main() {
         isTrue,
       );
       expect(worked('p3'), const Duration(seconds: 3));
+      // When each was sent, as kept: for a chat app's times.
+      expect(
+        (transcript.itemAt(
+          transcript.indexOf('p2')!,
+        ) as UserMessageItem).sentAt,
+        DateTime.utc(2026, 10, 1, 10, 0, 50).toLocal(),
+      );
     });
 
     test('translating a message twice changes nothing', () {
@@ -1549,67 +1740,7 @@ void main() {
       kernel.dispose();
     });
 
-    test('an upstream error the CLI reports is shown as an error', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push({
-        'type': 'assistant',
-        'uuid': 'e1',
-        'is_api_error_message': true,
-        'api_error_status': 400,
-        'message': {
-          'model': '<synthetic>',
-          'role': 'assistant',
-          'content': [
-            {
-              'type': 'text',
-              'text': 'API Error: 400 User location is not supported',
-            },
-          ],
-        },
-      });
-      await pumpEventQueue();
-      expect(shown(transcript), [
-        'user: hi',
-        'notice error: API Error: 400 User location is not supported',
-      ]);
-      kernel.dispose();
-    });
 
-    test('the same upstream error is not said twice', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      const said = 'API Error: 400 User location is not supported';
-      cli.push({
-        'type': 'assistant',
-        'uuid': 'e1',
-        'is_api_error_message': true,
-        'message': {
-          'model': '<synthetic>',
-          'role': 'assistant',
-          'content': [
-            {'type': 'text', 'text': said},
-          ],
-        },
-      });
-      cli.push({
-        'type': 'result',
-        'subtype': 'error_during_execution',
-        'is_error': true,
-        'result': said,
-      });
-      await pumpEventQueue();
-      final notices = [
-        for (var i = 0; i < transcript.length; i++)
-          if (transcript.itemAt(i) case NoticeItem(:final text)) text,
-      ];
-      expect(notices, [said]);
-      kernel.dispose();
-    });
 
     test(
       'a turn the user stopped is not given an error after the fact',
@@ -1678,26 +1809,6 @@ void main() {
       kernel.dispose();
     });
 
-    test("the CLI's own retry after an empty answer is not shown as a "
-        'message the user sent', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push({
-        'type': 'user',
-        'uuid': 'meta-1',
-        'message': {
-          'role': 'user',
-          'content':
-              '${ClaudeTranslator.noVisibleOutput} Please continue and '
-              'produce a user-visible response.]',
-        },
-      });
-      await pumpEventQueue();
-      expect(shown(transcript), ['user: hi']);
-      kernel.dispose();
-    });
 
     test('a turn done is kept by its session and prompt, for its footer '
         'later; one stopped too, its work to fold', () async {
@@ -2198,6 +2309,71 @@ void main() {
       kernel.dispose();
     });
 
+    test("one of the app's tools asks the user itself: on the "
+        "conversation, answered to it; the CLI's leave not asked for it", () async {
+      ClaudeSdkTools.register(
+        ClaudeSdkTool(
+          name: 'ask_me',
+          description: 'Asks.',
+          inputSchema: const {'type': 'object'},
+          asksItself: true,
+          run: (input, call) async =>
+              '${await call.ask!(const ApprovalRequest(id: '', title: 'Run it here?', toolName: 'mcp__baocode__ask_me', alwaysAllowLabel: 'Always for this host'))}',
+        ),
+      );
+      addTearDown(() => ClaudeSdkTools.unregister('ask_me'));
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'go'));
+      await pumpEventQueue();
+      cli.push({
+        'type': 'control_request',
+        'request_id': 'p1',
+        'request': {
+          'subtype': 'can_use_tool',
+          'tool_name': 'mcp__baocode__ask_me',
+          'input': <String, Object?>{},
+        },
+      });
+      await pumpEventQueue();
+      expect(cli.responses.last, {
+        'behavior': 'allow',
+        'updatedInput': <String, Object?>{},
+      });
+      expect(transcript.pendingInteraction, isNull);
+
+      cli.push({
+        'type': 'control_request',
+        'request_id': 'm1',
+        'request': {
+          'subtype': 'mcp_message',
+          'server_name': 'baocode',
+          'message': {
+            'jsonrpc': '2.0',
+            'id': 5,
+            'method': 'tools/call',
+            'params': {'name': 'ask_me', 'arguments': <String, Object?>{}},
+          },
+        },
+      });
+      await pumpEventQueue();
+      final request = transcript.pendingInteraction as ApprovalRequest;
+      expect(request.title, 'Run it here?');
+      expect(request.alwaysAllowLabel, 'Always for this host');
+      kernel.answer(
+        request.id,
+        const ApprovalAnswer(ApprovalDecision.allowAlways),
+      );
+      await pumpEventQueue();
+      expect(transcript.pendingInteraction, isNull);
+      final mcp = cli.responses.last['mcp_response']! as Map;
+      expect(((mcp['result'] as Map)['content'] as List).single, {
+        'type': 'text',
+        'text': 'ApprovalDecision.allowAlways',
+      });
+      kernel.dispose();
+    });
+
     test('a tool asks leave; always allowing sends its rules', () async {
       final cli = FakeCli();
       final (:kernel, :transcript, events: _) = claude(cli);
@@ -2361,8 +2537,8 @@ void main() {
         await pumpEventQueue();
         final content = (cli.users.last['message'] as Map)['content'] as List;
         expect(content, [
-          {'type': 'text', 'text': 'Carry out the plan'},
           {'type': 'text', 'text': ClaudeTranslator.planStartedNote(planFile)},
+          {'type': 'text', 'text': 'Carry out the plan'},
         ]);
         // Only the message that starts it says so.
         kernel.send(const KernelTurn(id: 'u3', text: 'And test it'));
@@ -2435,12 +2611,84 @@ void main() {
       await pumpEventQueue();
       final content = (cli.users.last['message'] as Map)['content'] as List;
       expect(
-        (content.last as Map)['text'],
+        (content.first as Map)['text'],
         ClaudeTranslator.planStartedNote(''),
       );
       expect(
         ClaudeTranslator.planStartedNote(''),
         contains('Carry out the plan you put to them now.'),
+      );
+      kernel.dispose();
+    });
+
+    test('full access with no one to ask approves what the CLI would ask '
+        'all the same', () async {
+      final cli = FakeCli();
+      final (:kernel, :transcript, events: _) = claude(
+        cli,
+        context: KernelContext(
+          cwd: '/p',
+          settings: const {'permission': 'bypassPermissions'},
+          workspace: () =>
+              const KernelWorkspace(folders: [], approvesAll: true),
+        ),
+      );
+      kernel.send(const KernelTurn(id: 'u1', text: 'go'));
+      await pumpEventQueue();
+      const command = {'command': 'rm -rf build', 'description': 'Clean'};
+      for (final (i, why) in const [
+        {'decision_reason_type': 'safetyCheck'},
+        {'decision_reason_type': 'safetyCheck', 'classifier_approvable': false},
+        {
+          'decision_reason_type': 'rule',
+          'matched_ask_rule': {'toolName': 'Bash'},
+        },
+        {'decision_reason_code': 'outside_reads_blocked'},
+      ].indexed) {
+        cli.push({
+          'type': 'control_request',
+          'request_id': 'r$i',
+          'request': {
+            'subtype': 'can_use_tool',
+            'tool_name': 'Bash',
+            'input': command,
+            ...why,
+          },
+        });
+        await pumpEventQueue();
+        expect(transcript.pendingInteraction, isNull);
+        expect(cli.responses.last, {
+          'behavior': 'allow',
+          'updatedInput': command,
+        });
+      }
+      // A question no one would answer: asked in its words instead.
+      cli.push({
+        'type': 'control_request',
+        'request_id': 'q',
+        'request': {
+          'subtype': 'can_use_tool',
+          'tool_name': 'AskUserQuestion',
+          'input': {
+            'questions': [
+              {
+                'question': 'Which language?',
+                'header': 'Language',
+                'options': [
+                  {'label': 'English'},
+                  {'label': 'Chinese'},
+                ],
+              },
+            ],
+          },
+        },
+      });
+      await pumpEventQueue();
+      expect(transcript.pendingInteraction, isNull);
+      expect(cli.responses.last['behavior'], 'deny');
+      expect(
+        cli.responses.last['message'],
+        contains('Ask them in your reply instead'),
       );
       kernel.dispose();
     });
@@ -2704,6 +2952,60 @@ void main() {
       kernel.dispose();
     });
 
+    test('skills, MCP servers and tools switched off: given at start, and '
+        'again whole as they change', () async {
+      final changes = ChangeNotifier();
+      var switches = const ExtensionSwitches(
+        disabledSkills: {'review'},
+        disabledServers: {'my.server'},
+      );
+      ExtensionSwitches.current = () => switches;
+      ExtensionSwitches.changes = changes;
+      addTearDown(() {
+        ExtensionSwitches.current = () => ExtensionSwitches.none;
+        ExtensionSwitches.changes = null;
+      });
+      final cli = FakeCli();
+      final launches = <ClaudeLaunch>[];
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        const KernelContext(cwd: '/p'),
+        start: (launch) async {
+          launches.add(launch);
+          return cli;
+        },
+      );
+      kernel.prepare();
+      await pumpEventQueue();
+      final started = launches.single.settings;
+      final allow = (started['permissions'] as Map)['allow'];
+      expect((started['permissions'] as Map)['deny'], ['mcp__my_server']);
+      expect(started['skillOverrides'], {'review': 'off'});
+      expect(cli.requests('apply_flag_settings'), isEmpty);
+
+      // One back on, a tool off: all of it sent (the rules it started with
+      // kept), what is on now left out.
+      switches = switches
+          .withSkills(['review'], true)
+          .withServer('my.server', true)
+          .withTool('git', 'push', false);
+      changes.notifyListeners();
+      await pumpEventQueue();
+      expect(cli.requests('apply_flag_settings').single['settings'], {
+        'permissions': {
+          'allow': allow,
+          'deny': ['mcp__git__push'],
+        },
+        'skillOverrides': <String, String>{},
+      });
+      // The same again: nothing sent.
+      changes.notifyListeners();
+      await pumpEventQueue();
+      expect(cli.requests('apply_flag_settings'), hasLength(1));
+      kernel.dispose();
+      changes.dispose();
+    });
+
     test('Plan\'s commands are left to the classifier with the approvals '
         'that approve for the user', () async {
       final cli = FakeCli();
@@ -2739,6 +3041,78 @@ void main() {
       expect(sent(), [false, true, false]);
       kernel.dispose();
     });
+
+    test(
+      'a queued message sent now while the process starts is not lost',
+      () async {
+        final cli = FakeCli();
+        final started = Completer<ClaudeCodeTransport>();
+        final kernel = ClaudeCodeKernel(
+          MockKernels.claudeCode,
+          const KernelContext(cwd: '/p'),
+          start: (_) => started.future,
+        );
+        addTearDown(kernel.dispose);
+        final transcript = Transcript();
+        kernel.events.listen(transcript.apply);
+        kernel
+          ..send(const KernelTurn(id: 'u1', text: 'first'))
+          ..send(const KernelTurn(id: 'u2', text: 'second'));
+        await pumpEventQueue();
+        expect(kernel.health.status, KernelHealthStatus.starting);
+        expect(transcript.queued.single.$1, 'u2');
+
+        // The queue is already shown, even though the process is not ready.
+        // Pressing twice must not send the message or interrupt twice.
+        kernel
+          ..sendQueuedNow('u2')
+          ..sendQueuedNow('u2');
+        started.complete(cli);
+        await pumpEventQueue();
+
+        expect(cli.users.map((message) => message['uuid']), ['u1', 'u2']);
+        expect(cli.requests('interrupt'), hasLength(1));
+        expect(transcript.activeTurn, isNull);
+        cli.push({
+          'type': 'command_lifecycle',
+          'command_uuid': 'u2',
+          'state': 'started',
+        });
+        await pumpEventQueue();
+        expect(transcript.activeTurn, 'u2');
+        expect(transcript.queued, isEmpty);
+      },
+    );
+
+    test(
+      'a queued message sent now while initialization waits is not lost',
+      () async {
+        final cli = _SilentCli();
+        final (:kernel, :transcript, events: _) = claude(cli);
+        addTearDown(kernel.dispose);
+        kernel
+          ..send(const KernelTurn(id: 'u1', text: 'first'))
+          ..send(const KernelTurn(id: 'u2', text: 'second'));
+        await pumpEventQueue();
+        expect(kernel.health.status, KernelHealthStatus.starting);
+        final initialize = cli.written.single;
+
+        kernel.sendQueuedNow('u2');
+        cli.push({
+          'type': 'control_response',
+          'response': {
+            'subtype': 'success',
+            'request_id': initialize['request_id'],
+            'response': FakeCli._initialize,
+          },
+        });
+        await pumpEventQueue();
+
+        expect(cli.users.map((message) => message['uuid']), ['u1', 'u2']);
+        expect(cli.requests('interrupt'), hasLength(1));
+        expect(transcript.activeTurn, isNull);
+      },
+    );
 
     test('messages sent while busy queue, start in turn, or are taken '
         'back', () async {
@@ -2968,6 +3342,89 @@ void main() {
         ],
       ]);
       expect([for (final (_, item) in transcript.queued) item.text], ['third']);
+      kernel.dispose();
+    });
+
+    test('a queued message moved among those held here is reordered there, '
+        'the CLI left as it is', () async {
+      final cli = FakeCli(
+        answers: {
+          'cancel_async_message': {'cancelled': true},
+        },
+      );
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel
+        ..send(const KernelTurn(id: 'u1', text: 'first'))
+        ..send(const KernelTurn(id: 'u2', text: 'second'))
+        ..send(const KernelTurn(id: 'u3', text: 'third'))
+        ..send(const KernelTurn(id: 'u4', text: 'fourth'));
+      await pumpEventQueue();
+      // One waits in the CLI at a time: the rest are held here.
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2']);
+      List<String> queued() => [for (final (id, _) in transcript.queued) id];
+      expect(queued(), ['u2', 'u3', 'u4']);
+
+      kernel.moveQueued('u4', 1);
+      await pumpEventQueue();
+      expect(queued(), ['u2', 'u4', 'u3']);
+      // Nothing taken back or sent again: it waits here either way.
+      expect(cli.requests('cancel_async_message'), isEmpty);
+      expect(cli.requests('interrupt'), isEmpty);
+      expect(cli.users.map((m) => m['uuid']), ['u1', 'u2']);
+      kernel.dispose();
+    });
+
+    test('a queued message moved before the one given the CLI is sent '
+        'before it, the turn running not stopped', () async {
+      final cli = FakeCli(
+        answers: {
+          'cancel_async_message': {'cancelled': true},
+        },
+      );
+      final (:kernel, :transcript, events: _) = claude(cli);
+      kernel
+        ..send(const KernelTurn(id: 'u1', text: 'first'))
+        ..send(const KernelTurn(id: 'u2', text: 'second'))
+        ..send(const KernelTurn(id: 'u3', text: 'third'))
+        ..send(const KernelTurn(id: 'u4', text: 'fourth'));
+      await pumpEventQueue();
+
+      kernel.moveQueued('u4', 0);
+      await pumpEventQueue();
+      // The one in the CLI taken back; all sent again in the new order,
+      // the first waiting in the CLI, the rest held here.
+      expect(
+        cli.requests('cancel_async_message').map((r) => r['message_uuid']),
+        ['u2'],
+      );
+      expect(cli.requests('interrupt'), isEmpty);
+      expect(
+        [for (final m in cli.users.skip(2)) (m['message'] as Map)['content']],
+        [
+          [
+            {'type': 'text', 'text': 'fourth'},
+          ],
+        ],
+      );
+      expect(
+        [for (final (_, item) in transcript.queued) item.text],
+        ['fourth', 'second', 'third'],
+      );
+
+      cli.push({
+        'type': 'command_lifecycle',
+        'command_uuid': cli.users.last['uuid'],
+        'state': 'started',
+      });
+      await pumpEventQueue();
+      // The next held given the CLI once the one before it is taken up.
+      expect((cli.users.last['message'] as Map)['content'], [
+        {'type': 'text', 'text': 'second'},
+      ]);
+      expect(
+        [for (final (_, item) in transcript.queued) item.text],
+        ['second', 'third'],
+      );
       kernel.dispose();
     });
 
@@ -3709,6 +4166,47 @@ void main() {
       kernel.dispose();
     });
 
+    test("keeps the calls on Claude Code's own models, timed, and priced "
+        "at Anthropic's as the CLI prices them", () async {
+      final ledger = UsageLedger.current = UsageLedger(MemoryUsageStorage());
+      addTearDown(
+        () => UsageLedger.current = UsageLedger(MemoryUsageStorage()),
+      );
+      final cli = FakeCli();
+      final (:kernel, transcript: _, events: _) = claude(cli);
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      final messages = recorded('question');
+      final result = messages.indexWhere((m) => m['type'] == 'result');
+      for (final message in messages.take(result + 1)) {
+        if (message['type'] case 'control_response' || 'control_request') {
+          continue;
+        }
+        cli.push(message);
+      }
+      await pumpEventQueue();
+      ledger.flush();
+      final calls = await ledger.range();
+      // Its two requests; the CLI's totals no more than theirs.
+      expect(calls, hasLength(2));
+      expect(calls.map((c) => (c.provider, c.model)).toSet(), {
+        ('claude-code', 'claude-sonnet-5'),
+      });
+      expect(calls.map((c) => c.output), [122, 5]);
+      expect(calls.first.cacheWriteLong, 6455);
+      expect(calls.first.stopReason, 'tool_use');
+      expect(calls.first.firstToken, isNotNull);
+      expect(calls.first.toolCalls, isNotEmpty);
+      // The plan's limits, told between them.
+      expect(calls.last.quota, isNotEmpty);
+      // What the CLI said they cost (its modelUsage's costUSD).
+      expect(
+        UsagePrices().costOf(calls).byCurrency['USD'],
+        closeTo(0.0425954, 1e-9),
+      );
+      kernel.dispose();
+    });
+
     test('says it is loading the history until it is read', () async {
       final read = Completer<List<Map<String, Object?>>>();
       final kernel = ClaudeCodeKernel(
@@ -3861,6 +4359,50 @@ void main() {
           kernel.dispose();
         },
       );
+
+      test("reads a model's usage given as strings", () async {
+        final kernel = open(
+          (session, {required turns, before}) async => ClaudeHistoryPage([
+            prompt('u1'),
+            {
+              ...answer('u1', 0),
+              'message': {
+                ...answer('u1', 0)['message']! as Map<String, Object?>,
+                'usage': {
+                  'input_tokens': '1',
+                  'cache_read_input_tokens': 'none',
+                  'cache_creation_input_tokens': '300',
+                },
+              },
+            },
+            // As some write the stream too.
+            {
+              'type': 'stream_event',
+              'event': {
+                'type': 'message_start',
+                'message': {
+                  'id': 'm-x',
+                  'usage': {'input_tokens': '1', 'output_tokens': '2'},
+                },
+              },
+            },
+            {
+              'type': 'stream_event',
+              'event': {'type': 'message_stop'},
+            },
+          ]),
+        );
+        final transcript = Transcript();
+        kernel.events.listen(transcript.apply);
+        await pumpEventQueue();
+        expect(prompts(transcript), ['u1']);
+        expect([
+          for (final (_, item) in transcript.liveItems)
+            if (item is NoticeItem) item.text,
+        ], isEmpty);
+        expect(transcript.stats!.cache!.conversation.written, 300);
+        kernel.dispose();
+      });
 
       test('turns kept show as their footers did, on every page; those '
           'not kept as before', () async {
@@ -4036,6 +4578,7 @@ void main() {
         String model = 'claude-opus-5-5',
         Object? parent,
         bool sidechain = false,
+        bool withCache = true,
       }) => {
         'type': 'assistant',
         'parent_tool_use_id': ?parent,
@@ -4048,9 +4591,9 @@ void main() {
           'usage': {
             'input_tokens': uncached,
             // As the proxy gives a provider's: only what was cached.
-            if (read > 0 || !model.startsWith('p/'))
+            if (withCache && (read > 0 || !model.startsWith('p/')))
               'cache_read_input_tokens': read,
-            if (written > 0 || !model.startsWith('p/'))
+            if (withCache && (written > 0 || !model.startsWith('p/')))
               'cache_creation_input_tokens': written,
           },
         },
@@ -4069,7 +4612,9 @@ void main() {
         ),
         start: (_) async => cli,
         readHistory: (_) async => [
-          // A message comes a content block a line, each with its usage.
+          // A message comes a content block a line, its usage completed by
+          // the last one; identical lines still count once.
+          assistant('m1', 0, 0, uncached: 20002),
           assistant('m1', 0, 20000),
           assistant('m1', 0, 20000),
           assistant('sub', 900, 900, sidechain: true),
@@ -4078,6 +4623,10 @@ void main() {
         ],
       );
       final transcript = Transcript();
+      var statsReports = 0;
+      kernel.events.listen((event) {
+        if (event is StatsReported) statsReports++;
+      });
       kernel.events.listen(transcript.apply);
       await pumpEventQueue();
       var cache = transcript.stats!.cache!;
@@ -4088,8 +4637,10 @@ void main() {
       kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
       await pumpEventQueue();
       cli
+        ..push(assistant('m3', 0, 0, uncached: 30502))
         ..push(assistant('m3', 30000, 500))
-        ..push(assistant('m3', 30000, 500))
+        // A partial line after the complete one leaves the cache intact.
+        ..push(assistant('m3', 0, 0, withCache: false))
         ..push(assistant('agent', 5000, 5000, parent: 'toolu_1'))
         // An API error's: no usage of the model's.
         ..push(assistant('err', 0, 0, uncached: 0));
@@ -4099,6 +4650,12 @@ void main() {
       expect(cache.last.hitRate, closeTo(30000 / 30502, 1e-9));
       expect(cache.conversation.read, 30000);
       expect(cache.conversation.written, 50500);
+
+      // An identical line does not report the same stats again.
+      final beforeDuplicate = statsReports;
+      cli.push(assistant('m3', 30000, 500));
+      await pumpEventQueue();
+      expect(statsReports, beforeDuplicate);
 
       // A provider's model that never says what was cached: not shown,
       // rather than all uncached.
@@ -4164,1628 +4721,6 @@ void main() {
       }
     });
 
-    group('the account usage, asked for', () {
-      final usage = <String, Object?>{
-        'rate_limits_available': true,
-        'rate_limits': {
-          'five_hour': {'utilization': 12, 'resets_at': '2026-09-28T15:00:00Z'},
-          'seven_day': {'utilization': 36.4, 'resets_at': null},
-          'seven_day_opus': null,
-          'model_scoped': [
-            {
-              'display_name': 'Opus',
-              'utilization': 58,
-              'resets_at': '2026-10-02T09:00:00Z',
-            },
-          ],
-        },
-        'behaviors': null,
-      };
-      String shown(Transcript transcript) => [
-        for (final limit in transcript.stats?.limits ?? const [])
-          '${limit.label} ${(limit.utilization * 100).round()}%',
-      ].join(', ');
-
-      setUp(() {
-        ClaudeCodeKernel.forgetAccount();
-        ClaudeCodeKernel.usageRetryDelay = Duration.zero;
-      });
-      tearDown(
-        () => ClaudeCodeKernel.usageRetryDelay = const Duration(seconds: 3),
-      );
-
-      test('with no session running, from a process of its own that saves '
-          'no session and is closed', () async {
-        final launches = <ClaudeLaunch>[];
-        final cli = FakeCli(answers: {'get_usage': usage});
-        final kernel = ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          const KernelContext(cwd: '/p'),
-          start: (launch) async {
-            launches.add(launch);
-            return cli;
-          },
-        );
-        final transcript = Transcript();
-        kernel.events.listen(transcript.apply);
-        await kernel.refreshUsage();
-        await pumpEventQueue();
-
-        expect(launches.single.arguments, contains('--no-session-persistence'));
-        expect(cli.requests('get_usage').single['skip_behaviors'], isTrue);
-        expect(cli.users, isEmpty);
-        expect(cli.closed, isTrue);
-        expect(
-          shown(transcript),
-          '5-hour limit 12%, Weekly limit 36%, Weekly Opus limit 58%',
-        );
-        expect(
-          transcript.stats!.limits.first.resetsAt!.toUtc(),
-          DateTime.utc(2026, 9, 28, 15),
-        );
-        // Not the session's own process: that starts on its first send.
-        expect(kernel.health.status, isNot(KernelHealthStatus.ready));
-
-        // Asked again soon after: not again.
-        await kernel.refreshUsage();
-        expect(launches, hasLength(1));
-        kernel.dispose();
-      });
-
-      test('from a session already running, in every session', () async {
-        final idle = claude(FakeCli());
-        final cli = FakeCli(answers: {'get_usage': usage});
-        final running = claude(cli);
-        running.kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-        await pumpEventQueue();
-
-        await idle.kernel.refreshUsage();
-        await pumpEventQueue();
-        expect(cli.requests('get_usage'), hasLength(1));
-        expect(shown(idle.transcript), startsWith('5-hour limit 12%'));
-        expect(shown(running.transcript), startsWith('5-hour limit 12%'));
-        idle.kernel.dispose();
-        running.kernel.dispose();
-      });
-
-      test('asked again while Claude Code is still fetching them', () async {
-        const pending = {'rate_limits_available': true, 'rate_limits': null};
-        final cli = _UsageCli([pending, usage]);
-        final (:kernel, :transcript, events: _) = claude(cli);
-        final states = <LimitsState>[];
-        kernel.events.listen((event) {
-          if (event is StatsReported) states.add(event.stats.limitsState);
-        });
-        await kernel.refreshUsage();
-        await pumpEventQueue();
-        expect(cli.requests('get_usage'), hasLength(2));
-        expect(shown(transcript), startsWith('5-hour limit 12%'));
-        expect(states.first, LimitsState.checking);
-        expect(states.last, LimitsState.idle);
-        kernel.dispose();
-      });
-
-      test('never told: unavailable, and asked again next time', () async {
-        const pending = {'rate_limits_available': true, 'rate_limits': null};
-        final cli = _UsageCli([pending]);
-        final (:kernel, :transcript, events: _) = claude(cli);
-        await kernel.refreshUsage();
-        await pumpEventQueue();
-        expect(cli.requests('get_usage'), hasLength(3));
-        expect(transcript.stats!.limitsState, LimitsState.unavailable);
-        expect(transcript.stats!.limits, isEmpty);
-        await kernel.refreshUsage();
-        expect(cli.requests('get_usage'), hasLength(6));
-        kernel.dispose();
-      });
-
-      test('without a plan (an API key), none and no note', () async {
-        final cli = _UsageCli([
-          {'rate_limits_available': false, 'rate_limits': null},
-        ]);
-        final (:kernel, :transcript, events: _) = claude(cli);
-        await kernel.refreshUsage();
-        await pumpEventQueue();
-        expect(cli.requests('get_usage'), hasLength(1));
-        expect(transcript.stats!.limitsState, LimitsState.idle);
-        kernel.dispose();
-      });
-
-      test('turned off: not asked, and it says by what; a reply still tells '
-          'them', () async {
-        final launches = <ClaudeLaunch>[];
-        final cli = FakeCli(answers: {'get_usage': usage});
-        final kernel = ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          const KernelContext(cwd: '/p'),
-          start: (launch) async {
-            launches.add(launch);
-            return cli;
-          },
-          usageOffBy: () async => 'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
-        );
-        final transcript = Transcript();
-        kernel.events.listen(transcript.apply);
-        await kernel.refreshUsage();
-        await pumpEventQueue();
-        expect(launches, isEmpty);
-        expect(transcript.stats!.limitsState, LimitsState.off);
-        expect(
-          transcript.stats!.limitsOffBy,
-          'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
-        );
-
-        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-        await pumpEventQueue();
-        cli.push({
-          'type': 'rate_limit_event',
-          'rate_limit_info': {
-            'status': 'allowed_warning',
-            'rateLimitType': 'five_hour',
-            'utilization': 0.91,
-          },
-        });
-        await pumpEventQueue();
-        expect(cli.requests('get_usage'), isEmpty);
-        expect(shown(transcript), '5-hour limit 91%');
-        kernel.dispose();
-      });
-
-      test(
-        'when Claude Code cannot tell, the limits stay as they were',
-        () async {
-          final kernel = ClaudeCodeKernel(
-            MockKernels.claudeCode,
-            const KernelContext(cwd: '/p'),
-            start: (_) async => throw const ClaudeUnavailable('not installed'),
-          );
-          await kernel.refreshUsage();
-          expect(kernel.accountLimits, isEmpty);
-          kernel.dispose();
-        },
-      );
-    });
-
-    test('one that exits while starting says what it printed', () async {
-      final cli = _SilentCli();
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async => cli,
-      );
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push(
-        ClaudeExit.message(
-          1,
-          '--dangerously-skip-permissions cannot be used with root/sudo '
-          'privileges for security reasons',
-        ),
-      );
-      await pumpEventQueue();
-      expect(kernel.health.status, KernelHealthStatus.failed);
-      expect(kernel.health.message, 'Claude Code stopped');
-      expect(kernel.health.detail, contains('root/sudo privileges'));
-      kernel.dispose();
-    });
-
-    test('one too old for an option it is started with says to update it, '
-        'and which one ran', () async {
-      final cli = _SilentCli();
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async => cli,
-      );
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push(
-        ClaudeExit.message(
-          1,
-          "error: unknown option '--prompt-suggestions'",
-          executable: '/Users/u/.nvm/versions/node/v22/bin/claude',
-        ),
-      );
-      await pumpEventQueue();
-      expect(kernel.health.status, KernelHealthStatus.failed);
-      expect(kernel.health.message, contains('older than BaoCode needs'));
-      expect(kernel.health.detail, contains('--prompt-suggestions'));
-      expect(
-        kernel.health.detail,
-        contains('/Users/u/.nvm/versions/node/v22/bin/claude'),
-      );
-      kernel.dispose();
-    });
-
-    test('one too old is passed over for a newer one, started in its place: '
-        'the turn goes on there', () async {
-      final old = _SilentCli();
-      final newer = FakeCli();
-      final rejected = <(String, String)>[];
-      var starts = 0;
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async => [old, newer][starts++],
-        rejectTooOld: (cwd, executable) async {
-          rejected.add((cwd, executable));
-          return true;
-        },
-      );
-      final transcript = Transcript();
-      kernel.events.listen(transcript.apply);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      old.push(
-        ClaudeExit.message(
-          1,
-          "error: unknown option '--prompt-suggestions'",
-          executable: '/usr/local/bin/claude',
-        ),
-      );
-      await pumpEventQueue();
-      expect(rejected, [('/p', '/usr/local/bin/claude')]);
-      expect(starts, 2);
-      expect(kernel.health.status, KernelHealthStatus.ready);
-      expect(newer.users, hasLength(1));
-      expect(shown(transcript), isNot(contains(startsWith('notice error'))));
-      kernel.dispose();
-    });
-
-    test('one too old with none newer to run says to update it', () async {
-      final cli = _SilentCli();
-      var starts = 0;
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async {
-          starts++;
-          return cli;
-        },
-        rejectTooOld: (_, _) async => false,
-      );
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push(
-        ClaudeExit.message(
-          1,
-          "error: unknown option '--prompt-suggestions'",
-          executable: '/usr/local/bin/claude',
-        ),
-      );
-      await pumpEventQueue();
-      expect(starts, 1);
-      expect(kernel.health.status, KernelHealthStatus.failed);
-      expect(kernel.health.message, contains('older than BaoCode needs'));
-      expect(kernel.health.detail, contains('/usr/local/bin/claude'));
-      kernel.dispose();
-    });
-
-    test(
-      'a crash fails the turn and says why; retrying starts again',
-      () async {
-        var starts = 0;
-        late FakeCli cli;
-        final kernel = ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          const KernelContext(cwd: '/p'),
-          start: (_) async {
-            starts++;
-            return cli = FakeCli();
-          },
-        );
-        final transcript = Transcript();
-        kernel.events.listen(transcript.apply);
-        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-        await pumpEventQueue();
-        cli.push(
-          ClaudeExit.message(1, 'Error: Invalid API key · Please run /login'),
-        );
-        await pumpEventQueue();
-        expect(transcript.activeTurn, isNull);
-        expect(kernel.health.status, KernelHealthStatus.failed);
-        expect(kernel.health.message, contains('not logged in'));
-        expect(
-          shown(transcript).last,
-          'notice error: Claude Code stopped unexpectedly',
-        );
-
-        kernel.restart();
-        await pumpEventQueue();
-        expect(starts, 2);
-        expect(kernel.health.status, KernelHealthStatus.ready);
-        kernel.dispose();
-      },
-    );
-
-    test('not logged in on a host over SSH, it says the Mac\'s keychain '
-        'may be why, and what to do', () async {
-      late FakeCli cli;
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: 'ssh://home-imac/Users/me/p'),
-        start: (_) async => cli = FakeCli(),
-      );
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      cli.push(
-        ClaudeExit.message(1, 'Error: Invalid API key · Please run /login'),
-      );
-      await pumpEventQueue();
-      expect(kernel.health.message, contains('home-imac'));
-      expect(kernel.health.message, contains('security unlock-keychain'));
-      expect(kernel.health.message, contains('CLAUDE_CODE_OAUTH_TOKEN'));
-      kernel.dispose();
-    });
-
-    test('a model\'s context and effort are picked beside it, and read '
-        'back from the CLI', () async {
-      Map<String, Object?> model(
-        String value,
-        String resolved, [
-        List<String> efforts = const [],
-      ]) => {
-        'value': value,
-        'resolvedModel': resolved,
-        'displayName': value,
-        'description': '',
-        if (efforts.isNotEmpty) 'supportsEffort': true,
-        if (efforts.isNotEmpty) 'supportedEffortLevels': efforts,
-      };
-      // Each start a CLI of its own, compacting where it was told at start
-      // (400K by the user's settings), not where it is told after.
-      final clis = <FakeCli>[];
-      final launches = <ClaudeLaunch>[];
-      FakeCli start(ClaudeLaunch launch) => FakeCli(
-        answers: {
-          'initialize': {
-            'commands': const [],
-            'models': [
-              {
-                ...model('default', 'claude-opus-4-6'),
-                'displayName': 'Default (recommended)',
-              },
-              model('opus', 'claude-opus-4-6', ['low', 'high']),
-              model('opus[1m]', 'claude-opus-4-6[1m]', ['low', 'high']),
-              model('fable[1m]', 'claude-fable-5-1', ['low', 'max']),
-              model('haiku', 'claude-haiku-4-5'),
-            ],
-          },
-          'get_settings': {
-            'applied': {'model': 'claude-opus-4-6[1m]', 'effort': 'low'},
-          },
-          'get_context_usage': {
-            'categories': const [],
-            'totalTokens': 1000,
-            'maxTokens': launch.autocompact ?? 400000,
-            'rawMaxTokens': launch.autocompact ?? 400000,
-          },
-        },
-      );
-      // As the last agent had it.
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(
-          cwd: '/p',
-          settings: {'model': 'opus', 'context': '400k', 'effort': 'high'},
-        ),
-        start: (launch) async {
-          launches.add(launch);
-          final cli = start(launch);
-          clis.add(cli);
-          return cli;
-        },
-      );
-      List<String> labels(List<KernelOption> options) => [
-        for (final option in options) option.label,
-      ];
-
-      // Shown as picked before it starts.
-      expect(kernel.contextSize.selected, '400k');
-      kernel.prepare();
-      await pumpEventQueue();
-      expect(launches.single.model, 'opus');
-      expect(launches.single.effort, 'high');
-      expect(launches.single.autocompact, 400000);
-      expect(
-        launches.single.arguments,
-        containsAllInOrder(['--autocompact', '400000']),
-      );
-      // Past 200K: the model's 1M variant.
-      expect(clis.single.requests('set_model').single['model'], 'opus[1m]');
-      expect(clis.single.requests('apply_flag_settings'), isEmpty);
-
-      // A model and its 1M variant are one.
-      expect(labels(kernel.model.options), [
-        'Default',
-        'opus',
-        'fable[1m]',
-        'haiku',
-      ]);
-      expect(kernel.model.selected, 'opus');
-      expect(labels(kernel.contextSize.optionsFor('opus')), [
-        '200K',
-        '400K',
-        '1M',
-      ]);
-      // Where it compacts, as the CLI reports it.
-      expect(kernel.contextSize.selected, '400k');
-      expect(labels(kernel.effort.optionsFor('fable')), ['Low', 'Max']);
-      expect(kernel.effort.optionsFor('haiku'), isEmpty);
-      // What the CLI has in effect, not what was asked.
-      expect(kernel.effort.selected, 'low');
-
-      // Another context is shown as picked, the conversation left be: the
-      // CLI takes it only at start, so it restarts as the next message is
-      // sent, on the same session.
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      kernel.contextSize.select('opus', '1m');
-      await pumpEventQueue();
-      expect(kernel.contextSize.selected, '1m');
-      clis.last.push({
-        'type': 'system',
-        'subtype': 'init',
-        'session_id': 's1',
-        'model': 'claude-opus-4-6[1m]',
-      });
-      clis.last.push({'type': 'result', 'subtype': 'success'});
-      await pumpEventQueue();
-      expect(launches, hasLength(1));
-      expect(clis.first.closed, isFalse);
-      expect(kernel.contextSize.selected, '1m');
-      kernel.send(const KernelTurn(id: 'u2', text: 'go on'));
-      await pumpEventQueue();
-      expect(clis.first.closed, isTrue);
-      expect(launches.last.resume, 's1');
-      expect(launches.last.autocompact, 1000000);
-      expect(clis.last.users.single['uuid'], 'u2');
-      expect(kernel.contextSize.selected, '1m');
-      clis.last.push({'type': 'result', 'subtype': 'success'});
-      await pumpEventQueue();
-
-      // The model it goes with is switched to straight away.
-      kernel.contextSize.select('opus', '200k');
-      await pumpEventQueue();
-      expect(clis.last.requests('set_model').last['model'], 'opus');
-      expect(kernel.contextSize.selected, '200k');
-      expect(launches, hasLength(2));
-      kernel.send(const KernelTurn(id: 'u3', text: 'more'));
-      await pumpEventQueue();
-      expect(launches, hasLength(3));
-      expect(launches.last.model, 'opus');
-      expect(launches.last.autocompact, 200000);
-      expect(kernel.contextSize.selected, '200k');
-      clis.last.push({'type': 'result', 'subtype': 'success'});
-      await pumpEventQueue();
-
-      // Another model's effort switches to it first.
-      kernel.effort.select('fable', 'max');
-      // Shown as picked while the CLI makes the change.
-      expect(kernel.effort.selected, 'max');
-      await pumpEventQueue();
-      final cli = clis.last;
-      expect(cli.requests('set_model').last['model'], 'fable[1m]');
-      expect(cli.requests('apply_flag_settings').last['settings'], {
-        'effortLevel': 'max',
-      });
-      // Asked what is in effect only once the change is done.
-      final order = [
-        for (final message in cli.written)
-          if (message['type'] == 'control_request')
-            (message['request'] as Map)['subtype'],
-      ];
-      expect(
-        order.lastIndexOf('get_settings'),
-        greaterThan(order.lastIndexOf('apply_flag_settings')),
-      );
-      expect(launches, hasLength(3));
-      kernel.dispose();
-    });
-
-    test('mode and approvals are picked apart', () async {
-      final cli = FakeCli();
-      final launches = <ClaudeLaunch>[];
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(
-          cwd: '/p',
-          settings: {'mode': 'plan', 'permission': 'acceptEdits'},
-        ),
-        start: (launch) async {
-          launches.add(launch);
-          return cli;
-        },
-      );
-      final transcript = Transcript();
-      kernel.events.listen(transcript.apply);
-      List<Object?> modesSent() => [
-        for (final request in cli.requests('set_permission_mode'))
-          request['mode'],
-      ];
-      List<Object?> notes(int i) => [
-        for (final part
-            in ((cli.users[i]['message'] as Map)['content'] as List)
-                .cast<Map<Object?, Object?>>()
-                .skip(1))
-          part['text'],
-      ];
-
-      // Plan is entered once started, so the CLI keeps the approvals.
-      kernel.prepare();
-      await pumpEventQueue();
-      expect(launches.single.permissionMode, 'acceptEdits');
-      expect(modesSent(), ['plan']);
-
-      // Ask keeps the approvals, and is only said to the model, unseen.
-      kernel.mode.select('ask');
-      expect(modesSent(), ['plan', 'acceptEdits']);
-      expect(kernel.permission.selected, 'acceptEdits');
-      kernel.send(const KernelTurn(id: 'u1', text: 'why is it slow?'));
-      await pumpEventQueue();
-      final content = ((cli.users.single['message'] as Map)['content'] as List)
-          .cast<Map<Object?, Object?>>();
-      expect(content.first['text'], 'why is it slow?');
-      expect(notes(0), [contains('in Ask mode')]);
-      cli.push({...cli.users.single, 'isReplay': true});
-      await pumpEventQueue();
-      expect(shown(transcript), ['user: why is it slow?']);
-
-      // An approval the CLI takes up in Ask stays in Ask.
-      cli.push({
-        'type': 'system',
-        'subtype': 'status',
-        'permissionMode': 'default',
-      });
-      await pumpEventQueue();
-      expect(kernel.mode.selected, 'ask');
-      expect(kernel.permission.selected, 'default');
-
-      // Out of Ask: the CLI is told nothing, the model once.
-      kernel.mode.select('agent');
-      kernel.permission.select('bypassPermissions');
-      // Full access is the CLI accepting edits, the rest approved here.
-      expect(modesSent(), ['plan', 'acceptEdits', 'acceptEdits']);
-      kernel.send(const KernelTurn(id: 'u2', text: 'fix it'));
-      kernel.send(const KernelTurn(id: 'u3', text: 'and test it'));
-      // Given the CLI once the one before it is taken up.
-      cli.push({
-        'type': 'command_lifecycle',
-        'command_uuid': 'u2',
-        'state': 'started',
-      });
-      await pumpEventQueue();
-      expect(notes(1), [contains('left Ask mode')]);
-      expect(notes(2), isEmpty);
-
-      // Changes the CLI makes itself move the picks along.
-      cli.push({
-        'type': 'system',
-        'subtype': 'status',
-        'permissionMode': 'plan',
-      });
-      await pumpEventQueue();
-      expect(kernel.mode.selected, 'plan');
-      expect(kernel.permission.selected, 'bypassPermissions');
-      cli.push({
-        'type': 'system',
-        'subtype': 'status',
-        'permissionMode': 'default',
-      });
-      await pumpEventQueue();
-      expect(kernel.mode.selected, 'agent');
-      expect(kernel.permission.selected, 'default');
-      expect(modesSent(), hasLength(3), reason: 'nothing echoed back');
-      expect(
-        kernel.permission.options.last,
-        isA<KernelOption>().having((o) => o.caution, 'caution', isTrue),
-      );
-      kernel.dispose();
-    });
-
-    test('the last turn\'s reply: all the agent said since the last '
-        'message, in order', () async {
-      final cli = FakeCli();
-      final descriptor = KernelDescriptor(
-        id: 'claude-code',
-        label: 'Claude Code',
-        icon: Icons.auto_awesome_rounded,
-        description: '',
-        create: (context) => ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          context,
-          start: (_) async => cli,
-        ),
-      );
-      final session = ChatSession(
-        kernel: descriptor,
-        kernels: [descriptor],
-        historyCount: 0,
-      );
-      addTearDown(session.dispose);
-      Future<void> say(String id, String text) async {
-        cli.push({
-          'type': 'assistant',
-          'parent_tool_use_id': null,
-          'message': {
-            'id': id,
-            'role': 'assistant',
-            'content': [
-              {'type': 'text', 'text': text},
-            ],
-          },
-        });
-        await pumpEventQueue();
-      }
-
-      expect(session.lastTurnReply, isNull);
-      session.send(const ComposerMessage(text: 'one'));
-      await pumpEventQueue();
-      await say('m1', 'Old answer.');
-      cli.push({
-        'type': 'result',
-        'subtype': 'success',
-        'is_error': false,
-        'session_id': 's',
-      });
-      await pumpEventQueue();
-      expect(session.lastTurnReply, 'Old answer.');
-      session.send(const ComposerMessage(text: 'two'));
-      await pumpEventQueue();
-      expect(session.lastTurnReply, isNull);
-      await say('m2', 'Looking.');
-      await say('m3', 'Option 1 or 2?');
-      expect(session.lastTurnReply, 'Looking.\n\nOption 1 or 2?');
-    });
-
-    test('a status row stays at the end all through a turn, hidden where '
-        'something else says so', () async {
-      final cli = FakeCli();
-      final descriptor = KernelDescriptor(
-        id: 'claude-code',
-        label: 'Claude Code',
-        icon: Icons.auto_awesome_rounded,
-        description: '',
-        create: (context) => ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          context,
-          start: (_) async => cli,
-        ),
-      );
-      final session = ChatSession(
-        kernel: descriptor,
-        kernels: [descriptor],
-        historyCount: 0,
-        quietAfterText: const Duration(milliseconds: 200),
-      );
-      ChatItem last() => session.itemAt(session.itemCount - 1);
-      ChatItem beforeLast() => session.itemAt(session.itemCount - 2);
-      Matcher row({required bool visible}) =>
-          isA<LiveStatusItem>().having((i) => i.visible, 'visible', visible);
-      Future<void> push(Map<String, Object?> message) async {
-        cli.push(message);
-        await pumpEventQueue();
-      }
-
-      Map<String, Object?> status(String? value) => {
-        'type': 'system',
-        'subtype': 'status',
-        'status': value,
-      };
-
-      session.send(const ComposerMessage(text: 'hi'));
-      await pumpEventQueue();
-      // At once, before the CLI says it asked the model.
-      expect(
-        last(),
-        isA<LiveStatusItem>().having(
-          (i) => i.label,
-          'label',
-          'Planning next move',
-        ),
-      );
-      // Its word that it did changes nothing.
-      await push(status('requesting'));
-      expect(last(), isA<LiveStatusItem>());
-      Future<void> stream(Map<String, Object?> event) =>
-          push({'type': 'stream_event', 'event': event});
-      // Its message begun, nothing of it shown yet: a proxy may hold a
-      // thought back for minutes.
-      final begun = DateTime.now();
-      await stream({
-        'type': 'message_start',
-        'message': {'id': 'm1'},
-      });
-      expect(last(), isA<LiveStatusItem>());
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      final blockAt = DateTime.now();
-      // Its thought shows instead, saying so itself while under way; timed
-      // from the message's start.
-      await stream({
-        'type': 'content_block_start',
-        'index': 0,
-        'content_block': {'type': 'thinking', 'thinking': ''},
-      });
-      expect(last(), row(visible: false));
-      final started = (beforeLast() as ThinkingItem).startedAt!;
-      expect(started.isBefore(begun), isFalse);
-      expect(started.isBefore(blockAt), isTrue);
-      await stream({'type': 'content_block_stop', 'index': 0});
-      // Between its blocks it is at work still.
-      expect(last(), row(visible: true));
-      expect(
-        last(),
-        isA<LiveStatusItem>().having((i) => i.whimsical, 'whimsical', isTrue),
-      );
-
-      await push(status('compacting'));
-      expect(
-        last(),
-        isA<LiveStatusItem>().having(
-          (i) => i.label,
-          'label',
-          'Compacting conversation',
-        ),
-      );
-      await push(status(null));
-      expect(
-        last(),
-        isA<LiveStatusItem>().having(
-          (i) => i.label,
-          'label',
-          'Planning next move',
-        ),
-      );
-
-      // Its text shows above it, hidden: most often something follows at
-      // once. Unless all is quiet for a while.
-      await stream({
-        'type': 'content_block_start',
-        'index': 1,
-        'content_block': {'type': 'text', 'text': ''},
-      });
-      await stream({
-        'type': 'content_block_delta',
-        'index': 1,
-        'delta': {'type': 'text_delta', 'text': 'Looking.'},
-      });
-      expect(last(), row(visible: false));
-      expect(beforeLast(), isA<AssistantTextItem>());
-      await stream({'type': 'content_block_stop', 'index': 1});
-      expect(last(), row(visible: false));
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      // More of anything times it anew.
-      await push(status('requesting'));
-      await Future<void>.delayed(const Duration(milliseconds: 120));
-      expect(last(), row(visible: false));
-      await Future<void>.delayed(const Duration(milliseconds: 160));
-      expect(last(), row(visible: true));
-
-      // And a tool at work, and done.
-      await push({
-        'type': 'assistant',
-        'parent_tool_use_id': null,
-        'message': {
-          'id': 'm2',
-          'role': 'assistant',
-          'content': [
-            {
-              'type': 'tool_use',
-              'id': 't1',
-              'name': 'Read',
-              'input': {'file_path': '/p/a.txt'},
-            },
-          ],
-        },
-      });
-      expect(last(), row(visible: true));
-      expect(
-        beforeLast(),
-        isA<ToolCallItem>().having(
-          (i) => i.status,
-          'status',
-          ToolStatus.running,
-        ),
-      );
-      await push({
-        'type': 'user',
-        'parent_tool_use_id': null,
-        'message': {
-          'role': 'user',
-          'content': [
-            {'type': 'tool_result', 'tool_use_id': 't1', 'content': 'a'},
-          ],
-        },
-      });
-      expect(last(), row(visible: true));
-      expect(
-        beforeLast(),
-        isA<ToolCallItem>().having(
-          (i) => i.status,
-          'status',
-          ToolStatus.succeeded,
-        ),
-      );
-
-      await push(status('requesting'));
-      await push({'type': 'result', 'subtype': 'success', 'is_error': false});
-      expect(last(), isA<ToolCallItem>(), reason: 'the turn is over');
-      session.dispose();
-    });
-
-    test('images go as content blocks, and come back in the echo', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      final image = ImageAttachment(
-        bytes: Uint8List.fromList(const [0x89, 0x50, 0x4E, 0x47, 1, 2, 3]),
-        mediaType: 'image/png',
-      );
-      kernel.send(KernelTurn(id: 'u1', text: 'what is this?', images: [image]));
-      expect((transcript.itemAt(0) as UserMessageItem).images, [image]);
-      await pumpEventQueue();
-      final content = ((cli.users.single['message'] as Map)['content'] as List)
-          .cast<Map<Object?, Object?>>();
-      expect(content.map((block) => block['type']), ['image', 'text']);
-      expect(content.first['source'], {
-        'type': 'base64',
-        'media_type': 'image/png',
-        'data': base64Encode(image.bytes),
-      });
-
-      // The CLI echoes the message (as it keeps it in its history).
-      cli.push({...cli.users.single, 'isReplay': true});
-      await pumpEventQueue();
-      expect(transcript.length, 1);
-      final echoed = transcript.itemAt(0) as UserMessageItem;
-      expect(echoed.text, 'what is this?');
-      expect(echoed.images.single.bytes, image.bytes);
-      kernel.dispose();
-    });
-
-    test('a numbered image goes named, and comes back numbered', () async {
-      final cli = FakeCli();
-      final (:kernel, :transcript, events: _) = claude(cli);
-      final image = ImageAttachment(
-        bytes: Uint8List.fromList(const [0x89, 0x50, 0x4E, 0x47, 1, 2, 3]),
-        mediaType: 'image/png',
-        number: 3,
-      );
-      kernel.send(
-        KernelTurn(id: 'u1', text: '[Image #3] 是什么', images: [image]),
-      );
-      await pumpEventQueue();
-      final content = ((cli.users.single['message'] as Map)['content'] as List)
-          .cast<Map<Object?, Object?>>();
-      expect(content.map((block) => block['type']), ['text', 'image', 'text']);
-      expect(content.first['text'], '[Image #3]');
-
-      cli.push({...cli.users.single, 'isReplay': true});
-      await pumpEventQueue();
-      final echoed = transcript.itemAt(0) as UserMessageItem;
-      expect(echoed.text, '[Image #3] 是什么', reason: 'its name is not text');
-      expect(echoed.images.single.number, 3);
-      kernel.dispose();
-    });
-
-    test('images pasted in Claude Code are numbered as it numbered them', () {
-      final transcript = Transcript();
-      var seq = 0;
-      final translator = ClaudeTranslator(
-        emit: transcript.apply,
-        nextSeq: () => ++seq,
-      )..replaying = true;
-      final picture = {
-        'type': 'image',
-        'source': {
-          'type': 'base64',
-          'media_type': 'image/png',
-          'data': base64Encode(const [0x89, 0x50, 0x4E, 0x47]),
-        },
-      };
-      translator.translate({
-        'type': 'user',
-        'uuid': 'p',
-        'imagePasteIds': [2, 3],
-        'message': {
-          'role': 'user',
-          'content': [
-            {'type': 'text', 'text': '[Image #3] 比 [Image #2] 好'},
-            picture,
-            picture,
-          ],
-        },
-      });
-      final message = transcript.itemAt(0) as UserMessageItem;
-      expect(message.text, '[Image #3] 比 [Image #2] 好');
-      expect(message.images.map((image) => image.number), [2, 3]);
-    });
-
-    test('a command keeps the images sent with it', () {
-      final transcript = Transcript();
-      var seq = 0;
-      final translator = ClaudeTranslator(
-        emit: transcript.apply,
-        nextSeq: () => ++seq,
-      );
-      translator.translate({
-        'type': 'user',
-        'uuid': 'g',
-        'message': {
-          'role': 'user',
-          'content': [
-            {'type': 'text', 'text': '[Image #4]'},
-            {
-              'type': 'image',
-              'source': {
-                'type': 'base64',
-                'media_type': 'image/png',
-                'data': base64Encode(const [0x89, 0x50, 0x4E, 0x47]),
-              },
-            },
-            {
-              'type': 'text',
-              'text':
-                  '<command-name>/goal</command-name>\n'
-                  '<command-message>goal</command-message>\n'
-                  '<command-args>[Image #4] 把这个作为默认值</command-args>',
-            },
-          ],
-        },
-      });
-      final message = transcript.itemAt(0) as UserMessageItem;
-      expect(message.text, '/goal [Image #4] 把这个作为默认值');
-      expect(message.images.single.number, 4);
-    });
-
-    group('goal', () {
-      Map<String, Object?> saidText(String text) => {
-        'type': 'assistant',
-        'uuid': 'a-${text.hashCode}',
-        'timestamp': '2026-10-05T10:00:00Z',
-        'message': {
-          'id': 'm-${text.hashCode}',
-          'model': '<synthetic>',
-          'role': 'assistant',
-          'content': [
-            {'type': 'text', 'text': text},
-          ],
-        },
-      };
-      Map<String, Object?> told(String text, {bool meta = false}) => {
-        'type': 'user',
-        'uuid': 'u-${text.hashCode}',
-        'isMeta': ?(meta ? true : null),
-        'message': {
-          'role': 'user',
-          'content': [
-            {'type': 'text', 'text': text},
-          ],
-        },
-      };
-
-      test('its answers to /goal and checks do not show, and have it '
-          'asked afresh', () {
-        final transcript = Transcript();
-        var seq = 0;
-        var said = 0;
-        final translator = ClaudeTranslator(
-          emit: transcript.apply,
-          nextSeq: () => ++seq,
-          goalSaid: () => said++,
-        );
-        translator.translate(saidText('Goal set: all tests pass'));
-        translator.translate(
-          told('Stop hook feedback:\n[all tests pass]: 2 still fail'),
-        );
-        translator.translate(
-          saidText(
-            'Goal active: all tests pass (3 turns)\n'
-            'Last check: 1 still fails',
-          ),
-        );
-        translator.translate(
-          saidText('No goal set. Usage: `/goal <condition>`'),
-        );
-        translator.translate(saidText('Goal cleared: ship it'));
-        expect(said, 5);
-        // Not made out from the words: the kernel reads how it stands.
-        expect(transcript.goal, isNull);
-        expect(shown(transcript), isEmpty);
-      });
-
-      test('the check a client asks for does not show; one typed does', () {
-        final transcript = Transcript();
-        var seq = 0;
-        final translator = ClaudeTranslator(
-          emit: transcript.apply,
-          nextSeq: () => ++seq,
-        );
-        // As Claude Code replays them.
-        String goal(String args) =>
-            '<command-name>/goal</command-name>\n'
-            '            <command-message>goal</command-message>\n'
-            '            <command-args>$args</command-args>';
-        translator.translate(told(goal('')));
-        translator.translate(told(goal('tests pass')));
-        expect(shown(transcript), ['user: /goal tests pass']);
-      });
-
-      test('a kept session has it as it stood, not once over', () {
-        Map<String, Object?> status(Map<String, Object?> record) => {
-          'type': 'attachment',
-          'timestamp': '2026-10-05T10:00:00Z',
-          'attachment': {'type': 'goal_status', ...record},
-        };
-        Transcript replay(List<Map<String, Object?>> records) {
-          final transcript = Transcript();
-          var seq = 0;
-          final translator = ClaudeTranslator(
-            emit: transcript.apply,
-            nextSeq: () => ++seq,
-          )..replaying = true;
-          records.forEach(translator.translate);
-          translator.endReplay();
-          return transcript;
-        }
-
-        final set = status({
-          'condition': 'lint clean',
-          'met': false,
-          'sentinel': true,
-        });
-        final checked = status({
-          'condition': 'lint clean',
-          'met': false,
-          'reason': '3 left',
-        });
-        final working = replay([set, checked]).goal;
-        expect(working?.condition, 'lint clean');
-        expect(working?.state, GoalState.active);
-        expect(working?.lastReason, '3 left');
-        expect(working?.checks, 1);
-        expect(working?.setAt, DateTime.utc(2026, 10, 5, 10).toLocal());
-
-        final met = status({
-          'condition': 'lint clean',
-          'met': true,
-          'reason': 'clean',
-          'iterations': 2,
-          'durationMs': 5000,
-          'tokens': 900,
-        });
-        expect(replay([set, checked, met]).goal, isNull);
-        expect(
-          replay([
-            status({
-              'condition': 'lint clean',
-              'met': false,
-              'sentinel': true,
-              'iterations': '2',
-              'durationMs': '5000',
-              'tokens': '900',
-            }),
-            status({
-              'condition': 'lint clean',
-              'met': true,
-              'iterations': '2',
-              'durationMs': '5000',
-              'tokens': '900',
-            }),
-          ]).goal,
-          isNull,
-        );
-        expect(
-          TurnStats.decode([
-            '{"turn":"u1","workedMs":1000,"inputTokens":"1200"}',
-          ])['u1']!.usage!.inputTokens,
-          1200,
-        );
-      });
-
-      test(
-        'a kept session\'s goal records are read back, last or not',
-        () async {
-          final dir = Directory.systemTemp.createTempSync('goal');
-          addTearDown(() => dir.deleteSync(recursive: true));
-          final file = File('${dir.path}/s.jsonl')
-            ..writeAsStringSync(
-              [
-                {
-                  'type': 'user',
-                  'uuid': 'u1',
-                  'parentUuid': null,
-                  'message': {'role': 'user', 'content': 'hi'},
-                },
-                {
-                  'type': 'attachment',
-                  'uuid': 'g1',
-                  'parentUuid': 'u1',
-                  'attachment': {
-                    'type': 'goal_status',
-                    'condition': 'tests pass',
-                    'met': false,
-                    'sentinel': true,
-                  },
-                },
-                {
-                  'type': 'attachment',
-                  'uuid': 'x1',
-                  'parentUuid': 'g1',
-                  'attachment': {'type': 'hook_success'},
-                },
-              ].map(jsonEncode).join('\n'),
-            );
-          final kept = await ClaudeStorage.read(
-            SessionRecord(
-              id: 's',
-              title: '',
-              updatedAt: DateTime(2026),
-              cwd: '/p',
-              path: file.path,
-            ),
-          );
-          expect(kept.map((entry) => entry['uuid']), ['u1', 'g1']);
-        },
-      );
-
-      test('set while the agent works, it is taken up at once: queued, '
-          'then the turn stopped', () async {
-        final cli = FakeCli();
-        final descriptor = KernelDescriptor(
-          id: 'claude-code',
-          label: 'Claude Code',
-          icon: Icons.auto_awesome_rounded,
-          description: '',
-          create: (context) => ClaudeCodeKernel(
-            MockKernels.claudeCode,
-            context,
-            start: (_) async => cli,
-          ),
-        );
-        final session = ChatSession(
-          kernel: descriptor,
-          kernels: [descriptor],
-          historyCount: 0,
-        );
-        addTearDown(session.dispose);
-        session.send(const ComposerMessage(text: 'work'));
-        await pumpEventQueue();
-        expect(session.isStreaming, isTrue);
-
-        session.setGoal('  tests pass ');
-        await pumpEventQueue();
-        final goal = cli.users.last;
-        expect((goal['message'] as Map)['content'], [
-          {'type': 'text', 'text': '/goal tests pass'},
-        ]);
-        // Stopped after it is sent: it is what the CLI takes up next.
-        final interrupt = cli.written.indexWhere(
-          (message) =>
-              message['type'] == 'control_request' &&
-              (message['request'] as Map)['subtype'] == 'interrupt',
-        );
-        expect(interrupt, greaterThan(cli.written.indexOf(goal)));
-        expect(session.isStreaming, isFalse);
-      });
-
-      test('a proposed goal is a step with its condition', () {
-        final transcript = Transcript();
-        var seq = 0;
-        final translator = ClaudeTranslator(
-          emit: transcript.apply,
-          nextSeq: () => ++seq,
-        );
-        translator.translate({
-          'type': 'assistant',
-          'uuid': 'p',
-          'message': {
-            'id': 'mp',
-            'role': 'assistant',
-            'content': [
-              {
-                'type': 'tool_use',
-                'id': 't1',
-                'name': 'ProposeGoal',
-                'input': {'condition': 'all tests pass\nand lint is clean'},
-              },
-            ],
-          },
-        });
-        final step = transcript.itemAt(0) as ToolCallItem;
-        expect(step.kind, ToolKind.goal);
-        expect(step.target, 'all tests pass and lint is clean');
-        expect(step.output, 'all tests pass\nand lint is clean');
-      });
-
-      test('the hooks say whether one is in effect, and which', () {
-        expect(
-          hookedGoal({
-            'hooks': [
-              {
-                'event': 'Stop',
-                'source': 'userSettings',
-                'type': 'command',
-                'commandText': 'say done',
-              },
-              {
-                'event': 'Stop',
-                'source': 'sessionHook',
-                'type': 'prompt',
-                'commandText': 'tests pass',
-              },
-            ],
-          }),
-          'tests pass',
-        );
-        expect(hookedGoal({'hooks': []}), isNull);
-
-        final kept = KernelGoal('tests pass', checks: 2);
-        expect(goalInEffect(kept, 'tests pass'), same(kept));
-        // Gone from the hooks: over, though not kept as so (yet).
-        expect(goalInEffect(kept, null), isNull);
-        // Set anew, not kept yet.
-        expect(goalInEffect(kept, 'ship it'), KernelGoal('ship it'));
-        final met = KernelGoal('tests pass', state: GoalState.met);
-        expect(goalInEffect(met, null), same(met));
-      });
-
-      group('as Claude Code has it', () {
-        Map<String, Object?> status(Map<String, Object?> record) => {
-          'type': 'attachment',
-          'timestamp': '2026-10-05T10:00:00Z',
-          'attachment': {'type': 'goal_status', ...record},
-        };
-        Map<String, Object?> set(String condition) =>
-            status({'condition': condition, 'met': false, 'sentinel': true});
-        // A goal in effect, as `get_hooks_listing` lists it.
-        Map<String, Object?> hook(String condition) => {
-          'event': 'Stop',
-          'matcher': '',
-          'source': 'sessionHook',
-          'type': 'prompt',
-          'commandText': condition,
-        };
-        const idle = {
-          'type': 'system',
-          'subtype': 'session_state_changed',
-          'state': 'idle',
-        };
-        const done = {
-          'type': 'result',
-          'subtype': 'success',
-          'is_error': false,
-        };
-
-        ({ClaudeCodeKernel kernel, Transcript transcript, FakeCli cli}) start(
-          Map<String, Object?> hooks,
-          List<Map<String, Object?>> Function() records, {
-          SessionRecord? resume,
-        }) {
-          final cli = FakeCli(answers: {'get_hooks_listing': hooks});
-          final kernel = ClaudeCodeKernel(
-            MockKernels.claudeCode,
-            KernelContext(cwd: '/p', resume: resume),
-            start: (_) async => cli,
-            readGoal: (cwd, id) async => records(),
-          );
-          addTearDown(kernel.dispose);
-          final transcript = Transcript();
-          kernel.events.listen(transcript.apply);
-          return (kernel: kernel, transcript: transcript, cli: cli);
-        }
-
-        test('set, checked and met, read afresh each time', () async {
-          final hooks = <String, Object?>{'hooks': []};
-          var records = <Map<String, Object?>>[];
-          final (:kernel, :transcript, :cli) = start(hooks, () => records);
-          kernel.send(const KernelTurn(id: 'u1', text: '/goal tests pass'));
-          await pumpEventQueue();
-          cli.push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
-
-          hooks['hooks'] = [hook('tests pass')];
-          records = [set('tests pass')];
-          cli.push(saidText('Goal set: tests pass'));
-          await pumpEventQueue();
-          expect(transcript.goal?.condition, 'tests pass');
-          expect(transcript.goal?.state, GoalState.active);
-          expect(
-            transcript.goal?.setAt,
-            DateTime.utc(2026, 10, 5, 10).toLocal(),
-          );
-
-          records = [
-            ...records,
-            status({
-              'condition': 'tests pass',
-              'met': false,
-              'reason': '2 fail',
-            }),
-          ];
-          cli.push(
-            told('Stop hook feedback:\n[tests pass]: 2 fail', meta: true),
-          );
-          await pumpEventQueue();
-          expect(transcript.goal?.checks, 1);
-          expect(transcript.goal?.lastReason, '2 fail');
-
-          // Met: Claude Code says nothing of it but in what it keeps.
-          hooks['hooks'] = [];
-          records = [
-            ...records,
-            status({
-              'condition': 'tests pass',
-              'met': true,
-              'iterations': 2,
-              'durationMs': 5000,
-            }),
-          ];
-          cli
-            ..push(done)
-            ..push(idle);
-          await pumpEventQueue();
-          expect(transcript.goal?.state, GoalState.met);
-          expect(transcript.goal?.duration, const Duration(seconds: 5));
-          // Read the same again: nothing new is reported.
-          final reported = transcript.goal;
-          cli.push(idle);
-          await pumpEventQueue();
-          expect(transcript.goal, same(reported));
-          // Nothing is asked of it in the conversation.
-          expect(
-            cli.users.where(
-              (message) => ((message['message'] as Map)['content'] as List).any(
-                (block) => (block as Map)['text'] == '/goal',
-              ),
-            ),
-            isEmpty,
-          );
-        });
-
-        test('one given up on is not met', () async {
-          final hooks = <String, Object?>{'hooks': []};
-          var records = <Map<String, Object?>>[];
-          final (:kernel, :transcript, :cli) = start(hooks, () => records);
-          kernel.send(const KernelTurn(id: 'u1', text: 'go'));
-          await pumpEventQueue();
-          cli.push({'type': 'system', 'subtype': 'init', 'session_id': 's1'});
-          records = [
-            set('ship it'),
-            status({
-              'condition': 'ship it',
-              'met': false,
-              'failed': true,
-              'reason': 'no access',
-            }),
-          ];
-          cli
-            ..push(done)
-            ..push(idle);
-          await pumpEventQueue();
-          expect(transcript.goal?.state, GoalState.failed);
-          expect(transcript.goal?.lastReason, 'no access');
-        });
-
-        test('resumed: one over before is not shown, nor one Claude Code did '
-            'not take up again', () async {
-          final hooks = <String, Object?>{'hooks': []};
-          final records = [
-            set('docs built'),
-            status({'condition': 'docs built', 'met': true, 'iterations': 1}),
-            set('lint clean'),
-          ];
-          final (:kernel, :transcript, :cli) = start(
-            hooks,
-            () => records,
-            resume: SessionRecord(
-              id: 's0',
-              title: '',
-              updatedAt: DateTime(2026),
-              cwd: '/p',
-            ),
-          );
-          kernel.send(const KernelTurn(id: 'u1', text: 'go'));
-          await pumpEventQueue();
-          expect(cli.requests('get_hooks_listing'), isNotEmpty);
-          expect(transcript.goal, isNull);
-
-          // In effect after all: as kept.
-          hooks['hooks'] = [hook('lint clean')];
-          cli.push(idle);
-          await pumpEventQueue();
-          expect(transcript.goal?.condition, 'lint clean');
-          expect(
-            transcript.goal?.setAt,
-            DateTime.utc(2026, 10, 5, 10).toLocal(),
-          );
-        });
-      });
-    });
-
-    test(
-      'suggests the next prompt once a turn ends, until one is sent',
-      () async {
-        final cli = FakeCli();
-        final (:kernel, :transcript, events: _) = claude(cli);
-        kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-        await pumpEventQueue();
-        expect(cli.requests('initialize').single['promptSuggestions'], isTrue);
-        cli
-          ..push({'type': 'result', 'subtype': 'success', 'is_error': false})
-          ..push({'type': 'prompt_suggestion', 'suggestion': 'Run the tests'});
-        await pumpEventQueue();
-        expect(transcript.activeTurn, isNull);
-        expect(kernel.promptSuggestion, 'Run the tests');
-
-        kernel.send(const KernelTurn(id: 'u2', text: 'something else'));
-        expect(kernel.promptSuggestion, isNull);
-        // Late, for a turn now past: not offered.
-        cli.push({'type': 'prompt_suggestion', 'suggestion': 'Stale'});
-        await pumpEventQueue();
-        expect(kernel.promptSuggestion, isNull);
-        kernel.dispose();
-      },
-    );
-
-    test('lists MCP servers; toggling and signing in go to the CLI', () async {
-      final cli = FakeCli(
-        answers: {
-          'mcp_status': {
-            'mcpServers': [
-              {
-                'name': 'github',
-                'status': 'connected',
-                'scope': 'user',
-                'serverInfo': {'name': 'github', 'version': '1.0.0'},
-                'tools': [
-                  {'name': 'search_issues'},
-                ],
-              },
-              {'name': 'linear', 'status': 'needs-auth', 'scope': 'user'},
-              {
-                'name': 'db',
-                'status': 'failed',
-                'scope': 'project',
-                'error': 'ECONNREFUSED',
-              },
-            ],
-          },
-          'mcp_authenticate': {
-            'authUrl': 'https://example.com/authorize',
-            'requiresUserAction': true,
-          },
-        },
-      );
-      final (:kernel, transcript: _, events: _) = claude(cli);
-      expect(kernel.mcpServers, isNull);
-      kernel.refreshMcpServers();
-      await pumpEventQueue();
-      final servers = kernel.mcpServers!;
-      expect(servers.map((s) => s.status), [
-        McpServerStatus.connected,
-        McpServerStatus.needsAuth,
-        McpServerStatus.failed,
-      ]);
-      expect(servers.first.tools, ['search_issues']);
-      expect(servers.first.version, '1.0.0');
-      expect(servers.last.error, 'ECONNREFUSED');
-      expect(servers.where((s) => s.needsAttention), hasLength(2));
-
-      kernel.setMcpServerEnabled('github', false);
-      // Shown as asked until the CLI says otherwise.
-      expect(kernel.mcpServers!.first.status, McpServerStatus.disabled);
-      kernel.reconnectMcpServer('db');
-      expect(kernel.mcpServers!.last.status, McpServerStatus.pending);
-      await pumpEventQueue();
-      expect(cli.requests('mcp_toggle').single, {
-        'subtype': 'mcp_toggle',
-        'serverName': 'github',
-        'enabled': false,
-      });
-      expect(cli.requests('mcp_reconnect').single['serverName'], 'db');
-      expect(cli.requests('mcp_status'), hasLength(3));
-
-      final page = await kernel.authenticateMcpServer('linear');
-      expect(page, Uri.parse('https://example.com/authorize'));
-      expect(cli.requests('mcp_authenticate').single['serverName'], 'linear');
-      kernel.dispose();
-    });
-
-    test('a foreground subagent can move to the background', () async {
-      final cli = FakeCli();
-      final descriptor = KernelDescriptor(
-        id: 'claude-code',
-        label: 'Claude Code',
-        icon: Icons.auto_awesome_rounded,
-        description: '',
-        create: (context) => ClaudeCodeKernel(
-          MockKernels.claudeCode,
-          context,
-          start: (_) async => cli,
-        ),
-      );
-      final session = ChatSession(
-        kernel: descriptor,
-        kernels: [descriptor],
-        historyCount: 0,
-      );
-      session.send(const ComposerMessage(text: 'read a.txt with a subagent'));
-      await pumpEventQueue();
-      // The recorded run, up to its subagent starting in the foreground.
-      for (final message in recorded('tasks')) {
-        if (message['type'] == 'control_response' ||
-            message['type'] == 'result') {
-          continue;
-        }
-        cli.push(message);
-        if (message['subtype'] == 'task_started' &&
-            message['task_type'] == 'local_agent') {
-          break;
-        }
-      }
-      await pumpEventQueue();
-      final index = [
-        for (var i = 0; i < session.itemCount; i++) session.itemAt(i),
-      ].indexWhere((item) => item is AgentItem);
-      expect(index, greaterThan(0));
-      final terminal = [
-        for (var i = 0; i < session.itemCount; i++) session.itemAt(i),
-      ].indexWhere((item) => item is TerminalItem);
-      expect(
-        session.moveToBackgroundAt(terminal),
-        isNull,
-        reason: 'the command already runs in the background',
-      );
-
-      session.moveToBackgroundAt(index)!();
-      await pumpEventQueue();
-      expect(
-        cli.requests('background_tasks').single['tool_use_id'],
-        'toolu_01HKNayPh69XKXcDa5WTvi9a',
-      );
-      cli.push({
-        'type': 'system',
-        'subtype': 'task_updated',
-        'task_id': 'afe17d4da100207b1',
-        'patch': {'is_backgrounded': true},
-      });
-      await pumpEventQueue();
-      expect(session.moveToBackgroundAt(index), isNull);
-      session.dispose();
-    });
-
-    test('a CLI that cannot start fails the turn with its reason', () async {
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async =>
-            throw const ClaudeUnavailable('Claude Code is not installed'),
-      );
-      final transcript = Transcript();
-      kernel.events.listen(transcript.apply);
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      expect(kernel.health.message, 'Claude Code is not installed');
-      expect(transcript.activeTurn, isNull);
-      expect(
-        shown(transcript).last,
-        'notice error: Claude Code is not installed',
-      );
-      kernel.dispose();
-    });
-
-    test('a project folder that is gone is told as such', () async {
-      final kernel = ClaudeCodeKernel(
-        MockKernels.claudeCode,
-        const KernelContext(cwd: '/p'),
-        start: (_) async => throw const ClaudeFolderGone('/p'),
-      );
-      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
-      await pumpEventQueue();
-      expect(kernel.health.status, KernelHealthStatus.failed);
-      expect(kernel.health.missingFolder, '/p');
-      kernel.dispose();
-    });
-  });
 
   test('full access is not the CLI\'s, which root cannot have', () async {
     final cli = FakeCli();
@@ -5818,6 +4753,22 @@ void main() {
     expect(at, isNot(-1));
     expect(arguments[at + 1], contains(ClaudeLaunch.citingCode));
     expect(ClaudeLaunch.citingCode, contains('```startLine:endLine:filepath'));
+  });
+
+  test('some of Claude Code\'s tools: the app\'s MCP servers alone, or the '
+      'user\'s too', () {
+    List<String> arguments({bool userServers = false}) => ClaudeLaunch(
+      cwd: '/p',
+      tools: const ['Bash', 'Read'],
+      userServers: userServers,
+    ).arguments;
+    final only = arguments();
+    expect(only[only.indexOf('--tools') + 1], 'Bash,Read');
+    expect(only, contains('--strict-mcp-config'));
+    final theirs = arguments(userServers: true);
+    expect(theirs[theirs.indexOf('--tools') + 1], 'Bash,Read');
+    expect(theirs, isNot(contains('--strict-mcp-config')));
+    });
   });
 
   group('commit attribution', () {
@@ -6351,6 +5302,94 @@ exec /usr/bin/env "\$@"
       );
     });
 
+    test('a session is listed past the notes sent ahead of what was typed, '
+        'and by a command typed with what it is to do', () async {
+      final root = await Directory.systemTemp.createTemp('baocode-storage-');
+      addTearDown(() => root.delete(recursive: true));
+      final config = '${root.path}/config';
+      final cwd = '${root.path}/project';
+      Directory(cwd).createSync(recursive: true);
+      void session(String id, Object content) =>
+          File('$config/projects/-p/$id.jsonl')
+            ..createSync(recursive: true)
+            ..writeAsStringSync(
+              '${jsonEncode({
+                'type': 'user',
+                'uuid': 'aaaaaaaa-1111-4111-8111-111111111111',
+                'cwd': cwd,
+                'message': {'role': 'user', 'content': content},
+              })}\n',
+            );
+      // As the app sends them: the notes first, what was typed last.
+      session('editor', [
+        {
+          'type': 'text',
+          'text':
+              '<system-reminder>The user has lib/a.dart open in the '
+              'editor. This may or may not be related to the current '
+              'task.</system-reminder>',
+        },
+        {'type': 'text', 'text': 'fix the crash'},
+      ]);
+      session('phone', [
+        {'type': 'text', 'text': '[Image #1]'},
+        {
+          'type': 'image',
+          'source': {'type': 'base64', 'media_type': 'image/png', 'data': ''},
+        },
+        {
+          'type': 'text',
+          'text':
+              '<system-reminder>The user is now writing to you from the '
+              'BaoCode app on their phone.</system-reminder>',
+        },
+        {'type': 'text', 'text': 'why is this red\n[Image #1]'},
+      ]);
+      session('goal', [
+        {
+          'type': 'text',
+          'text':
+              '<command-name>/goal</command-name>\n'
+              '            <command-message>goal</command-message>\n'
+              '            <command-args>fix #149 and #148</command-args>',
+        },
+      ]);
+      session(
+        'design',
+        '<command-message>design</command-message>\n'
+            '<command-name>/design</command-name>\n'
+            '<command-args>a settings page</command-args>',
+      );
+      // Not what the user asked: no conversation to list.
+      session(
+        'model',
+        '<command-name>/model</command-name>\n'
+            '<command-args></command-args>',
+      );
+      session('notes', [
+        {
+          'type': 'text',
+          'text':
+              '<system-reminder>The user no longer has a file open in the '
+              'editor.</system-reminder>',
+        },
+      ]);
+
+      final sessions = (await ClaudeStorage(
+        configDir: config,
+        cacheFile: '${root.path}/cache.json',
+      ).projects()).single.sessions;
+      expect(
+        {for (final s in sessions) s.id: s.title},
+        {
+          'editor': 'fix the crash',
+          'phone': 'why is this red',
+          'goal': '/goal fix #149 and #148',
+          'design': '/design a settings page',
+        },
+      );
+    });
+
     test('a session file is read again only once it changes, and the cache '
         'keeps only the files still there', () async {
       final root = await Directory.systemTemp.createTemp('baocode-storage-');
@@ -6395,6 +5434,82 @@ exec /usr/bin/env "\$@"
       // One not to trust is started over.
       File(cacheFile).writeAsStringSync('{not json');
       expect(await titles(), {'one': 'grown longer'});
+    });
+
+    test('a session file appended to is read on from where it was read, '
+        'its titles and last message taken from what came', () async {
+      final root = await Directory.systemTemp.createTemp('baocode-storage-');
+      addTearDown(() => root.delete(recursive: true));
+      final config = '${root.path}/config';
+      final cwd = '${root.path}/project';
+      final cacheFile = '${root.path}/cache/claude-sessions.json';
+      Directory(cwd).createSync(recursive: true);
+      final file = File('$config/projects/-p/one.jsonl')
+        ..createSync(recursive: true);
+      void append(List<Map<String, Object?>> lines) => file.writeAsStringSync(
+        lines.map((line) => '${jsonEncode(line)}\n').join(),
+        mode: FileMode.append,
+      );
+      final storage = ClaudeStorage(configDir: config, cacheFile: cacheFile);
+      Future<SessionRecord> session() async =>
+          (await storage.projects()).single.sessions.single;
+
+      append([
+        {
+          'type': 'user',
+          'message': {'role': 'user', 'content': 'first'},
+          'cwd': cwd,
+          'timestamp': '2026-09-27T08:00:00.000Z',
+        },
+      ]);
+      expect((await session()).title, 'first');
+
+      // Changed where it was read already, not at its end: not read again.
+      final read = file.readAsStringSync();
+      file.writeAsStringSync(read.replaceFirst('first', 'xxxxx'));
+      append([
+        {
+          'type': 'assistant',
+          'cwd': cwd,
+          'timestamp': '2026-09-27T09:00:00.000Z',
+          'message': {'role': 'assistant', 'content': []},
+        },
+      ]);
+      var kept = await session();
+      expect(kept.title, 'first');
+      expect(kept.updatedAt, DateTime.utc(2026, 9, 27, 9).toLocal());
+
+      append([
+        {'type': 'ai-title', 'aiTitle': 'Generated', 'sessionId': 'one'},
+      ]);
+      expect((await session()).title, 'Generated');
+      append([
+        {'type': 'custom-title', 'customTitle': 'Named', 'sessionId': 'one'},
+      ]);
+      expect((await session()).title, 'Named');
+
+      append([
+        {'type': 'ai-title', 'aiTitle': 'Generated again', 'sessionId': 'one'},
+      ]);
+      expect((await session()).title, 'Named');
+      append([
+        {'type': 'custom-title', 'customTitle': ' ', 'sessionId': 'one'},
+      ]);
+      expect((await session()).title, 'Generated again');
+
+      // Written over from the start, not appended to: read whole again.
+      file.writeAsStringSync(
+        '${jsonEncode({
+          'type': 'user',
+          'cwd': cwd,
+          'timestamp': '2026-09-27T10:00:00.000Z',
+          'message': {'role': 'user', 'content': 'rewritten from the start, '
+              'longer than it was before'},
+        })}\n',
+      );
+      kept = await session();
+      expect(kept.title, 'rewritten from the start, longer than it was before');
+      expect(kept.updatedAt, DateTime.utc(2026, 9, 27, 10).toLocal());
     });
 
     test(
@@ -6632,806 +5747,8 @@ exec /usr/bin/env "\$@"
     );
   });
 
-  group('Codex adapter', () {
-    late _FakeServer server;
-    late CodexKernel kernel;
-    late List<KernelEvent> events;
-
-    setUp(() {
-      server = _FakeServer();
-      kernel = CodexKernel(MockKernels.codex, server);
-      events = [];
-      kernel.events.listen(events.add);
-    });
-    tearDown(() => kernel.dispose());
-
-    void notify(String method, Map<String, Object?> params) =>
-        server.push({'method': method, 'params': params});
-
-    test('translates items, and asks leave to run a command', () async {
-      kernel.mode.select('ask');
-      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
-      await pumpEventQueue();
-      expect(server.written.map((m) => m['method']), [
-        'model/list',
-        'thread/start',
-        'turn/start',
-      ]);
-      // Only what the app-server's protocol has: a parameter it does not
-      // know may make it refuse the whole request.
-      final threadStart =
-          server.written.firstWhere(
-                (m) => m['method'] == 'thread/start',
-              )['params']
-              as Map;
-      expect(threadStart.containsKey('runtimeWorkspaceRoots'), isFalse);
-      // The models the server has are what the picker offers.
-      expect(kernel.model.options.map((o) => o.id), ['gpt-5.5-codex']);
-      final turnStart = server.written.last['params'] as Map;
-      expect(turnStart.containsKey('collaborationMode'), isFalse);
-      expect(turnStart['sandboxPolicy'], {
-        'type': 'readOnly',
-        'networkAccess': false,
-      });
-      expect(turnStart['model'], 'gpt-5.5-codex');
-
-      notify('item/completed', {
-        'item': {
-          'type': 'commandExecution',
-          'id': 'c1',
-          'command': 'rg Foo',
-          'status': 'completed',
-          'aggregatedOutput': 'a.dart:1:Foo',
-          'commandActions': [
-            {'type': 'search', 'query': 'Foo'},
-          ],
-        },
-      });
-      notify('item/completed', {
-        'item': {
-          'type': 'fileChange',
-          'id': 'f',
-          'changes': [
-            {'path': 'lib/a.dart', 'diff': '@@ -3 +3 @@\n a\n-b\n+c'},
-          ],
-        },
-      });
-      server.push({
-        'id': 7,
-        'method': 'item/commandExecution/requestApproval',
-        'params': {'command': 'flutter test'},
-      });
-      final approval =
-          events.whereType<InteractionRequested>().single.request
-              as ApprovalRequest;
-      expect((approval.preview as CommandPreview).command, 'flutter test');
-      kernel
-        ..answer(
-          'approval:7',
-          const ApprovalAnswer(ApprovalDecision.allowAlways),
-        )
-        ..answer('approval:7', const ApprovalAnswer(ApprovalDecision.deny));
-      final replies = server.written.where((m) => m['id'] == 7).toList();
-      expect(replies.single['result'], {'decision': 'acceptForSession'});
-
-      notify('turn/completed', {
-        'turn': {'id': 'st1', 'status': 'completed'},
-      });
-      expect(events.last, isA<TurnEnded>());
-      final edited = events.whereType<FileEdited>().single;
-      expect(
-        (edited.change.path, edited.change.added, edited.change.removed),
-        ('lib/a.dart', 1, 1),
-      );
-      // What it was, by the patch taken back out.
-      expect(
-        (edited.original! as OriginalByPatch).diff,
-        '@@ -3 +3 @@\n a\n-b\n+c',
-      );
-    });
-
-    test('a file added or deleted tells what it was', () async {
-      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
-      await pumpEventQueue();
-      notify('item/completed', {
-        'item': {
-          'type': 'fileChange',
-          'id': 'f',
-          'changes': [
-            {
-              'path': 'new.txt',
-              'kind': {'type': 'add'},
-              'diff': 'new\n',
-            },
-            {
-              'path': 'old.txt',
-              'kind': {'type': 'delete'},
-              'diff': 'old\n',
-            },
-          ],
-        },
-      });
-      final originals = [
-        for (final event in events.whereType<FileEdited>())
-          (event.original! as OriginalText).text,
-      ];
-      expect(originals, [null, 'old\n']);
-    });
-
-    test('a command running when the turn stops shows as failed', () async {
-      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
-      await pumpEventQueue();
-      notify('item/started', {
-        'item': {
-          'type': 'commandExecution',
-          'id': 'c1',
-          'command': 'sleep 9',
-          'status': 'inProgress',
-        },
-      });
-      final running = events.whereType<ItemUpserted>().last.item;
-      expect((running as TerminalItem).status, CommandStatus.running);
-
-      kernel.cancel();
-      final stopped = events
-          .whereType<ItemUpserted>()
-          .lastWhere((e) => e.id == 'c1')
-          .item;
-      expect((stopped as TerminalItem).status, CommandStatus.failed);
-      expect(stopped.command, 'sleep 9');
-      expect(events.last, isA<TurnEnded>());
-    });
-
-    test('effort is read from the model and sent with the turn', () async {
-      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
-      await pumpEventQueue();
-
-      final model = kernel.model.selected!;
-      expect(kernel.effort.optionsFor(model).map((option) => option.id), [
-        'low',
-        'medium',
-        'high',
-      ]);
-      expect(kernel.effort.selected, 'medium');
-      expect(kernel.fast.optionsFor(model).map((option) => option.id), [
-        'priority',
-      ]);
-
-      kernel.effort.select(model, 'high');
-      kernel.fast.select(model, 'priority');
-      notify('turn/completed', {
-        'turn': {'id': 'st1', 'status': 'completed'},
-      });
-      await pumpEventQueue();
-      kernel.send(const KernelTurn(id: 't2', text: 'again'));
-      await pumpEventQueue();
-
-      final turnStart = server.written.lastWhere(
-        (message) =>
-            message['method'] == 'turn/start' &&
-            (message['params'] as Map)['clientUserMessageId'] == 't2',
-      );
-      final params = turnStart['params'] as Map;
-      expect(params['effort'], 'high');
-      expect(params['serviceTierForTurn'], 'priority');
-      // The effort goes with the turn, and not as a parameter the
-      // app-server does not have.
-      expect(params.containsKey('collaborationMode'), isFalse);
-    });
-
-    test('Plan is a note with the turn, and its plan starts', () async {
-      kernel.mode.select('plan');
-      kernel.send(const KernelTurn(id: 't1', text: 'plan it'));
-      await pumpEventQueue();
-
-      final turnStart = server.written.lastWhere(
-        (message) => message['method'] == 'turn/start',
-      );
-      final params = turnStart['params'] as Map;
-      // The app-server has no mode of its own to plan in: the agent is
-      // told, with the message, and the sandbox keeps it from changing
-      // anything while it plans.
-      final input = (params['input'] as List).cast<Map>();
-      expect(
-        input.map((part) => part['text']),
-        contains(contains('do not change any file')),
-      );
-      expect(params['sandboxPolicy'], {
-        'type': 'readOnly',
-        'networkAccess': false,
-      });
-
-      notify('item/completed', {
-        'item': {
-          'type': 'agentMessage',
-          'id': 'plan1',
-          'text':
-              '<proposed_plan>\n# Ship it\n\nDo the work.\n'
-              '</proposed_plan>',
-        },
-      });
-      final plan =
-          events
-                  .whereType<ItemCompleted>()
-                  .lastWhere((event) => event.id == 'plan1')
-                  .item
-              as PlanItem;
-      expect((plan.title, plan.status), ('Ship it', PlanStatus.awaiting));
-
-      kernel.startBuilding();
-      expect(kernel.mode.selected, 'agent');
-      final approved =
-          events
-                  .whereType<ItemCompleted>()
-                  .lastWhere((event) => event.id == 'plan1')
-                  .item
-              as PlanItem;
-      expect(approved.status, PlanStatus.approved);
-
-      // The plan is carried out by the next message: the agent is told to
-      // build it, not to plan it again.
-      notify('turn/completed', {
-        'turn': {'id': 'st1', 'status': 'completed'},
-      });
-      await pumpEventQueue();
-      kernel.send(const KernelTurn(id: 't2', text: 'go'));
-      await pumpEventQueue();
-      final built = server.written.lastWhere(
-        (message) => message['method'] == 'turn/start',
-      );
-      final carried = (built['params'] as Map)['input'] as List;
-      expect(
-        carried.map((part) => (part as Map)['text']),
-        contains(contains('Carry it out now')),
-      );
-    });
-
-    test('a goal the server reports is kept with its progress', () async {
-      kernel.send(const KernelTurn(id: 't1', text: 'go on'));
-      await pumpEventQueue();
-      notify('thread/goal/updated', {
-        'goal': {
-          'threadId': 'th',
-          'objective': 'Make the build pass',
-          'status': 'active',
-          'createdAt': 1800000000,
-          'updatedAt': 1800000010,
-          'timeUsedSeconds': 10,
-          'tokensUsed': 900,
-        },
-      });
-      final goal = events.whereType<GoalReported>().last.goal!;
-      expect(goal.condition, 'Make the build pass');
-      expect(
-        (goal.state, goal.duration, goal.tokens),
-        (GoalState.active, const Duration(seconds: 10), 900),
-      );
-
-      notify('thread/goal/cleared', {'threadId': 'th'});
-      expect(events.whereType<GoalReported>().last.goal, isNull);
-    });
-
-    test(
-      'the review command is the server\'s review, not a model prompt',
-      () async {
-        kernel.send(const KernelTurn(id: 'r1', text: '/review'));
-        await pumpEventQueue();
-
-        final review = server.written.lastWhere(
-          (message) => message['method'] == 'review/start',
-        );
-        expect(review['params'], {
-          'threadId': 'th',
-          'delivery': 'inline',
-          'target': {'type': 'uncommittedChanges'},
-        });
-        expect(
-          server.written.where((message) => message['method'] == 'turn/start'),
-          isEmpty,
-        );
-      },
-    );
-
-    test('the compact command asks the server to compact the thread', () async {
-      kernel.send(const KernelTurn(id: 'c1', text: '/compact'));
-      await pumpEventQueue();
-
-      final compact = server.written.lastWhere(
-        (message) => message['method'] == 'thread/compact/start',
-      );
-      expect(compact['params'], {'threadId': 'th'});
-      expect(
-        server.written.where((message) => message['method'] == 'turn/start'),
-        isEmpty,
-      );
-    });
-
-    test('a predicted next prompt comes from the server', () async {
-      kernel.send(const KernelTurn(id: 'p1', text: 'hello'));
-      await pumpEventQueue();
-      notify('thread/prediction/updated', {
-        'threadId': 'th',
-        'sourceTurnId': 'st1',
-        'result': {'type': 'completed', 'text': 'Show me the diff'},
-      });
-      expect(kernel.promptSuggestion, 'Show me the diff');
-
-      kernel.send(const KernelTurn(id: 'p2', text: 'next'));
-      expect(kernel.promptSuggestion, isNull);
-    });
-
-    test('messages sent while busy wait their turn', () async {
-      kernel.send(const KernelTurn(id: 't1', text: 'first'));
-      await pumpEventQueue();
-      kernel.send(const KernelTurn(id: 't2', text: 'second'));
-
-      var user =
-          events
-                  .whereType<ItemUpserted>()
-                  .lastWhere((event) => event.id == 't2')
-                  .item
-              as UserMessageItem;
-      expect(user.queued, isTrue);
-      expect(
-        server.written.where((message) => message['method'] == 'turn/start'),
-        hasLength(1),
-      );
-
-      notify('turn/completed', {
-        'turn': {'id': 'st1', 'status': 'completed'},
-      });
-      await pumpEventQueue();
-
-      user =
-          events
-                  .whereType<ItemUpserted>()
-                  .lastWhere((event) => event.id == 't2')
-                  .item
-              as UserMessageItem;
-      expect(user.queued, isFalse);
-      expect(
-        server.written.where((message) => message['method'] == 'turn/start'),
-        hasLength(2),
-      );
-
-      kernel.send(const KernelTurn(id: 't3', text: 'third'));
-      expect(await kernel.cancelQueued('t3'), isTrue);
-      expect(events.whereType<ItemRemoved>().last.id, 't3');
-      expect(await kernel.cancelQueued('t3'), isFalse);
-    });
-
-    test('history is read by page, and earlier turns go before it', () async {
-      final historyServer = _FakeServer()
-        ..turnsPages.addAll([
-          {
-            'data': [
-              {
-                'id': 'turn-new',
-                'items': [
-                  {
-                    'type': 'userMessage',
-                    'id': 'user-new',
-                    'content': [
-                      {'type': 'text', 'text': 'new'},
-                    ],
-                  },
-                  {
-                    'type': 'agentMessage',
-                    'id': 'answer-new',
-                    'text': 'new answer',
-                  },
-                ],
-                'status': 'completed',
-                'durationMs': 1200,
-              },
-            ],
-            'nextCursor': 'older',
-          },
-          {
-            'data': [
-              {
-                'id': 'turn-old',
-                'items': [
-                  {
-                    'type': 'userMessage',
-                    'id': 'user-old',
-                    'content': [
-                      {'type': 'text', 'text': 'old'},
-                    ],
-                  },
-                  {
-                    'type': 'agentMessage',
-                    'id': 'answer-old',
-                    'text': 'old answer',
-                  },
-                ],
-                'status': 'completed',
-              },
-            ],
-            'nextCursor': null,
-          },
-        ]);
-      final historyEvents = <KernelEvent>[];
-      final history = CodexKernel(
-        MockKernels.codex,
-        historyServer,
-        context: KernelContext(
-          resume: SessionRecord(
-            id: 'th',
-            title: 'kept',
-            updatedAt: DateTime(2026),
-            cwd: Directory.current.path,
-          ),
-        ),
-      )..events.listen(historyEvents.add);
-      await pumpEventQueue();
-
-      final first = historyEvents.whereType<HistoryPrepended>().single.items;
-      expect(
-        [
-          for (final (_, item) in first)
-            if (item is UserMessageItem) item.text,
-        ],
-        ['new'],
-      );
-      expect(history.hasEarlierHistory, isTrue);
-
-      final firstRead = history.loadEarlier();
-      final secondRead = history.loadEarlier();
-      expect(identical(firstRead, secondRead), isTrue);
-      await firstRead;
-      final pages = historyEvents.whereType<HistoryPrepended>().toList();
-      final earlier = pages.last.items;
-      expect(
-        [
-          for (final (_, item) in earlier)
-            if (item is UserMessageItem) item.text,
-        ],
-        ['old'],
-      );
-      expect(history.hasEarlierHistory, isFalse);
-      history.dispose();
-    });
-
-    test('rename, fork and file search use the server', () async {
-      server.answers['thread/fork'] = {
-        'thread': {'id': 'forked', 'path': r'F:\tmp\fork.jsonl'},
-      };
-      server.answers['fuzzyFileSearch'] = {
-        'files': [
-          {
-            'path': p.join(Directory.current.path, 'lib', 'main.dart'),
-            'match_type': 'file',
-          },
-        ],
-      };
-      kernel.send(const KernelTurn(id: 't1', text: 'hi'));
-      await pumpEventQueue();
-
-      kernel.rename('A title');
-      final forked = await kernel.fork(title: 'A fork');
-      final files = await kernel.suggestFiles('main');
-
-      expect(forked?.id, 'forked');
-      expect(files.single.path, 'lib/main.dart');
-      expect(
-        server.written.map((message) => message['method']),
-        containsAll(['thread/name/set', 'thread/fork', 'fuzzyFileSearch']),
-      );
-    });
-
-    test('MCP servers and account limits are the server\'s', () async {
-      server.answers['mcpServerStatus/list'] = {
-        'data': [
-          {
-            'name': 'docs',
-            'runtimeStatus': 'connected',
-            'authStatus': 'unsupported',
-            'tools': {
-              'search': {'name': 'search'},
-            },
-            'serverInfo': {'name': 'docs', 'version': '1.2.3'},
-          },
-        ],
-      };
-      server.answers['account/rateLimits/read'] = {
-        'rateLimits': {
-          'primary': {
-            'usedPercent': 42,
-            'windowDurationMins': 300,
-            'resetsAt': 1800000000,
-          },
-        },
-      };
-      kernel.refreshMcpServers();
-      await kernel.refreshUsage();
-      await pumpEventQueue();
-
-      final mcp = kernel.mcpServers!.single;
-      expect(mcp.name, 'docs');
-      expect(mcp.version, '1.2.3');
-      expect(mcp.tools, ['search']);
-      expect(kernel.accountLimits.single.utilization, 0.42);
-      expect(kernel.accountLimits.single.label, 'Codex 5h');
-    });
-
-    test(
-      'questions and extra permissions are answered in their shape',
-      () async {
-        kernel.send(const KernelTurn(id: 't1', text: 'ask me'));
-        await pumpEventQueue();
-        server.push({
-          'id': 21,
-          'method': 'item/tool/requestUserInput',
-          'params': {
-            'threadId': 'th',
-            'turnId': 'st1',
-            'itemId': 'q1',
-            'isBlocking': true,
-            'questions': [
-              {
-                'id': 'choice',
-                'header': 'Pick',
-                'question': 'Which?',
-                'isOther': false,
-                'options': [
-                  {'label': 'One', 'description': ''},
-                  {'label': 'Two', 'description': ''},
-                ],
-              },
-            ],
-          },
-        });
-        expect(
-          events.whereType<InteractionRequested>().last.request,
-          isA<QuestionRequest>(),
-        );
-        kernel.answer(
-          'question:21',
-          const QuestionAnswer([
-            ['Two'],
-          ]),
-        );
-        final question = server.written.lastWhere(
-          (message) => message['id'] == 21,
-        );
-        expect(question['result'], {
-          'answers': {
-            'choice': {
-              'answers': ['Two'],
-            },
-          },
-        });
-
-        server.push({
-          'id': 22,
-          'method': 'item/permissions/requestApproval',
-          'params': {
-            'threadId': 'th',
-            'turnId': 'st1',
-            'itemId': 'p1',
-            'cwd': Directory.current.path,
-            'startedAtMs': 1,
-            'permissions': {
-              'network': {'enabled': true},
-            },
-          },
-        });
-        kernel.answer(
-          'permissions:22',
-          const ApprovalAnswer(ApprovalDecision.allowAlways),
-        );
-        final permission = server.written.lastWhere(
-          (message) => message['id'] == 22,
-        );
-        expect(permission['result'], {
-          'permissions': {
-            'network': {'enabled': true},
-          },
-          'scope': 'session',
-        });
-
-        server.push({
-          'id': 23,
-          'method': 'mcpServer/elicitation/request',
-          'params': {
-            'threadId': 'th',
-            'serverName': 'docs',
-            'message': 'Choose how to continue',
-            'mode': 'form',
-            'requestedSchema': {
-              'type': 'object',
-              'properties': {
-                'colour': {
-                  'type': 'string',
-                  'title': 'Colour',
-                  'enum': ['blue', 'green'],
-                },
-                'remember': {'type': 'boolean', 'title': 'Remember'},
-              },
-            },
-          },
-        });
-        kernel.answer(
-          'elicitation:23',
-          const QuestionAnswer([
-            ['blue'],
-            ['Yes'],
-          ]),
-        );
-        final elicitation = server.written.lastWhere(
-          (message) => message['id'] == 23,
-        );
-        expect(elicitation['result'], {
-          'action': 'accept',
-          'content': {'colour': 'blue', 'remember': true},
-        });
-      },
-    );
-
-    test('catalog lists the server\'s threads by project', () async {
-      server.answers['thread/list'] = {
-        'data': [
-          {
-            'id': 'one',
-            'name': 'Named',
-            'preview': 'ignored',
-            'cwd': r'F:\Projects\one',
-            'updatedAt': 1800000000,
-          },
-          {
-            'id': 'two',
-            'name': null,
-            'preview': 'First line',
-            'cwd': r'F:\Projects\one',
-            'updatedAt': 1700000000,
-          },
-        ],
-      };
-      final catalog = CodexCatalog(transport: server);
-      final projects = await catalog.projects();
-
-      expect(projects.single.path, r'F:\Projects\one');
-      expect(
-        projects.single.sessions.map((session) => (session.id, session.title)),
-        [('one', 'Named'), ('two', 'First line')],
-      );
-      final list = server.written.lastWhere(
-        (message) => message['method'] == 'thread/list',
-      );
-      expect((list['params'] as Map)['sortKey'], 'updated_at');
-
-      await catalog.delete('one');
-      expect(
-        server.written.lastWhere(
-          (message) => message['method'] == 'thread/delete',
-        )['params'],
-        {'threadId': 'one'},
-      );
-    });
-
-    test('declares no background tasks and no undo', () {
-      expect(kernel, isNot(isA<RunsBackgroundTasks>()));
-      expect(kernel, isNot(isA<RevertsChanges>()));
-      expect(kernel, isA<SelectsMode>());
-      expect(kernel, isA<StartsPlans>());
-      expect(kernel, isA<SelectsPermission>());
-      expect(kernel, isA<SelectsEffort>());
-      expect(kernel, isA<SelectsFast>());
-      expect(kernel, isA<LoadsHistory>());
-      expect(kernel, isA<SuggestsPrompts>());
-    });
-  });
 }
 
-/// Answers Codex requests the way the app server does.
-class _FakeServer implements CodexTransport {
-  final StreamController<Map<String, Object?>> _out =
-      StreamController.broadcast(sync: true);
-  final List<Map<String, Object?>> written = [];
-  final Map<String, Map<String, Object?>> answers = {};
-  final List<Map<String, Object?>> turnsPages = [];
-
-  @override
-  Stream<Map<String, Object?>> get messages => _out.stream;
-
-  @override
-  Future<void> get exited => _exited.future;
-
-  final Completer<void> _exited = Completer<void>();
-
-  @override
-  List<String> get stderr => const [];
-
-  @override
-  void restart() {}
-
-  @override
-  Future<Map<String, Object?>> request(
-    String method, [
-    Map<String, Object?> params = const {},
-  ]) async {
-    final id = ++_requests;
-    final answer = Completer<Map<String, Object?>>();
-    final sub = _out.stream.listen((message) {
-      if (message['id'] == id && !answer.isCompleted) {
-        answer.complete(
-          (message['result'] as Map?)?.cast<String, Object?>() ?? const {},
-        );
-      }
-    });
-    write({'id': id, 'method': method, 'params': params});
-    try {
-      return await answer.future.timeout(const Duration(seconds: 5));
-    } finally {
-      sub.cancel();
-    }
-  }
-
-  int _requests = 0;
-
-  void push(Map<String, Object?> message) => _out.add(message);
-
-  @override
-  void write(Map<String, Object?> message) {
-    written.add(message);
-    final method = message['method'];
-    final result = method == 'thread/turns/list' && turnsPages.isNotEmpty
-        ? turnsPages.removeAt(0)
-        : answers[method] ??
-              switch (method) {
-                'thread/start' => {
-                  'thread': {'id': 'th'},
-                },
-                'collaborationMode/list' => {
-                  'data': [
-                    {'name': 'Plan', 'mode': 'plan'},
-                    {'name': 'Default', 'mode': 'default'},
-                  ],
-                },
-                'turn/start' => {
-                  'turn': {'id': 'st1'},
-                },
-                'review/start' => {
-                  'turn': {'id': 'st1'},
-                  'reviewThreadId': 'th',
-                },
-                'thread/compact/start' => <String, Object?>{},
-                'model/list' => {
-                  'data': [
-                    {
-                      'id': 'gpt-5.5-codex',
-                      'displayName': 'GPT-5.5 Codex',
-                      'description': 'Coding model',
-                      'defaultReasoningEffort': 'medium',
-                      'isDefault': true,
-                      'supportedReasoningEfforts': [
-                        {'reasoningEffort': 'low', 'description': ''},
-                        {'reasoningEffort': 'medium', 'description': ''},
-                        {'reasoningEffort': 'high', 'description': ''},
-                      ],
-                      'serviceTiers': [
-                        {
-                          'id': 'priority',
-                          'name': 'Fast',
-                          'description': 'Priority service tier',
-                        },
-                      ],
-                    },
-                  ],
-                },
-                null => null,
-                _ => <String, Object?>{},
-              };
-    if (result != null) push({'id': message['id'], 'result': result});
-  }
-
-  @override
-  void close() {
-    _out.close();
-    if (!_exited.isCompleted) _exited.complete();
-  }
-}
 
 /// Turns kept in memory, by session and prompt.
 class _KeptTurns implements TurnStats {

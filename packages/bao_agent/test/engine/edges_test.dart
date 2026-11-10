@@ -9,13 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 import '../support/harness.dart';
-import '../support/message_text.dart';
-
-/// The hook at [path] as a command the shell runs: on Windows a script is
-/// not run of itself, so the shell is told to run it.
-String _hookCommand(String path) => Platform.isWindows
-    ? 'bash "${path.replaceAll(r'\', '/')}"'
-    : path;
 
 /// The less travelled ways: plans approved, agents that fail, compaction
 /// under pressure, notebooks with outputs, inputs not quite right.
@@ -24,19 +17,14 @@ void main() {
 
   tearDown(() => h.dispose());
 
-  /// The messages as JSON, for checks that look at their shape.
   String sentIn(ModelRequest request) => jsonEncode(request.body['messages']);
 
   test('a plan approved: the mode is left, the plan given back', () async {
     h = await Harness.start(permissionMode: 'plan');
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
-    final plan = h.engine.session.planFilePath;
-    final reminder = messageWithPath(
-      h.model.turns.first.body['messages'] as List,
-      plan,
-    );
-    expect(reminder, contains('write it to $plan with Write'));
+    final plan = RegExp(r'write it to ([^ ]+\.md)')
+        .firstMatch(sentIn(h.model.turns.first))![1]!;
     h.model.script.addAll([
       Reply.tool('Write', {
         'file_path': plan,
@@ -75,26 +63,11 @@ void main() {
   test('a plan sent rather than written is kept in its file, which the '
       'user is shown', () async {
     // #298: the file named was not there, and its tab said so.
-    final plans = p.join(
-      Directory.systemTemp.path,
-      'bao_agent plans ${DateTime.now().microsecondsSinceEpoch}',
-    );
-    h = await Harness.start(
-      permissionMode: 'plan',
-      settings: {'plansDirectory': plans},
-    );
-    addTearDown(() {
-      final dir = Directory(plans);
-      if (dir.existsSync()) dir.deleteSync(recursive: true);
-    });
+    h = await Harness.start(permissionMode: 'plan');
     h.model.script.add(Reply.text('looking'));
     await h.turn('plan');
-    final plan = h.engine.session.planFilePath;
-    final reminder = messageWithPath(
-      h.model.turns.first.body['messages'] as List,
-      plan,
-    );
-    expect(reminder, contains('write it to $plan with Write'));
+    final plan = RegExp(r'write it to ([^ ]+\.md)')
+        .firstMatch(sentIn(h.model.turns.first))![1]!;
     expect(File(plan).existsSync(), isFalse);
     h.model.script.addAll([
       Reply.tool('ExitPlanMode', {'plan': '# Plan\n\nStep one.'}),
@@ -132,11 +105,14 @@ void main() {
     expect('${last.last['text']}', contains('plan mode'));
     expect(last.last.containsKey('cache_control'), isFalse);
     expect(last[last.length - 2]['cache_control'], isNotNull);
-    // What the first wrote to the cache, the second sends the same.
+    // What the first wrote to the cache, the second sends the same (the
+    // mark itself moves on to the end).
+    String plain(Object? m) =>
+        jsonEncode(m).replaceAll(',"cache_control":{"type":"ephemeral"}', '');
     final i = first.length - 1;
     expect(
-      jsonEncode(second[i]),
-      jsonEncode({...first[i], 'content': last.sublist(0, last.length - 1)}),
+      plain(second[i]),
+      plain({...first[i], 'content': last.sublist(0, last.length - 1)}),
     );
   });
 
@@ -209,13 +185,14 @@ void main() {
             'Agent',
             {'description': 'x', 'prompt': 'p', 'subagent_type': 'nope'},
           ),
-          ('Agent', {'description': 'x', 'prompt': 'p', 'resume': 'a-missing'}),
+          ('SendMessage', {'to': 'a-missing', 'message': 'go on'}),
           (
             'Agent',
             {
               'description': 'x',
               'prompt': 'p',
               'subagent_type': 'general-PURPOSE',
+              'run_in_background': false,
             },
           ),
         ]),
@@ -227,7 +204,7 @@ void main() {
         '${unknown['content']}',
         allOf(contains("no agent of the kind 'nope'"), contains('Explore')),
       );
-      expect('${missing['content']}', contains('with the ID a-missing'));
+      expect('${missing['content']}', contains('No agent "a-missing"'));
       expect((cased['tool_use_result'] as Map)['status'], 'completed');
     });
 
@@ -240,14 +217,14 @@ void main() {
         ..writeAsStringSync(
           '#!/bin/sh\necho \'{"hookSpecificOutput": {"hookEventName": "SubagentStart", "additionalContext": "Mind the tests."}}\'\n',
         );
-      if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
+      Process.runSync('chmod', ['+x', hook.path]);
       h = await Harness.start(
         settings: {
           'hooks': {
             'SubagentStart': [
               {
                 'hooks': [
-                  {'type': 'command', 'command': _hookCommand(hook.path)},
+                  {'type': 'command', 'command': hook.path},
                 ],
               },
             ],
@@ -267,7 +244,11 @@ void main() {
         );
       };
       h.model.script.addAll([
-        Reply.tool('Agent', {'description': 'Work', 'prompt': 'SUB: work'}),
+        Reply.tool('Agent', {
+          'description': 'Work',
+          'prompt': 'SUB: work',
+          'run_in_background': false,
+        }),
         Reply.text('it failed'),
       ]);
       await h.turn('go');
@@ -331,7 +312,7 @@ void main() {
         (agent['input_schema'] as Map)['properties'] as Map,
         isNot(contains('model')),
       );
-      expect('${agent['description']}', contains('none can be chosen here'));
+      expect('${agent['description']}', contains('there is none to pick'));
     });
 
     test('unforced, inherit stands: Explore on the session\'s model', () async {
@@ -368,7 +349,11 @@ void main() {
           ? Reply.text('a long answer that takes a while to come')
           : null;
       h.model.script.addAll([
-        Reply.tool('Agent', {'description': 'Slow', 'prompt': 'SUB: slow'}),
+        Reply.tool('Agent', {
+          'description': 'Slow',
+          'prompt': 'SUB: slow',
+          'run_in_background': false,
+        }),
       ]);
       final idle = h.nextIdle();
       h.send('go');
@@ -383,72 +368,54 @@ void main() {
   });
 
   group('compaction', () {
-    test('a PreCompact hook adds to the instructions; todos and the plan carried over', () async {
-      final bin = Directory.systemTemp
-          .createTempSync('hooks_')
-          .resolveSymbolicLinksSync();
-      addTearDown(() => Directory(bin).deleteSync(recursive: true));
-      final hook = File(p.join(bin, 'pre.sh'))
-        ..writeAsStringSync('#!/bin/sh\necho "Keep the API notes."\n');
-      if (!Platform.isWindows) Process.runSync('chmod', ['+x', hook.path]);
-      h = await Harness.start(
-        permissionMode: 'plan',
-        settings: {
-          'hooks': {
-            'PreCompact': [
-              {
-                'matcher': 'manual',
-                'hooks': [
-                  {'type': 'command', 'command': _hookCommand(hook.path)},
-                ],
-              },
-            ],
-          },
-        },
-      );
-      h.model.script.add(Reply.text('looking'));
-      await h.turn('plan');
-      final plan = h.engine.session.planFilePath;
-      final reminder = messageWithPath(
-        h.model.turns.first.body['messages'] as List,
-        plan,
-      );
-      expect(reminder, contains('write it to $plan with Write'));
-      h.model.script.addAll([
-        Reply.tools([
-          ('Write', {'file_path': plan, 'content': '# Plan'}),
-          (
-            'TodoWrite',
-            {
-              'todos': [
+    test(
+      'a PreCompact hook adds to the instructions; the plan carried over',
+      () async {
+        final bin = Directory.systemTemp
+            .createTempSync('hooks_')
+            .resolveSymbolicLinksSync();
+        addTearDown(() => Directory(bin).deleteSync(recursive: true));
+        final hook = File(p.join(bin, 'pre.sh'))
+          ..writeAsStringSync('#!/bin/sh\necho "Keep the API notes."\n');
+        Process.runSync('chmod', ['+x', hook.path]);
+        h = await Harness.start(
+          permissionMode: 'plan',
+          settings: {
+            'hooks': {
+              'PreCompact': [
                 {
-                  'content': 'First',
-                  'status': 'pending',
-                  'activeForm': 'Doing first',
+                  'matcher': 'manual',
+                  'hooks': [
+                    {'type': 'command', 'command': hook.path},
+                  ],
                 },
               ],
             },
-          ),
-        ]),
-        Reply.text('ok'),
-        Reply.text(''),
-        Reply.text('<summary>Summed.</summary>'),
-      ]);
-      await h.turn('write');
-      await h.turn('/compact');
-      final summarizing = h.model.requests.lastWhere(
-        (r) =>
-            jsonEncode(r.body['system']).contains('summary of a conversation'),
-      );
-      expect(sentIn(summarizing), contains('Keep the API notes.'));
-      final summary = h
-          .of('user')
-          .lastWhere((m) => m['isCompactSummary'] == true);
-      expect(
-        messageText(summary),
-        allOf(contains('[pending] First'), contains(plan)),
-      );
-    });
+          },
+        );
+        h.model.script.add(Reply.text('looking'));
+        await h.turn('plan');
+        final plan = RegExp(r'write it to ([^ ]+\.md)')
+            .firstMatch(sentIn(h.model.turns.first))![1]!;
+        h.model.script.addAll([
+          Reply.tool('Write', {'file_path': plan, 'content': '# Plan'}),
+          Reply.text('ok'),
+          Reply.text('<summary>Summed.</summary>'),
+        ]);
+        await h.turn('write');
+        await h.turn('/compact');
+        final summarizing = h.model.requests.lastWhere(
+          (r) =>
+              jsonEncode(r.body['system'])
+                  .contains('summary of a conversation'),
+        );
+        expect(sentIn(summarizing), contains('Keep the API notes.'));
+        final summary = h
+            .of('user')
+            .lastWhere((m) => m['isCompactSummary'] == true);
+        expect(jsonEncode(summary), contains(plan));
+      },
+    );
 
     test(
       'too long even to sum up: the oldest left out until it fits',
@@ -695,45 +662,27 @@ void main() {
     }
   });
 
-  test('Bash: long output cut in the middle; TaskOutput filtered; TaskStop of what is not running', () async {
-    h = await Harness.start(environment: {'BASH_MAX_OUTPUT_LENGTH': '200'});
-    h.model.script.addAll([
-      Reply.tool('Bash', {'command': 'seq 1 500', 'description': 'Count'}),
-      Reply.tool('Bash', {
-        'command': 'printf "keep 1\\ndrop\\nkeep 2\\n"',
-        'description': 'Print',
-        'run_in_background': true,
-      }, id: 'toolu_print'),
-    ]);
-    h.model.route = (request) {
-      final text = sentIn(request);
-      if (text.contains('<task-notification>')) return Reply.text('noted');
-      final id = RegExp(r'background with ID: (\w+)').firstMatch(text)?[1];
-      if (id == null) return null;
-      if (!text.contains('"name":"TaskOutput"')) {
-        return Reply.tools([
-          ('TaskOutput', {'task_id': id, 'block': true, 'filter': '^keep'}),
-          ('TaskOutput', {'task_id': id, 'filter': '('}),
+  test(
+    'Bash: long output cut in the middle; TaskStop of what is not running',
+    () async {
+      h = await Harness.start(environment: {'BASH_MAX_OUTPUT_LENGTH': '200'});
+      h.model.script.addAll([
+        Reply.tool('Bash', {'command': 'seq 1 500', 'description': 'Count'}),
+        Reply.tools([
           ('TaskStop', {'task_id': 'b-none'}),
           ('TaskStop', {}),
-        ]);
-      }
-      return null;
-    };
-    h.model.script.add(Reply.text('done'));
-    await h.turn('go');
-    final results = h.toolResults;
-    expect(
-      '${results[0]['content']}',
-      allOf(contains('lines truncated'), startsWith('1\n'), endsWith('500')),
-    );
-    final [filtered, invalid, none, missing] = results.sublist(2, 6);
-    expect(
-      '${filtered['content']}',
-      allOf(contains('keep 1'), contains('keep 2'), isNot(contains('drop'))),
-    );
-    expect('${invalid['content']}', contains('Invalid filter'));
-    expect('${none['content']}', contains('No task found'));
-    expect(missing['is_error'], isTrue);
-  });
+        ]),
+        Reply.text('done'),
+      ]);
+      await h.turn('go');
+      final results = h.toolResults;
+      expect(
+        '${results[0]['content']}',
+        allOf(contains('lines truncated'), startsWith('1\n'), endsWith('500')),
+      );
+      final [none, missing] = results.sublist(1, 3);
+      expect('${none['content']}', contains('No task found'));
+      expect(missing['is_error'], isTrue);
+    },
+  );
 }

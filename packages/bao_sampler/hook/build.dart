@@ -5,8 +5,9 @@ import 'package:native_toolchain_c/native_toolchain_c.dart';
 import 'windows_vswhere.dart';
 
 /// Builds the sampler (native/bao_sampler.c) for Windows and Linux, for an
-/// app and for `flutter test` alike. macOS has `/usr/bin/sample` instead;
-/// the phones and the web have none.
+/// app and for `flutter test` alike, and on Linux the crash handler
+/// (native/bao_crash.c). macOS has `/usr/bin/sample` and its own crash
+/// reports instead; the phones and the web have none.
 void main(List<String> arguments) async {
   await build(arguments, (input, output) async {
     if (!input.config.buildCodeAssets) return;
@@ -16,7 +17,10 @@ void main(List<String> arguments) async {
     await CBuilder.library(
       name: 'bao_sampler',
       assetName: 'src/sampler_native.dart',
-      sources: const ['native/bao_sampler.c'],
+      sources: [
+        'native/bao_sampler.c',
+        if (os == OS.linux) 'native/bao_crash.c',
+      ],
       frameworks: const [],
       libraries: os == OS.linux ? const ['pthread', 'dl'] : const [],
       std: os == OS.windows ? null : 'gnu11',

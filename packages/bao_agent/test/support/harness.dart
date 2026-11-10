@@ -34,6 +34,7 @@ class Harness {
     bool strictMcpConfig = false,
     Future<void> Function()? stopSession,
     Duration sessionStopTimeout = const Duration(seconds: 15),
+    bool firstParty = true,
   }) async {
     final root =
         from?.root ??
@@ -52,7 +53,7 @@ class Harness {
     if (settings.isNotEmpty) {
       File(p.join(config, 'settings.json')).writeAsStringSync(_json(settings));
     }
-    final fake = FakeModel(script, errands);
+    final fake = FakeModel(script, errands)..firstParty = firstParty;
     final harness = Harness._(root, cwd, config, fake);
     harness.engine = AgentEngine(
       EngineOptions(

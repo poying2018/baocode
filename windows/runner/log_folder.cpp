@@ -9,6 +9,11 @@
 #include <vector>
 
 #include "app_identity.h"
+#include <cstdio>
+#include <vector>
+
+#include "crash_report.h"
+#include "hang_watchdog.h"
 #include "utils.h"
 
 namespace log_folder {
@@ -95,6 +100,7 @@ void SetFolder(const std::wstring& folder) {
     g_folder = folder;
   }
   const std::wstring key = SettingsKey();
+  hang_watchdog::LogsFolderNamed(folder);
   ::RegSetKeyValueW(HKEY_CURRENT_USER, key.c_str(), kFolderValue, REG_SZ,
                     folder.c_str(),
                     static_cast<DWORD>((folder.size() + 1) * sizeof(wchar_t)));
@@ -194,6 +200,8 @@ void WriteTrayLog(const char* format, ...) {
       break;
     }
   }
+void AppendExit(const char* how) {
+  crash_report::AppendExit(Path(), how);
 }
 
 }  // namespace log_folder

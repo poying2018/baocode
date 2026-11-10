@@ -1,4 +1,5 @@
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// Wheel scrolling of a scroll view inside another, as browsers do it: a
@@ -10,13 +11,19 @@ import 'package:flutter/widgets.dart';
 /// - Started elsewhere (or with the inner view already at that end): it
 ///   scrolls the outer view, even once the pointer is over the inner one.
 ///
-/// A gesture ends after [gap] without wheel events. Goes inside the inner
-/// scroll view, around its content. (A trackpad pan is a drag, which the
-/// inner view keeps to itself already.)
+/// Zero-delta events neither start nor extend a gesture. A gesture ends
+/// after [gap] without a nonzero wheel event. Goes inside the inner scroll
+/// view, around its content. (A trackpad pan is a drag, which the inner
+/// view keeps to itself already.)
 class WheelLatch extends StatefulWidget {
-  const WheelLatch({super.key, required this.child});
+  const WheelLatch({super.key, required this.child, this.keep = false});
 
   final Widget child;
+
+  /// A gesture started over the inner view is its own wherever it can
+  /// scroll at all, at its ends too: one that only scrolls there (an edit's
+  /// card) never moves the outer view under the pointer.
+  final bool keep;
 
   static const gap = Duration(milliseconds: 300);
 
@@ -36,6 +43,7 @@ class _WheelLatchState extends State<WheelLatch> {
   /// gesture started anywhere else belongs to no inner view.
   static void _watch(PointerEvent event) {
     if (event is! PointerScrollEvent) return;
+    if (event.scrollDelta == Offset.zero) return;
     final last = _lastWheel;
     final starts = last == null || event.timeStamp - last >= WheelLatch.gap;
     if (starts && _latchedAt != event.timeStamp) _latched = null;
@@ -51,22 +59,29 @@ class _WheelLatchState extends State<WheelLatch> {
     }
   }
 
-  /// The wheel's move as [view]'s offset takes it: turned round in a
-  /// reversed view (live output's), as [Scrollable] itself does.
+  /// The wheel's move as [view]'s offset takes it: across with Shift held
+  /// (a mouse's), so none of it down; turned round in a reversed view (live
+  /// output's). As [Scrollable] itself does.
   static double _deltaIn(ScrollableState view, PointerScrollEvent event) {
-    final dy = event.scrollDelta.dy;
+    final across =
+        event.kind == PointerDeviceKind.mouse &&
+        HardwareKeyboard.instance.isShiftPressed;
+    final dy = across ? event.scrollDelta.dx : event.scrollDelta.dy;
     return axisDirectionIsReversed(view.axisDirection) ? -dy : dy;
   }
 
   void _handleSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) return;
+    if (event.scrollDelta == Offset.zero) return;
     final inner = Scrollable.maybeOf(context);
     if (inner == null) return;
     final delta = _deltaIn(inner, event);
     final last = _lastWheel;
     if (last == null || event.timeStamp - last >= WheelLatch.gap) {
       final position = inner.position;
-      final moves = delta > 0
+      final moves = widget.keep
+          ? position.maxScrollExtent > position.minScrollExtent
+          : delta > 0
           ? position.pixels < position.maxScrollExtent
           : delta < 0 && position.pixels > position.minScrollExtent;
       _latched = moves ? this : null;

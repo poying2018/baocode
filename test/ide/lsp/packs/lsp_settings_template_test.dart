@@ -71,7 +71,7 @@ void main() {
       'till the project closes', () async {
     final catalog = _Counting();
     final manager = LspManager(temp.path, catalog, const _NoServers());
-    final changes = _Observable(0);
+    final changes = _Changes();
     StandardLsp(
       catalog: BundledLspCatalog(),
       provider: const _NoServers(),
@@ -91,11 +91,9 @@ void main() {
   });
 }
 
-/// A [ValueNotifier] that says whether anything listens to it: the
-/// notifier's own answer is a protected member, and this is what the test
-/// asks of it.
-class _Observable extends ValueNotifier<int> {
-  _Observable(super.value);
+/// lsp.json's changes, telling whether they are still listened to.
+class _Changes extends ValueNotifier<int> {
+  _Changes() : super(0);
 
   bool get listened => hasListeners;
 }

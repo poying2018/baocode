@@ -2004,6 +2004,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   /// click) and for its original ([head], Open File (HEAD)).
   Future<void> _openChangeInLog(
     IdeGitResource resource, {
+    List<IdeGitResource>? among,
     bool head = false,
     bool focusEditor = false,
   }) async {
@@ -2067,12 +2068,17 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
           .paths
           .add(edit.path);
     }
-    final l10n = context.l10n;
-    for (final MapEntry(key: turn, value: (:request, :paths))
-        in turns.entries) {
+    for (final MapEntry(value: (:request, :paths)) in turns.entries) {
       final line = request.trim().split('\n').first.trim();
       final title = line.length > 40 ? '${line.substring(0, 40)}…' : line;
-      _changelists.assignTurn(turn, l10n.gitChangelistTurn(title), paths);
+      final existing = _changelists.lists
+          .where((list) => list.name == title)
+          .firstOrNull;
+      if (existing == null) {
+        _changelists.create(title, paths: paths);
+      } else {
+        _changelists.move(paths, existing.id);
+      }
     }
   }
 

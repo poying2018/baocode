@@ -29,6 +29,7 @@ import '../theme/app_theme.dart';
 import '../theme/codicons.dart';
 import '../theme/workbench_theme.dart' show themeColors;
 import '../workspace/editor_launcher.dart' show openExternal;
+import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/window_controls.dart';
 import '../workspace/workspace.dart';
@@ -61,7 +62,12 @@ class StashView extends StatefulWidget {
     this.titleBarInset = 12,
     this.initial,
     this.onHotkeySettings,
+    this.island,
   });
+
+  /// Given, what is under the title bar is on a card of this color (see
+  /// [Island]), the title bar on the window's.
+  final Color? island;
 
   final StashController controller;
   final VoidCallback onClose;
@@ -617,127 +623,129 @@ class StashViewState extends State<StashView>
       children: [
         _buildTitleBar(l10n),
         Expanded(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final room = constraints.maxWidth;
-              final wide = room >= 760;
-              // Kept as the stash beside it comes and goes: not built anew,
-              // where it was scrolled to.
-              final list = KeyedSubtree(key: _list, child: _buildList(l10n));
-              if (open == null) return list;
-              // The one shown as [_tap] changes it, one fading into the
-              // other.
-              final detail = ValueListenableBuilder(
-                valueListenable: _shown,
-                builder: (context, id, _) => AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 200),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween(
-                        begin: const Offset(0, .012),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
+          child: _onIsland(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final room = constraints.maxWidth;
+                final wide = room >= 760;
+                // Kept as the stash beside it comes and goes: not built anew,
+                // where it was scrolled to.
+                final list = KeyedSubtree(key: _list, child: _buildList(l10n));
+                if (open == null) return list;
+                // The one shown as [_tap] changes it, one fading into the
+                // other.
+                final detail = ValueListenableBuilder(
+                  valueListenable: _shown,
+                  builder: (context, id, _) => AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: const Offset(0, .012),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    layoutBuilder: (current, previous) => Stack(
+                      fit: StackFit.expand,
+                      children: [...previous, ?current],
+                    ),
+                    child: StashDetail(
+                      key: ValueKey(id ?? open.id),
+                      controller: _controller,
+                      id: id ?? open.id,
+                      autofocus: (id ?? open.id) == _writing,
+                      onOpenAgent: widget.onOpenAgent,
+                      onOpenLink: _openLink,
+                      onClose: () => setState(() => _open = null),
                     ),
                   ),
-                  layoutBuilder: (current, previous) => Stack(
-                    fit: StackFit.expand,
-                    children: [...previous, ?current],
-                  ),
-                  child: StashDetail(
-                    key: ValueKey(id ?? open.id),
-                    controller: _controller,
-                    id: id ?? open.id,
-                    autofocus: (id ?? open.id) == _writing,
-                    onOpenAgent: widget.onOpenAgent,
-                    onOpenLink: _openLink,
-                    onClose: () => setState(() => _open = null),
-                  ),
-                ),
-              );
-              if (!wide) {
-                // In place of the cards, the one fading into the other.
-                return AnimatedBuilder(
-                  animation: _detailCurve,
-                  builder: (context, _) {
-                    final t = _detailCurve.value;
-                    return Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Offstage(
-                          offstage: t >= 1,
-                          child: Opacity(opacity: 1 - t, child: list),
-                        ),
-                        Opacity(
-                          opacity: t,
-                          child: Transform.translate(
-                            offset: Offset(0, (1 - t) * 18),
-                            child: detail,
-                          ),
-                        ),
-                      ],
-                    );
-                  },
                 );
-              }
-              final width = _widthOfDetail(room);
-              final dragging = _dragStart != null;
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Its room grows as it slides in and fades up.
-                  AnimatedBuilder(
+                if (!wide) {
+                  // In place of the cards, the one fading into the other.
+                  return AnimatedBuilder(
                     animation: _detailCurve,
                     builder: (context, _) {
                       final t = _detailCurve.value;
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      return Stack(
+                        fit: StackFit.expand,
                         children: [
-                          Expanded(child: list),
+                          Offstage(
+                            offstage: t >= 1,
+                            child: Opacity(opacity: 1 - t, child: list),
+                          ),
                           Opacity(
                             opacity: t,
-                            child: _sash(room, dragging: dragging),
-                          ),
-                          SizedBox(
-                            width: width * t,
-                            child: ClipRect(
-                              child: OverflowBox(
-                                alignment: Alignment.centerLeft,
-                                minWidth: width,
-                                maxWidth: width,
-                                child: Opacity(
-                                  opacity: t,
-                                  child: Transform.translate(
-                                    offset: Offset((1 - t) * 40, 0),
-                                    child: detail,
-                                  ),
-                                ),
-                              ),
+                            child: Transform.translate(
+                              offset: Offset(0, (1 - t) * 18),
+                              child: detail,
                             ),
                           ),
                         ],
                       );
                     },
-                  ),
-                  // The resize cursor wherever the pointer goes while
-                  // dragging; a press there (a drag whose end was lost)
-                  // ends it.
-                  if (dragging)
-                    Positioned.fill(
-                      child: Listener(
-                        behavior: HitTestBehavior.translucent,
-                        onPointerDown: (_) => _endDrag(),
-                        child: const MouseRegion(
-                          cursor: SystemMouseCursors.resizeColumn,
+                  );
+                }
+                final width = _widthOfDetail(room);
+                final dragging = _dragStart != null;
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Its room grows as it slides in and fades up.
+                    AnimatedBuilder(
+                      animation: _detailCurve,
+                      builder: (context, _) {
+                        final t = _detailCurve.value;
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: list),
+                            Opacity(
+                              opacity: t,
+                              child: _sash(room, dragging: dragging),
+                            ),
+                            SizedBox(
+                              width: width * t,
+                              child: ClipRect(
+                                child: OverflowBox(
+                                  alignment: Alignment.centerLeft,
+                                  minWidth: width,
+                                  maxWidth: width,
+                                  child: Opacity(
+                                    opacity: t,
+                                    child: Transform.translate(
+                                      offset: Offset((1 - t) * 40, 0),
+                                      child: detail,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                    // The resize cursor wherever the pointer goes while
+                    // dragging; a press there (a drag whose end was lost)
+                    // ends it.
+                    if (dragging)
+                      Positioned.fill(
+                        child: Listener(
+                          behavior: HitTestBehavior.translucent,
+                          onPointerDown: (_) => _endDrag(),
+                          child: const MouseRegion(
+                            cursor: SystemMouseCursors.resizeColumn,
+                          ),
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -801,6 +809,12 @@ class StashViewState extends State<StashView>
       ),
     ),
   );
+
+  /// [child] on its card, where it has one ([StashView.island]).
+  Widget _onIsland(Widget child) => switch (widget.island) {
+    final color? => Island(color: color, child: child),
+    null => child,
+  };
 
   void _endDrag() {
     if (!mounted || _dragStart == null) return;
@@ -1237,13 +1251,13 @@ class StashViewState extends State<StashView>
               ),
               for (final project in _controller.workspace.projects)
                 IdeMenuAction(
-                  project.name,
+                  stashProjectLabel(_controller.workspace, project),
                   icon: stashProjectIcon(_controller.workspace, project),
                   keepOpen: true,
                   checkedNow: () => _projects.contains(project.path),
                   onSelected: () => toggle(_projects, project.path),
                 ),
-            ]),
+            ], projects: true),
           ),
         ),
         StashChip(
@@ -1355,6 +1369,7 @@ class StashViewState extends State<StashView>
                       _projectEntries(
                         (project) => unawaited(_setProject(ids, project)),
                       ),
+                      projects: true,
                     ),
                   );
                 },
@@ -1410,6 +1425,7 @@ mixin _StashActions<T extends StatefulWidget> on State<T> {
         note.project = project;
         note.suggestedProject = '';
       }, touch: false);
+      await _controller.forge?.projectChanged(id);
     }
   }
 
@@ -1494,7 +1510,7 @@ mixin _StashActions<T extends StatefulWidget> on State<T> {
       const IdeMenuSeparator(),
       for (final project in _controller.workspace.projects)
         IdeMenuAction(
-          project.name,
+          stashProjectLabel(_controller.workspace, project),
           icon: stashProjectIcon(_controller.workspace, project),
           checked: project.path == current,
           onSelected: () => pick(project.path),
@@ -1581,13 +1597,26 @@ mixin _StashActions<T extends StatefulWidget> on State<T> {
     );
   }
 
-  Future<void> _filterMenu(Rect anchor, List<IdeMenuEntry> entries) =>
-      showIdeMenu(context, anchor: anchor, entries: entries);
+  /// [projects]: a menu of projects, typed over to find one, their icons
+  /// where the checks go.
+  Future<void> _filterMenu(
+    Rect anchor,
+    List<IdeMenuEntry> entries, {
+    bool projects = false,
+  }) => showIdeMenu(
+    context,
+    anchor: anchor,
+    speedSearch: projects,
+    iconsInCheckColumn: projects,
+    entries: entries,
+  );
 
   String? _projectName(String? path) {
     if (path == null || path.isEmpty) return null;
     for (final project in _controller.workspace.projects) {
-      if (project.path == path) return project.name;
+      if (project.path == path) {
+        return stashProjectLabel(_controller.workspace, project);
+      }
     }
     return p.basename(path);
   }
@@ -1624,10 +1653,15 @@ FileView stashFileView(
   id: 'stash',
   matches: (path) => controller.store.idOfFile(path) != null,
   build: (context, path) => switch (controller.store.idOfFile(path)) {
-    final id? => StashDetail(
-      controller: controller,
-      id: id,
-      onOpenAgent: onOpenAgent,
+    // Its text where it was, when its tab shows again.
+    final id? => KeptScrolling(
+      identifier: ('stash', id),
+      builder: (context, scroll) => StashDetail(
+        controller: controller,
+        id: id,
+        onOpenAgent: onOpenAgent,
+        scrollController: scroll,
+      ),
     ),
     null => const SizedBox.shrink(),
   },
@@ -1645,10 +1679,14 @@ class StashDetail extends StatefulWidget {
     this.onOpenLink,
     this.onClose,
     this.autofocus = false,
+    this.scrollController,
   });
 
   final StashController controller;
   final int id;
+
+  /// Scrolls its text; its own when null.
+  final ScrollController? scrollController;
 
   /// Whether its text has the keyboard as it shows (one just made).
   final bool autofocus;
@@ -1844,6 +1882,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
                       (project) => unawaited(_setProject([note.id], project)),
                       current: note.project,
                     ),
+                    projects: true,
                   ),
                 ),
               ),
@@ -2017,6 +2056,7 @@ class _StashDetailState extends State<StashDetail> with _StashActions {
             refs: _controller.refs(_openLink),
             placeholder: context.l10n.stashPlaceholder,
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            scrollController: widget.scrollController,
           ),
         ),
       ],

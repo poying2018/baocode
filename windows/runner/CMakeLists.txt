@@ -15,6 +15,7 @@ add_executable(${BINARY_NAME} WIN32
   "caption_areas.cpp"
   "clipboard_images.cpp"
   "context_menu.cpp"
+  "crash_report.cpp"
   "drag_source.cpp"
   "drop_target.cpp"
   "flutter_window.cpp"
@@ -49,6 +50,11 @@ target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MINOR=${FLUTT
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_PATCH=${FLUTTER_VERSION_PATCH}")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_BUILD=${FLUTTER_VERSION_BUILD}")
 
+# The DEV-badged icon for Debug builds (Runner.rc). A generator expression,
+# not CMAKE_BUILD_TYPE: Visual Studio's generator builds every configuration
+# from one cache, where CMAKE_BUILD_TYPE is empty.
+target_compile_definitions(${BINARY_NAME} PRIVATE "$<$<CONFIG:Debug>:BAOCODE_DEV_ICON>")
+
 # Disable Windows macros that collide with C++ standard library functions.
 target_compile_definitions(${BINARY_NAME} PRIVATE "NOMINMAX")
 
@@ -64,7 +70,7 @@ target_compile_definitions(${BINARY_NAME} PRIVATE
 target_link_libraries(${BINARY_NAME} PRIVATE flutter flutter_wrapper_app)
 target_link_libraries(${BINARY_NAME} PRIVATE "dwmapi.lib" "ole32.lib"
   "shell32.lib" "uuid.lib" "windowscodecs.lib" "winmm.lib" "dbghelp.lib"
-  "runtimeobject.lib")
+  "runtimeobject.lib" "wer.lib")
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")
 
 # The WebView2 SDK, for the channel build's login window (login_window.cpp):

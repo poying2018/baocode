@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -39,7 +38,6 @@ class _SilentTransport implements CodexTransport {
 /// The kernel's own state, and when it says so.
 void main() {
   test('a project folder that is gone is said after the view is built', () async {
-    final folder = '${Directory.systemTemp.path}\\baocode-codex-gone';
     final kernel = CodexKernel(
       const KernelDescriptor(
         id: 'codex',
@@ -49,7 +47,6 @@ void main() {
         create: _never,
       ),
       _SilentTransport(),
-      context: KernelContext(cwd: folder),
     );
     addTearDown(kernel.closeEvents);
     final told = <KernelEvent>[];

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,10 +26,15 @@ class OpenInEditorButton extends StatelessWidget {
     super.key,
     required this.workspace,
     required this.project,
+    this.agent,
   });
 
   final Workspace workspace;
   final Project project;
+
+  /// The agent whose chat the IDE opens with [project]; null: the focused
+  /// one's, where it is this project's.
+  final AgentThread? agent;
 
   /// Opens a project in an editor; replaceable under test.
   @visibleForTesting
@@ -38,8 +45,11 @@ class OpenInEditorButton extends StatelessWidget {
     // A remote project's files are not this machine's: only the IDE's own
     // opens them.
     if (editor == Editor.fastIde || project.host != null) {
-      // The project in the IDE, with the current agent's chat there.
-      if (workspace.current case final thread? when thread.project == project) {
+      // The project in the IDE, with the agent's chat there.
+      final thread =
+          agent ??
+          (workspace.current?.project == project ? workspace.current : null);
+      if (thread != null) {
         workspace.openInIde(thread);
       } else {
         workspace
@@ -92,7 +102,7 @@ class OpenInEditorButton extends StatelessWidget {
               ConstrainedBox(
                 // The label's part fills what the chevron leaves.
                 constraints: BoxConstraints(
-                  minWidth: width - 2 - openInEditorChevronWidth,
+                  minWidth: math.max(0, width - 2 - openInEditorChevronWidth),
                 ),
                 child: _Segment(
                   semanticsLabel: open,

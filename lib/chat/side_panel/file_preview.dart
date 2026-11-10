@@ -10,12 +10,15 @@ import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:path/path.dart' as p;
+import 'package:super_sliver_list/super_sliver_list.dart';
 
 import '../../base/shown_when_ready.dart';
 import '../../base/smooth_scroll.dart';
+import '../../ide/editor_word_wrap.dart';
 import '../../ide/file_service.dart';
 import '../../ide/ide_agent_edits.dart';
 import '../../ide/ide_code_diff.dart';
+import '../../theme/codicons.dart';
 import '../../ide/ide_code_editor.dart';
 import '../../ide/ide_hover.dart';
 import '../../ide/ide_image_preview.dart';
@@ -33,7 +36,8 @@ import '../../theme/material_file_icons.dart';
 import '../../theme/workbench_theme.dart' show themeColors;
 import '../../workspace/editor_launcher.dart' show openExternal;
 import '../../workspace/window_controls.dart';
-import '../composer/composer_files.dart' show ComposerFile, CopiedCode;
+import '../composer/composer_files.dart'
+    show CodeReference, ComposerFile, CopiedCode;
 import '../composer/file_drop.dart';
 import '../widgets/code_citation.dart' show CodeColorizer;
 import '../widgets/hover_builder.dart';
@@ -43,6 +47,7 @@ import 'file_link.dart';
 import 'file_open.dart';
 import 'line_diff.dart';
 import '../../base/safe_selection_indexes.dart';
+import '../../ide/host_paths.dart';
 
 /// A file in the side panel: its text in the IDE's editor, to edit, search
 /// and save (Cmd+S, Ctrl+S), the lines asked for marked and scrolled to,
@@ -70,6 +75,8 @@ class FilePreview extends StatefulWidget {
     this.formatter,
     this.agentEdit,
     this.onOpenAgentChange,
+    this.diffScroll,
+    this.onDiffScrolled,
   });
 
   final FileOpenRequest request;
@@ -81,6 +88,11 @@ class FilePreview extends StatefulWidget {
   /// Opens the next file whose agent change is pending, at it, once this
   /// one's is all kept or undone (see [IdeAgentHunks.open]).
   final ValueChanged<String>? onOpenAgentChange;
+
+  /// Where its changes were scrolled when shown before, for them to show
+  /// there again; told [onDiffScrolled] as they scroll.
+  final Offset? diffScroll;
+  final ValueChanged<Offset>? onDiffScrolled;
 
   /// The file's text as edited already (its tab's), to go on with: read
   /// anew in it where it is not changed.
@@ -125,6 +137,14 @@ class FilePreview extends StatefulWidget {
 
   /// Past this many lines, the text is not colored.
   static const maxColoredLines = 5000;
+
+  /// The lines selected in the file [focus] is in, as its text, its lines
+  /// or its changes show it: references to them for the chat (Add
+  /// Selection to Chat). None where nothing is, or a markdown file shows
+  /// rendered.
+  static List<CodeReference> selectedAt(BuildContext? focus) =>
+      focus?.findAncestorStateOfType<_FilePreviewState>()?._selectedIn(focus) ??
+      const [];
 
   @override
   State<FilePreview> createState() => _FilePreviewState();
@@ -195,10 +215,15 @@ class _FilePreviewState extends State<FilePreview> {
   /// An image shows as it is, its changes too: there is no text to compare.
   bool get _image => ideIsImagePath(_request.path);
 
-  /// A markdown file rendered: its changes not, unless the text before is
-  /// not known and the file shows as it is.
+  /// A markdown file rendered: its changes too, as the file is after them
+  /// (its changes a click away), unless it was deleted.
   bool get _isMarkdown =>
-      isMarkdownPath(_request.path) && (!_request.diff || _loaded is _Text);
+      isMarkdownPath(_request.path) &&
+      switch (_loaded) {
+        _ when !_request.diff => true,
+        _Text() || _Diff(deleted: false) => true,
+        _ => false,
+      };
 
   /// The file's own text shows, to edit: not its changes, nor the index's,
   /// nor what is only shown ([FileOpenRequest.readOnly]).
@@ -210,6 +235,7 @@ class _FilePreviewState extends State<FilePreview> {
     super.initState();
     if (widget.edit case final edit? when _editable) _attach(edit);
     EditorLanguageOverrides.instance.addListener(_languageModesChanged);
+    EditorWordWrap.on.addListener(_editChanged);
     IdeLanguageNames.ensureLoaded(() {
       if (mounted) setState(() {});
     });
@@ -265,6 +291,7 @@ class _FilePreviewState extends State<FilePreview> {
   @override
   void dispose() {
     EditorLanguageOverrides.instance.removeListener(_languageModesChanged);
+    EditorWordWrap.on.removeListener(_editChanged);
     _dropMarkdown();
     _detach();
     _hunks.dispose();
@@ -332,7 +359,7 @@ class _FilePreviewState extends State<FilePreview> {
     _loaded = null;
     _colors = const [];
     // The agent's change shows in the text.
-    if (_request.agentChange && _isMarkdown) _source = true;
+    if (_request.agentChange && isMarkdownPath(_request.path)) _source = true;
     _dropMarkdown();
     if (_image) return;
     // Its tab's edit shows as it is while the file is read anew.
@@ -541,12 +568,25 @@ class _FilePreviewState extends State<FilePreview> {
             ),
           if (_isMarkdown && _markdown != null)
             _TextButton(
-              label: _source ? l10n.sidePanelPreview : l10n.sidePanelSource,
+              label: _source
+                  ? l10n.sidePanelPreview
+                  : _loaded is _Diff
+                  ? l10n.sidePanelChanges
+                  : l10n.sidePanelSource,
               onPressed: () => setState(() => _source = !_source),
             ),
           if ((widget.agentEdit, _agent) case (final edit?, _?)
               when !_isMarkdown || _source)
             IdeAgentEditActions(edit: edit, hunks: _hunks),
+          // Its lines, the editor's or only shown, wrapped or not: the
+          // editors' one setting.
+          if (_loaded is _Text && !_image && (_markdown == null || _source))
+            IdeActionButton(
+              icon: Codicons.wordWrap,
+              tooltip: l10n.menuWordWrap,
+              checked: EditorWordWrap.on.value,
+              onPressed: EditorWordWrap.toggle,
+            ),
           ...widget.actions,
         ],
       ),
@@ -597,6 +637,8 @@ class _FilePreviewState extends State<FilePreview> {
               ? () => unawaited(openExternal(_request.path))
               : null,
         );
+      case _Text() || _Diff() when _markdown != null && !_source:
+        return _markdownPreview(_markdown!);
       case _Diff(:final original, :final modified, :final deleted):
         return IdeCodeDiff(
           // Asked for again: scrolled back to the lines asked for.
@@ -605,6 +647,8 @@ class _FilePreviewState extends State<FilePreview> {
           original: original,
           modified: modified,
           line: _request.range?.start,
+          scrolled: widget.diffScroll,
+          onScrolled: widget.onDiffScrolled,
           highlights: widget.highlights,
           // Lines of the file as it is now.
           onCopy: deleted
@@ -612,50 +656,14 @@ class _FilePreviewState extends State<FilePreview> {
               : (text, start, end) => _copied(start, end, text),
         );
       case _Text(:final lines):
-        if (_markdown case final model? when !_source) {
-          // The file's own text, its edit's: edited here, as in its source.
-          final edit = _edit;
-          final editable =
-              edit != null &&
-              !_request.agentChange &&
-              identical(model, edit.controller.document);
-          final preview = IdeMarkdownPreview(
-            key: _previewKey,
-            path: _request.path,
-            model: model,
-            readBytes: widget.readBytes ?? readFileBytes,
-            pathContext: widget.paths,
-            readOnly: !editable,
-            // Its source's editor told, which keeps whether it is saved.
-            onEdited: edit?.controller.syncFromDocument,
-            // Pictures and files pasted: copied beside it, linked to.
-            onPaste: editable
-                ? () => _markdownPaste().paste(_request.path)
-                : null,
-            initialLine: _request.range?.start,
-            onOpenFile: _openLinked,
-            onOpenExternal: (uri) => unawaited(openExternal(uri.toString())),
-            // This machine's files only, not a remote project's host's.
-            onReveal:
-                widget.files is! IdeHostFiles &&
-                    WindowControls.canRevealInFileManager
-                ? (path) => unawaited(WindowControls.revealInFileManager(path))
-                : null,
-          );
-          if (!editable) return preview;
-          // Files dropped on it from other apps: as pasted, where they are
-          // let go.
-          return _saved(
-            edit,
-            FileDropRegion(delegate: _markdownDrop, child: preview),
-          );
-        }
         if (_edit case final edit?) return _editing(edit);
         final range = _request.range;
         final gutter = _gutter(context, lines.length);
+        final wrap = EditorWordWrap.on.value;
         return _Lines(
           key: ValueKey(('text', _request.path)),
           count: lines.length,
+          wrap: wrap,
           lineHeight: _lineHeight(context),
           reveal: widget.reveal,
           target: range == null ? null : range.start - 1,
@@ -667,10 +675,49 @@ class _FilePreviewState extends State<FilePreview> {
             colors: _colors.elementAtOrNull(i),
             gutter: gutter,
             sideways: sideways,
+            wrap: wrap,
             marked: range != null && i + 1 >= range.start && i + 1 <= range.end,
           ),
         );
     }
+  }
+
+  /// A markdown file rendered: its own text, edited here as in its source;
+  /// its changes', as it is after them, only shown.
+  Widget _markdownPreview(EditorDocumentModel model) {
+    // The file's own text, its edit's: edited here, as in its source.
+    final edit = _edit;
+    final editable =
+        edit != null &&
+        !_request.agentChange &&
+        identical(model, edit.controller.document);
+    final preview = IdeMarkdownPreview(
+      key: _previewKey,
+      path: _request.path,
+      model: model,
+      readBytes: widget.readBytes ?? readFileBytes,
+      pathContext: widget.paths,
+      readOnly: !editable,
+      // Its source's editor told, which keeps whether it is saved.
+      onEdited: edit?.controller.syncFromDocument,
+      // Pictures and files pasted: copied beside it, linked to.
+      onPaste: editable ? () => _markdownPaste().paste(_request.path) : null,
+      initialLine: _request.range?.start,
+      onOpenFile: _openLinked,
+      onOpenExternal: (uri) => unawaited(openExternal(uri.toString())),
+      // This machine's files only, not a remote project's host's.
+      onReveal:
+          widget.files is! IdeHostFiles && WindowControls.canRevealInFileManager
+          ? (path) => unawaited(WindowControls.revealInFileManager(path))
+          : null,
+    );
+    if (!editable) return preview;
+    // Files dropped on it from other apps: as pasted, where they are
+    // let go.
+    return _saved(
+      edit,
+      FileDropRegion(delegate: _markdownDrop, child: preview),
+    );
   }
 
   /// [child], where [edit] is edited, saving it with the IDE's keys.
@@ -715,6 +762,40 @@ class _FilePreviewState extends State<FilePreview> {
     );
   }
 
+  /// What [FilePreview.selectedAt] finds at [focus], in it.
+  List<CodeReference> _selectedIn(BuildContext focus) {
+    List<CodeReference> of(
+      Iterable<({String text, int startLine, int endLine})> lines,
+    ) => [
+      for (final (:text, :startLine, :endLine) in lines)
+        CodeReference(
+          path: _request.path,
+          start: startLine,
+          end: endLine,
+          code: text,
+        ),
+    ];
+
+    switch (_loaded) {
+      case _Text() || _Diff() when _markdown != null && !_source:
+        return const [];
+      // Lines of the file as it is now: none of one deleted.
+      case _Diff(deleted: false):
+        final diff = focus.findAncestorStateOfType<IdeCodeDiffState>();
+        return of(diff?.selectedLines() ?? const []);
+      case _Text():
+        if (_edit case final edit?) return of(edit.controller.selectedLines());
+        final lines = focus.findAncestorStateOfType<_LinesState>();
+        final rows = lines?._selection.selectedRows();
+        if (rows == null) return const [];
+        return of([
+          (text: rows.text, startLine: rows.first + 1, endLine: rows.last + 1),
+        ]);
+      default:
+        return const [];
+    }
+  }
+
   /// Lines [start] to [end] copied, as [text]: pasted into the chat's
   /// composer, they go in as a reference to those lines of the file, as
   /// the IDE's editor's do.
@@ -751,7 +832,9 @@ class _FilePreviewState extends State<FilePreview> {
       files: files,
       l10n: l10n,
       root: widget.root,
-      context: widget.paths ?? (remote ? p.posix : p.context),
+      context:
+          widget.paths ??
+          (remote ? hostPathsFor(widget.root ?? '') : p.context),
       remote: remote,
       confirmLarge: (name, size) async {
         if (!mounted) return false;
@@ -895,12 +978,17 @@ class _Lines extends StatefulWidget {
     required this.row,
     required this.width,
     required this.lineHeight,
+    this.wrap = false,
     this.target,
     this.reveal = 0,
     this.onCopy,
   });
 
   final int count;
+
+  /// Whether long lines wrap at the view's width, rather than scroll
+  /// sideways: rows as tall as they wrap.
+  final bool wrap;
   final Widget Function(
     BuildContext context,
     int index,
@@ -920,6 +1008,9 @@ class _Lines extends StatefulWidget {
 class _LinesState extends State<_Lines> {
   final _scroll = SmoothScrollController();
   final _sideways = ScrollController();
+
+  /// Where each row is, wrapped: rows of their own heights.
+  final _list = ListController();
   late final _selection = _LinesSelection(
     (first, last, text) => widget.onCopy?.call(first, last, text),
   );
@@ -935,6 +1026,7 @@ class _LinesState extends State<_Lines> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.reveal != widget.reveal ||
         oldWidget.target != widget.target ||
+        oldWidget.wrap != widget.wrap ||
         oldWidget.lineHeight != widget.lineHeight) {
       _reveal();
     }
@@ -946,6 +1038,16 @@ class _LinesState extends State<_Lines> {
     if (target == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_scroll.hasClients) return;
+      if (widget.wrap) {
+        if (_list.isAttached) {
+          _list.jumpToItem(
+            index: math.max(0, target - 3),
+            scrollController: _scroll,
+            alignment: 0,
+          );
+        }
+        return;
+      }
       final position = _scroll.position;
       final offset = (target - 3) * widget.lineHeight;
       _scroll.jumpTo(offset.clamp(0.0, position.maxScrollExtent));
@@ -956,6 +1058,7 @@ class _LinesState extends State<_Lines> {
   void dispose() {
     _scroll.dispose();
     _sideways.dispose();
+    _list.dispose();
     _selection.dispose();
     super.dispose();
   }
@@ -966,6 +1069,12 @@ class _LinesState extends State<_Lines> {
       builder: (context, constraints) {
         // The measured width already includes gutters and change markers.
         final width = math.max(constraints.maxWidth, widget.width + 24);
+        Widget row(BuildContext context, int index) => _SelectableRow(
+          index: index,
+          lines: _selection,
+          child: widget.row(context, index, _sideways),
+        );
+        const padding = EdgeInsets.symmetric(vertical: 6);
         // Both scrollbars at the edges of the view, not of the lines as
         // wide as the longest; drawn as the editor's are.
         return SelectionArea(
@@ -978,31 +1087,35 @@ class _LinesState extends State<_Lines> {
                 thickness: 14,
                 notificationPredicate: (notification) =>
                     notification.metrics.axis == Axis.vertical,
-                child: HoverScrollbar(
-                  controller: _sideways,
-                  thickness: 12,
-                  notificationPredicate: (notification) =>
-                      notification.metrics.axis == Axis.horizontal,
-                  child: SingleChildScrollView(
-                    controller: _sideways,
-                    scrollDirection: Axis.horizontal,
-                    child: SizedBox(
-                      width: width,
-                      height: constraints.maxHeight,
-                      child: ListView.builder(
+                child: widget.wrap
+                    ? SuperListView.builder(
                         controller: _scroll,
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        itemExtent: widget.lineHeight,
+                        listController: _list,
+                        padding: padding,
                         itemCount: widget.count,
-                        itemBuilder: (context, index) => _SelectableRow(
-                          index: index,
-                          lines: _selection,
-                          child: widget.row(context, index, _sideways),
+                        itemBuilder: row,
+                      )
+                    : HoverScrollbar(
+                        controller: _sideways,
+                        thickness: 12,
+                        notificationPredicate: (notification) =>
+                            notification.metrics.axis == Axis.horizontal,
+                        child: SingleChildScrollView(
+                          controller: _sideways,
+                          scrollDirection: Axis.horizontal,
+                          child: SizedBox(
+                            width: width,
+                            height: constraints.maxHeight,
+                            child: ListView.builder(
+                              controller: _scroll,
+                              padding: padding,
+                              itemExtent: widget.lineHeight,
+                              itemCount: widget.count,
+                              itemBuilder: row,
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ),
               ),
             ),
           ),
@@ -1044,19 +1157,33 @@ class _LinesSelection extends StaticSelectionContainerDelegate
 
   @override
   SelectedContent? getSelectedContent() {
+    final (content, rows) = _selectedContent();
+    if (rows == null) return content;
+    onCopy(rows.first, rows.last, rows.text);
+    return SelectedContent(plainText: rows.text);
+  }
+
+  /// The rows selected (from 0) and their text, one to a line; null when
+  /// none is.
+  ({int first, int last, String text})? selectedRows() => _selectedContent().$2;
+
+  (SelectedContent?, ({int first, int last, String text})?) _selectedContent() {
     _rows.clear();
     final content = super.getSelectedContent();
-    if (content == null || _rows.isEmpty) return content;
-    final rows = [..._rows]..sort((a, b) => a.$1.compareTo(b.$1));
+    // The rows outside the selection tell nothing selected: not its own.
+    final rows = [
+      for (final row in _rows)
+        if (row.$2.isNotEmpty) row,
+    ]..sort((a, b) => a.$1.compareTo(b.$1));
     _rows.clear();
+    if (content == null || rows.isEmpty) return (content, null);
     // An empty line selects nothing of its own: kept, between the others.
     final byRow = {for (final (row, text) in rows) row: text};
     final text = [
       for (var row = rows.first.$1; row <= rows.last.$1; row++)
         byRow[row] ?? '',
     ].join('\n');
-    onCopy(rows.first.$1, rows.last.$1, text);
-    return SelectedContent(plainText: text);
+    return (content, (first: rows.first.$1, last: rows.last.$1, text: text));
   }
 }
 
@@ -1120,12 +1247,16 @@ class _LineRow extends StatelessWidget {
     required this.sideways,
     this.colors,
     this.marked = false,
+    this.wrap = false,
   });
 
   final int number;
   final String text;
   final double gutter;
   final ScrollController sideways;
+
+  /// Wrapped at the row's width, as many lines as that takes; else one.
+  final bool wrap;
   final List<TextSpan>? colors;
   final bool marked;
 
@@ -1150,9 +1281,9 @@ class _LineRow extends StatelessWidget {
                     children: colors,
                     text: colors == null ? shown : null,
                   ),
-                  maxLines: 1,
-                  softWrap: false,
-                  overflow: TextOverflow.clip,
+                  maxLines: wrap ? null : 1,
+                  softWrap: wrap,
+                  overflow: wrap ? null : TextOverflow.clip,
                   style: style.copyWith(
                     color: themeColors['editor.foreground'],
                   ),

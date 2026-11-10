@@ -660,6 +660,17 @@ class BrowserConnection {
 
   bool can(String capability) => capabilities.contains(capability);
 
+  /// Whether the user let the extension reach file:// pages and local files
+  /// (its "Allow access to file URLs"): null for one from before it said.
+  bool? fileAccess;
+
+  /// What to tell when [fileAccess] is false: only the user can turn it on.
+  static const fileAccessHelp =
+      'The browser does not let BaoCode\'s extension reach local files. Ask '
+      'the user to open chrome://extensions, click Details on BaoCode and '
+      'turn on "Allow access to file URLs" (then try again; the extension '
+      'reloads).';
+
   int _lastId = 0;
   final Map<int, Completer<Object?>> _pending = {};
   final BytesBuilder _buffer = BytesBuilder(copy: false);
@@ -733,9 +744,18 @@ class BrowserConnection {
       ..add(body);
   }
 
+  /// How many bytes [_buffer] must have for a whole message to be in it:
+  /// a header's, then, once that is in, its message's too.
+  int _wanted = 4;
+
   void _read(Uint8List data) {
     _buffer.add(data);
+    // Not taking the bytes before a message is all there: taken at every
+    // chunk, a big message (a screenshot's, a page's) was copied over and
+    // over, seconds of the main thread for some megabytes.
+    if (_buffer.length < _wanted) return;
     final bytes = _buffer.takeBytes();
+    _wanted = 4;
     var offset = 0;
     while (bytes.length - offset >= 4) {
       final length = ByteData.sublistView(
@@ -747,7 +767,10 @@ class BrowserConnection {
         _close();
         return;
       }
-      if (bytes.length - offset - 4 < length) break;
+      if (bytes.length - offset - 4 < length) {
+        _wanted = 4 + length;
+        break;
+      }
       final body = Uint8List.sublistView(
         bytes,
         offset + 4,
@@ -800,6 +823,7 @@ class BrowserConnection {
       case 'hello':
         browser = message['browser'] as String? ?? 'Browser';
         version = message['version'] as String?;
+        fileAccess = message['fileAccess'] as bool?;
         protocol = (message['protocol'] as num?)?.toInt() ?? 1;
         capabilities = {
           for (final capability in message['capabilities'] as List? ?? [])

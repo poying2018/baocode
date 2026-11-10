@@ -4,7 +4,9 @@ import '../../browser/browser_steps.dart';
 import '../../images/image_steps.dart';
 import '../../l10n/l10n.dart';
 import '../chat_models.dart';
+import '../edit_detail.dart';
 import 'activity_row.dart';
+import 'agent_message_card.dart';
 import 'agent_step.dart';
 import 'assistant_text.dart';
 import 'command_step.dart';
@@ -60,6 +62,10 @@ class ChatItemView extends StatelessWidget {
 
   Widget _build() {
     return switch (item) {
+      UserMessageItem(:final text, fromAgent: final agent?) => AgentMessageCard(
+        agent: agent,
+        text: text,
+      ),
       UserMessageItem(:final text, :final images) => UserMessageBubble(
         text: text,
         images: images,
@@ -91,6 +97,8 @@ class ChatItemView extends StatelessWidget {
         :final path,
         :final results,
         :final label,
+        :final tool,
+        :final input,
         :final status,
         :final output,
         :final images,
@@ -103,6 +111,8 @@ class ChatItemView extends StatelessWidget {
           path: path,
           results: results,
           label: label,
+          tool: tool,
+          input: input,
           status: status,
           output: output,
           images: images,
@@ -177,6 +187,8 @@ String chatItemPlainText(
   }
 
   return switch (item) {
+    UserMessageItem(:final text, fromAgent: final agent?) =>
+      '$agent: ${inline(text)}',
     UserMessageItem(:final text) => inline(text),
     AssistantTextItem(:final text) => [
       for (final line in text.split('\n'))
@@ -207,14 +219,21 @@ String chatItemPlainText(
       :final input,
     ) =>
       [
-        StepHeader.text(
-          label ??
-              (kind == ToolKind.browser
-                  ? browserVerb(tool, input, status: status, l10n: strings)
-                  : toolVerb(kind, status: status, l10n: strings)),
-          target,
-          detail,
-        ),
+        switch (kind == ToolKind.todo
+            ? todoStep(tool, input, target, output: output, l10n: strings)
+            : null) {
+          (:final verb, :final object, detail: final todoDetail)
+              when label == null =>
+            StepHeader.text(verb, object, todoDetail ?? detail),
+          _ => StepHeader.text(
+            label ??
+                (kind == ToolKind.browser
+                    ? browserVerb(tool, input, status: status, l10n: strings)
+                    : toolVerb(kind, status: status, l10n: strings)),
+            target,
+            detail,
+          ),
+        },
         if (expanded)
           if (results.isNotEmpty)
             results.join('\n')
@@ -247,11 +266,15 @@ String chatItemPlainText(
       ].join('\n'),
     CodeDiffItem(:final fileName, :final lines) => [
       [
-        StepHeader.text(strings.toolEdited, fileName),
+        // A card shows only the file's name over its lines, always open.
+        if (EditDetail.current.value == EditDetail.compact)
+          StepHeader.text(strings.toolEdited, fileName)
+        else
+          fileName,
         if (item.added > 0) '+${item.added}',
         if (item.removed > 0) '-${item.removed}',
       ].join(' '),
-      if (expanded)
+      if (expanded || EditDetail.current.value == EditDetail.card)
         for (final line in lines)
           '${line.lineNumber} ${switch (line.type) {
             DiffLineType.added => '+',

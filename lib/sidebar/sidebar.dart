@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../base/give_way_row.dart';
 import '../base/smooth_scroll.dart';
 import '../chat/chat_keys.dart';
+import '../chat/composer/composer_mock_data.dart' show fuzzyMatch;
 import '../chat/floating/floating_placement.dart';
 import '../chat/widgets/hover_builder.dart';
 import '../chat/widgets/inline_rename_field.dart';
@@ -20,6 +22,7 @@ import '../ide/ide_button.dart' show IdeButtonColors;
 import '../ide/ide_commands.dart' show ideUsesMacKeys;
 import '../ide/ide_hover.dart';
 import '../ide/ide_list.dart';
+import '../ide/ide_speed_search.dart';
 import '../ide/ide_spinning.dart';
 import '../kernel/agent_kernel.dart' show KernelChoiceKind;
 import '../keybindings/chat_keybindings.dart';
@@ -37,12 +40,14 @@ import '../theme/workbench_theme.dart' show themeColors;
 import '../update/update_service.dart';
 import '../workspace/chat_drag.dart';
 import '../workspace/editor_launcher.dart';
+import '../workspace/islands.dart';
 import '../workspace/title_bar_double_click.dart';
 import '../workspace/window_controls.dart';
 import '../workspace/workspace.dart';
 import '../workspace/workspace_dialog.dart';
 import 'sidebar_menu.dart';
 import 'sidebar_times.dart';
+import '../theme/svg_icons.dart';
 
 enum SidebarGrouping {
   project('Project', Icons.folder_outlined),
@@ -98,6 +103,10 @@ class _Group {
 
 const _pinnedGroup = 'pinned';
 
+/// How much further in an aside's row is than the one it was asked
+/// beside (see [Workspace.askBeside]).
+const _asideIndent = 16.0;
+
 /// The group of the archived agents, while they show.
 const _archivedGroup = 'archived';
 
@@ -137,6 +146,7 @@ class _ListRow {
     this.extent, {
     this.thread,
     this.more,
+    this.aside = false,
   });
 
   final _ListRowKind kind;
@@ -145,6 +155,9 @@ class _ListRow {
   final double extent;
   final AgentThread? thread;
   final _Rows? more;
+
+  /// Whether [thread] is an aside, under the one it was asked beside.
+  final bool aside;
 }
 
 /// What the window asks of its sidebar, for the chat's keybindings: the
@@ -188,7 +201,17 @@ class Sidebar extends StatefulWidget {
     this.updates,
     this.onUpdate,
     this.setup,
+    this.surface,
+    this.atRight = false,
   });
+
+  /// Under it: [AppColors.sidebarSurface] by default; none where the
+  /// window's own color is under it already.
+  final Color? surface;
+
+  /// At the window's right (see ChatLayout): its collapse button at its
+  /// left, by the conversations.
+  final bool atRight;
 
   /// Over the foot's row: the setup checklist folded ("Setup n/m"), which
   /// shows nothing when the checklist does not fold there.
@@ -308,8 +331,19 @@ class _SidebarState extends State<Sidebar>
 
   bool _rowsDirty = true;
   AgentThread? _listedCurrent;
+
+  /// The agent whose row was just clicked to open it: in view, under the
+  /// pointer, it is not scrolled to (see [_revealCurrent]).
+  AgentThread? _clickedOpen;
   List<Project> _listProjects = const [];
   List<_ListRow> _listRows = const [];
+
+  /// The groups listed, those the speed search hides too.
+  List<_Group> _listGroups = const [];
+
+  /// The asides listed under each conversation, as [_groups] took them out
+  /// of the groups.
+  Map<AgentThread, List<AgentThread>> _asides = const {};
   List<double> _rowOffsets = const [0];
   Map<Key, int> _rowIndices = const {};
   Map<AgentThread, int> _threadIndices = const {};
@@ -317,6 +351,21 @@ class _SidebarState extends State<Sidebar>
   Offset? _dragPosition;
   Offset? _projectDragPosition;
   List<Project> _projectDragProjects = const [];
+
+  /// Speed search, as IntelliJ's trees have: typed with the list focused (a
+  /// row or a project clicked), the project whose name matches best is
+  /// scrolled to; its characters matched stand out. Only the list's keys:
+  /// what is typed elsewhere (the chat's input, wherever the pointer is)
+  /// stays there.
+  String _speedQuery = '';
+
+  /// The project headers the search matches, top to bottom, by their
+  /// groups' ids: the characters of their names matched.
+  Map<String, List<int>> _speedHits = const {};
+
+  /// The project found, among [_speedHits] (or found before, while none
+  /// matches).
+  String? _speedFound;
 
   /// Shows the archived agents or hides them; shown, they are scrolled to,
   /// at the bottom of the list.
@@ -364,7 +413,11 @@ class _SidebarState extends State<Sidebar>
   void _timesChanged() => setState(_markRowsDirty);
 
   void _focusChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {
+      // The keys taken elsewhere: the search is done.
+      if (!_listFocus.hasFocus) _speedClear();
+    });
   }
 
   @override
@@ -417,8 +470,22 @@ class _SidebarState extends State<Sidebar>
 
   /// The agents listed, top to bottom (see [_buildList]).
   List<AgentThread> _visibleThreads() => [
-    for (final group in _groups()) ..._rows(group).threads,
+    for (final group in _groups())
+      for (final thread in _rows(group).threads) ...[
+        thread,
+        ..._asidesListed(thread),
+      ],
   ];
+
+  /// The asides listed under [thread]: folded, none but the one shown.
+  List<AgentThread> _asidesListed(AgentThread thread) {
+    final asides = _asides[thread] ?? const <AgentThread>[];
+    if (!_workspace.asidesFolded(thread)) return asides;
+    return [
+      for (final aside in asides)
+        if (identical(aside, _current)) aside,
+    ];
+  }
 
   /// Whether [group] folds: not the only project's, which is all there is.
   bool _collapsible(_Group group) => group.project == null || _projectsShown;
@@ -426,8 +493,37 @@ class _SidebarState extends State<Sidebar>
   bool _collapsed(_Group group) =>
       _collapsible(group) && _workspace.isCollapsed(group.id);
 
+  /// What [thread] needs, its asides' too where they are folded under it:
+  /// the most pressing (see [ThreadStatus]'s order).
+  ThreadStatus _statusOf(AgentThread thread) {
+    var status = thread.shownStatus;
+    if (_workspace.asidesFolded(thread)) {
+      for (final aside in _asides[thread] ?? const <AgentThread>[]) {
+        if (aside.shownStatus.index < status.index) status = aside.shownStatus;
+      }
+    }
+    return status;
+  }
+
+  /// How many of [group]'s agents (and their asides) are at work, waiting
+  /// on the user, or finished unseen: told on its header while it is
+  /// folded, where its rows are not.
+  Map<ThreadStatus, int> _groupStatuses(_Group group) {
+    final counts = <ThreadStatus, int>{};
+    for (final thread in group.threads) {
+      for (final one in [thread, ...?_asides[thread]]) {
+        final status = one.shownStatus;
+        if (status != ThreadStatus.idle) {
+          counts[status] = (counts[status] ?? 0) + 1;
+        }
+      }
+    }
+    return counts;
+  }
+
   /// A project's most recent agents, unless asked for all (the open one
-  /// too, wherever it is).
+  /// too, wherever it is, and those at work or waiting on the user: not to
+  /// be lost under "show more").
   _Rows _rows(_Group group) {
     if (_collapsed(group)) return (threads: const [], more: 0, less: false);
     final all = group.threads;
@@ -440,7 +536,10 @@ class _SidebarState extends State<Sidebar>
     final current = _current;
     final shown = [
       for (final (i, thread) in all.indexed)
-        if (i < _recent || identical(thread, current)) thread,
+        if (i < _recent ||
+            identical(thread, current) ||
+            _statusOf(thread).index <= ThreadStatus.running.index)
+          thread,
     ];
     return (threads: shown, more: all.length - shown.length, less: false);
   }
@@ -474,6 +573,7 @@ class _SidebarState extends State<Sidebar>
       return;
     }
     setState(() => _listSelection.select(thread));
+    _clickedOpen = thread;
     _open(thread);
   }
 
@@ -557,6 +657,10 @@ class _SidebarState extends State<Sidebar>
     if (event is KeyUpEvent || _renaming != null) {
       return KeyEventResult.ignored;
     }
+    // Searching, its keys come first; else a key bound is the binding's.
+    if (_speedQuery.isNotEmpty && _speedKey(event)) {
+      return KeyEventResult.handled;
+    }
     int rows(Object? args) => args is num ? args.toInt() : 1;
     final commands = <String, void Function(Object?)>{
       'list.focusDown': (args) => listFocusNext(rows(args)),
@@ -587,6 +691,7 @@ class _SidebarState extends State<Sidebar>
       commands[command]!(item.entry.args);
       return KeyEventResult.handled;
     }
+    if (_speedKey(event)) return KeyEventResult.handled;
     return ideListNavigationKeys.contains(event.logicalKey)
         ? KeyEventResult.handled
         : KeyEventResult.ignored;
@@ -594,6 +699,196 @@ class _SidebarState extends State<Sidebar>
 
   void _revealRow(AgentThread thread) {
     final index = _threadIndices[thread];
+    if (index == null) return;
+    ideRevealRange(_listScroll, _rowOffsets[index], _rowOffsets[index + 1]);
+  }
+
+  /// The open agent brought into view, once another is open (its pane
+  /// clicked, a shortcut, the search): its row; in a folded project, the
+  /// project's header, marked (see [_GroupHeader.located]), the project
+  /// left folded as the user had it.
+  void _revealCurrent() {
+    final current = _current;
+    // Searching, the list is the search's.
+    if (current == null || _onPage || _speedQuery.isNotEmpty) return;
+    if (_threadIndices[current] case final index?) return _bringTo(index);
+    for (final (index, row) in _listRows.indexed) {
+      if (row.kind == _ListRowKind.header &&
+          _collapsed(row.group) &&
+          row.group.threads.contains(current)) {
+        return _bringTo(index);
+      }
+    }
+  }
+
+  /// Scrolls row [index] to a third of the way down the list, where it is
+  /// seen, an agent's project's header above it where that fits, unless it
+  /// is well within the list already (not near its top or bottom edge,
+  /// where it would go unnoticed).
+  void _bringTo(int index) {
+    if (!_listScroll.hasClients) return;
+    final position = _listScroll.position;
+    final view = position.viewportDimension;
+    final top = _rowOffsets[index] - position.pixels;
+    final bottom = _rowOffsets[index + 1] - position.pixels;
+    if (top >= view * .15 && bottom <= view * .85) return;
+    var at = _rowOffsets[index] - view / 3;
+    if (_listRows[index].kind != _ListRowKind.header) {
+      final header = _listRows
+          .take(index)
+          .toList()
+          .lastIndexWhere((row) => row.kind == _ListRowKind.header);
+      // The header at the top, where the row is still in the upper half.
+      if (header >= 0 &&
+          _rowOffsets[index + 1] - _rowOffsets[header] <= view / 2) {
+        at = math.min(at, _rowOffsets[header] - 8);
+      }
+    }
+    final target = at.clamp(position.minScrollExtent, position.maxScrollExtent);
+    if ((target - position.pixels).abs() < 1) return;
+    unawaited(
+      position.animateTo(
+        target,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOutCubic,
+      ),
+    );
+  }
+
+  /// Speed search's keys, the list's own: a character typed searches;
+  /// while it does, Backspace, Escape, Enter and the arrows are its.
+  bool _speedKey(KeyEvent event) {
+    if (event is KeyUpEvent || _renaming != null || _renamingHost) {
+      return false;
+    }
+    if (_speedQuery.isNotEmpty) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.escape:
+          _speedEnd();
+          return true;
+        case LogicalKeyboardKey.backspace:
+          final query = _speedQuery.characters.skipLast(1).toString();
+          query.isEmpty ? _speedEnd() : _speedSearch(query);
+          return true;
+        case LogicalKeyboardKey.enter || LogicalKeyboardKey.numpadEnter:
+          _speedEnter();
+          return true;
+        case LogicalKeyboardKey.arrowDown:
+          _speedStep(1);
+          return true;
+        case LogicalKeyboardKey.arrowUp:
+          _speedStep(-1);
+          return true;
+      }
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isMetaPressed ||
+        keyboard.isAltPressed) {
+      return false;
+    }
+    final char = event.character;
+    if (char == null ||
+        char.isEmpty ||
+        char.codeUnitAt(0) < 0x20 ||
+        char.codeUnitAt(0) == 0x7f) {
+      return false;
+    }
+    // Space is the list's (toggles a group); no projects, nothing to find.
+    if (_speedQuery.isEmpty && (char == ' ' || _listProjects.isEmpty)) {
+      return false;
+    }
+    _speedSearch(_speedQuery + char);
+    return true;
+  }
+
+  void _speedClear() {
+    if (_speedQuery.isNotEmpty) _rowsDirty = true;
+    _speedQuery = '';
+    _speedHits = const {};
+    _speedFound = null;
+  }
+
+  /// Ends the search, every project listed again: the agent picked among
+  /// those it showed kept in view, else the project found.
+  void _speedEnd() {
+    if (_speedQuery.isEmpty) return;
+    final found = _speedHits.containsKey(_speedFound) ? _speedFound : null;
+    final shown = {for (final row in _listRows) ?row.thread};
+    setState(_speedClear);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_listSelection.focused case final thread?
+          when shown.contains(thread)) {
+        _revealRow(thread);
+      } else if (found != null) {
+        _revealHeader(found);
+      }
+    });
+  }
+
+  /// Finds [query] among the projects' names, listing only those it
+  /// matches: the best match, the one found before while it is as good.
+  void _speedSearch(String query) {
+    final hits = <String, ({List<int> indexes, int score})>{};
+    for (final group in _listGroups) {
+      if (group.project == null) continue;
+      if (fuzzyMatch(group.label, query) case final hit?) {
+        hits[group.id] = hit;
+      }
+    }
+    String? best;
+    for (final MapEntry(:key, :value) in hits.entries) {
+      final bestScore = best == null ? null : hits[best]!.score;
+      if (bestScore == null ||
+          value.score > bestScore ||
+          (value.score == bestScore && key == _speedFound)) {
+        best = key;
+      }
+    }
+    setState(() {
+      _speedQuery = query;
+      _speedHits = {
+        for (final MapEntry(:key, :value) in hits.entries) key: value.indexes,
+      };
+      if (best != null) _speedFound = best;
+      _rowsDirty = true;
+    });
+    if (best == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _revealHeader(best!);
+    });
+  }
+
+  /// The next match below (or above) the one found.
+  void _speedStep(int delta) {
+    final ids = _speedHits.keys.toList();
+    if (ids.isEmpty) return;
+    final at = ids.indexOf(_speedFound ?? '');
+    final next = ids[(at + delta).clamp(0, ids.length - 1)];
+    setState(() => _speedFound = next);
+    _revealHeader(next);
+  }
+
+  /// Into the project found: unfolded, its first agent focused.
+  void _speedEnter() {
+    final id = _speedFound;
+    final group = _speedHits.containsKey(id)
+        ? _listGroups.where((group) => group.id == id).firstOrNull
+        : null;
+    setState(_speedClear);
+    if (group == null) return;
+    if (_collapsed(group)) _workspace.toggleCollapsed(group.id);
+    final first = _rows(group).threads.firstOrNull;
+    if (first != null) setState(() => _listSelection.select(first));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      first == null ? _revealHeader(group.id) : _revealRow(first);
+    });
+  }
+
+  void _revealHeader(String id) {
+    final index = _rowIndices[ValueKey(id)];
     if (index == null) return;
     ideRevealRange(_listScroll, _rowOffsets[index], _rowOffsets[index + 1]);
   }
@@ -625,6 +920,22 @@ class _SidebarState extends State<Sidebar>
             _workspace.listsInSidebar(thread))
           thread,
     ]..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    // Asides under the one each was asked beside, where that one is
+    // listed with them (both archived, or neither): not in groups of
+    // their own.
+    final listed = threads.toSet();
+    _asides = {
+      for (final MapEntry(key: parent, value: asides)
+          in _workspace.asidesByParent.entries)
+        if (listed.contains(parent))
+          parent: [
+            for (final aside in asides)
+              if (listed.contains(aside) && aside.archived == parent.archived)
+                aside,
+          ],
+    }..removeWhere((_, asides) => asides.isEmpty);
+    final nested = {for (final asides in _asides.values) ...asides};
+    threads.removeWhere(nested.contains);
     final active = [
       for (final thread in threads)
         if (!thread.archived) thread,
@@ -717,107 +1028,121 @@ class _SidebarState extends State<Sidebar>
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.sidebarSurface,
-      child: ListenableBuilder(
-        listenable: _workspace,
-        builder: (context, _) => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // The toggle lives in the window's header on Windows (see
-            // window_header/), which is where this row would have been.
-            if (!WindowControls.drawsHeader) _buildTopBar(),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                8,
-                AppMetrics.contentInset,
-                8,
-                6,
-              ),
-              // A new chat picks its folder over its input (see
-              // NewChatFolderBar): a folder first only without any.
-              child: _NewAgentButton(
-                onTap: switch (_workspace.sidebarHost) {
-                  final host? when _workspace.sidebarProjectsOn(host).isEmpty =>
-                    () => widget.onOpenFolderOn?.call(host),
-                  null when _workspace.sidebarProjectsHere.isEmpty =>
-                    widget.onOpenFolder ?? () {},
-                  _ => _create,
-                },
-              ),
-            ),
-            if (switch (_workspace.sidebarHost) {
-                  final host? when widget.onOpenFolderOn != null =>
-                    () => widget.onOpenFolderOn!(host),
-                  null => widget.onOpenFolder,
-                  _ => null,
-                }
-                case final open?)
-              _NavRow(
-                icon: Codicons.folderOpened,
-                label: context.l10n.sidebarOpenProject,
-                onTap: open,
-              ),
-            if (widget.onSearch case final search?)
-              _NavRow(
-                icon: Codicons.search,
-                label: context.l10n.sidebarSearch,
-                hover: ChatKeys.titleWithKey(
-                  context.l10n.cmdChatSearch,
-                  ChatCommandIds.search,
-                  ChatKeys.chatLayout,
-                ),
-                onTap: search,
-              ),
-            if (widget.onCustomize case final customize?)
-              _NavRow(
-                icon: Codicons.plug,
-                label: context.l10n.sidebarCustomize,
-                selected: widget.customizing,
-                onTap: customize,
-              ),
-            if (widget.onStash case final stash?)
-              switch (widget.stashes) {
-                final stashes? => ListenableBuilder(
-                  listenable: stashes.changes,
-                  builder: (context, _) => _NavRow(
-                    icon: Codicons.note,
-                    label: context.l10n.stashTitle,
-                    selected: widget.stashing,
-                    badge: stashes.news(),
-                    badgeHover: context.l10n.stashNewsSidebar(stashes.news()),
-                    onTap: stash,
-                  ),
-                ),
-                null => _NavRow(
-                  icon: Codicons.note,
-                  label: context.l10n.stashTitle,
-                  selected: widget.stashing,
-                  onTap: stash,
-                ),
-              },
-            if (widget.onSearch != null ||
-                widget.onCustomize != null ||
-                widget.onStash != null)
-              const SizedBox(height: 4),
-            _buildGroupingBar(),
-            Expanded(child: _buildList()),
-            _buildFooter(),
-          ],
-        ),
+      color: widget.surface ?? AppColors.sidebarSurface,
+      child: Listener(
+        // On the way up, so a click lands on the row it went down on
+        // before every project is listed again.
+        onPointerUp: (_) => _speedEnd(),
+        child: _buildContent(),
       ),
     );
   }
 
-  /// Under the window's traffic lights; the collapse button on the right.
+  Widget _buildContent() {
+    return ListenableBuilder(
+      listenable: _workspace,
+      builder: (context, _) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The toggle lives in the window's header on Windows (see
+          // window_header/), which is where this row would have been.
+          if (!WindowControls.drawsHeader) _buildTopBar(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              8,
+              AppMetrics.contentInset,
+              8,
+              6,
+            ),
+            // A new chat picks its folder over its input (see
+            // NewChatFolderBar): a folder first only without any.
+            child: _NewAgentButton(
+              onTap: switch (_workspace.sidebarHost) {
+                final host? when _workspace.sidebarProjectsOn(host).isEmpty =>
+                  () => widget.onOpenFolderOn?.call(host),
+                null when _workspace.sidebarProjectsHere.isEmpty =>
+                  widget.onOpenFolder ?? () {},
+                _ => _create,
+              },
+            ),
+          ),
+          if (switch (_workspace.sidebarHost) {
+                final host? when widget.onOpenFolderOn != null =>
+                  () => widget.onOpenFolderOn!(host),
+                null => widget.onOpenFolder,
+                _ => null,
+              }
+              case final open?)
+            _NavRow(
+              icon: Codicons.folderOpened,
+              label: context.l10n.sidebarOpenProject,
+              onTap: open,
+            ),
+          if (widget.onSearch case final search?)
+            _NavRow(
+              icon: Codicons.search,
+              label: context.l10n.sidebarSearch,
+              hover: ChatKeys.titleWithKey(
+                context.l10n.cmdChatSearch,
+                ChatCommandIds.search,
+                ChatKeys.chatLayout,
+              ),
+              onTap: search,
+            ),
+          if (widget.onCustomize case final customize?)
+            _NavRow(
+              icon: Codicons.plug,
+              label: context.l10n.sidebarCustomize,
+              selected: widget.customizing,
+              onTap: customize,
+            ),
+          if (widget.onStash case final stash?)
+            switch (widget.stashes) {
+              final stashes? => ListenableBuilder(
+                listenable: stashes.changes,
+                builder: (context, _) => _NavRow(
+                  icon: Codicons.note,
+                  label: context.l10n.stashTitle,
+                  selected: widget.stashing,
+                  badge: stashes.news(),
+                  badgeHover: context.l10n.stashNewsSidebar(stashes.news()),
+                  onTap: stash,
+                ),
+              ),
+              null => _NavRow(
+                icon: Codicons.note,
+                label: context.l10n.stashTitle,
+                selected: widget.stashing,
+                onTap: stash,
+              ),
+            },
+          if (widget.onSearch != null ||
+              widget.onCustomize != null ||
+              widget.onStash != null)
+            const SizedBox(height: 4),
+          _buildGroupingBar(),
+          Expanded(child: _buildList()),
+          _buildFooter(),
+        ],
+      ),
+    );
+  }
+
+  /// Under the window's traffic lights; the collapse button on the side
+  /// by the conversations.
   Widget _buildTopBar() {
+    final right = widget.atRight;
     return TitleBarDoubleClick(
       child: SizedBox(
         height: AppMetrics.titleBarHeight,
         child: Row(
+          textDirection: right ? TextDirection.rtl : TextDirection.ltr,
           children: [
             const Spacer(),
             SidebarIconButton(
-              icon: Codicons.layoutSidebarLeft,
+              icon: right
+                  ? Codicons.layoutSidebarRight
+                  : Codicons.layoutSidebarLeft,
               tooltip: context.l10n.windowHideSidebar,
               command: 'workbench.action.toggleSidebarVisibility',
               onTap: widget.onCollapse,
@@ -830,6 +1155,13 @@ class _SidebarState extends State<Sidebar>
   }
 
   Widget _buildGroupingBar() {
+    // Searching, the filter is the whole row.
+    if (_speedQuery.isNotEmpty) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(8, 5, 8, 1),
+        child: _buildSpeedHeading(),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(14, 6, 6, 2),
       child: Row(
@@ -923,6 +1255,15 @@ class _SidebarState extends State<Sidebar>
       ),
     );
   }
+
+  /// What the speed search has been typed, in place of the heading, as a
+  /// filter on: how many projects it leaves of all.
+  Widget _buildSpeedHeading() => IdeSpeedSearchField(
+    query: _speedQuery,
+    found: _speedHits.length,
+    total: _listProjects.length,
+    onClear: _speedEnd,
+  );
 
   /// Folds every group that folds, or, all folded, unfolds them (#300):
   /// shown where there are several to fold.
@@ -1279,13 +1620,21 @@ class _SidebarState extends State<Sidebar>
     if (switched) _rowsDirty = true;
     if (_rowsDirty) {
       _listedCurrent = _current;
-      final groups = [
+      final all = [
         for (final group in _groups())
           // Empty projects stay to start an agent in; other empty groups go.
           if (group.threads.isNotEmpty || group.project != null || group.pinned)
             group,
       ];
-      _listProjects = [for (final group in groups) ?group.project];
+      _listGroups = all;
+      _listProjects = [for (final group in all) ?group.project];
+      // Searching, only the projects it matches.
+      final groups = _speedQuery.isEmpty
+          ? all
+          : [
+              for (final group in all)
+                if (_speedHits.containsKey(group.id)) group,
+            ];
       final rows = <_ListRow>[];
       for (final group in groups) {
         rows.add(_ListRow(_ListRowKind.header, group, ValueKey(group.id), 32));
@@ -1305,6 +1654,18 @@ class _SidebarState extends State<Sidebar>
               thread: thread,
             ),
           );
+          for (final aside in _asidesListed(thread)) {
+            rows.add(
+              _ListRow(
+                _ListRowKind.thread,
+                group,
+                ObjectKey(aside),
+                _rowHeight,
+                thread: aside,
+                aside: true,
+              ),
+            );
+          }
         }
         if (shown.more > 0 || shown.less) {
           rows.add(
@@ -1335,18 +1696,32 @@ class _SidebarState extends State<Sidebar>
           _onPage || !_threadIndices.containsKey(_current) ? null : _current,
         );
       }
-      _listSelection.values.retainWhere(_threadIndices.containsKey);
-      if (!_threadIndices.containsKey(_listSelection.focused)) {
-        _listSelection.focused = null;
+      // And the list goes to it, laid out first; not from its own row,
+      // clicked: that moving away under the pointer.
+      if (switched) {
+        final clicked = identical(_current, _clickedOpen);
+        _clickedOpen = null;
+        if (!clicked) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _revealCurrent();
+          });
+        }
       }
-      if (!_threadIndices.containsKey(_listSelection.anchor)) {
-        _listSelection.anchor = null;
+      // The rows picked stay while the search hides them.
+      if (_speedQuery.isEmpty) {
+        _listSelection.values.retainWhere(_threadIndices.containsKey);
+        if (!_threadIndices.containsKey(_listSelection.focused)) {
+          _listSelection.focused = null;
+        }
+        if (!_threadIndices.containsKey(_listSelection.anchor)) {
+          _listSelection.anchor = null;
+        }
       }
       _rowsDirty = false;
     }
     final rows = _listRows;
     final projects = _listProjects;
-    if (rows.isEmpty) {
+    if (rows.isEmpty && _speedQuery.isEmpty) {
       if (_workspace.sidebarHost case final host?) {
         return _buildNoProjectsOn(host);
       }
@@ -1386,7 +1761,11 @@ class _SidebarState extends State<Sidebar>
                   slots: _slots,
                   child: _buildHeader(row.group, projects),
                 ),
-                _ListRowKind.thread => _buildRow(row.thread!, row.group),
+                _ListRowKind.thread => _buildRow(
+                  row.thread!,
+                  row.group,
+                  aside: row.aside,
+                ),
                 _ListRowKind.pinZone => _PinZone(
                   height: _rowHeight,
                   active: _spot?.group.id == row.group.id,
@@ -1447,9 +1826,26 @@ class _SidebarState extends State<Sidebar>
     final header = _GroupHeader(
       group: group,
       collapsed: _collapsed(group),
+      statuses: _collapsed(group) ? _groupStatuses(group) : const {},
       light: !collapsible,
-      onToggle: collapsible ? () => _workspace.toggleCollapsed(group.id) : null,
+      // As a row clicked: the list has the keys then (its speed search).
+      onToggle: collapsible
+          ? () {
+              _listFocus.requestFocus();
+              _workspace.toggleCollapsed(group.id);
+            }
+          : null,
       onCreate: project == null ? null : () => _create(project),
+      // Dragged onto the panes, beside them; not in an agent's window,
+      // which has its one conversation.
+      dragNew: switch ((project, widget.drag)) {
+        (final project?, final drag?) when widget.onNewAgent == null => (
+          drag: drag,
+          make: () => _workspace.dragAgent(project),
+          onMissed: _workspace.dropDragAgent,
+        ),
+        _ => null,
+      },
       // The archived agents' as the footer's toggle has it: unarchive or
       // delete them all.
       menu: project != null
@@ -1461,6 +1857,13 @@ class _SidebarState extends State<Sidebar>
           ? null
           : _workspace.workspaceOf(project)?.folders,
       dragged: project != null && identical(project, _draggedProject),
+      speedMatch: _speedHits[group.id],
+      // The one the speed search found; else one folded over the agent open.
+      located:
+          (group.id == _speedFound && _speedHits.containsKey(group.id)) ||
+          (_speedQuery.isEmpty &&
+              _collapsed(group) &&
+              group.threads.contains(_current)),
       pinned: project != null && _workspace.isPinnedProject(project),
       icon: project == null
           ? null
@@ -1485,14 +1888,14 @@ class _SidebarState extends State<Sidebar>
     );
   }
 
-  Widget _buildRow(AgentThread thread, _Group group) =>
+  Widget _buildRow(AgentThread thread, _Group group, {bool aside = false}) =>
       switch (widget.stashes) {
         // Linked to one, or done with it, meanwhile.
         final stashes? => ListenableBuilder(
           listenable: stashes.changes,
-          builder: (context, _) => _buildThreadRow(thread, group),
+          builder: (context, _) => _buildThreadRow(thread, group, aside: aside),
         ),
-        null => _buildThreadRow(thread, group),
+        null => _buildThreadRow(thread, group, aside: aside),
       };
 
   /// The model [thread] runs on, by its upstream and name: its session's,
@@ -1515,9 +1918,14 @@ class _SidebarState extends State<Sidebar>
     return kept;
   }
 
-  Widget _buildThreadRow(AgentThread thread, _Group group) {
+  Widget _buildThreadRow(
+    AgentThread thread,
+    _Group group, {
+    bool aside = false,
+  }) {
     return _ThreadRow(
       thread: thread,
+      status: _statusOf(thread),
       model: () => _modelOf(thread),
       height: _rowHeight,
       stashes: switch ((widget.stashes, thread.id)) {
@@ -1576,6 +1984,15 @@ class _SidebarState extends State<Sidebar>
           if (forked != null && mounted) _open(forked);
         }),
       ),
+      onDetach: aside ? () => _workspace.detach(thread) : null,
+      asides: switch (_asides[thread]?.length) {
+        final count? when !aside => (
+          count: count,
+          folded: _workspace.asidesFolded(thread),
+          onToggle: () => _workspace.toggleAsidesFolded(thread),
+        ),
+        _ => null,
+      },
       onDelete: () => unawaited(_confirmDelete([thread])),
     );
   }
@@ -1946,9 +2363,15 @@ class _SidebarState extends State<Sidebar>
         widget.setup == null) {
       return const SizedBox.shrink();
     }
-    // No line over it: the list fades out above it instead.
+    // No line over it: the list fades out above it instead. Its buttons'
+    // middle where the row under the conversation's card has its own.
     return Padding(
-      padding: const EdgeInsets.all(6),
+      padding: const EdgeInsets.fromLTRB(
+        6,
+        6,
+        6,
+        (Islands.belowHeight - _footerRowHeight) / 2,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1957,29 +2380,37 @@ class _SidebarState extends State<Sidebar>
     );
   }
 
+  /// The footer's buttons' row: the archived toggle's height.
+  static const _footerRowHeight = 26.0;
+
   Widget _buildFooterButtons(
     int count,
     VoidCallback? settings,
     Widget? update,
   ) {
-    return Row(
-      children: [
-        Expanded(
-          child: count == 0
-              ? const SizedBox.shrink()
-              : _buildArchivedToggle(count),
-        ),
-        if (update != null) ...[const SizedBox(width: 4), update],
-        if (settings != null) ...[
-          const SizedBox(width: 4),
-          SidebarIconButton(
-            icon: Codicons.settingsGear,
-            tooltip: context.l10n.settingsTitle,
-            command: openSettingsCommandId,
-            onTap: settings,
+    // As high with the archived toggle as without: the buttons where the
+    // conversation's branch is beside it.
+    return SizedBox(
+      height: _footerRowHeight,
+      child: Row(
+        children: [
+          Expanded(
+            child: count == 0
+                ? const SizedBox.shrink()
+                : _buildArchivedToggle(count),
           ),
+          if (update != null) ...[const SizedBox(width: 4), update],
+          if (settings != null) ...[
+            const SizedBox(width: 4),
+            SidebarIconButton(
+              icon: Codicons.settingsGear,
+              tooltip: context.l10n.settingsTitle,
+              command: openSettingsCommandId,
+              onTap: settings,
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
@@ -2049,7 +2480,7 @@ class _SidebarState extends State<Sidebar>
 
   Widget _buildArchivedLabel(int count, bool active) {
     return Container(
-      height: 26,
+      height: _footerRowHeight,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: active ? AppColors.hover : Colors.transparent,
@@ -2086,18 +2517,25 @@ class _SidebarState extends State<Sidebar>
         final l10n = context.l10n;
         final thread = threads.first;
         final title = thread.localizedTitle(l10n);
+        // Their asides go with them.
+        final asides = {
+          for (final thread in threads) ..._workspace.asidesOf(thread),
+        }.difference(threads.toSet()).length;
         return _ConfirmDialog(
           title: threads.length == 1
               ? l10n.sidebarDeleteAgentTitle
               : l10n.sidebarDeleteAgentsTitle,
-          message: threads.length == 1
-              ? thread.kernel.catalog == null
-                    ? l10n.sidebarDeleteAgentMessage(title)
-                    : l10n.sidebarDeleteAgentMessageKernel(
-                        title,
-                        thread.kernel.label,
-                      )
-              : l10n.sidebarDeleteAgentsMessage(threads.length),
+          message: [
+            threads.length == 1
+                ? thread.kernel.catalog == null
+                      ? l10n.sidebarDeleteAgentMessage(title)
+                      : l10n.sidebarDeleteAgentMessageKernel(
+                          title,
+                          thread.kernel.label,
+                        )
+                : l10n.sidebarDeleteAgentsMessage(threads.length),
+            if (asides > 0) l10n.sidebarDeleteAsidesToo(asides),
+          ].join(' '),
           action: l10n.commonDelete,
         );
       },
@@ -2118,19 +2556,15 @@ class _NewAgentButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The agent sessions window's New Session button, in the side panel
-    // rail's colors (its surface and line, the text; a toolbar button's
-    // hover over it): a theme's own for it can all but vanish (One Dark
-    // Pro's, see-through on a line as dark as the sidebar). Its hover
-    // with the keys of New Agent, which does the same (a folder first,
-    // without one).
-    final colors = themeColors;
+    // The agent sessions window's New Session button, as a little card on
+    // the window's base (the islands' color and outline), hovered as rows
+    // on a card are (the text's color faintly over it): a theme's widget
+    // or toolbar colors are of no part of the window, and can all but
+    // vanish or stand out of place. Its hover with the keys of New Agent,
+    // which does the same (a folder first, without one).
     final foreground = AppColors.text;
-    final surface = AppColors.surface;
-    final hover = Color.alphaBlend(colors['toolbar.hoverBackground'], surface);
-    // A see-through surface fades in as the hover's own color: a fade
-    // from another (a theme's #ff000000) would pass through it.
-    final idle = surface.a == 0 ? hover.withValues(alpha: 0) : surface;
+    final card = AppColors.code;
+    final hover = Color.alphaBlend(AppColors.bubbleHover, card);
     return IdeHover(
       message: ChatKeys.titleWithKey(
         context.l10n.sidebarNewAgent,
@@ -2147,9 +2581,9 @@ class _NewAgentButton extends StatelessWidget {
             height: 30,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: hovered ? hover : idle,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: AppColors.partBorder),
+              color: hovered ? hover : card,
+              borderRadius: BorderRadius.circular(Islands.controlRadius),
+              border: Border.all(color: Islands.border),
             ),
             child: Row(
               children: [
@@ -2271,10 +2705,14 @@ class _GroupHeader extends StatelessWidget {
     required this.group,
     required this.collapsed,
     required this.onToggle,
+    this.statuses = const {},
     this.light = false,
     this.onCreate,
+    this.dragNew,
     this.menu,
     this.dragged = false,
+    this.speedMatch,
+    this.located = false,
     this.pinned = false,
     this.icon,
     this.folders,
@@ -2283,12 +2721,43 @@ class _GroupHeader extends StatelessWidget {
   final _Group group;
   final bool collapsed;
 
+  /// Folded, how many of its agents are at work, waiting on the user, or
+  /// finished unseen (see [_SidebarState._groupStatuses]).
+  final Map<ThreadStatus, int> statuses;
+
+  /// The characters of its name the speed search matches.
+  final List<int>? speedMatch;
+
+  /// Marked: the project the speed search found, or one folded over the
+  /// agent open.
+  final bool located;
+
   /// Null where the group does not fold.
   final VoidCallback? onToggle;
 
   /// The only project's: its name, nothing to fold or count.
   final bool light;
   final VoidCallback? onCreate;
+
+  /// Dragged, [onCreate]'s button makes a new agent of the project to go
+  /// beside the panes where it is let go (see [ChatNewDragSource]), not in
+  /// place of the focused one. None where it does not drag.
+  final ({
+    ChatDrag drag,
+    AgentThread Function() make,
+    ValueChanged<AgentThread> onMissed,
+  })?
+  dragNew;
+
+  Widget _newDragged(Widget button) => switch (dragNew) {
+    final dragNew? => ChatNewDragSource(
+      drag: dragNew.drag,
+      make: dragNew.make,
+      onMissed: dragNew.onMissed,
+      child: button,
+    ),
+    null => button,
+  };
 
   /// The project's menu (or the archived agents'), on a right click or its
   /// "…" button.
@@ -2335,7 +2804,7 @@ class _GroupHeader extends StatelessWidget {
             margin: const EdgeInsets.only(top: 6),
             padding: EdgeInsets.only(left: light ? 6 : 4, right: 2),
             decoration: BoxDecoration(
-              color: (active || dragged) && project != null
+              color: (active || dragged || located) && project != null
                   ? AppColors.hover
                   : Colors.transparent,
               borderRadius: BorderRadius.circular(5),
@@ -2396,11 +2865,13 @@ class _GroupHeader extends StatelessWidget {
                     onTap: menu.open,
                   ),
                 if (onCreate case final onCreate? when active)
-                  SidebarIconButton(
-                    icon: Icons.add_rounded,
-                    tooltip: context.l10n.sidebarNewAgentIn(group.label),
-                    size: 20,
-                    onTap: onCreate,
+                  _newDragged(
+                    SidebarIconButton(
+                      icon: Icons.add_rounded,
+                      tooltip: context.l10n.sidebarNewAgentIn(group.label),
+                      size: 20,
+                      onTap: onCreate,
+                    ),
                   ),
               ],
             ),
@@ -2411,29 +2882,49 @@ class _GroupHeader extends StatelessWidget {
     return header;
   }
 
-  /// Folded, the dot of the agent in it that most needs attention: one
-  /// waiting on a question, else one finished unseen.
+  /// Folded, what its agents are doing, as their rows would say: a spinner
+  /// while any is at work, and the dot of the one that most needs
+  /// attention (waiting on a question, else finished unseen). How many of
+  /// each over them.
   Widget? _hiddenStatus(BuildContext context) {
-    if (!collapsed) return null;
-    final statuses = {for (final thread in group.threads) thread.status};
-    final (status, label) = switch (statuses) {
-      _ when statuses.contains(ThreadStatus.needsInput) => (
-        ThreadStatus.needsInput,
-        context.l10n.sidebarNeedsInput,
+    if (!collapsed || statuses.isEmpty) return null;
+    final l10n = context.l10n;
+    final told = [
+      for (final (status, label) in [
+        (ThreadStatus.running, l10n.sidebarRunning),
+        (ThreadStatus.needsInput, l10n.sidebarNeedsInput),
+        (ThreadStatus.unread, l10n.sidebarUnread),
+      ])
+        if (statuses[status] case final count?) '$label $count',
+    ].join(' · ');
+    final dot = statuses.containsKey(ThreadStatus.needsInput)
+        ? ThreadStatus.needsInput
+        : statuses.containsKey(ThreadStatus.unread)
+        ? ThreadStatus.unread
+        : null;
+    return _RowHover(
+      content: (context) => Text(told),
+      child: Semantics(
+        label: told,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (statuses.containsKey(ThreadStatus.running))
+              const StatusIndicator(ThreadStatus.running),
+            if (dot != null) ...[
+              if (statuses.containsKey(ThreadStatus.running))
+                const SizedBox(width: 5),
+              StatusIndicator(dot),
+            ],
+          ],
+        ),
       ),
-      _ when statuses.contains(ThreadStatus.unread) => (
-        ThreadStatus.unread,
-        context.l10n.sidebarUnread,
-      ),
-      _ => (null, null),
-    };
-    if (status == null) return null;
-    return Semantics(label: label, child: StatusIndicator(status));
+    );
   }
 
   Widget _label(Project? project) {
-    final label = Text(
-      group.label,
+    final label = Text.rich(
+      ideSpeedSpan(group.label, speedMatch ?? const []),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(
@@ -2864,6 +3355,7 @@ class _MoreRow extends StatelessWidget {
 class _ThreadRow extends StatelessWidget {
   const _ThreadRow({
     required this.thread,
+    required this.status,
     required this.model,
     required this.height,
     this.stashes = const [],
@@ -2885,6 +3377,8 @@ class _ThreadRow extends StatelessWidget {
     required this.onArchive,
     required this.onFork,
     required this.onDelete,
+    this.onDetach,
+    this.asides,
     required this.menuTargets,
     required this.onContextMenu,
     required this.onPinAll,
@@ -2894,6 +3388,9 @@ class _ThreadRow extends StatelessWidget {
   });
 
   final AgentThread thread;
+
+  /// What it needs, its folded asides' too (see [_SidebarState._statusOf]).
+  final ThreadStatus status;
 
   /// The model it runs on, as its hover shows it; none when unknown.
   final String? Function() model;
@@ -2933,6 +3430,15 @@ class _ThreadRow extends StatelessWidget {
   /// Copies the conversation into a new agent, shown.
   final VoidCallback onFork;
   final VoidCallback onDelete;
+
+  /// Given, it is a conversation asked beside another (`/btw`), listed
+  /// under that one: makes it one of its own. Not pinned, nor dragged.
+  final VoidCallback? onDetach;
+
+  /// Given, it has [count] asides listed under it: while hovered, an
+  /// arrow in its status's place folds them, or unfolds them; folded, a
+  /// tag at its end says how many and unfolds them too.
+  final ({int count, bool folded, VoidCallback onToggle})? asides;
   final List<AgentThread> Function() menuTargets;
   final VoidCallback onContextMenu;
   final void Function(List<AgentThread>, bool) onPinAll;
@@ -2991,7 +3497,7 @@ class _ThreadRow extends StatelessWidget {
         icon: Icons.edit_outlined,
         onSelected: onRename,
       ),
-      if (!thread.archived)
+      if (!thread.archived && onDetach == null)
         SidebarMenuItem(
           pinned ? l10n.sidebarUnpin : l10n.sidebarPin,
           icon: pinned ? Icons.push_pin : Icons.push_pin_outlined,
@@ -3002,6 +3508,12 @@ class _ThreadRow extends StatelessWidget {
         icon: Icons.inventory_2_outlined,
         onSelected: onArchive,
       ),
+      if (onDetach case final detach?)
+        SidebarMenuItem(
+          l10n.sidebarDetachAside,
+          icon: Codicons.debugDisconnect,
+          onSelected: detach,
+        ),
       // A conversation to copy: none before the first message.
       if (thread.id != null && (!thread.isOpen || thread.session.canFork))
         SidebarMenuItem(
@@ -3055,7 +3567,11 @@ class _ThreadRow extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               Padding(
-                padding: const EdgeInsets.only(left: 8, right: 4),
+                // An aside under the one it was asked beside.
+                padding: EdgeInsets.only(
+                  left: onDetach == null ? 8 : 8 + _asideIndent,
+                  right: 4,
+                ),
                 // Too narrow, what is beside the title gives way (its hover
                 // tells it), before the title is cut to nothing.
                 child: GiveWayRow(
@@ -3066,7 +3582,18 @@ class _ThreadRow extends StatelessWidget {
                         child: SizedBox(
                           width: 14,
                           child: Center(
-                            child: StatusIndicator(thread.shownStatus),
+                            child: switch (asides) {
+                              final asides? when active => _AsidesArrow(
+                                folded: asides.folded,
+                                tooltip: asides.folded
+                                    ? context.l10n.sidebarUnfoldAsides(
+                                        asides.count,
+                                      )
+                                    : context.l10n.sidebarFoldAsides,
+                                onTap: asides.onToggle,
+                              ),
+                              _ => StatusIndicator(status),
+                            },
                           ),
                         ),
                       ),
@@ -3100,7 +3627,7 @@ class _ThreadRow extends StatelessWidget {
     );
     // Dragged out onto the conversations, it shows beside them.
     return ChatDragSource(
-      drag: renaming ? null : drag,
+      drag: renaming || onDetach != null ? null : drag,
       thread: thread,
       threads: dragThreads,
       child: Semantics(selected: selected, child: row),
@@ -3221,6 +3748,28 @@ class _ThreadRow extends StatelessWidget {
     Widget gap(Widget child) =>
         Padding(padding: const EdgeInsets.only(left: 6), child: child);
     return [
+      // The last to give way: what is not listed under it.
+      if (asides case (:final count, folded: true, :final onToggle))
+        GiveWay(
+          priority: 4,
+          gap(
+            IdeHover(
+              message: l10n.sidebarUnfoldAsides(count),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onToggle,
+                  child: _TagPill(
+                    color: selected ? foreground : AppColors.textMuted,
+                    icon: Codicons.commentDiscussion,
+                    label: '$count',
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       if (stashes.isNotEmpty)
         GiveWay(
           priority: 3,
@@ -3280,7 +3829,7 @@ class _ThreadRow extends StatelessWidget {
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (!thread.archived)
+                if (!thread.archived && onDetach == null)
                   SidebarIconButton(
                     icon: thread.pinned
                         ? Icons.push_pin
@@ -3318,11 +3867,8 @@ class _ThreadRow extends StatelessWidget {
                     : relativeTime(thread.updatedAt, DateTime.now(), l10n),
                 textAlign: TextAlign.right,
                 maxLines: 1,
-                // The color of the buttons it gives way to on hover.
-                style: TextStyle(
-                  color: selected ? foreground : AppColors.textMuted,
-                  fontSize: 11,
-                ),
+                // A step under the title's, selected or not.
+                style: TextStyle(color: AppColors.textFaint, fontSize: 11),
               ),
             ),
           ),
@@ -3462,6 +4008,49 @@ class _StashTag extends StatelessWidget {
   }
 }
 
+/// On a conversation's row, hovered: the arrow that folds the asides
+/// listed under it, as a group's folds its rows (see [_GroupHeader]).
+class _AsidesArrow extends StatelessWidget {
+  const _AsidesArrow({
+    required this.folded,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final bool folded;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) => IdeHover(
+    message: tooltip,
+    child: Semantics(
+      button: true,
+      expanded: !folded,
+      label: tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: SizedBox.square(
+            dimension: 14,
+            child: AnimatedRotation(
+              turns: folded ? 0 : 0.25,
+              duration: const Duration(milliseconds: 150),
+              child: Icon(
+                Icons.chevron_right_rounded,
+                size: 15,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// A conversation's row's tag: [label] in [color], on a pill of it, faint.
 class _TagPill extends StatelessWidget {
   const _TagPill({required this.color, required this.label, this.icon});
@@ -3596,7 +4185,7 @@ class SidebarIconButton extends StatelessWidget {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(5),
               ),
-              child: switch (Icon(
+              child: switch (AppIcon(
                 icon,
                 size: size * 0.65,
                 color: hovered ? AppColors.text : AppColors.textMuted,

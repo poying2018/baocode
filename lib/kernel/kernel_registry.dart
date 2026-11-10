@@ -39,7 +39,7 @@ abstract final class KernelRegistry {
     description: 'OpenAI’s coding agent',
     create: (context) {
       final transport = CodexTransportFactory.of(context);
-      return CodexKernel(codex, transport, context: context);
+      return CodexKernel(codex, transport);
     },
     catalog: CodexCatalog(
       transport: CodexTransportFactory.of(const KernelContext()),

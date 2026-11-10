@@ -15,11 +15,15 @@ import '../../models/model_icons.dart';
 import '../../models/model_provider.dart';
 import '../../models/model_providers.dart';
 import '../../models/model_runtime.dart';
+import '../../remote/port_forwards.dart';
 import '../../remote/remote_location.dart';
 import '../../settings/user_settings.dart';
+import '../../usage/claude_usage_meter.dart';
+import '../../usage/usage_ledger.dart';
 import '../../workspace/editor_launcher.dart' show openExternal;
 import '../agent_kernel.dart';
 import '../commit_attribution.dart';
+import '../extension_switches.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
 import '../prompt_suggestions.dart';
@@ -113,6 +117,7 @@ class ClaudeCodeKernel
         SuggestsPrompts,
         ManagesMcpServers,
         ConfirmsModelSwitch,
+        WatchesEdits,
         LoadsHistory {
   ClaudeCodeKernel(
     this.descriptor,
@@ -139,6 +144,7 @@ class ClaudeCodeKernel
       ownModel: _ownModel,
     );
     _providers.addListener(_providersChanged);
+    ExtensionSwitches.changes?.addListener(_applySwitches);
     _live.add(this);
     _sessionId = _context.resume?.id;
     final settings = _context.settings;
@@ -220,6 +226,11 @@ class ClaudeCodeKernel
   ClaudeCodeTransport? _transport;
   ControlChannel? _control;
   StreamSubscription<Map<String, Object?>>? _subscription;
+
+  /// Keeps the calls of a process on Claude Code's own models (Settings →
+  /// Usage): those to a provider of the user's go through the model proxy,
+  /// which keeps them.
+  ClaudeUsageMeter? _usage;
   Future<void>? _starting;
 
   /// The build that exited too old as it started, and what it printed:
@@ -440,10 +451,22 @@ class ClaudeCodeKernel
   /// a restart (see [_applyWindow]).
   bool _launchedSuggestions = true;
 
+  /// What the process was started with, its flag settings' permission
+  /// rules sent again with the [ExtensionSwitches] as they change.
+  ClaudeLaunch? _launched;
+
+  /// The [ExtensionSwitches] the process has: at start, then each change
+  /// sent ([_applySwitches]).
+  ExtensionSwitches _appliedSwitches = ExtensionSwitches.none;
+
   /// The context window, as the CLI reports it: the smaller of the
   /// model's and [_window].
   int _contextWindow = 200000;
   bool _contextReported = false;
+
+  /// What filled the context as last counted (`get_context_usage`): the
+  /// Claude plan's calls' makeup, which no proxy sees.
+  ContextDetail? _contextDetail;
 
   /// The models' own windows, by the model the CLI resolved them to, as
   /// reported while they were in use.
@@ -494,6 +517,11 @@ class ClaudeCodeKernel
 
   /// The workspace [_cwd] is the folder of, as it is at this launch.
   KernelWorkspace? get _workspace => _context.workspace?.call();
+
+  /// When the messages sent while it works are taken up: as its workspace
+  /// would have them, else as the user set.
+  QueuedMessages get _queuedMessages =>
+      _workspace?.queuedMessages ?? QueuedMessages.current();
 
   /// Starts the process, if not yet, and waits until it is ready.
   Future<void> _ensureStarted() {
@@ -568,9 +596,10 @@ class ClaudeCodeKernel
       _launchedModel = custom != null ? _model : null;
       _launchedWindow = _autocompact;
       _launchedSuggestions = PromptSuggestions.current();
-      final sdkServers = ClaudeSdkTools.servers;
+      _appliedSwitches = ExtensionSwitches.current();
+      final sdkServers = ClaudeSdkTools.serversFor(_cwd);
       final transport = await _start(
-        ClaudeLaunch(
+        _launched = ClaudeLaunch(
           cwd: _cwd,
           sdkServers: sdkServers,
           resume: _sessionId,
@@ -584,15 +613,21 @@ class ClaudeCodeKernel
           thinking: custom != null && direct && effort == 'none' ? false : null,
           autocompact: _autocompact,
           promptSuggestions: _launchedSuggestions,
+          switches: _appliedSwitches,
           attribution: CommitAttribution.current(),
           env: env,
-          directories: workspace?.folders ?? const [],
+          directories: [...?workspace?.folders, ...?workspace?.reaches],
+          folderInstructions: workspace?.folders.isNotEmpty ?? false,
           // Long pastes are kept on this machine: only its agent reads them.
           // A remote one's reads the files of this machine's copied there.
           readable: RemoteLocation.isRemote(_cwd)
               ? RemoteDrops.folders
               : [?PasteStore.directory],
           instructions: workspace?.instructions,
+          ownPrompt: workspace?.ownPrompt ?? false,
+          tools: workspace?.tools,
+          userServers: workspace?.userServers ?? false,
+          allowed: workspace?.allowedTools ?? const [],
           models: switch (custom) {
             (final provider, _) => _requestedModels(provider),
             null => const [],
@@ -604,12 +639,27 @@ class ClaudeCodeKernel
         return;
       }
       _transport = transport;
+      _usage = custom == null
+          ? ClaudeUsageMeter(
+              record: (call, {trace}) =>
+                  UsageLedger.current.record(call, trace: trace),
+              tracing: () => UsageLedger.current.trace,
+              underway: (key, progress) => progress == null
+                  ? UsageLedger.current.end(key)
+                  : UsageLedger.current.begin(key, progress),
+              makeup: () => _contextDetail,
+              session: () => _sessionId,
+              providerName: 'Claude Code',
+              quota: () => _quota,
+            )
+          : null;
       final control = _control = ControlChannel(transport.write);
       _subscription = transport.messages.listen(_receive);
       _applyInitialize(
         await control.request('initialize', {
           'promptSuggestions': _launchedSuggestions,
           if (sdkServers.isNotEmpty) 'sdkMcpServers': sdkServers,
+          if (_editWatch != null) 'hooks': _editHooks,
         }),
       );
       if (_mode != _cliMode) {
@@ -623,6 +673,8 @@ class ClaudeCodeKernel
         return await _launch();
       }
       _setHealth(KernelHealth.ready);
+      // Switched since it was started.
+      _applySwitches();
       _syncGoal();
       final window = _window;
       _change([
@@ -700,6 +752,8 @@ class ClaudeCodeKernel
   void _teardown() {
     // The process gone, no last word of a turn stopped here comes.
     _stoppedAwaitingResult = 0;
+    _usage?.close();
+    _usage = null;
     unawaited(_subscription?.cancel());
     _subscription = null;
     // The CLI is waiting for an answer to each of the questions it
@@ -828,11 +882,28 @@ class ClaudeCodeKernel
     _setHealth(KernelHealth.idle);
   }
 
+  /// The skills, MCP servers and tools turned on or off since the process
+  /// started, given it as flag settings: taken up at once, the next request
+  /// to the model without them.
+  void _applySwitches() {
+    final launch = _launched;
+    final switches = ExtensionSwitches.current();
+    if (!_running || launch == null || switches == _appliedSwitches) return;
+    _appliedSwitches = switches;
+    _change([
+      (
+        'apply_flag_settings',
+        {'settings': launch.switchSettings(switches, whole: true)},
+      ),
+    ]);
+  }
+
   @override
   void dispose() {
     _disposed = true;
     _goalRetry?.cancel();
     _providers.removeListener(_providersChanged);
+    ExtensionSwitches.changes?.removeListener(_applySwitches);
     _live.remove(this);
     _cancelSdkCalls();
     _teardown();
@@ -911,7 +982,12 @@ class ClaudeCodeKernel
       ItemUpserted(
         nextSeq,
         turn.id,
-        UserMessageItem(text: turn.text, queued: busy, images: turn.images),
+        UserMessageItem(
+          text: turn.text,
+          queued: busy,
+          images: turn.images,
+          sentAt: DateTime.now(),
+        ),
       ),
     );
     // Taken now, as the message was sent.
@@ -934,8 +1010,7 @@ class ClaudeCodeKernel
   bool get _holds {
     final waiting = _queued.where((id) => !_held.containsKey(id));
     return waiting.any((id) => _sent[id]?.now ?? false) ||
-        (waiting.isNotEmpty &&
-            QueuedMessages.current() == QueuedMessages.afterTurn);
+        (waiting.isNotEmpty && _queuedMessages == QueuedMessages.afterTurn);
   }
 
   /// Gives the CLI the messages held for it, as far as [_holds] lets it: one
@@ -970,7 +1045,7 @@ class ClaudeCodeKernel
         // CLI's own default).
         'priority': spareBackground
             ? 'now'
-            : switch (QueuedMessages.current()) {
+            : switch (_queuedMessages) {
                 QueuedMessages.afterTurn => 'later',
                 QueuedMessages.duringTurn => 'next',
               },
@@ -991,12 +1066,14 @@ class ClaudeCodeKernel
                 },
               },
             ],
-            if (turn.text.isNotEmpty) {'type': 'text', 'text': turn.text},
             for (final note in turn.notes) {'type': 'text', 'text': note},
             if (ask)
               {'type': 'text', 'text': _askNote}
             else if (askEnded)
               {'type': 'text', 'text': _askEndedNote},
+            // Last: the CLI takes a message for a command (`/compact`)
+            // only by its last block.
+            if (turn.text.isNotEmpty) {'type': 'text', 'text': turn.text},
           ],
         },
       });
@@ -1010,6 +1087,7 @@ class ClaudeCodeKernel
     _turn = id;
     _limitHit(null);
     _turnStarted = DateTime.now();
+    _usage?.requested();
     _translator.turnId = id;
     emit(TurnStarted(nextSeq, id, unprompted: unprompted));
     _translator.begin();
@@ -1041,8 +1119,11 @@ class ClaudeCodeKernel
         costUsd: usage?.costUsd,
       );
     }
-    for (final id in _permissions.keys) {
+    for (final MapEntry(key: id, value: permission) in _permissions.entries) {
       emit(InteractionResolved(nextSeq, id));
+      if (permission.sdk case final sdk? when !sdk.isCompleted) {
+        sdk.complete(null);
+      }
     }
     // The CLI is still waiting for an answer to each of these: told,
     // so it lets the tool call go instead of holding the turn open for
@@ -1156,8 +1237,9 @@ class ClaudeCodeKernel
             .then<void>(
               (_) {},
               onError: (Object _) {
-                if (!_queued.contains(turnId)) return;
-                sendQueuedByResending([turnId, ...others], now: turnId);
+                if (_queued.contains(turnId)) {
+                  _resendQueued([turnId, ...others], now: turnId);
+                }
               },
             ),
       );
@@ -1166,13 +1248,63 @@ class ClaudeCodeKernel
     // The CLI takes up all it queued as one turn, in the order sent: the
     // others are taken back too, and sent again after it, held until it is
     // taken up. Those held first, for none to be given the CLI meanwhile.
-    sendQueuedByResending([turnId, ...others], now: turnId);
+    _resendQueued([turnId, ...others], now: turnId);
   }
 
-  /// Takes back what is queued and sends it again in [order], the one [now]
-  /// to be taken up at once. Those held here first, for none to be given the
-  /// CLI meanwhile.
-  void sendQueuedByResending(List<String> order, {String? now}) {
+  @override
+  void moveQueued(String turnId, int index) {
+    final order = [..._queued];
+    if (!order.remove(turnId)) return;
+    order.insert(index.clamp(0, order.length), turnId);
+    if (_reorderHere(order)) return;
+    if (!_running) {
+      // The queue is shown before the process finishes starting. Keep the
+      // request behind its pending writes, then check the queue again.
+      _whenReady((_) {
+        if (_running) moveQueued(turnId, index);
+      });
+      return;
+    }
+    // Those given the CLI go in the order sent: it takes them back, and is
+    // sent all again in this one, none taken up at once.
+    _resendQueued(order);
+  }
+
+  /// Puts the queued messages in [order] here, if the CLI's part is left as
+  /// it is; returns whether it could.
+  bool _reorderHere(List<String> order) {
+    final given = [
+      for (final id in _queued)
+        if (!_held.containsKey(id)) id,
+    ];
+    final nowGiven = [
+      for (final id in order)
+        if (!_held.containsKey(id)) id,
+    ];
+    // The ones held here may go in any order among themselves, but none
+    // may go before those given the CLI, which take their turn first.
+    if (!listEquals(given, nowGiven)) return false;
+    if (!order.take(nowGiven.length).every((id) => !_held.containsKey(id))) {
+      return false;
+    }
+    _queued
+      ..clear()
+      ..addAll(order);
+    final held = {
+      for (final id in order)
+        if (_held.containsKey(id)) id: _held[id]!,
+    };
+    _held
+      ..clear()
+      ..addAll(held);
+    emit(QueueReordered(nextSeq, order));
+    return true;
+  }
+
+  /// Takes back what is queued and sends it again in [order]: the one [now]
+  /// (if any) to be taken up at once, the turn running stopped for it.
+  /// Those held here first, for none to be given the CLI meanwhile.
+  void _resendQueued(List<String> order, {String? now}) {
     unawaited(() async {
       final taken = {
         for (final id in [
@@ -1479,6 +1611,16 @@ class ClaudeCodeKernel
   @override
   void answer(String requestId, InteractionAnswer answer) {
     final permission = _permissions.remove(requestId);
+    if (permission?.sdk case final sdk?) {
+      emit(InteractionResolved(nextSeq, requestId));
+      if (!sdk.isCompleted) {
+        sdk.complete(switch (answer) {
+          ApprovalAnswer(:final decision) => decision,
+          QuestionAnswer() => null,
+        });
+      }
+      return;
+    }
     final control = _control;
     if (permission == null || control == null) return;
     emit(InteractionResolved(nextSeq, requestId));
@@ -1547,6 +1689,25 @@ class ClaudeCodeKernel
       });
       return;
     }
+    // Where no one is there to answer a question either (a bot's,
+    // KernelWorkspace.approvesAll: the user reads its messages alone, on
+    // their phone), it would wait for ever: asked in its words instead.
+    if (tool == 'AskUserQuestion' && (_workspace?.approvesAll ?? false)) {
+      _control!.respond(requestId, {
+        'behavior': 'deny',
+        'message': _askInWords,
+      });
+      return;
+    }
+    // The app's tools that ask the user themselves, in any mode (see
+    // ClaudeSdkTool.asksItself): not asked twice.
+    if (ClaudeSdkTools.called(tool)?.asksItself ?? false) {
+      _control!.respond(requestId, {
+        'behavior': 'allow',
+        'updatedInput': input,
+      });
+      return;
+    }
     // Answered here, with nothing shown: in Don't ask nothing that is not
     // pre-approved is asked about (the CLI asks in Plan all the same). A
     // question is always the user's to answer, in any mode: the approvals
@@ -1556,14 +1717,15 @@ class ClaudeCodeKernel
       return;
     }
     // Full access is approved here (see _cliApproval), but for what the
-    // CLI's own would ask all the same. In Plan it leaves to the
+    // CLI's own would ask all the same: that too where no one is there to
+    // ask (a bot's, KernelWorkspace.approvesAll). In Plan it leaves to the
     // classifier what the CLI cannot tell is read-only; with no
     // classifier (another provider's model), that is approved here too,
     // as it would be by the classifier.
     if (_approval == 'bypassPermissions' &&
         (_work != 'plan' || !_classifies) &&
         tool != 'AskUserQuestion' &&
-        !_askedInFullAccess(request)) {
+        ((_workspace?.approvesAll ?? false) || !_askedInFullAccess(request))) {
       _control!.respond(requestId, {
         'behavior': 'allow',
         'updatedInput': input,
@@ -1732,6 +1894,7 @@ class ClaudeCodeKernel
   }
 
   void _handle(Map<String, Object?> message) {
+    _usage?.receive(message);
     switch (message['type']) {
       case ClaudeExit.type:
         _exited(
@@ -1854,9 +2017,73 @@ class ClaudeCodeKernel
         _elicitation(id, request);
       case 'mcp_message':
         unawaited(_mcpMessage(id, request));
+      case 'hook_callback':
+        unawaited(_hookCallback(id, request));
       default:
         control.refuse(id, 'Not supported by this client');
     }
+  }
+
+  // --- Edits, as they are made ------------------------------------------------
+
+  @override
+  set editWatch(EditWatch? watch) => _editWatch = watch;
+  EditWatch? _editWatch;
+
+  /// The hooks it has the CLI call back, around each edit of the agent's or
+  /// a subagent's, for an [EditWatch].
+  static const _beforeEdit = 'baocode-before-edit';
+  static const _afterEdit = 'baocode-after-edit';
+  static const _editTools = 'Edit|Write|MultiEdit|NotebookEdit';
+
+  static final Map<String, Object?> _editHooks = {
+    'PreToolUse': [
+      {
+        'matcher': _editTools,
+        'hookCallbackIds': [_beforeEdit],
+      },
+    ],
+    // Done, failed, or not let do.
+    for (final event in const [
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionDenied',
+    ])
+      event: [
+        {
+          'matcher': _editTools,
+          'hookCallbackIds': [_afterEdit],
+        },
+      ],
+  };
+
+  /// How long an edit waits on the watch at most.
+  static const _editWait = Duration(seconds: 10);
+
+  /// One of [_editHooks] called back: the watch told of the edit, and the
+  /// CLI answered once it is done with it (the edit waits on that).
+  Future<void> _hookCallback(String id, Map<String, Object?> request) async {
+    final input = (request['input'] as Map?)?.cast<String, Object?>();
+    final tool = (input?['tool_input'] as Map?)?.cast<String, Object?>();
+    final path = tool?['file_path'] ?? tool?['notebook_path'];
+    final watch = _editWatch;
+    // A plan is not a change to review.
+    if (watch != null &&
+        path is String &&
+        path.isNotEmpty &&
+        !ClaudeTranslator.isPlanPath(path)) {
+      final told = switch (request['callback_id']) {
+        _beforeEdit => watch.beforeEdit(path),
+        _afterEdit => watch.afterEdit(path),
+        _ => null,
+      };
+      try {
+        await told?.timeout(_editWait);
+      } on Object {
+        // The edit goes on all the same.
+      }
+    }
+    _control?.respond(id, const {});
   }
 
   /// What the agent says to one of the app's own MCP servers (see
@@ -1873,9 +2100,39 @@ class ClaudeCodeKernel
         cwd: _cwd,
         sessionId: _sessionId,
         cancelled: _sdkCallsCancelled.future,
+        ask: _sdkAsk,
       ),
     );
     _control?.respond(id, {'mcp_response': response});
+  }
+
+  int _sdkAsks = 0;
+
+  /// One of the app's own tools asks the user: on the conversation, as the
+  /// CLI's requests are; but answered to the tool. Given up as the turn
+  /// ends; null where no one is there to ask.
+  Future<ApprovalDecision?> _sdkAsk(ApprovalRequest request) {
+    // No one there (a bot's), or Don't ask: not allowed.
+    if ((_workspace?.approvesAll ?? false) || _approval == 'dontAsk') {
+      return Future.value();
+    }
+    final id = 'baocode-${++_sdkAsks}';
+    final answered = Completer<ApprovalDecision?>();
+    _permissions[id] = _Permission(const {}, const [], const [], sdk: answered);
+    emit(
+      InteractionRequested(
+        nextSeq,
+        ApprovalRequest(
+          id: id,
+          title: request.title,
+          toolName: request.toolName,
+          reason: request.reason,
+          preview: request.preview,
+          alwaysAllowLabel: request.alwaysAllowLabel,
+        ),
+      ),
+    );
+    return answered.future;
   }
 
   /// An MCP server asks the user for input: its form as questions, or a
@@ -1933,6 +2190,7 @@ class ClaudeCodeKernel
               UserMessageItem(
                 text: _sent[id]?.text ?? '',
                 images: _sent[id]?.images ?? const [],
+                sentAt: DateTime.now(),
               ),
             ),
           );
@@ -2119,6 +2377,38 @@ class ClaudeCodeKernel
       return null;
     }
   }
+
+  /// What the account it is logged in as is called, for its calls kept:
+  /// its Claude plan's, else Anthropic's API.
+  static String? _planName(Object? account) {
+    if (account is! Map) return null;
+    if (account['subscriptionType'] case final String plan
+        when plan.trim().isNotEmpty) {
+      final name = plan.trim();
+      // Told as `max`, or already as `Claude Max`.
+      if (name.toLowerCase().startsWith('claude')) return name;
+      return 'Claude ${name[0].toUpperCase()}${name.substring(1)}';
+    }
+    return account['apiKeySource'] != null ? 'Anthropic API' : null;
+  }
+
+  /// The plan's limits as last told, by their type (`five_hour`…), for the
+  /// calls kept.
+  static Map<String, double> get _quota => {
+    for (final limit in _limits)
+      _limitTypes[limit.label] ?? limit.label: limit.utilization,
+  };
+
+  static final _limitTypes = {
+    for (final type in const [
+      'five_hour',
+      'seven_day',
+      'seven_day_opus',
+      'seven_day_sonnet',
+      'seven_day_overage_included',
+    ])
+      _limitLabel(type): type,
+  };
 
   static String _limitLabel(Object? type) => switch (type) {
     'five_hour' => '5-hour limit',
@@ -2420,9 +2710,9 @@ class ClaudeCodeKernel
   );
 
   /// Counts the request to the model [message] answers, if it is the
-  /// conversation's: once, as a message comes a content block at a time,
-  /// each with its request's usage. A subagent's is left out, as its
-  /// transcript is apart. Whether it was not counted yet.
+  /// conversation's: once, as a message comes a content block at a time.
+  /// Later lines update the fields they give. A subagent's is left out, as
+  /// its transcript is apart. Whether it was added or its usage changed.
   bool _countRequest(Map<String, Object?> message) {
     if (message['parent_tool_use_id'] != null ||
         message['isSidechain'] == true) {
@@ -2438,14 +2728,12 @@ class ClaudeCodeKernel
     };
     if (id == null || usage == null) return false;
     final model = (body as Map)['model'] as String?;
-    int count(String key) => switch (usage[key]) {
-      final num n => n.toInt(),
-      _ => 0,
-    };
+    final previous = _requests[id];
+    int count(String key, int was) => claudeInt(usage[key]) ?? was;
     final tokens = CacheTokens(
-      read: count('cache_read_input_tokens'),
-      written: count('cache_creation_input_tokens'),
-      uncached: count('input_tokens'),
+      read: count('cache_read_input_tokens', previous?.read ?? 0),
+      written: count('cache_creation_input_tokens', previous?.written ?? 0),
+      uncached: count('input_tokens', previous?.uncached ?? 0),
     );
     // None at all: one of the CLI's own (an API error), not the model's.
     if (tokens.total == 0) return false;
@@ -2455,9 +2743,11 @@ class ClaudeCodeKernel
         usage.containsKey('cache_creation_input_tokens')) {
       _cachingModels.add(model);
     }
-    if (_requests.containsKey(id)) return false;
     _requests[id] = tokens;
-    return true;
+    return previous == null ||
+        previous.read != tokens.read ||
+        previous.written != tokens.written ||
+        previous.uncached != tokens.uncached;
   }
 
   /// The conversation was compacted, maybe mid-turn: the context shown
@@ -2484,8 +2774,10 @@ class ClaudeCodeKernel
     final control = _control;
     if (control == null) return;
     try {
+      // In full: each part's things too (the system prompt's sections,
+      // the built-in tools, the messages by tool), counted where it runs.
       final usage = await control.request('get_context_usage', {
-        'detail': 'summary',
+        'detail': 'full',
       }, const Duration(seconds: 20));
       final max = claudeInt(usage['maxTokens']) ?? _contextWindow;
       _contextWindow = max;
@@ -2518,6 +2810,7 @@ class ClaudeCodeKernel
                     },
                   ),
             ],
+            detail: _contextDetail = ContextDetail.parse(usage),
           ),
         ),
       );
@@ -2649,6 +2942,22 @@ class ClaudeCodeKernel
 
   /// The SSH host the agent runs on; null for this machine.
   String? get _remoteHost => RemoteLocation.hostOf(_cwd);
+
+  /// What the agent's commands on an SSH host print: a server's address
+  /// forwarded here as it says it (see PortForwards.notice).
+  @override
+  void emit(KernelEvent event) {
+    super.emit(event);
+    if (event
+        case ItemUpserted(
+          item: ToolCallItem(kind: ToolKind.command, :final output?),
+        )
+        when output.isNotEmpty) {
+      if (_remoteHost case final host? when !RemoteLocation.isWsl(host)) {
+        PortForwards.instance.notice(host, output);
+      }
+    }
+  }
 
   /// Whether [text] says Claude Code is not logged in.
   ///
@@ -2795,6 +3104,9 @@ class ClaudeCodeKernel
     // Claude Code's own models are those it lists set up as the user has
     // it: one on a provider lists what the provider's names stand in for.
     final own = _launchedProvider.isEmpty;
+    if (_planName(response['account']) case final plan?) {
+      _usage?.providerName = plan;
+    }
     final listed = [
       for (final raw in response['models'] as List? ?? const [])
         if (raw is Map) raw.cast<Object?, Object?>(),
@@ -3386,6 +3698,12 @@ class ClaudeCodeKernel
       '<system-reminder>The user has left Ask mode: you may now edit files '
       'and run commands as the task needs.</system-reminder>';
 
+  /// The answer to a question where no one can answer it.
+  static const _askInWords =
+      'The user cannot see or answer this tool here: they only read your '
+      'messages. Ask them in your reply instead, briefly, and wait for '
+      'their answer.';
+
   /// The answer to what would be asked in Don't ask.
   static const _notAsked =
       'The user is not asked in this mode, and this is not pre-approved.';
@@ -3633,7 +3951,12 @@ class _Permission {
     this.suggestions,
     this.questions, {
     this.elicitation,
+    this.sdk,
   });
+
+  /// For one of the app's own tools asking (ClaudeSdkCall.ask): answered
+  /// here, not to the CLI.
+  final Completer<ApprovalDecision?>? sdk;
 
   /// For an MCP server's elicitation: its form's fields, or the link it
   /// asks to open.

@@ -146,7 +146,8 @@ void main() {
     ]);
     expect(sidebarColor(tester).a, lessThan(0.85));
     expect(colorsUnder(tester, find.byType(ChatScreen)), [
-      AppColors.conversationSurface,
+      AppColors.sidebarSurface,
+      Colors.transparent,
       Colors.transparent,
       Colors.transparent,
     ]);
@@ -172,9 +173,10 @@ void main() {
       ]);
       // Acrylic is a thinner blur than macOS's sidebar material: 96% over
       // the sidebar, 98% over the conversation (see AppColors).
-      expect(sidebarColor(tester).a, closeTo(0.96, 0.001));
+      expect(AppColors.sidebarSurface.a, closeTo(0.96, 0.001));
       expect(colorsUnder(tester, find.byType(ChatScreen)), [
-        AppColors.conversationSurface,
+        AppColors.sidebarSurface,
+        Colors.transparent,
         Colors.transparent,
         Colors.transparent,
       ]);
@@ -204,7 +206,7 @@ void main() {
     await tester.pumpWidget(BaoCodeApp(workspace: Workspace.mock()));
     await tester.pump();
     expect(colorsUnder(tester, find.byType(Sidebar)).first.a, 1);
-    expect(sidebarColor(tester).a, 1);
+    expect(AppColors.sidebarSurface.a, 1);
   }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
 }
 

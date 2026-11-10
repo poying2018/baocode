@@ -53,3 +53,26 @@ abstract final class StackSampler {
         0;
   }
 }
+
+/// Writes a crash of the app down on Linux, which keeps no report of it
+/// the app can read (native/bao_crash.c): a `crash-<time>-<pid>.txt` of
+/// the signal and the stack in [reports], and a line in the event log at
+/// [events], `<time> [exit] crashed: SIGSEGV at libapp.so+0x…`.
+abstract final class CrashHandler {
+  /// Sets it up, the reports' first line [header] (the app's version);
+  /// false on other platforms, or without the native half.
+  static bool install({
+    required String events,
+    required String reports,
+    required String header,
+  }) {
+    if (!Platform.isLinux) return false;
+    Uint8List z(String text) => Uint8List.fromList([...utf8.encode(text), 0]);
+    try {
+      final (e, r, h) = (z(events), z(reports), z(header));
+      return crashInstall(e.address, r.address, h.address) != 0;
+    } on Object {
+      return false;
+    }
+  }
+}

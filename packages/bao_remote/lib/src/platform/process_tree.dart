@@ -12,7 +12,10 @@ Future<void> killTree(int pid, {bool force = false, bool? windows}) async {
     } on ProcessException {
       // No taskkill on this machine: the process alone goes.
       try {
-        Process.killPid(pid, force ? ProcessSignal.sigkill : ProcessSignal.sigterm);
+        Process.killPid(
+          pid,
+          force ? ProcessSignal.sigkill : ProcessSignal.sigterm,
+        );
       } on Object {
         // It is already gone.
       }
@@ -60,5 +63,19 @@ Future<List<int>> _descendants(int pid) async {
     return out;
   } on ProcessException {
     return const [];
+  }
+}
+
+/// Ends process [pid] and every process it started, on Windows
+/// (`taskkill /T /F`); [Process.killPid] elsewhere.
+void killProcessTree(int pid, [ProcessSignal signal = ProcessSignal.sigterm]) {
+  if (!Platform.isWindows) {
+    Process.killPid(pid, signal);
+    return;
+  }
+  try {
+    Process.runSync('taskkill', ['/T', '/F', '/PID', '$pid']);
+  } on ProcessException {
+    Process.killPid(pid);
   }
 }

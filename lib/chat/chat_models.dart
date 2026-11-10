@@ -21,8 +21,15 @@ class UserMessageItem extends ChatItem {
 
   final String text;
 
+  /// Sent by a subagent (SendMessage), not typed: what it was given to do,
+  /// else its id. Shown as its, and not to be edited.
+  final String? fromAgent;
+
   /// Pictures sent with it (screenshots, mockups…).
   final List<ImageAttachment> images;
+
+  /// When it was sent, where known: a chat app's times between messages.
+  final DateTime? sentAt;
 
   /// Sent while the agent was busy: waits for its turn, and can be taken
   /// back until then.
@@ -34,13 +41,6 @@ class UserMessageItem extends ChatItem {
 
   /// What its turn spent, kept with [worked], when the kernel said.
   final TurnUsage? usage;
-
-  /// Sent by a subagent (SendMessage), not typed: what it was given to do,
-  /// else its id. Shown as its, and not to be edited.
-  final String? fromAgent;
-
-  /// When it was sent, where known: a chat app's times between messages.
-  final DateTime? sentAt;
 
   /// The user stopped its turn, [worked] in: all its work folds, an answer
   /// or not.
@@ -735,7 +735,6 @@ class FileChange {
     this.kind = FileChangeKind.modified,
     this.binary = false,
     this.tracked = true,
-    this.shared = false,
     this.conflict = false,
   });
 
@@ -747,14 +746,9 @@ class FileChange {
   /// No line counts: a binary file.
   final bool binary;
 
-  /// Whether what it was before is known, to be undone; not when it is
-  /// in no snapshot (ignored, too large, outside the project) and the
-  /// agent did not tell.
+  /// Whether what it was before is known, to be undone; not when it was
+  /// too large to keep and the agent did not tell.
   final bool tracked;
-
-  /// Another agent was at work in the project at the same time: some of
-  /// it may be theirs.
-  final bool shared;
 
   /// It changed again since the agent left it, and Undo could not carry
   /// that over.

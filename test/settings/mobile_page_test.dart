@@ -1,14 +1,57 @@
 import 'package:bao_link/bao_link.dart';
 import 'package:baocode/link/link_host.dart';
+import 'package:baocode/link/phone_downloads.dart';
 import 'package:baocode/link/qr_view.dart';
 import 'package:baocode/settings/pages/mobile_page.dart';
 import 'package:baocode/workspace/workspace.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../link/fake_link_platform.dart';
 
+/// The code to pair with: not the phone app's downloads beside it.
+final _pairCode = find.byWidgetPredicate(
+  (widget) => widget is QrView && !widget.data.startsWith(phoneDownloadSite),
+);
+
 void main() {
+  testWidgets('the phone app to get first: the codes of the site\'s own '
+      'downloads', (tester) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final host = LinkHost(
+      workspace: Workspace.mock(),
+      platform: FakeLinkPlatform(),
+    );
+    addTearDown(host.dispose);
+    await host.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MobileSettingsPage(host: host)),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Get the Phone App'), findsOneWidget);
+    final codes = tester
+        .widgetList<QrView>(find.byType(QrView))
+        .map((code) => code.data);
+    // The download page's links (site/download.html), which lead to the
+    // release current when scanned.
+    expect(codes, [
+      'https://baocode.dev/dl/android',
+      'https://baocode.dev/dl/ios',
+    ]);
+    expect(find.text('Android'), findsOneWidget);
+    expect(find.text('iPhone and iPad'), findsOneWidget);
+    // Shown before the switch to let phones in: the app comes first.
+    expect(
+      tester.getTopLeft(find.byType(QrView).first).dy,
+      lessThan(tester.getTopLeft(find.text('Allow Phones to Connect')).dy),
+    );
+  });
+
   testWidgets('shows a code to pair with, then the safety code to compare', (
     tester,
   ) async {
@@ -26,29 +69,47 @@ void main() {
     );
     await tester.pump();
     expect(find.text('Off'), findsOneWidget);
-    expect(find.text('192.168.1.5:47100'), findsOneWidget);
-    expect(find.text('Not Available Yet'), findsOneWidget);
 
     await tester.tap(find.text('Show QR Code'));
     await tester.pump();
     await tester.pump();
     expect(host.enabled, isTrue);
-    expect(find.byType(QrView), findsOneWidget);
-    expect(find.text('Listening on port 47100'), findsOneWidget);
+    expect(_pairCode, findsOneWidget);
+    expect(
+      find.text('On, reachable through relay-us1.baocode.dev'),
+      findsOneWidget,
+    );
+
+    // The code clicked: its link copied, for a phone that cannot scan it.
+    String? copied;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'Clipboard.setData') {
+          copied = (call.arguments as Map)['text'] as String;
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.tap(_pairCode);
+    await tester.pump();
+    expect(copied, host.offer!.uri);
+    expect(find.text('Copied'), findsOneWidget);
 
     // A phone scans it.
     final phone = LinkIdentity.generate();
-    final (a, b) = MemoryLinkSocket.pair();
-    platform.incoming.add(b);
     final offer = host.offer!;
     var answered = false;
     () async {
-      final channel = await SecureChannel.connect(
-        a,
-        identity: phone,
-        serverKey: offer.key,
-      );
-      await LinkPeer(channel).call(LinkMethods.hello, {
+      final connection = await platform.phone(phone).connect(offer.address);
+      final peer = await LinkPeer.connect(connection);
+      await peer.call(LinkMethods.hello, {
         'name': 'iPhone',
         'token': encodeKey(offer.token),
       });
@@ -66,7 +127,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 10));
     expect(host.pending, isNull);
-    expect(find.byType(QrView), findsNothing);
+    expect(_pairCode, findsNothing);
     // The phone let go, once told.
     await tester.pump(const Duration(milliseconds: 300));
   });
@@ -91,17 +152,12 @@ void main() {
     await tester.pump();
 
     final phone = LinkIdentity.generate();
-    final (a, b) = MemoryLinkSocket.pair();
-    platform.incoming.add(b);
     final key = host.offer!.key;
+    final address = host.offer!.address;
     Object? confirmed;
     () async {
-      final channel = await SecureChannel.connect(
-        a,
-        identity: phone,
-        serverKey: key,
-      );
-      final peer = LinkPeer(channel);
+      final connection = await platform.phone(phone).connect(address);
+      final peer = await LinkPeer.connect(connection);
       await peer.call(LinkMethods.hello, {'name': 'Pixel', 'request': true});
       confirmed = await peer.call(LinkMethods.confirm);
     }();
@@ -122,5 +178,176 @@ void main() {
     expect(host.phones.single.name, 'Pixel');
     await tester.pump();
     expect(find.text('Paired with Pixel.'), findsOneWidget);
+    // The path is counted once it has settled.
+    await tester.pump(const Duration(seconds: 16));
+  });
+
+  testWidgets('phones paired before the rebuild are shown to pair again', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final platform = FakeLinkPlatform()
+      ..kept = {
+        'version': 1,
+        'identity': {'privateKey': 'AAAA', 'publicKey': 'AAAA'},
+        'phones': [
+          {'key': 'AAAA', 'name': 'Old iPhone', 'system': 'iOS 18'},
+        ],
+      };
+    final host = LinkHost(workspace: Workspace.mock(), platform: platform);
+    addTearDown(host.dispose);
+    await host.load();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MobileSettingsPage(host: host)),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Old iPhone'), findsOneWidget);
+    expect(find.textContaining('Needs pairing again'), findsOneWidget);
+    await tester.tap(find.text('Pair Again'));
+    await tester.pump();
+    await tester.pump();
+    expect(_pairCode, findsOneWidget);
+    host.endPairing();
+    await tester.pump();
+
+    await tester.tap(find.text('Remove'));
+    await tester.pump();
+    expect(find.text('Old iPhone'), findsNothing);
+    expect(find.text('No phone is paired yet.'), findsOneWidget);
+  });
+
+  testWidgets('the relays folded; open, how they are chosen, and the one '
+      'picked; a custom address only once Custom is picked', (tester) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final platform = FakeLinkPlatform();
+    final host = LinkHost(workspace: Workspace.mock(), platform: platform);
+    addTearDown(host.dispose);
+    await host.load();
+    await host.setEnabled(true);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MobileSettingsPage(host: host)),
+      ),
+    );
+    await tester.pump();
+    final us1 = Uri.parse(defaultLinkRelays.first).host;
+    final hk1 = Uri.parse(defaultLinkRelays[1]).host;
+    // Folded: only how they are chosen.
+    expect(find.text('Automatic'), findsOneWidget);
+    await tester.tap(find.text('Relays'));
+    await tester.pump();
+    // Automatic: nothing more to choose.
+    expect(find.text('Relay Used'), findsNothing);
+
+    Future<void> pick(String now, String label) async {
+      await tester.tap(find.text(now));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> typeIn(String text) async {
+      await tester.enterText(find.byType(TextField), text);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    // Picking one: the one in use picked; another picked in its dropdown;
+    // no address to type.
+    await pick('Automatic', 'Pick One');
+    expect(host.relays, [defaultLinkRelays.first]);
+    expect(find.text('Relay Used'), findsOneWidget);
+    expect(find.byType(TextField), findsNothing);
+    await pick(us1, hk1);
+    expect(host.relays, [defaultLinkRelays[1]]);
+
+    // Custom, last: its address typed, picked once it is one.
+    await pick(hk1, 'Custom');
+    expect(find.byType(TextField), findsOneWidget);
+    expect(host.relays, [defaultLinkRelays[1]]);
+    await typeIn('not an address');
+    expect(find.textContaining('Not a relay address'), findsOneWidget);
+    expect(host.relays, [defaultLinkRelays[1]]);
+    await typeIn('relay.example.com');
+    expect(host.relays, ['https://relay.example.com']);
+    expect(find.textContaining('Not a relay address'), findsNothing);
+    await tester.tap(find.text('Relays'));
+    await tester.pump();
+    expect(find.text('Pick One · relay.example.com'), findsOneWidget);
+    await tester.tap(find.text('Relays'));
+    await tester.pump();
+    // Still Custom, with its address.
+    expect(find.text('Custom'), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      'https://relay.example.com',
+    );
+
+    // One of BaoCode's again: the address gone.
+    await pick('Custom', us1);
+    expect(host.relays, [defaultLinkRelays.first]);
+    expect(find.byType(TextField), findsNothing);
+  });
+
+  testWidgets('direct only: no relay kept, its port typed and kept alone', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final platform = FakeLinkPlatform();
+    final host = LinkHost(workspace: Workspace.mock(), platform: platform);
+    addTearDown(host.dispose);
+    await host.load();
+    await host.setEnabled(true);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: MobileSettingsPage(host: host)),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Relays'));
+    await tester.pump();
+
+    Future<void> pick(String now, String label) async {
+      await tester.tap(find.text(now));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> typeIn(String text) async {
+      await tester.enterText(find.byType(TextField), text);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await pick('Automatic', 'Direct Only');
+    expect(host.relayMode, LinkRelayMode.direct);
+    expect(host.relays, isEmpty);
+    expect(find.text('On, direct only'), findsOneWidget);
+    // The port, and where it can be reached: none yet, its address is the
+    // LAN's alone.
+    expect(find.text('Direct Port'), findsOneWidget);
+    expect(find.text('Direct Address'), findsOneWidget);
+    expect(find.textContaining('No public address yet'), findsOneWidget);
+
+    await typeIn('51000');
+    expect(host.linkPort, 51000);
+    await typeIn('80');
+    expect(host.linkPort, 51000);
+    expect(find.textContaining('1024 to 65535'), findsOneWidget);
+
+    await pick('Direct Only', 'Automatic');
+    expect(host.relays, defaultLinkRelays);
+    expect(find.text('Direct Port'), findsNothing);
   });
 }

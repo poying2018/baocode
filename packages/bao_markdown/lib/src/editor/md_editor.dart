@@ -14,6 +14,7 @@ import '../md_blocks.dart';
 import '../md_controller.dart';
 import '../md_edits.dart';
 import '../md_inline.dart';
+import 'md_clipboard.dart';
 import 'md_display.dart';
 import 'md_embeds.dart';
 import 'md_offsets.dart';
@@ -52,6 +53,7 @@ class MarkdownEditor extends StatefulWidget {
     this.physics,
     this.onKey,
     this.onPaste,
+    this.onPasteCopy,
     this.colorize,
     this.onClick,
     this.revealsLinks = true,
@@ -86,6 +88,11 @@ class MarkdownEditor extends StatefulWidget {
   /// put in as it is.
   final Future<bool> Function()? onPaste;
 
+  /// A paste of what an editor of its kind copied: its markdown as it is
+  /// to go in (its tags numbered on from those here, say); as it is
+  /// without.
+  final String Function(String markdown)? onPasteCopy;
+
   /// Code blocks' colors.
   final MarkdownCodeColorizer? colorize;
 
@@ -103,6 +110,10 @@ class MarkdownEditor extends StatefulWidget {
 
   /// How its lines' text is aligned (a table's cell's, as its column).
   final TextAlign textAlign;
+
+  /// Told when an editor with the keyboard found itself cut off from the
+  /// platform's input and attached again: the app writes it down.
+  static void Function(String message)? onInputLost;
 
   @override
   State<MarkdownEditor> createState() => MarkdownEditorState();
@@ -1134,6 +1145,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
 
   void _tapDown(TapDragDownDetails details) {
     if (!_focus.hasPrimaryFocus) _focus.requestFocus();
+    _ensureInput('a click');
     final counted = details.consecutiveTapCount;
     final last = _tapAt;
     _tapAt = details.globalPosition;
@@ -1334,41 +1346,19 @@ class MarkdownEditorState extends State<MarkdownEditor>
   TextInputConnection? _connection;
 
   /// What the platform was last told of the text: some lines around the
-  /// caret's, from [_remoteStart].
+  /// caret's ([_told]).
   TextEditingValue _remote = TextEditingValue.empty;
-  int _remoteStart = 0;
+
+  /// Those lines as told, each atom one character: where the platform's
+  /// offsets are in the text.
+  MdTold _told = MdTold.empty;
 
   /// The selection was too long to tell the platform: it was told of the
   /// caret alone; what it types replaces the selection.
   bool _remoteCaretOnly = false;
 
-  /// The atoms ([MdAtoms]) in what the platform was told, each told as
-  /// one character ([MdAtoms.shown]): where that is in [_remote], and how
-  /// long the atom is in the text. In order.
-  List<(int, int)> _remoteAtoms = const [];
-
   /// The text's offset of [remote], an offset in [_remote].
-  int _sourceAt(int remote) {
-    var offset = _remoteStart + remote;
-    for (final (at, length) in _remoteAtoms) {
-      if (at >= remote) break;
-      offset += length - 1;
-    }
-    return offset;
-  }
-
-  /// [_remoteAtoms] after [start] to [end] of [_remote] was replaced by
-  /// [inserted] characters: those in it gone, those after it moved.
-  void _remoteEdited(int start, int end, int inserted) {
-    if (_remoteAtoms.isEmpty) return;
-    _remoteAtoms = [
-      for (final (at, length) in _remoteAtoms)
-        if (at < start)
-          (at, length)
-        else if (at >= end)
-          (at + inserted - (end - start), length),
-    ];
-  }
+  int _sourceAt(int remote) => _told.toSource(remote);
 
   bool get _hasInput => _connection?.attached ?? false;
 
@@ -1395,6 +1385,19 @@ class MarkdownEditorState extends State<MarkdownEditor>
     _imeGeometrySoon();
   }
 
+  /// Attaches again where the editor has the keyboard but not the
+  /// platform's input: typed letters (an input method's too) would go
+  /// nowhere, and a click, focus not changing, would not bring it back.
+  void _ensureInput(String by) {
+    if (widget.readOnly || !_focus.hasPrimaryFocus || _hasInput) return;
+    MarkdownEditor.onInputLost?.call(
+      '${_connection == null ? 'closed' : 'taken by another client'}; '
+      'attached again on $by',
+    );
+    _connection = null;
+    _openInput();
+  }
+
   void _closeInput() {
     _connection?.close();
     _connection = null;
@@ -1405,9 +1408,8 @@ class MarkdownEditorState extends State<MarkdownEditor>
   TextEditingValue _windowValue() {
     final selection = controller.selection;
     if (!selection.isValid) {
-      _remoteStart = 0;
+      _told = MdTold.empty;
       _remoteCaretOnly = false;
-      _remoteAtoms = const [];
       return TextEditingValue.empty;
     }
     final lines = controller.lines;
@@ -1418,41 +1420,28 @@ class MarkdownEditorState extends State<MarkdownEditor>
     );
     var start = lines.lineStart(first);
     var end = lines.lineEnd(last);
-    var (text, atoms) = _told(start, end);
+    var told = _tell(start, end);
     _remoteCaretOnly = false;
-    if (text.length > 4000) {
+    if (told.text.length > 4000) {
       final line = controller.lineAt(selection.extentOffset);
       first = last = line;
       start = lines.lineStart(line);
       end = lines.lineEnd(line);
-      (text, atoms) = _told(start, end);
+      told = _tell(start, end);
       _remoteCaretOnly = !selection.isCollapsed;
     }
-    _remoteStart = start;
-    _remoteAtoms = atoms;
-    // Where an offset of the text is in what is told: an atom's inside, at
-    // its start.
-    int told(int offset) {
-      var remote = offset - start;
-      var shift = 0;
-      for (final (at, length) in atoms) {
-        final from = start + at + shift;
-        if (offset <= from) break;
-        remote -= offset >= from + length ? length - 1 : offset - from;
-        shift += length - 1;
-      }
-      return remote;
-    }
+    _told = told;
+    final text = told.text;
 
     TextSelection remoteSelection;
     if (_remoteCaretOnly) {
       remoteSelection = TextSelection.collapsed(
-        offset: told(selection.extentOffset),
+        offset: told.toTold(selection.extentOffset),
       );
     } else {
       remoteSelection = TextSelection(
-        baseOffset: told(selection.baseOffset),
-        extentOffset: told(selection.extentOffset),
+        baseOffset: told.toTold(selection.baseOffset),
+        extentOffset: told.toTold(selection.extentOffset),
         affinity: selection.affinity,
       );
     }
@@ -1464,30 +1453,17 @@ class MarkdownEditorState extends State<MarkdownEditor>
           controller.isComposing &&
               composing.start >= start &&
               composing.end <= end
-          ? TextRange(start: told(composing.start), end: told(composing.end))
+          ? TextRange(
+              start: told.toTold(composing.start),
+              end: told.toTold(composing.end),
+            )
           : TextRange.empty,
     );
   }
 
-  /// [start] to [end] of the text as the platform is told of it, each atom
-  /// one character; and the atoms, where they are in the text told and how
-  /// long they are in the text.
-  (String, List<(int, int)>) _told(int start, int end) {
-    final text = controller.substring(start, end);
-    if (!text.contains(MdAtoms.open)) return (text, const []);
-    final atoms = <(int, int)>[];
-    final buffer = StringBuffer();
-    var at = 0;
-    for (final run in MdAtoms.parse(text)) {
-      buffer
-        ..write(text.substring(at, run.start))
-        ..write(MdAtoms.shown);
-      atoms.add((buffer.length - 1, run.end - run.start));
-      at = run.end;
-    }
-    buffer.write(text.substring(at));
-    return (buffer.toString(), atoms);
-  }
+  /// [start] to [end] of the text as the platform is told of it.
+  MdTold _tell(int start, int end) =>
+      MdTold.of(controller.substring(start, end), start: start);
 
   /// Tells the platform of the text where it differs from what it has.
   void _syncRemote() {
@@ -1495,9 +1471,9 @@ class MarkdownEditorState extends State<MarkdownEditor>
     // While an input method composes, the platform has the text and the
     // composition: told again, Windows ends what it composes.
     if (_composing) return;
-    final start = _remoteStart;
+    final start = _told.start;
     final value = _windowValue();
-    if (start == _remoteStart && _sameAsRemote(value)) return;
+    if (start == _told.start && _sameAsRemote(value)) return;
     _remote = value;
     _connection!.setEditingState(value);
   }
@@ -1668,7 +1644,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
       // what it gives back as it was is left be.
       (start, end, text) = _trimmed(old, start, end, text);
     }
-    final told = text.length;
+    final told = text;
     final clean = MdAtoms.strip(text.replaceAll(MdAtoms.shown, ''));
     final cleaned = clean.length != text.length;
     text = clean;
@@ -1679,7 +1655,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
     } catch (_) {
       // Out of step with the platform: told again below.
     }
-    if (start >= 0) _remoteEdited(start, end, told);
+    if (start >= 0) _told = _told.edited(start, end, told);
     TextSelection selection(TextSelection remote) => cleaned
         ? TextSelection.collapsed(offset: sourceStart + text.length)
         : TextSelection(
@@ -1855,6 +1831,7 @@ class MarkdownEditorState extends State<MarkdownEditor>
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     // Not one for a widget in it with the keyboard (a table's cell).
     if (!_focus.hasPrimaryFocus) return KeyEventResult.ignored;
+    if (event is KeyDownEvent) _ensureInput('a key');
     final own = widget.onKey?.call(event);
     if (own != null && own != KeyEventResult.ignored) return own;
     if (event is KeyUpEvent || widget.readOnly || controller.isComposing) {
@@ -2140,14 +2117,6 @@ class MarkdownEditorState extends State<MarkdownEditor>
 
   // --- Copying and pasting ------------------------------------------------------------
 
-  /// What the editor last copied: as text (on the clipboard) and as its
-  /// markdown (pasted back here while the clipboard still has the text),
-  /// and whether that was a plain text's ([MarkdownController.plain]).
-  ({String plain, String markdown, bool fromPlain})? get lastCopy => _copied;
-
-  /// Any editor's, pasted in another of its kind (plain or markdown).
-  static ({String plain, String markdown, bool fromPlain})? _copied;
-
   /// [start] to [end] as text: what it shows, a picture as its embeds'
   /// [MarkdownEmbeds.plainText].
   String plainText(int start, int end) {
@@ -2193,31 +2162,31 @@ class MarkdownEditorState extends State<MarkdownEditor>
     return parts.join('\n');
   }
 
-  /// The selection copied (cut, where [cut]).
+  /// The selection copied (cut, where [cut]): as text, and as its markdown
+  /// for an editor of its kind to paste (see [MdClipboard]).
   Future<void> copy({bool cut = false}) async {
     final selection = controller.selection;
     if (!selection.isValid || selection.isCollapsed) return;
-    final markdown = controller.substring(selection.start, selection.end);
-    final plain = plainText(selection.start, selection.end);
-    _copied = (plain: plain, markdown: markdown, fromPlain: controller.plain);
+    final clip = MdClip(
+      plain: plainText(selection.start, selection.end),
+      markdown: controller.substring(selection.start, selection.end),
+      fromPlain: controller.plain,
+    );
     if (cut && !widget.readOnly) {
       controller.replace(selection.start, selection.end, '');
     }
-    await Clipboard.setData(ClipboardData(text: plain));
+    await MdClipboard.instance.write(clip);
   }
 
-  /// What the clipboard has, put in place of the selection.
+  /// What the clipboard has, put in place of the selection: an editor's
+  /// copy of its kind as its markdown, else [MarkdownEditor.onPaste]'s or
+  /// the text.
   Future<void> paste() async {
     if (widget.readOnly) return;
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final text = data?.text;
+    final (:text, :clip) = await MdClipboard.instance.read();
     if (!mounted) return;
-    final copied = _copied;
-    if (text != null &&
-        copied != null &&
-        text == copied.plain &&
-        copied.fromPlain == controller.plain) {
-      insertText(copied.markdown);
+    if (clip != null && clip.fromPlain == controller.plain) {
+      insertText(widget.onPasteCopy?.call(clip.markdown) ?? clip.markdown);
       return;
     }
     if (widget.onPaste != null && await widget.onPaste!()) return;
@@ -2437,9 +2406,12 @@ class MarkdownEditorState extends State<MarkdownEditor>
   Widget build(BuildContext context) {
     _reveal = _computeReveal();
     final lines = controller.lines;
+    final behavior = ScrollConfiguration.of(context);
     Widget scroll = CustomScrollView(
       key: _scrollKey,
       controller: scrollController,
+      // Its scrollbar outside the text's cursor: built below.
+      scrollBehavior: behavior.copyWith(scrollbars: false),
       physics: widget.physics,
       shrinkWrap: widget.shrinkWrap,
       slivers: [
@@ -2486,52 +2458,62 @@ class MarkdownEditorState extends State<MarkdownEditor>
       child: Focus(
         focusNode: _focus,
         onKeyEvent: _key,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.text,
-          child: RawGestureDetector(
-            behavior: HitTestBehavior.translucent,
-            gestures: {
-              _MouseSelect: GestureRecognizerFactoryWithHandlers<_MouseSelect>(
-                () => _MouseSelect(_allows),
-                (recognizer) => recognizer
-                  ..dragStartBehavior = DragStartBehavior.down
-                  ..onTapDown = _tapDown
-                  ..onTapUp = _tapUp
-                  ..onDragStart = _dragStart
-                  ..onDragUpdate = _dragUpdate
-                  ..onDragEnd = _dragEnd
-                  ..onCancel = _dragCancel,
-              ),
-              _TouchTap: GestureRecognizerFactoryWithHandlers<_TouchTap>(
-                () => _TouchTap(_allows),
-                (recognizer) => recognizer.onTapUp = (details) {
-                  if (!_focus.hasPrimaryFocus) _focus.requestFocus();
-                  final at = offsetAt(details.globalPosition);
-                  if (at == null || (widget.onClick?.call(at) ?? false)) {
-                    return;
-                  }
-                  _moveTo(at, extend: false);
-                },
-              ),
-              _TouchHold: GestureRecognizerFactoryWithHandlers<_TouchHold>(
-                () => _TouchHold(_allows),
-                (recognizer) => recognizer.onLongPressStart = (details) {
-                  if (!_focus.hasPrimaryFocus) _focus.requestFocus();
-                  final at = offsetAt(details.globalPosition);
-                  if (at == null) return;
-                  final (start, end) = _wordAt(at);
-                  _select(TextSelection(baseOffset: start, extentOffset: end));
-                },
-              ),
-            },
-            child: NotificationListener<ScrollNotification>(
-              onNotification: (_) {
-                _imeGeometrySoon();
-                return false;
+        // The scrollbar the app's (none where it has none), over the text
+        // but not under its cursor: an arrow there, not the I-beam.
+        child: behavior.buildScrollbar(
+          context,
+          MouseRegion(
+            cursor: SystemMouseCursors.text,
+            child: RawGestureDetector(
+              behavior: HitTestBehavior.translucent,
+              gestures: {
+                _MouseSelect:
+                    GestureRecognizerFactoryWithHandlers<_MouseSelect>(
+                      () => _MouseSelect(_allows),
+                      (recognizer) => recognizer
+                        ..dragStartBehavior = DragStartBehavior.down
+                        ..onTapDown = _tapDown
+                        ..onTapUp = _tapUp
+                        ..onDragStart = _dragStart
+                        ..onDragUpdate = _dragUpdate
+                        ..onDragEnd = _dragEnd
+                        ..onCancel = _dragCancel,
+                    ),
+                _TouchTap: GestureRecognizerFactoryWithHandlers<_TouchTap>(
+                  () => _TouchTap(_allows),
+                  (recognizer) => recognizer.onTapUp = (details) {
+                    if (!_focus.hasPrimaryFocus) _focus.requestFocus();
+                    _ensureInput('a tap');
+                    final at = offsetAt(details.globalPosition);
+                    if (at == null || (widget.onClick?.call(at) ?? false)) {
+                      return;
+                    }
+                    _moveTo(at, extend: false);
+                  },
+                ),
+                _TouchHold: GestureRecognizerFactoryWithHandlers<_TouchHold>(
+                  () => _TouchHold(_allows),
+                  (recognizer) => recognizer.onLongPressStart = (details) {
+                    if (!_focus.hasPrimaryFocus) _focus.requestFocus();
+                    final at = offsetAt(details.globalPosition);
+                    if (at == null) return;
+                    final (start, end) = _wordAt(at);
+                    _select(
+                      TextSelection(baseOffset: start, extentOffset: end),
+                    );
+                  },
+                ),
               },
-              child: scroll,
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (_) {
+                  _imeGeometrySoon();
+                  return false;
+                },
+                child: scroll,
+              ),
             ),
           ),
+          ScrollableDetails.vertical(controller: scrollController),
         ),
       ),
     );

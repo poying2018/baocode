@@ -88,7 +88,11 @@ class IdeInputBox extends StatefulWidget {
     this.semanticsLabel,
     this.floatingValidation = false,
     this.obscureText = false,
+    this.radius = 4,
   });
+
+  /// Its corners: [Islands.controlRadius]'s on a card.
+  final double radius;
 
   final TextEditingController controller;
   final FocusNode? focusNode;
@@ -258,8 +262,8 @@ class _IdeInputBoxState extends State<IdeInputBox> {
         color: IdeInputColors.background,
         border: Border.all(color: outline),
         borderRadius: validation == null || floating
-            ? BorderRadius.circular(4)
-            : const BorderRadius.vertical(top: Radius.circular(4)),
+            ? BorderRadius.circular(widget.radius)
+            : BorderRadius.vertical(top: Radius.circular(widget.radius)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,11 +296,16 @@ class _IdeInputBoxState extends State<IdeInputBox> {
                     link: _link,
                     targetAnchor: Alignment.bottomLeft,
                     showWhenUnlinked: false,
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: SizedBox(
-                        width: constraints.maxWidth,
-                        child: _message(validation),
+                    // Clicked through: what it is over stays at hand (the
+                    // commit panel's Generate Commit Message, the message
+                    // wanted).
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: constraints.maxWidth,
+                          child: _message(validation),
+                        ),
                       ),
                     ),
                   ),

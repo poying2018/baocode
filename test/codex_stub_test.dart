@@ -12,7 +12,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:baocode/chat/chat_models.dart';
-import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/codex/codex_kernel.dart';
 import 'package:baocode/kernel/codex/codex_process_transport_io.dart';
 import 'package:baocode/kernel/codex/codex_transport.dart';
@@ -63,7 +62,6 @@ void main() {
     final kernel = CodexKernel(
       KernelRegistry.codex,
       transport,
-      context: KernelContext(cwd: Directory.current.path),
     );
     addTearDown(kernel.dispose);
 

@@ -3693,7 +3693,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
                 insertSpaces: insertSpaces,
               ),
       git: _shownGit(thread),
-      terminals: _terminals?.sidePanelTerminals(thread.project.path),
+      terminals: _terminals?.serviceOf(thread.project.path),
       terminalSkipShell: chatTerminalSkipShell,
       onOpenTerminalLink: _openTerminalLink,
       // Claude Haiku where the project is, as the IDE's Source Control.
@@ -3972,12 +3972,6 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       openInIde: embedded
           ? null
           : (request) => _openRequestInIde(thread, request),
-      showBrowserTab: embedded
-          ? null
-          : (tabId) {
-              BrowserTools.show(tabId);
-              _sidePanel.showSection(thread.session, SidePanelSection.browser);
-            },
       openFolder: embedded
           ? null
           : (path) => _sidePanel.openFolder(thread.session, path),
@@ -4061,14 +4055,17 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
   }
 
   /// [child] with the terminal panel under it (see [ChatTerminalArea]).
-  Widget _withTerminal(Widget child) => switch (_terminals) {
-    final terminals? => ChatTerminalArea(
+  Widget _withTerminal(Widget child) {
+    final terminals = _terminals;
+    final root = _workspace.current?.project.path;
+    if (terminals == null || root == null) return child;
+    return ChatTerminalArea(
       terminals: terminals,
+      root: root,
       onOpenLink: _openTerminalLink,
       child: child,
-    ),
-    null => child,
-  };
+    );
+  }
 
   Widget _buildGrid({required bool showToggle}) {
     if (_stashing) {
@@ -4091,11 +4088,6 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       },
       paneBuilder: (context, thread, place) =>
           _buildChat(showToggle: showToggle, pane: thread, place: place),
-      // Those not focused in the sidebar's color, set apart.
-      paneBackground: (thread) => identical(thread, _workspace.current)
-          ? null
-          : AppColors.unfocusedConversationSurface,
-      focused: _workspace.current,
       onLinesMoved: _workspace.keepGridLines,
     );
   }
@@ -4400,7 +4392,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
         null => null,
       },
       SidePanelSection.terminal ||
-      SidePanelSection.browser ||
+      SidePanelSection.usage ||
+      SidePanelSection.ports ||
       SidePanelSection.plan => null,
     };
   }

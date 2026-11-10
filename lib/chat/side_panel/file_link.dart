@@ -1,6 +1,5 @@
 import 'package:path/path.dart' as p;
 
-import '../../platform/path_style.dart';
 
 /// Lines of a file, from 1: [start] to [end], at [column] (from 1) when
 /// one is said.
@@ -43,12 +42,30 @@ class FileLineRange {
 /// (`[a.dart](lib/a.dart#L12)`, as `ClaudeLaunch.fileLinks` asks it to
 /// write them), a path in inline code (`lib/a.dart:12`, as Claude Code's
 /// own prompt has it), or a search's match. [path] as written: relative to
-/// where the agent works, or absolute.
+/// where the agent works, or absolute; on another [machine] than that.
 class FileLink {
-  const FileLink(this.path, [this.range]);
+  const FileLink(this.path, [this.range]) : machine = null;
+
+  /// A file of [machine]'s: [userComputer], or an SSH host.
+  const FileLink.on(this.machine, this.path, [this.range]);
 
   final String path;
   final FileLineRange? range;
+
+  /// Where the file is when that is not where the agent works:
+  /// [userComputer] (`local:/a/b.dart`, from an agent on an SSH host), or
+  /// an SSH host (`ssh://host/a/b.dart`, as the app names a host's file,
+  /// see `RemoteLocation`). Null for where the agent works.
+  final String? machine;
+
+  /// The user's own computer, as [machine]: no host is named `''`.
+  static const userComputer = '';
+
+  /// The scheme of a link to a file of the user's own computer.
+  static const userComputerScheme = 'local:';
+
+  /// The scheme of a link to a file of an SSH host.
+  static const sshScheme = 'ssh://';
 
   /// The file a link to [href] goes to; null for a web, mail or any other
   /// scheme's address, a heading's anchor, or nothing.
@@ -59,6 +76,19 @@ class FileLink {
       text = text.substring(1, text.length - 1).trim();
     }
     if (text.isEmpty || text.startsWith('#')) return null;
+    final lower = text.toLowerCase();
+    if (lower.startsWith(userComputerScheme)) {
+      var rest = text.substring(userComputerScheme.length);
+      // `local:///a/b.dart`, as a URL would be.
+      if (rest.startsWith('//')) rest = rest.substring(2);
+      return _on(userComputer, rest);
+    }
+    if (lower.startsWith(sshScheme)) {
+      final rest = text.substring(sshScheme.length);
+      final slash = rest.indexOf('/');
+      if (slash <= 0) return null;
+      return _on(rest.substring(0, slash), rest.substring(slash));
+    }
     if (_scheme.firstMatch(text) case final match?
         when !_drive.hasMatch(text)) {
       if (match[1]!.toLowerCase() != 'file') return null;
@@ -85,6 +115,27 @@ class FileLink {
     return _withSuffix(path);
   }
 
+  /// The file at [address] (an absolute path, with a line after it or
+  /// not) of [machine]'s; null for none, or a relative path: where it is
+  /// from is not known there.
+  static FileLink? _on(String machine, String address) {
+    final hash = address.indexOf('#');
+    var path = _decode(hash < 0 ? address : address.substring(0, hash));
+    // `/C:/a/b.dart`, a Windows host's, as the app's locations spell it.
+    if (RegExp(r'^/[A-Za-z]:([/\\]|$)').hasMatch(path)) {
+      path = path.substring(1);
+    }
+    final FileLink link;
+    if (hash >= 0) {
+      link = FileLink(path, _fragment(address.substring(hash + 1)));
+    } else {
+      link = _withSuffix(path);
+    }
+    final absolute = link.path.startsWith('/') || _drive.hasMatch(link.path);
+    if (!absolute) return null;
+    return FileLink.on(machine, link.path, link.range);
+  }
+
   /// The file inline code names (`lib/a.dart`, `lib/a.dart:12:5`,
   /// `a.dart#L3-L9`); null for code that does not look like a path: with
   /// blanks, quotes or brackets in it, an address, or a word without a
@@ -108,19 +159,40 @@ class FileLink {
     return _pathLike(link.path) ? link : null;
   }
 
-  /// [path] in [root] (absolute, in [paths]' spelling; this machine's when
-  /// null): null when it is outside it, as the agent's work is all there.
-  String? resolveIn(String root, {p.Context? paths}) =>
-      resolvePath(path, root, paths: paths);
+  /// [path] made absolute from [root] (in [paths]' spelling; this
+  /// machine's when null): see [resolvePath].
+  String? resolveIn(String root, {p.Context? paths, String? home}) =>
+      resolvePath(path, root, paths: paths, home: home);
 
-  /// [path] (absolute, or relative to [root]) in [root]; null outside.
-  static String? resolvePath(String path, String root, {p.Context? paths}) {
-    final context = paths ?? PathStyle.of(root);
-    if (path.isEmpty || path.startsWith('~')) return null;
-    final full = context.normalize(
-      context.isAbsolute(path) ? path : context.join(root, path),
+  /// [path] absolute, as the agent's own tools take it (bao_agent's
+  /// `PermissionEngine.absolute`): `~` the [home] folder of the host,
+  /// relative to [root] (where the agent works), wherever that leads, in
+  /// the project or out of it. Null for nothing, `~` without a [home], or
+  /// another user's (`~bob`).
+  static String? resolvePath(
+    String path,
+    String root, {
+    p.Context? paths,
+    String? home,
+  }) {
+    final context = paths ?? p.context;
+    if (path.isEmpty) return null;
+    var expanded = path;
+    if (path.startsWith('~')) {
+      final rest = path.substring(1);
+      if (home == null || home.isEmpty) return null;
+      if (rest.isEmpty) {
+        expanded = home;
+      } else if (rest.startsWith('/') ||
+          (context.style == p.Style.windows && rest.startsWith(r''))) {
+        expanded = context.join(home, rest.substring(1));
+      } else {
+        return null;
+      }
+    }
+    return context.normalize(
+      context.isAbsolute(expanded) ? expanded : context.join(root, expanded),
     );
-    return context.isWithin(root, full) ? full : null;
   }
 
   /// A scheme (`https:`, `vscode:`); a drive (`C:`) is not one.
@@ -189,11 +261,16 @@ class FileLink {
 
   @override
   bool operator ==(Object other) =>
-      other is FileLink && other.path == path && other.range == range;
+      other is FileLink &&
+      other.path == path &&
+      other.range == range &&
+      other.machine == machine;
 
   @override
-  int get hashCode => Object.hash(path, range);
+  int get hashCode => Object.hash(path, range, machine);
 
   @override
-  String toString() => 'FileLink($path, $range)';
+  String toString() =>
+      'FileLink(${machine == null ? '' : '${machine!.isEmpty ? 'local' : machine}: '}'
+      '$path, $range)';
 }

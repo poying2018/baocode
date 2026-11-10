@@ -47,11 +47,14 @@ class FakeCatalog implements SessionCatalog {
     path: 'test/fixtures/claude_code/history.jsonl',
   );
 
+  /// [kept] as listed now, once talked in elsewhere.
+  static SessionRecord? keptNow;
+
   @override
   Future<List<ProjectRecord>> projects() async => [
     for (final session in started)
       ProjectRecord(path: session.cwd, sessions: [session]),
-    ProjectRecord(path: '/tmp/project', sessions: [kept]),
+    ProjectRecord(path: '/tmp/project', sessions: [keptNow ?? kept]),
   ];
 
   @override
@@ -176,6 +179,91 @@ class _Renames implements ClaudeCodeTransport {
 }
 
 void main() {
+  testWidgets('a kept session talked in elsewhere is read anew, in place', (
+    tester,
+  ) async {
+    final workspace = await pumpLoaded(tester);
+    await tester.tap(inSidebar(find.text('Write a.txt and read it back')));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    final thread = workspace.selected;
+    final was = thread.session;
+    expect(thread.record, FakeCatalog.kept);
+    Finder reload() => find.byWidgetPredicate(
+      (widget) =>
+          widget is SidebarIconButton &&
+          widget.tooltip == 'Reload (continued elsewhere)',
+    );
+
+    // Nothing said elsewhere: nothing to read anew.
+    await tester.runAsync(workspace.refresh);
+    await tester.pump();
+    expect(thread.goneOnElsewhere, isFalse);
+    expect(reload(), findsNothing);
+
+    // Gone on with in a terminal: the session's file grew, its last
+    // message after the conversation here was read.
+    final file = File(FakeCatalog.kept.path!);
+    final original = file.readAsStringSync();
+    addTearDown(() => file.writeAsStringSync(original));
+    // In fake async, only synchronous IO runs: the lines go in as text.
+    const since =
+        '\n'
+        '{"parentUuid":"d23f2137-f51f-4a22-af0c-05760c529c4e","isSidechain":'
+        'false,"type":"user","uuid":"11111111-2222-4333-8444-555555555555",'
+        '"message":{"role":"user","content":[{"type":"text","text":'
+        '"Said in a terminal since"}]},"cwd":"/tmp/project","sessionId":'
+        '"eafc328b-0be0-4b23-bbaa-962b545ecb51","version":"2.0.0"}\n'
+        '{"parentUuid":"11111111-2222-4333-8444-555555555555","isSidechain":'
+        'false,"type":"assistant","uuid":"22222222-3333-4444-8555-666666666666"'
+        ',"message":{"id":"msg_terminal_since","type":"message","role":'
+        '"assistant","model":"claude-sonnet-5","content":[{"type":"text",'
+        '"text":"Answered there and then."}]},"cwd":"/tmp/project",'
+        '"sessionId":"eafc328b-0be0-4b23-bbaa-962b545ecb51","version":"2.0.0"}'
+        '\n';
+    file.writeAsStringSync('$original$since', flush: true);
+    final kept = FakeCatalog.kept;
+    FakeCatalog.keptNow = SessionRecord(
+      id: kept.id,
+      title: kept.title,
+      updatedAt: DateTime.now().add(const Duration(minutes: 1)),
+      cwd: kept.cwd,
+      path: kept.path,
+    );
+    addTearDown(() => FakeCatalog.keptNow = null);
+    await tester.runAsync(workspace.refresh);
+    await tester.pump();
+    expect(thread.goneOnElsewhere, isTrue);
+    expect(reload(), findsOneWidget);
+
+    // Typed and not sent: goes on in the conversation read anew.
+    was.draft.save(
+      'Half a question',
+      const TextSelection.collapsed(offset: 4),
+      const [],
+    );
+    await tester.tap(reload());
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    await tester.pump();
+
+    // The same thread in its place, its conversation read anew.
+    expect(identical(workspace.selected, thread), isTrue);
+    expect(identical(thread.session, was), isFalse);
+    expect(thread.record, kept);
+    expect(
+      tester.widget<ChatScreen>(find.byType(ChatScreen)).session,
+      thread.session,
+    );
+    expect(find.textContaining('Said in a terminal since'), findsOneWidget);
+    expect(find.textContaining('Answered there and then.'), findsOneWidget);
+    expect(thread.session.draft.content, 'Half a question');
+    expect(thread.goneOnElsewhere, isFalse);
+    expect(reload(), findsNothing);
+    thread.session.stop();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('lists the kept sessions; one opens with its history', (
     tester,
   ) async {
@@ -333,12 +421,14 @@ void main() {
       'title is kept with its session', (tester) async {
     final renames = <String>[];
     final asked = <String>[];
+    final titledIn = <String?>[];
     final generated = Completer<String?>();
     final workspace = await pumpLoaded(
       tester,
       kernel: titledClaude(renames),
-      titler: (message, {model, location}) {
+      titler: (message, {model, location, session}) {
         asked.add(message);
+        titledIn.add(session);
         return generated.future;
       },
     );
@@ -349,7 +439,11 @@ void main() {
     session.send(const ComposerMessage(text: 'hi'));
     await tester.runAsync(() => Future<void>.delayed(Duration.zero));
     await tester.pump();
+    // Once its CLI told its id, the call kept under it.
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
     expect(asked, ['hi']);
+    expect(titledIn, ['mock-claude-session']);
     expect(thread.title, 'hi');
     generated.complete('Greeting');
     await tester.pump();
@@ -373,7 +467,7 @@ void main() {
     final workspace = await pumpLoaded(
       tester,
       kernel: titledClaude(renames),
-      titler: (message, {model, location}) async {
+      titler: (message, {model, location, session}) async {
         asked.add(message);
         return 'Generated';
       },
@@ -410,7 +504,7 @@ void main() {
     final workspace = await pumpLoaded(
       tester,
       kernel: titledClaude(renames),
-      titler: (_, {model, location}) => generated.future,
+      titler: (_, {model, location, session}) => generated.future,
     );
     final thread = workspace.selected;
     thread.session.send(
@@ -428,13 +522,41 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
   });
 
+  testWidgets('a title summed up on request is from all that was asked, '
+      'and left to the user to keep', (tester) async {
+    final renames = <String>[];
+    final asked = <String>[];
+    final workspace = await pumpLoaded(
+      tester,
+      kernel: titledClaude(renames),
+      titler: (message, {model, location, session}) async {
+        asked.add(message);
+        return 'Generated ${asked.length}';
+      },
+    );
+    final thread = workspace.selected;
+    thread.session.send(const ComposerMessage(text: 'Fix the login test'));
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+    expect(thread.title, 'Generated 1');
+
+    expect(askedTitles(thread.session), ['Fix the login test']);
+    final summary = await workspace.summarizeTitle(thread);
+    expect(summary, 'Generated 2');
+    expect(asked.last, 'Fix the login test');
+    expect(thread.title, 'Generated 1');
+    thread.session.stop();
+    await tester.pump(const Duration(seconds: 1));
+  });
+
   testWidgets('renamed in Claude Code (/rename), it is named so here too '
       '(#171)', (tester) async {
     final renames = <String>[];
     final workspace = await pumpLoaded(
       tester,
       kernel: titledClaude(renames),
-      titler: (_, {model, location}) async => 'Generated',
+      titler: (_, {model, location, session}) async => 'Generated',
     );
     final thread = workspace.selected;
     thread.session.send(const ComposerMessage(text: 'Fix the login test'));
@@ -465,7 +587,7 @@ void main() {
     final asked = <String>[];
     final workspace = await pumpLoaded(
       tester,
-      titler: (message, {model, location}) async {
+      titler: (message, {model, location, session}) async {
         asked.add(message);
         return 'Generated';
       },
@@ -967,6 +1089,32 @@ void main() {
   });
 
   group('the chat panes', () {
+    testWidgets(
+      'rearranged panes and the moved agent focused survive a restart',
+      (tester) async {
+        final store = MemoryPreferenceStore();
+        var workspace = await pumpLoaded(tester, preferences: store);
+        final draft = workspace.selected;
+        final kept = workspace.threads.firstWhere(
+          (thread) => thread.record?.id == FakeCatalog.kept.id,
+        );
+        workspace.openBeside(kept, draft, PaneSide.right);
+        workspace.rearrangePane(kept, draft, side: PaneSide.bottom);
+        expect(workspace.grid.rowsSplit, isTrue);
+        expect(workspace.grid.columnsSplit, isFalse);
+        expect(workspace.current, same(kept));
+
+        await tester.pumpWidget(const SizedBox());
+        workspace = await pumpLoaded(tester, preferences: store);
+        expect(workspace.grid.panes, hasLength(2));
+        expect(workspace.grid.at(0)?.id, isNull);
+        expect(workspace.grid.at(2)?.id, FakeCatalog.kept.id);
+        expect(workspace.grid.rowsSplit, isTrue);
+        expect(workspace.grid.columnsSplit, isFalse);
+        expect(workspace.current?.id, FakeCatalog.kept.id);
+      },
+    );
+
     testWidgets('the agents open, where they were, and the one focused are '
         'kept between runs', (tester) async {
       final store = MemoryPreferenceStore();
@@ -976,7 +1124,7 @@ void main() {
         (thread) => thread.record?.id == FakeCatalog.kept.id,
       );
       workspace.openBeside(kept, draft, PaneSide.right);
-      workspace.grid.columnRatio = .3;
+      workspace.grid.setColumnRatioIn(0, .3);
       workspace.keepGridLines();
 
       // The next run.
@@ -991,7 +1139,47 @@ void main() {
       expect(workspace.grid.at(0), same(panes.first));
       expect(workspace.grid.at(1), same(panes.last));
       expect(workspace.selected, same(panes.last));
-      expect(workspace.grid.columnRatio, .3);
+      expect(workspace.grid.columnRatios, [.3, .3]);
+    });
+
+    testWidgets("each pane's tabs, and the one shown, survive a restart", (
+      tester,
+    ) async {
+      addTearDown(FakeCatalog.started.clear);
+      FakeCatalog.started.addAll([
+        for (final id in ['tab-a', 'tab-b'])
+          SessionRecord(
+            id: id,
+            title: id,
+            updatedAt: DateTime(2026, 9, 28),
+            cwd: '/tmp/project',
+          ),
+      ]);
+      final store = MemoryPreferenceStore();
+      var workspace = await pumpLoaded(tester, preferences: store);
+      AgentThread byId(String id) =>
+          workspace.threads.firstWhere((thread) => thread.id == id);
+      final draft = workspace.selected;
+      final kept = byId(FakeCatalog.kept.id);
+      workspace
+        ..openBeside(kept, draft, PaneSide.right)
+        ..openInPlaceOf(kept, byId('tab-a'))
+        ..openInPlaceOf(byId('tab-a'), byId('tab-b'))
+        ..raiseCovered(byId('tab-b'), byId('tab-a'));
+      List<String?> tabs() => [
+        for (final tab in workspace.grid.tabs(workspace.grid.at(1)!)) tab.id,
+      ];
+      expect(tabs(), [FakeCatalog.kept.id, 'tab-a', 'tab-b']);
+      expect(workspace.grid.at(1)?.id, 'tab-a');
+
+      await tester.pumpWidget(const SizedBox());
+      workspace = await pumpLoaded(tester, preferences: store);
+      expect(workspace.grid.panes, hasLength(2));
+      expect(tabs(), [FakeCatalog.kept.id, 'tab-a', 'tab-b']);
+      expect(workspace.grid.at(1)?.id, 'tab-a');
+      expect(workspace.grid.tabs(workspace.grid.at(0)!), hasLength(1));
+      // The one covered last shows when the shown one closes.
+      expect(workspace.grid.uncover(workspace.grid.at(1)!)?.id, 'tab-b');
     });
 
     testWidgets("an agent that is no more leaves its pane to the others", (

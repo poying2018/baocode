@@ -8,6 +8,14 @@
 import 'dart:async';
 
 import '../../chat/chat_models.dart' show ToolCallItem, ToolKind;
+import '../kernel_types.dart' show ApprovalDecision, ApprovalRequest;
+
+/// Asks the user [request] on the agent's conversation, as the agent's
+/// own requests are: what they decided, or null where it was given up
+/// (the turn stopped) or no one is there to ask.
+typedef ClaudeSdkAsk = Future<ApprovalDecision?> Function(
+  ApprovalRequest request,
+);
 
 /// Where a tool is called from: the agent's working directory (its
 /// project's path, as the workspace has it) and its session.
@@ -17,9 +25,14 @@ class ClaudeSdkCall {
     this.sessionId,
     this.cancelled,
     this.toolUseId,
+    this.ask,
   });
 
   final String cwd;
+
+  /// Asks the user, on the agent's conversation: its id is the kernel's
+  /// to give (the request's own is not kept). None where the kernel cannot.
+  final ClaudeSdkAsk? ask;
   final String? sessionId;
 
   /// The tool use it answers, as Claude Code says (`_meta`'s
@@ -45,7 +58,18 @@ class ClaudeSdkTool {
     this.summary,
     this.files,
     this.alwaysLoad = false,
+    this.offeredIn,
+    this.asksItself = false,
   });
+
+  /// Whether it asks the user itself, each time, whatever the mode
+  /// ([ClaudeSdkCall.ask]): the CLI's leave not asked for it too.
+  final bool asksItself;
+
+  /// Whether an agent working in a folder (its location) is offered it, as
+  /// the tool itself says, besides [ClaudeSdkTools.gate]; everywhere for
+  /// null.
+  final bool Function(String cwd)? offeredIn;
 
   final String name;
   final String description;
@@ -84,6 +108,21 @@ Map<String, Object?> claudeSdkText(String text) => {
   'text': text,
 };
 
+/// Which of the app's tools an agent is offered, by the folder it works in:
+/// a bot's are its own, its abilities'; a project's agent has none of
+/// them.
+abstract interface class ClaudeSdkGate {
+  bool offersTool(String cwd, String tool);
+
+  /// Whether what [feature] tells of its tools ([ClaudeSdkTools.instruct])
+  /// is told there.
+  bool tellsFeature(String cwd, String feature);
+
+  /// Whether a tool called there may wait on the user at the computer (to
+  /// pick a model, say): not where there is none to.
+  bool asksUser(String cwd);
+}
+
 /// The app's server and its tools (registered as their features start).
 abstract final class ClaudeSdkTools {
   /// The server's name: its tools are `mcp__baocode__<name>` to the agent.
@@ -99,15 +138,37 @@ abstract final class ClaudeSdkTools {
 
   static void unregister(String name) => _tools.remove(name);
 
-  /// What each feature tells the agent of its tools, by feature: the
-  /// server's instructions, in the agent's system prompt.
-  static final Map<String, String> _instructions = {};
+  /// What each feature tells the agent of its tools, by feature, for the
+  /// folder it works in: the server's instructions, in the agent's system
+  /// prompt.
+  static final Map<String, String? Function(String cwd)> _instructions = {};
 
   /// Has the server tell the agent [text] for [feature]; null takes it
   /// back.
   static void instruct(String feature, String? text) => text == null
       ? _instructions.remove(feature)
-      : _instructions[feature] = text;
+      : _instructions[feature] = (_) => text;
+
+  /// Has the server tell an agent what [text] gives for the folder it
+  /// works in (nothing for null) for [feature].
+  static void instructFor(String feature, String? Function(String cwd) text) =>
+      _instructions[feature] = text;
+
+  /// Which tools, by name, an agent working in a folder is offered, and
+  /// which features' instructions it is told (see [ClaudeSdkGate]); all of
+  /// them when null.
+  static ClaudeSdkGate? gate;
+
+  static bool _offers(String cwd, String tool) =>
+      (_tools[tool]?.offeredIn?.call(cwd) ?? true) &&
+      (gate?.offersTool(cwd, tool) ?? true);
+
+  static bool _tells(String cwd, String feature) =>
+      gate?.tellsFeature(cwd, feature) ?? true;
+
+  /// Whether a tool called by an agent working in [cwd] may wait on the
+  /// user at the computer ([ClaudeSdkGate.asksUser]).
+  static bool asksUser(String cwd) => gate?.asksUser(cwd) ?? true;
 
   /// The tool an agent calls [name] (`mcp__baocode__<name>`), if one of
   /// this server's.
@@ -124,6 +185,11 @@ abstract final class ClaudeSdkTools {
   /// The servers to launch Claude Code with: this one, if it has tools.
   static List<String> get servers => any ? const [server] : const [];
 
+  /// The servers to launch an agent working in [cwd] with: this one, if it
+  /// offers that agent a tool.
+  static List<String> serversFor(String cwd) =>
+      _tools.keys.any((name) => _offers(cwd, name)) ? const [server] : const [];
+
   /// The answer to [message] (JSON-RPC) for the server.
   static Future<Map<String, Object?>> handle(
     Map<String, Object?> message,
@@ -138,27 +204,35 @@ abstract final class ClaudeSdkTools {
     };
     switch (message['method']) {
       case 'initialize':
+        final told = [
+          for (final MapEntry(key: feature, value: text)
+              in _instructions.entries)
+            if (_tells(call.cwd, feature)) ?text(call.cwd),
+        ];
         return result({
           'protocolVersion': params['protocolVersion'] ?? '2024-11-05',
           'capabilities': {'tools': <String, Object?>{}},
           'serverInfo': {'name': server, 'version': '1.0.0'},
-          if (_instructions.isNotEmpty)
-            'instructions': _instructions.values.join('\n\n'),
+          if (told.isNotEmpty) 'instructions': told.join('\n\n'),
         });
       case 'tools/list':
         return result({
           'tools': [
             for (final tool in _tools.values)
-              {
-                'name': tool.name,
-                'description': tool.description,
-                'inputSchema': tool.inputSchema,
-                if (tool.alwaysLoad) '_meta': {'anthropic/alwaysLoad': true},
-              },
+              if (_offers(call.cwd, tool.name))
+                {
+                  'name': tool.name,
+                  'description': tool.description,
+                  'inputSchema': tool.inputSchema,
+                  if (tool.alwaysLoad) '_meta': {'anthropic/alwaysLoad': true},
+                },
           ],
         });
       case 'tools/call':
-        final tool = _tools[params['name']];
+        final tool = switch (params['name']) {
+          final String name when _offers(call.cwd, name) => _tools[name],
+          _ => null,
+        };
         final input =
             (params['arguments'] as Map?)?.cast<String, Object?>() ?? {};
         if (tool == null) {
@@ -185,6 +259,7 @@ abstract final class ClaudeSdkTools {
               cwd: call.cwd,
               sessionId: call.sessionId,
               cancelled: cancel.future,
+              ask: call.ask,
               toolUseId: switch (params['_meta']) {
                 {'claudecode/toolUseId': final String id} => id,
                 _ => null,

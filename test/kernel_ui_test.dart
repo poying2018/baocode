@@ -3,6 +3,8 @@ import 'dart:math' show Random;
 import 'dart:ui' as ui;
 
 import 'package:bao_markdown/bao_markdown.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -307,6 +309,60 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     expect(panel, findsNothing);
     expect(find.textContaining('and lint', findRichText: true), findsOneWidget);
+  });
+
+  testWidgets('a queued message dragged above another waits before it', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final (:session, :cli) = await pumpScripted(
+      tester,
+      cli: FakeCli(
+        answers: {
+          'cancel_async_message': {'cancelled': true},
+        },
+      ),
+    );
+    session
+      ..send(const ComposerMessage(text: 'then the tests'))
+      ..send(const ComposerMessage(text: 'and lint'));
+    await tester.pump(const Duration(milliseconds: 100));
+    final panel = find.byType(QueuePanel);
+    expect(
+      [for (final (_, item) in session.queued) item.text],
+      ['then the tests', 'and lint'],
+    );
+
+    // The second dragged above the first.
+    final gesture = await tester.startGesture(
+      tester.getCenter(
+        find.descendant(of: panel, matching: find.text('and lint')),
+      ),
+    );
+    await tester.pump(kPressTimeout);
+    // A little to start it, then well past the one above.
+    await gesture.moveBy(const Offset(0, -10));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -30));
+    await tester.pump();
+    await gesture.moveBy(const Offset(0, -30));
+    await tester.pump();
+    await gesture.up();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      [for (final (_, item) in session.queued) item.text],
+      ['and lint', 'then the tests'],
+    );
+    // The one given the CLI taken back, all sent again in the new order.
+    expect(cli.requests('cancel_async_message'), hasLength(1));
+    expect(cli.requests('interrupt'), isEmpty);
+    debugDefaultTargetPlatformOverride = null;
   });
 
   testWidgets('an earlier conversation says it is loading until it is read', (
@@ -646,7 +702,8 @@ void main() {
         ],
       },
     });
-    await tester.pump();
+    // Shown with the next of the turn's rebuilds (at most every 66 ms).
+    await tester.pump(const Duration(milliseconds: 100));
     expect(tester.widget<PlanCard>(card).item.status, PlanStatus.awaiting);
     expect(session.awaitingPlan?.path, plan);
     // Not started while the turn that put it goes on.
@@ -951,6 +1008,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     expect('Planning next move', startsWith(shownStatus(tester)));
     expect(shownStatus(tester), isNotEmpty);
+    // On the shared clock's frames, opened: not a frame every vsync.
+    expect(tester.hasRunningAnimations, isFalse);
 
     await pumpUntil(tester, () => caret.evaluate().isEmpty);
     expect(shownStatus(tester), 'Planning next move');
@@ -1461,6 +1520,61 @@ void main() {
     // background task.
     expect(find.text('Compare the games'), findsNWidgets(2));
     expect(find.text('· Explore · 1m 14s · 1 tool · 9.1k tokens'), findsOne);
+  });
+
+  testWidgets("the mouse's back button leaves a subagent, its forward "
+      'button goes in again (#516)', (tester) async {
+    final (:session, :cli) = await pumpScripted(tester);
+    cli
+      ..push(
+        assistant(null, 'toolu_a', {
+          'name': 'Agent',
+          'input': {
+            'description': 'Compare the games',
+            'subagent_type': 'Explore',
+            'prompt': 'Compare the three games.',
+          },
+        }),
+      )
+      ..push({
+        'type': 'system',
+        'subtype': 'task_started',
+        'task_id': 't1',
+        'tool_use_id': 'toolu_a',
+        'description': 'Compare the games',
+        'task_type': 'local_agent',
+        'is_backgrounded': false,
+      });
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('Compare the games'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Conversation'), findsOneWidget);
+
+    Future<void> side(int buttons) async {
+      await tester.tapAt(
+        tester.getCenter(find.byType(ChatScreen)),
+        buttons: buttons,
+        kind: PointerDeviceKind.mouse,
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump();
+    }
+
+    await side(kBackMouseButton);
+    expect(find.text('Conversation'), findsNothing);
+    expect(session.openAgents, isEmpty);
+    // Nothing further back in the conversation: nothing happens.
+    await side(kBackMouseButton);
+    expect(find.byType(ChatComposer), findsOneWidget);
+
+    await side(kForwardMouseButton);
+    expect(find.text('Conversation'), findsOneWidget);
+    expect(session.openAgents, hasLength(1));
+    // Nothing further in.
+    await side(kForwardMouseButton);
+    expect(session.openAgents, hasLength(1));
   });
 
   testWidgets('its turn over, an agent with a subagent still running in the '

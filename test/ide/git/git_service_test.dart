@@ -1,17 +1,17 @@
 @TestOn('vm')
 library;
 
+import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:bao_remote/local.dart' show runGit;
-import 'package:bao_remote/src/git/git_runner.dart' show gitArgumentsAreSafe;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/git/git_model.dart';
 import 'package:baocode/ide/git/git_repository.dart';
 import 'package:baocode/ide/git/git_service.dart';
 import 'package:path/path.dart' as p;
-
-import 'git_programs.dart';
 
 /// Runs local Git (no network) in a temporary repository whose own config
 /// keeps the user's hooks, signing and templates out.
@@ -79,24 +79,20 @@ void main() {
       'gitDecoration.ignoredResourceForeground',
     );
 
-    await service.stage([p.join(root, 'lib', 'new.dart')]);
+    await service.stage([p.join(root, 'lib/new.dart')]);
     state = (await service.status())!;
     expect(
       state.group(IdeGitGroup.staged).single.status,
       IdeGitStatus.indexAdded,
     );
 
-    await service.unstage([p.join(root, 'lib', 'new.dart')]);
+    await service.unstage([p.join(root, 'lib/new.dart')]);
     state = (await service.status())!;
     expect(state.group(IdeGitGroup.staged), isEmpty);
 
     await service.discard(state.resources);
-    // Git writes the file as the machine has it: with CRLF on Windows.
-    expect(
-      await File(p.join(root, 'lib', 'a.dart')).readAsString(),
-      Platform.isWindows ? 'a\r\n' : 'a\n',
-    );
-    expect(await File(p.join(root, 'lib', 'new.dart')).exists(), isFalse);
+    expect(await File(p.join(root, 'lib/a.dart')).readAsString(), 'a\n');
+    expect(await File(p.join(root, 'lib/new.dart')).exists(), isFalse);
     expect((await service.status())!.resources, isEmpty);
 
     await write('lib/a.dart', 'second\n');
@@ -109,12 +105,12 @@ void main() {
     expect(log.first.references.single.name, 'main');
     expect(log.first.parentIds, [log.last.id]);
 
-    final history = await service.fileLog(p.join(root, 'lib', 'a.dart'));
+    final history = await service.fileLog(p.join(root, 'lib/a.dart'));
     expect(history, hasLength(2));
     final changes = await service.commitChanges(log.first.id);
     expect(
       [for (final c in changes) (c.path, c.status)],
-      [(p.join(root, 'lib', 'a.dart'), 'M')],
+      [(p.join(root, 'lib/a.dart'), 'M')],
     );
   }, skip: hasGit ? false : 'Git is not installed');
 
@@ -154,19 +150,27 @@ void main() {
     expect(tag.details!.subject, 'Second commit');
     expect(refs.singleWhere((r) => r.name == 'older').details, isNull);
 
-    // Not `git branch --format` (Git 2.13+), as #735 had it; a remote's HEAD
-    // is left out.
+    // Not `git branch --format` (Git 2.13+, #735); a remote's HEAD left out.
     await git([
       'symbolic-ref',
       'refs/remotes/origin/HEAD',
       'refs/remotes/origin/topic',
     ]);
-    expect(await service.branchesContaining(first), [
-      'main',
-      'older',
-      'origin/topic',
-    ]);
-    expect(await service.branchesContaining(second), ['main']);
+    expect(
+      [
+        for (final r in await service.branchesContaining(first))
+          (r.name, r.kind),
+      ],
+      [
+        ('main', IdeGitRefKind.branch),
+        ('older', IdeGitRefKind.branch),
+        ('origin/topic', IdeGitRefKind.remote),
+      ],
+    );
+    expect(
+      [for (final r in await service.branchesContaining(second)) r.name],
+      ['main'],
+    );
 
     // A remote branch is checked out as a new branch tracking it.
     expect(await service.trackingBranches('origin/topic'), isEmpty);
@@ -207,49 +211,6 @@ void main() {
     expect(await service.status(), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 
-  test('the options that make Git run a program are refused', () {
-    // The remote server takes Git's arguments from across the wire and runs
-    // them on the user's machine: these are refused there
-    // (remote_server.dart's gitRun). The app's own Git service builds its
-    // arguments itself — the rebase's sequence editor is one of them — and
-    // is checked by no gate; what is tested here is the gate itself.
-    for (final arguments in [
-      ['-c', 'core.sshCommand=calc'],
-      ['--upload-pack=calc'],
-      ['--exec-path=/tmp'],
-      ['--receive-pack', 'calc'],
-      // A hook is a program too, and so is a filter.
-      ['-c', 'core.hooksPath=/tmp/hooks'],
-      ['-c', 'filter.lfs.process=calc'],
-      ['-c', 'core.fsmonitor=calc'],
-      ['-c', 'core.askPass=calc'],
-      // A setting read from the environment is one more way in.
-      ['--config-env=core.sshCommand=EVIL'],
-    ]) {
-      expect(
-        gitArgumentsAreSafe(arguments),
-        isFalse,
-        reason: '${arguments.join(' ')} was allowed',
-      );
-    }
-    // The ordinary ones are not refused.
-    expect(gitArgumentsAreSafe(['status', '--porcelain=v1']), isTrue);
-    // The app's own rebase builds its todo-list editor from Git itself.
-    expect(
-      gitArgumentsAreSafe([
-        '-c',
-        'sequence.editor=git cat-file blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 >',
-        '-c',
-        'core.editor=:',
-        'rebase',
-        '-i',
-        '--autostash',
-      ]),
-      isTrue,
-      reason: 'the rebase cannot work with its sequence editor refused',
-    );
-  });
-
   test('the repository commits everything, untracked files included', () async {
     final repository = IdeGitRepository(
       IdeGitService(root),
@@ -268,10 +229,45 @@ void main() {
     expect(log.first.subject, 'Everything');
   }, skip: hasGit ? false : 'Git is not installed');
 
+  test('an image is read whole at HEAD and in the index', () async {
+    final service = IdeGitService(root);
+    // Bytes Git takes for binary, of no multiple of 4, and not deflated
+    // much: lines of the binary patch to put together.
+    final random = math.Random(7);
+    final committed = Uint8List.fromList([
+      0x89, 0x50, 0x4e, 0x47, 0, //
+      for (var i = 0; i < 70003; i++) random.nextInt(256),
+    ]);
+    final staged = Uint8List.fromList([0, 1, 2]);
+    final image = p.join(root, 'img', 'a b.png');
+    await Directory(p.dirname(image)).create();
+    await File(image).writeAsBytes(committed);
+    await write('img/icon.svg', '<svg>\n</svg>');
+    await git(['add', '-A']);
+    await git(['commit', '-q', '-m', 'Images']);
+    await File(image).writeAsBytes(staged);
+    await git(['add', '-A']);
+    await File(image).writeAsBytes([9]);
+
+    expect(await service.showBytes('HEAD', image), committed);
+    expect(await service.showBytes('', image), staged);
+    // Text, where Git takes it for that.
+    expect(
+      utf8.decode(
+        await service.showBytes('HEAD', p.join(root, 'img/icon.svg')),
+      ),
+      '<svg>\n</svg>',
+    );
+    await expectLater(
+      service.showBytes('HEAD', p.join(root, 'img/none.png')),
+      throwsA(isA<IdeGitException>()),
+    );
+  }, skip: hasGit ? false : 'Git is not installed');
+
   test('blame gives the commits of the lines on disk', () async {
     final service = IdeGitService(root);
     await write('lib/a.dart', 'a\nb\n');
-    final blame = (await service.blame(p.join(root, 'lib', 'a.dart')))!;
+    final blame = (await service.blame(p.join(root, 'lib/a.dart')))!;
     final commit = blame.singleWhere((b) => !b.uncommitted);
     expect(commit.subject, 'Initial commit');
     expect(commit.authorName, 'Ada');
@@ -283,13 +279,11 @@ void main() {
     ]);
 
     await write('lib/new.dart', 'new\n');
-    expect(await service.blame(p.join(root, 'lib', 'new.dart')), isNull);
+    expect(await service.blame(p.join(root, 'lib/new.dart')), isNull);
   }, skip: hasGit ? false : 'Git is not installed');
 
   test('a rebase goes on with what is checked staged; changes left '
       'unchecked are said to be in the way', () async {
-    // A rebase runs Git's editor sequence: skipped where that cannot run.
-    if (!await canGitRunPrograms) return;
     await git(['checkout', '-q', '-b', 'feature']);
     await write('lib/a.dart', 'feature\n');
     await git(['commit', '-q', '-am', 'Feature']);

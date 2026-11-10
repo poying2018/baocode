@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../../models/launch_environment.dart';
 import '../commit_attribution.dart';
+import '../extension_switches.dart';
 
 export 'package:bao_remote/claude.dart'
     show ClaudeFolderGone, ClaudeNoModel, ClaudeUnavailable;
@@ -59,12 +60,22 @@ class ClaudeLaunch {
     this.env,
     this.settingsPath,
     this.directories = const [],
+    this.folderInstructions = true,
     this.readable = const [],
     this.instructions,
+    this.ownPrompt = false,
     this.models = const [],
     this.sdkServers = const [],
+    this.tools,
+    this.userServers = false,
+    this.allowed = const [],
     this.promptSuggestions = true,
+    this.switches = ExtensionSwitches.none,
   });
+
+  /// The skills, MCP servers and tools turned off (Settings → Customize):
+  /// permission rules and `skillOverrides` of the flag settings.
+  final ExtensionSwitches switches;
 
   /// Whether it suggests the next prompt after each turn
   /// (`--prompt-suggestions`), each a request of its own.
@@ -80,13 +91,35 @@ class ClaudeLaunch {
   /// allowed without asking: they only do what the app does.
   final List<String> sdkServers;
 
+  /// The only built-in tools it has (`--tools`; none for an empty list),
+  /// [sdkServers]' tools aside; all when null. Set, [sdkServers] are its
+  /// only MCP servers too (`--strict-mcp-config`): not the user's own,
+  /// configured for Claude Code, but with [userServers].
+  final List<String>? tools;
+
+  /// Whether, with [tools] set, the user's own MCP servers are kept.
+  final bool userServers;
+
+  /// Built-in tools it uses without asking (permission rules: `WebFetch`,
+  /// say), as the flag settings allow them.
+  final List<String> allowed;
+
   /// Folders it works in besides [cwd] (a multi-folder workspace's): each
   /// an `--add-dir`, their `CLAUDE.md` read as [cwd]'s is.
   final List<String> directories;
 
+  /// Whether the `CLAUDE.md` of [directories] is read; not for those it
+  /// only reaches into (a bot's, the user's projects).
+  final bool folderInstructions;
+
   /// Told the agent after [appendedSystemPrompt] (what the workspace it
   /// works in is); none when null.
   final String? instructions;
+
+  /// Whether [instructions] are all its system prompt (`--system-prompt`),
+  /// in place of Claude Code's own and [appendedSystemPrompt]: an agent
+  /// that does not code (a bot's).
+  final bool ownPrompt;
 
   /// The session id to continue.
   final String? resume;
@@ -167,10 +200,16 @@ class ClaudeLaunch {
     env: env ?? this.env,
     settingsPath: settingsPath ?? this.settingsPath,
     directories: directories,
+    folderInstructions: folderInstructions,
     readable: readable,
     instructions: instructions,
+    ownPrompt: ownPrompt,
     models: models,
+    sdkServers: sdkServers,
+    tools: tools,
+    allowed: allowed,
     promptSuggestions: promptSuggestions,
+    switches: switches,
   );
 
   Map<String, String>? get _attribution => switch (attribution) {
@@ -195,16 +234,35 @@ class ClaudeLaunch {
       },
       'availableModels': allowlist,
     },
-    if (readable.isNotEmpty)
-      'permissions': {
-        'allow': [for (final folder in readable) readRule(folder)],
-      },
+    ...switchSettings(switches),
     'env': {
       ...unsetEnvironment,
       ...?env,
-      if (directories.isNotEmpty) ...additionalDirectoriesEnvironment,
+      if (directories.isNotEmpty && folderInstructions)
+        ...additionalDirectoriesEnvironment,
     },
   };
+
+  /// The flag settings' `permissions` and `skillOverrides` with [switches]
+  /// in them: given at start, and again whole (`apply_flag_settings`
+  /// replaces each key, not merges into it) when they change, an empty one
+  /// taking back what was turned off.
+  Map<String, Object?> switchSettings(
+    ExtensionSwitches switches, {
+    bool whole = false,
+  }) {
+    final allow = [for (final folder in readable) readRule(folder), ...allowed];
+    final deny = switches.denyRules;
+    final overrides = switches.skillOverrides;
+    return {
+      if (whole || allow.isNotEmpty || deny.isNotEmpty)
+        'permissions': {
+          if (whole || allow.isNotEmpty) 'allow': allow,
+          if (whole || deny.isNotEmpty) 'deny': deny,
+        },
+      if (whole || overrides.isNotEmpty) 'skillOverrides': overrides,
+    };
+  }
 
   /// A provider's session's models, let through the user's own
   /// `availableModels`: those it is switched to and starts on, and its
@@ -282,6 +340,11 @@ class ClaudeLaunch {
       jsonEncode(settings),
     ],
     if (!persist) '--no-session-persistence',
+    if (tools case final tools?) ...[
+      '--tools',
+      tools.join(','),
+      if (!userServers) '--strict-mcp-config',
+    ],
     if (sdkServers.isNotEmpty) ...[
       '--mcp-config',
       jsonEncode({
@@ -292,12 +355,17 @@ class ClaudeLaunch {
       '--allowedTools',
       sdkServers.map((name) => 'mcp__$name').join(','),
     ],
-    '--append-system-prompt',
-    switch (instructions) {
-      final instructions? when instructions.isNotEmpty =>
-        '$appendedSystemPrompt\n\n$instructions',
-      _ => appendedSystemPrompt,
-    },
+    if (ownPrompt) ...[
+      '--system-prompt',
+      instructions ?? '',
+    ] else ...[
+      '--append-system-prompt',
+      switch (instructions) {
+        final instructions? when instructions.isNotEmpty =>
+          '$appendedSystemPrompt\n\n$instructions',
+        _ => appendedSystemPrompt,
+      },
+    ],
   ];
 
   /// What the chat asks of the agent besides Claude Code's own prompt: how
@@ -326,12 +394,13 @@ This is the ONLY acceptable format for code citations. The format is ```startLin
 <file_links>
 When you mention a specific file or folder in your reply (one you read, changed, created or point the user to), write it as a markdown link so the user can open it with a click:
 
-[display name](path/relative/to/working/directory#L42)
+[display name](/absolute/path/to/file#L42)
 
-- The target is the path relative to the current working directory; for a file outside it (another added directory, a temp file), the full absolute path. Never ~/, file://, vscode://, http:// or https:// for local files.
+- The target is always the file's full absolute path, wherever the file is and whatever folder your shell is in. Never a relative path (not lib/a.dart, ./a.dart or ../a.dart), never ~/, file://, vscode://, http:// or https:// for local files.
+- That path is the one on the machine your tools run on. For a file on another machine you reach from there over SSH (with ssh, scp or rsync), write ssh://<host>/<its absolute path there>, the host as you reached it: [app.log](ssh://devbox/var/log/app.log#L120).
 - Add a line with #L42, or a range with #L42-L58; not :42 in the target.
-- If the path contains spaces, wrap the target in angle brackets: [notes.md](<docs/release notes.md#L3>).
-- The display name is usually the file name, optionally with the line: [chat_screen.dart:42](lib/chat/chat_screen.dart#L42).
+- If the path contains spaces, wrap the target in angle brackets: [notes.md](</Users/me/My Project/docs/notes.md#L3>).
+- The display name is usually the file name, optionally with the line: [chat_screen.dart:42](/Users/me/app/lib/chat/chat_screen.dart#L42).
 - Link only paths you have seen exist, spelled exactly; do not guess or shorten them.
 - Write each path as a link, not as bare text or in backticks; links do not work inside inline code or code blocks, which keep the format of <citing_code>.
 </file_links>''';

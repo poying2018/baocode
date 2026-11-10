@@ -14,14 +14,15 @@ import '../keybindings/chat_keybindings.dart';
 import '../keybindings/keybinding_service.dart';
 import '../l10n/l10n.dart';
 import '../theme/codicons.dart';
-import '../theme/workbench_theme.dart' show themeColors;
 import '../workspace/thread_status_mark.dart';
 import '../workspace/workspace.dart';
 import 'ide_chat_history.dart';
 import 'ide_hover.dart';
 import 'ide_menu.dart';
 import 'ide_tab_bar.dart';
+import 'tab_reorder.dart';
 import 'tab_strip_scroll.dart';
+import '../workspace/islands.dart';
 
 class IdeChatTitle extends StatelessWidget {
   const IdeChatTitle({
@@ -204,14 +205,7 @@ class _ChatTabsState extends State<_ChatTabs> {
       final current = widget.current;
       final context = current == null ? null : _keys[current]?.currentContext;
       if (context == null) return;
-      Scrollable.ensureVisible(
-        context,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
-      );
-      Scrollable.ensureVisible(
-        context,
-        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
-      );
+      TabStripScroll.reveal(context);
     });
   }
 
@@ -324,33 +318,43 @@ class _ChatTabsState extends State<_ChatTabs> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           for (final (i, thread) in tabs.indexed) ...[
-            if (_spot == i) const _DropLine(),
-            _TabDragSource(
+            if (i > 0)
+              ?IdeTabStrip.separator(
+                context,
+                shown:
+                    !identical(tabs[i - 1], widget.current) &&
+                    !identical(thread, widget.current),
+              ),
+            if (_spot == i) const TabDropLine(),
+            TabDragSource(
               enabled: tabs.length > 1,
               onStart: () => setState(() => _dragged = thread),
               onUpdate: _moveDrag,
               onEnd: _endDrag,
               child: Opacity(
                 opacity: identical(thread, _dragged) ? .5 : 1,
-                child: _ChatTab(
-                  key: _keys.putIfAbsent(thread, GlobalKey.new),
-                  thread: thread,
-                  title: thread.localizedTitle(l10n),
-                  active: identical(thread, widget.current),
-                  closeTooltip: l10n.commonClose,
-                  renaming: identical(thread, _renaming),
-                  onRename: (text) {
-                    setState(() => _renaming = null);
-                    if (text != null) widget.onRename(thread, text);
-                  },
-                  onSelect: () => widget.onOpen(thread),
-                  onClose: () => widget.onClose([thread]),
-                  onMenu: (position) => _showMenu(thread, position),
+                child: IslandTabStart(
+                  atStart: i == 0,
+                  child: _ChatTab(
+                    key: _keys.putIfAbsent(thread, GlobalKey.new),
+                    thread: thread,
+                    title: thread.localizedTitle(l10n),
+                    active: identical(thread, widget.current),
+                    closeTooltip: l10n.commonClose,
+                    renaming: identical(thread, _renaming),
+                    onRename: (text) {
+                      setState(() => _renaming = null);
+                      if (text != null) widget.onRename(thread, text);
+                    },
+                    onSelect: () => widget.onOpen(thread),
+                    onClose: () => widget.onClose([thread]),
+                    onMenu: (position) => _showMenu(thread, position),
+                  ),
                 ),
               ),
             ),
           ],
-          if (_spot == tabs.length) const _DropLine(),
+          if (_spot == tabs.length) const TabDropLine(),
         ],
       ),
     );
@@ -380,8 +384,9 @@ class IdeThreadIcon extends StatelessWidget {
 
 /// A tab dragged among the tabs: past a few pixels, so a click still
 /// selects it.
-class _TabDragSource extends StatelessWidget {
-  const _TabDragSource({
+class TabDragSource extends StatelessWidget {
+  const TabDragSource({
+    super.key,
     required this.enabled,
     required this.onStart,
     required this.onUpdate,
@@ -429,27 +434,6 @@ class _TabDragRecognizer extends HorizontalDragGestureRecognizer {
     PointerDeviceKind pointerDeviceKind,
     double? deviceTouchSlop,
   ) => globalDistanceMoved.abs() > 4;
-}
-
-/// Where a dragged tab would go: a line between tabs, taking no room.
-class _DropLine extends StatelessWidget {
-  const _DropLine();
-
-  @override
-  Widget build(BuildContext context) => SizedBox(
-    width: 0,
-    height: 22,
-    child: OverflowBox(
-      maxWidth: 2,
-      child: Container(
-        width: 2,
-        decoration: BoxDecoration(
-          color: themeColors['focusBorder'],
-          borderRadius: BorderRadius.circular(1),
-        ),
-      ),
-    ),
-  );
 }
 
 /// One chat's tab, as an editor's: its icon (a spinner while its agent

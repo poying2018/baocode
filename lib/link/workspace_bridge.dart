@@ -1,10 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:bao_link/bao_link.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:path/path.dart' as p;
 
+import '../bots/bot.dart';
+import '../bots/bots.dart';
 import '../chat/chat_models.dart';
 import '../chat/chat_session.dart';
 import '../chat/composer/composer_files.dart' show fileReferenceText;
@@ -14,6 +18,7 @@ import '../ide/file_service.dart';
 import '../kernel/agent_kernel.dart' show KernelChoiceKind;
 import '../kernel/kernel_types.dart';
 import '../remote/project_host.dart';
+import '../remote/ssh_host.dart';
 import '../workspace/workspace.dart';
 import 'chat_codec.dart';
 import 'interaction_codec.dart';
@@ -25,6 +30,19 @@ typedef ProjectFiles = ({IdeFileService files, p.Context paths});
 ProjectFiles hostFilesOf(Project project) {
   final host = ProjectHost.of(project.path);
   return (files: host.files(host.pathOf(project.path)), paths: host.paths);
+}
+
+/// [project]'s host connected, if it is one over SSH: as a window opened on
+/// it would, one that failed tried again (the phone asking is the user
+/// asking). Throws what connecting failed with.
+Future<void> reachProjectHost(Project project) async {
+  if (ProjectHost.of(project.path) case final SshHost host) {
+    try {
+      await host.ready;
+    } on Object {
+      await host.reconnect();
+    }
+  }
 }
 
 /// A paired phone's view of the [Workspace], over its [LinkPeer]: the
@@ -39,8 +57,11 @@ class WorkspaceBridge {
     required this.device,
     this.branchOf,
     this.filesOf = hostFilesOf,
+    this.reachHost = reachProjectHost,
     this.customizations,
+    this.bots,
     this.throttle = const Duration(milliseconds: 150),
+    this.outputEvery = const Duration(milliseconds: 500),
   });
 
   final Workspace workspace;
@@ -55,17 +76,39 @@ class WorkspaceBridge {
   /// A project's files: none but the projects listed are given out.
   final ProjectFiles Function(Project project) filesOf;
 
+  /// A project's host connected before its files are asked of it.
+  final Future<void> Function(Project project) reachHost;
+
+  /// [project]'s host reached ([reachHost]); one that cannot be, said to
+  /// the phone as such ([LinkErrors.unreachable]), not as files missing.
+  Future<void> _reach(Project project) async {
+    try {
+      await reachHost(project);
+    } on Object catch (error) {
+      throw LinkRemoteException(LinkErrors.unreachable, '$error');
+    }
+  }
+
   /// Claude Code's customizations on this machine; none told without.
   final CustomizationStore? customizations;
+
+  /// The user's bots; none told without.
+  final Bots? bots;
 
   /// How often a phone hears of changes at most: a turn's text streams in
   /// many more times than that.
   final Duration throttle;
 
+  /// How often a watched task's output is looked at.
+  final Duration outputEvery;
+
   /// How many agents the phone gets listed, the most recent first.
   static const maxSessions = 300;
 
   final Map<String, _Follow> _follows = {};
+
+  /// Task outputs the phone watches, by session and task.
+  final Map<String, OutputWatch> _watches = {};
   Timer? _stateTimer;
   String? _stateSent;
   bool _disposed = false;
@@ -73,6 +116,7 @@ class WorkspaceBridge {
   /// Starts telling the phone of changes; what it asks goes to [handle].
   void start() {
     workspace.addListener(_stateChanged);
+    bots?.addListener(_stateChanged);
     unawaited(peer.done.then((_) => dispose()));
   }
 
@@ -80,22 +124,46 @@ class WorkspaceBridge {
     if (_disposed) return;
     _disposed = true;
     workspace.removeListener(_stateChanged);
+    bots?.removeListener(_stateChanged);
     _stateTimer?.cancel();
     for (final follow in _follows.values) {
       follow.dispose();
     }
     _follows.clear();
+    for (final watch in _watches.values) {
+      watch.dispose();
+    }
+    _watches.clear();
   }
+
+  /// A command task's output as it is now; null when there is none.
+  Future<String?> _outputOf(Object? session, Object? task) async {
+    final thread = _thread(session);
+    final path = _task(thread.session, task)?.outputFile;
+    if (path == null) return null;
+    try {
+      return await _filesOf(thread.project).files.read(path, force: true);
+    } on Object {
+      return null;
+    }
+  }
+
+  static String _tail(String text) => text.length <= LinkLimits.output
+      ? text
+      : text.substring(text.length - LinkLimits.output);
 
   // --- Ids ------------------------------------------------------------------
 
   /// Each agent's id for the phones: its session's, else one given here
-  /// (a new agent's, until it has one), kept for the run.
+  /// (a new agent's, until it has one), kept for the run. Those given here
+  /// are this run's alone: a phone keeps what it had of the last run's
+  /// `new-0`, not to be shown as this one's.
   static final Expando<String> _ids = Expando('link id');
   static int _nextId = 0;
+  static final _run = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
 
   static String idOf(AgentThread thread) =>
-      _ids[thread] ??= thread.id ?? 'new-${_nextId++}';
+      _ids[thread] ??= thread.id ?? 'new-$_run-${_nextId++}';
 
   AgentThread _thread(Object? id) {
     if (id is String) {
@@ -116,6 +184,13 @@ class WorkspaceBridge {
     }
     throw LinkRemoteException(LinkErrors.notFound, 'No project $id');
   }
+
+  /// Where the files [params] ask for are: a project's, or a bot's (its
+  /// folder, where its agent works; any file by its full path).
+  Project _filesProject(Map<String, Object?> params) => switch (params['bot']) {
+    final Object id => workspace.projectAt(_bot(id).folder),
+    _ => _project(params['project']),
+  };
 
   final Map<String, ProjectFiles> _files = {};
 
@@ -145,6 +220,7 @@ class WorkspaceBridge {
             path: project.root,
             branch: branchOf?.call(project),
             icon: workspace.iconOf(project)?.toJson(),
+            pinned: workspace.isPinnedProject(project),
           ),
       ],
       sessions: [
@@ -173,11 +249,55 @@ class WorkspaceBridge {
                 : null,
           ),
       ],
+      bots: [
+        if (bots case final bots?)
+          for (final bot in bots.bots) _linkBot(bots, bot),
+      ],
     );
   }
 
+  LinkBot _linkBot(Bots bots, Bot bot) {
+    final thread = bots.threadOf(bot);
+    final session = thread == null ? null : idOf(thread);
+    // Read as it comes, while the phone follows it.
+    if (session != null && _follows.containsKey(session)) bots.seen(bot);
+    return LinkBot(
+      id: bot.id,
+      name: bot.name,
+      avatar: bot.avatar,
+      gender: bot.gender,
+      signature: bot.signature,
+      identity: bot.identity,
+      style: bot.style,
+      abilities: bot.abilities,
+      proactive: bot.proactive,
+      model: bots.modelOf(bot),
+      assistant: bot.assistant,
+      chatOnly: bot.chatOnly,
+      session: session,
+      status: bots.typing(bot) ? BotStatus.typing : BotStatus.idle,
+      unread: bots.unread(bot),
+      last: bots.lastLine(bot),
+      updatedAt: thread?.updatedAt,
+      notices: bots.notices(bot),
+    );
+  }
+
+  Bots _bots() =>
+      bots ??
+      (throw const LinkRemoteException(LinkErrors.unsupported, 'No bots'));
+
+  Bot _bot(Object? id) =>
+      switch (id) {
+        final String id => _bots().byId(id),
+        _ => null,
+      } ??
+      (throw LinkRemoteException(LinkErrors.notFound, 'No bot $id'));
+
   void _stateChanged() {
-    if (_disposed || _stateTimer != null) return;
+    if (_disposed) return;
+    _refollow();
+    if (_stateTimer != null) return;
     _stateTimer = Timer(throttle, () {
       _stateTimer = null;
       if (_disposed) return;
@@ -189,7 +309,68 @@ class WorkspaceBridge {
     });
   }
 
+  /// Follows anew the agents whose conversation was opened again (see
+  /// [Workspace.reload]): the phone sent all of it, as when it opened it.
+  void _refollow() {
+    for (final MapEntry(key: id, value: follow) in [..._follows.entries]) {
+      final AgentThread thread;
+      try {
+        thread = _thread(id);
+      } on LinkRemoteException {
+        continue;
+      }
+      if (!thread.isOpen || identical(thread.session, follow.session)) {
+        continue;
+      }
+      follow.dispose();
+      final fresh = _follows[id] = follow.over(thread.session);
+      peer.emit(LinkEvents.session, fresh.start());
+    }
+  }
+
   // --- Requests -------------------------------------------------------------
+
+  /// The phones' messages taken, by phone and message id, with what they
+  /// were answered: for the last [_takenKept], whatever the connection.
+  static final Map<String, Future<Object?>> _taken = {};
+  static const _takenKept = 200;
+
+  /// Where the user writes to [thread] from, as its agent is told: the
+  /// phone; for a bot, nothing (its prompt has it so already).
+  UserPlace? _from(AgentThread thread) =>
+      bots?.botAt(thread.project.path) == null ? UserPlace.phone : null;
+
+  /// Sends [params]' message ([LinkMethods.send]).
+  Future<Object?> _send(Map<String, Object?> params) async {
+    final text = (params['text'] as String? ?? '').trim();
+    if (text.isEmpty && _images(params['images']).isEmpty) return null;
+    final AgentThread thread;
+    if (params['bot'] case final Object id) {
+      // Its conversation, whichever it is now: the last run's, once
+      // listed, not another started.
+      if (workspace.loading) await workspace.loaded;
+      thread = _bots().threadFor(_bot(id));
+    } else if (params['session'] case final Object id) {
+      thread = _thread(id);
+    } else if (params['project'] case final String path) {
+      thread = workspace.startAgent(_project(path));
+    } else {
+      throw const LinkRemoteException(
+        LinkErrors.notFound,
+        'No agent nor project',
+      );
+    }
+    final session = thread.session;
+    if (!session.canSend) {
+      throw const LinkRemoteException('busy', 'The agent is at work');
+    }
+    session.send(
+      _message(thread, params),
+      now: params['now'] == true,
+      from: _from(thread),
+    );
+    return {'session': idOf(thread)};
+  }
 
   Future<Object?> handle(String method, Map<String, Object?> params) async {
     switch (method) {
@@ -200,6 +381,9 @@ class WorkspaceBridge {
       case LinkMethods.open:
         final thread = _thread(params['session']);
         final id = idOf(thread);
+        if (bots?.botAt(thread.project.path) case final bot?) {
+          bots!.seen(bot);
+        }
         _follows.remove(id)?.dispose();
         final follow = _follows[id] = _Follow(
           id: id,
@@ -225,59 +409,48 @@ class WorkspaceBridge {
         }
         return null;
       case LinkMethods.send:
-        var text = (params['text'] as String? ?? '').trim();
-        final images = _images(params['images']);
-        final named = [
-          for (final mention in (params['mentions'] as List?) ?? const [])
-            if (mention is String && mention.isNotEmpty) mention,
-        ];
-        if (text.isEmpty && images.isEmpty) return null;
-        final AgentThread thread;
-        if (params['session'] case final Object id) {
-          thread = _thread(id);
-        } else if (params['project'] case final String path) {
-          thread = workspace.startAgent(_project(path));
-        } else {
+        // Sent again (its answer lost on the way, the connection dropped):
+        // answered as it was, not taken twice.
+        final key = switch (params['id']) {
+          final String id => '${peer.remote}/$id',
+          _ => null,
+        };
+        if (key == null) return _send(params);
+        if (_taken[key] case final taken?) return taken;
+        final taking = _taken[key] = _send(params);
+        if (_taken.length > _takenKept) _taken.remove(_taken.keys.first);
+        try {
+          return await taking;
+        } on Object {
+          // Not taken (the agent busy…): it may be sent again.
+          _taken.remove(key);
+          rethrow;
+        }
+      case LinkMethods.edit:
+        final thread = _thread(params['session']);
+        final session = thread.session;
+        if (!session.canEditMessages) {
+          throw const LinkRemoteException(
+            LinkErrors.unsupported,
+            'This agent cannot go back',
+          );
+        }
+        // Counted from the phone's first item, as its updates are.
+        final index =
+            (_follows[idOf(thread)]?.from ?? 0) +
+            (params['index'] as int? ?? -1);
+        if (index < 0 ||
+            index >= session.itemCount ||
+            session.itemAt(index) is! UserMessageItem) {
           throw const LinkRemoteException(
             LinkErrors.notFound,
-            'No agent nor project',
+            'No message there',
           );
         }
-        // A workspace's files named from its folders' names: by their
-        // paths, as its agent finds them.
-        final mentions = <String>[];
-        final multiRoot = _rootsOf(thread.project).first.$1.isNotEmpty;
-        for (final mention in named) {
-          final full = _fullPath(thread.project, mention);
-          if (full == null || !multiRoot) {
-            mentions.add(mention);
-            continue;
-          }
-          text = text.replaceAll(
-            fileReferenceText(mention),
-            fileReferenceText(full),
-          );
-          mentions.add(full);
-        }
-        final session = thread.session;
-        if (!session.canSend) {
-          throw const LinkRemoteException('busy', 'The agent is at work');
-        }
-        // Numbered on from the conversation's, as the composer numbers
-        // what is pasted, and named in the text as it names them.
-        var next = session.lastImageNumber + 1;
-        final numbered = [for (final image in images) image.withNumber(next++)];
-        if (numbered.isNotEmpty) {
-          final references = [
-            for (final image in numbered) '[Image #${image.number}]',
-          ].join(' ');
-          text = text.isEmpty ? references : '$text\n$references';
-        }
-        session.send(
-          ComposerMessage(text: text, mentions: mentions, images: numbered),
-          now: params['now'] == true,
-        );
-        return {'session': idOf(thread)};
+        final message = _message(thread, params);
+        if (message.isEmpty) return null;
+        session.editMessage(index, message, from: _from(thread));
+        return null;
       case LinkMethods.stop:
         _thread(params['session']).session.stop();
         return null;
@@ -310,11 +483,24 @@ class WorkspaceBridge {
         session.startPlan(workspace.l10n().planStartMessage);
         return null;
       case LinkMethods.choose:
-        _choose(
-          _thread(params['session']).session,
-          params['kind'] as String? ?? '',
-          params['option'] as String? ?? '',
-        );
+        final thread = _thread(params['session']);
+        final kind = params['kind'] as String? ?? '';
+        final option = params['option'] as String? ?? '';
+        final bot = bots?.botAt(thread.project.path);
+        // A bot's agent asks nothing and works as one: only its model,
+        // and how it thinks, are the user's to pick.
+        if (bot != null && (kind == 'mode' || kind == 'permission')) {
+          throw const LinkRemoteException(
+            LinkErrors.unsupported,
+            'A bot works as it does',
+          );
+        }
+        _choose(thread.session, kind, option);
+        if (bot != null && kind == 'model') {
+          if (thread.session.models?.selected.id case final model?) {
+            bots!.setModel(bot, model);
+          }
+        }
         return null;
       case LinkMethods.rename:
         workspace.rename(
@@ -328,8 +514,20 @@ class WorkspaceBridge {
           params['pinned'] == true,
         );
         return null;
+      case LinkMethods.pinProject:
+        workspace.setPinnedProject(
+          _project(params['project']),
+          params['pinned'] == true,
+        );
+        return null;
       case LinkMethods.archive:
         workspace.setArchived(_thread(params['session']), true);
+        return null;
+      case LinkMethods.delete:
+        workspace.delete(_thread(params['session']));
+        return null;
+      case LinkMethods.hideProject:
+        workspace.hideProject(_project(params['project']));
         return null;
       case LinkMethods.keep:
         final session = _thread(params['session']).session;
@@ -365,25 +563,50 @@ class WorkspaceBridge {
         if (task != null) session.stopTask(task);
         return null;
       case LinkMethods.output:
-        final thread = _thread(params['session']);
-        final path = _task(thread.session, params['task'])?.outputFile;
-        if (path == null) return {'text': ''};
-        try {
-          final text = await _filesOf(thread.project).files
-              .read(path, force: true);
-          return {
-            'text': text.length <= LinkLimits.output
-                ? text
-                : text.substring(text.length - LinkLimits.output),
-          };
-        } on Object {
-          return {'text': ''};
+        final text = await _outputOf(params['session'], params['task']);
+        return {'text': _tail(text ?? '')};
+      case LinkMethods.watchOutput:
+        final session = params['session'];
+        final task = params['task'];
+        if (session is! String || task is! String) {
+          throw const LinkRemoteException('bad', 'No session or task');
         }
+        final key = '$session\n$task';
+        _watches.remove(key)?.dispose();
+        final text = await _outputOf(session, task) ?? '';
+        if (_disposed) return {'text': '', 'offset': 0};
+        _watches[key] = OutputWatch(
+          session: session,
+          task: task,
+          text: text,
+          read: () => _outputOf(session, task),
+          emit: (output) => peer.emit(LinkEvents.output, output.toJson()),
+          every: outputEvery,
+        );
+        return {'text': _tail(text), 'offset': text.length};
+      case LinkMethods.unwatchOutput:
+        _watches.remove('${params['session']}\n${params['task']}')?.dispose();
+        return null;
       case LinkMethods.files:
         return _listFiles(_project(params['project']));
+      case LinkMethods.folder:
+        return _listFolder(
+          _project(params['project']),
+          params['path'] as String? ?? '',
+        );
       case LinkMethods.read:
         return _readFile(
-          _project(params['project']),
+          _filesProject(params),
+          params['path'] as String? ?? '',
+        );
+      case LinkMethods.image:
+        return _readImage(
+          _filesProject(params),
+          params['path'] as String? ?? '',
+        );
+      case LinkMethods.download:
+        return _download(
+          _filesProject(params),
           params['path'] as String? ?? '',
         );
       case LinkMethods.extensions:
@@ -394,6 +617,75 @@ class WorkspaceBridge {
         return {
           'session': idOf(workspace.startAgent(_project(params['project']))),
         };
+      case LinkMethods.saveBot:
+        final bots = _bots();
+        final saved = bots.save(
+          id: params['bot'] as String?,
+          name: params['name'] as String? ?? '',
+          avatar: params['avatar'] as String?,
+          gender: params['gender'] as String? ?? '',
+          signature: params['signature'] as String? ?? '',
+          identity: params['identity'] as String? ?? '',
+          style: params['style'] as String? ?? '',
+          abilities: {
+            for (final name in (params['abilities'] as List?) ?? const [])
+              ?BotAbility.values.asNameMap()[name],
+          },
+          proactive: switch (params['proactive']) {
+            final Map<String, Object?> json => BotProactive.fromJson(json),
+            _ => const BotProactive(),
+          },
+          avatarImage: _avatarImage(params['avatarImage']),
+          // Not said (a phone from before): as it was.
+          chatOnly: params['chatOnly'] as bool?,
+        );
+        return {'bot': _linkBot(bots, saved).toJson()};
+      case LinkMethods.botAvatar:
+        final image = _bots().avatarImage(_bot(params['bot']));
+        if (image == null) {
+          throw const LinkRemoteException(LinkErrors.notFound, 'No picture');
+        }
+        return {'type': image.type, 'data': base64Encode(image.bytes)};
+      case LinkMethods.deleteBot:
+        final bot = _bot(params['bot']);
+        if (bot.assistant) {
+          throw const LinkRemoteException(
+            LinkErrors.unsupported,
+            'The assistant stays',
+          );
+        }
+        _bots().delete(bot.id);
+        return null;
+      case LinkMethods.clearBotChat:
+        _bots().clearChat(_bot(params['bot']));
+        return null;
+      case LinkMethods.botMemory:
+        final bot = _bot(params['bot']);
+        return {'text': _bots().memory(bot), 'self': _bots().selfNotes(bot)};
+      case LinkMethods.setBotMemory:
+        _bots().setMemory(_bot(params['bot']), params['text'] as String? ?? '');
+        return null;
+      case LinkMethods.setBotSelf:
+        _bots().setSelfNotes(
+          _bot(params['bot']),
+          params['text'] as String? ?? '',
+          restart: true,
+        );
+        return null;
+      case LinkMethods.setMe:
+        String text(String key) => switch (params[key]) {
+          final String value => value.trim(),
+          _ => '',
+        };
+        _bots().setMe(
+          BotUser(
+            name: text('name'),
+            gender: text('gender'),
+            signature: text('signature'),
+          ),
+          _avatarImage(params['picture']),
+        );
+        return null;
       case LinkMethods.icon:
         final id = params['id'];
         final image = id is String ? workspace.icons[id] : null;
@@ -415,6 +707,96 @@ class WorkspaceBridge {
     return null;
   }
 
+  /// What the phone sent ([LinkMethods.send], [LinkMethods.edit]) as the
+  /// composer would send it to [thread]: its files named by their paths as
+  /// the agent finds them, its pictures numbered on from the
+  /// conversation's and named in the text.
+  ComposerMessage _message(AgentThread thread, Map<String, Object?> params) {
+    var text = (params['text'] as String? ?? '').trim();
+    final images = _images(params['images']);
+    final named = [
+      for (final mention in (params['mentions'] as List?) ?? const [])
+        if (mention is String && mention.isNotEmpty) mention,
+    ];
+    // A workspace's files named from its folders' names: by their
+    // paths, as its agent finds them.
+    final mentions = <String>[];
+    final multiRoot = _rootsOf(thread.project).first.$1.isNotEmpty;
+    for (final mention in named) {
+      final full = _fullPath(thread.project, mention);
+      if (full == null || !multiRoot) {
+        mentions.add(mention);
+        continue;
+      }
+      text = text.replaceAll(
+        fileReferenceText(mention),
+        fileReferenceText(full),
+      );
+      mentions.add(full);
+    }
+    // Numbered on from the conversation's, as the composer numbers what
+    // is pasted, and named in the text as it names them.
+    var next = thread.session.lastImageNumber + 1;
+    final numbered = [for (final image in images) image.withNumber(next++)];
+    if (numbered.isNotEmpty) {
+      final references = [
+        for (final image in numbered) '[Image #${image.number}]',
+      ].join(' ');
+      text = text.isEmpty ? references : '$text\n$references';
+    }
+    return ComposerMessage(text: text, mentions: mentions, images: numbered);
+  }
+
+  /// A picture of [project] the phone shows, as a reply names it.
+  Future<Map<String, Object?>> _readImage(Project project, String path) async {
+    await _reach(project);
+    final (:files, :paths) = _filesOf(project);
+    final candidates = _candidates(project, path);
+    final type = switch (paths.extension(path).toLowerCase()) {
+      '.png' => 'image/png',
+      '.jpg' || '.jpeg' => 'image/jpeg',
+      '.gif' => 'image/gif',
+      '.webp' => 'image/webp',
+      _ => null,
+    };
+    if (type == null) {
+      throw LinkRemoteException('bad', 'Not a picture: $path');
+    }
+    for (final full in candidates) {
+      final Uint8List bytes;
+      try {
+        bytes = await readBytesThrough(files, full);
+      } on Object {
+        continue; // Not there: the next place it may be.
+      }
+      if (bytes.length > LinkLimits.image) {
+        return {'tooLarge': true, 'size': bytes.length};
+      }
+      return {'type': type, 'data': base64Encode(bytes)};
+    }
+    throw LinkRemoteException(LinkErrors.notFound, 'No file $path');
+  }
+
+  /// A file of [project], or any of its machine, as it is: for the phone
+  /// to open in an app of its own.
+  Future<Map<String, Object?>> _download(Project project, String path) async {
+    await _reach(project);
+    final (:files, paths: _) = _filesOf(project);
+    for (final full in _candidates(project, path)) {
+      final Uint8List bytes;
+      try {
+        bytes = await readBytesThrough(files, full);
+      } on Object {
+        continue; // Not there: the next place it may be.
+      }
+      if (bytes.length > LinkLimits.download) {
+        return {'tooLarge': true, 'size': bytes.length};
+      }
+      return {'data': base64Encode(bytes)};
+    }
+    throw LinkRemoteException(LinkErrors.notFound, 'No file $path');
+  }
+
   static const _imageTypes = {
     'image/png',
     'image/jpeg',
@@ -428,6 +810,21 @@ class WorkspaceBridge {
           when _imageTypes.contains(type))
         ?_image(data, type, image['name'] as String?),
   ];
+
+  /// A bot's new picture, as [LinkMethods.saveBot] sends it; none for
+  /// none, `bad` for what is not one.
+  static BotAvatarImage? _avatarImage(Object? json) {
+    if (json == null) return null;
+    if (json case {'data': final String data, 'type': final String type}
+        when _imageTypes.contains(type)) {
+      if (_image(data, type, null) case final image?
+          when image.bytes.isNotEmpty &&
+              image.bytes.length <= LinkLimits.avatar) {
+        return (bytes: image.bytes, type: type);
+      }
+    }
+    throw const LinkRemoteException('bad', 'Not a picture, or too large');
+  }
 
   static ImageAttachment? _image(String data, String type, String? name) {
     try {
@@ -447,6 +844,37 @@ class WorkspaceBridge {
       if (thread.project == project && thread.isOpen)
         for (final change in thread.session.fileChanges) change.path: change,
   };
+
+  /// Where the file the phone names [path] in [project] may be, the likeliest
+  /// first: in one of its folders, as the phone names them; one its agents
+  /// changed; any by its full path. Then, a path as an agent wrote it in its
+  /// words (`lib/main.dart`, of a workspace's folder, not named): under each
+  /// of the project's folders, the first there the one.
+  List<String> _candidates(Project project, String path) {
+    final paths = _filesOf(project).paths;
+    final found = <String>[
+      ?_fullPath(project, path),
+      ..._changesIn(project).keys.where((c) => paths.equals(c, path)),
+      ?_anywhere(project, path),
+      if (!paths.isAbsolute(path) && path.isNotEmpty)
+        for (final (_, root) in _rootsOf(project))
+          if (paths.normalize(paths.join(root, path)) case final full
+              when paths.isWithin(root, full))
+            full,
+    ];
+    return [
+      for (final (i, full) in found.indexed)
+        if (found.indexWhere((f) => paths.equals(f, full)) == i) full,
+    ];
+  }
+
+  /// [path] anywhere on [project]'s machine, by its full path (a log in
+  /// /tmp, what an agent or its subagent read elsewhere): the phone is the
+  /// user's own, and opens what they would here. Null for one not full.
+  String? _anywhere(Project project, String path) {
+    final paths = _filesOf(project).paths;
+    return paths.isAbsolute(path) ? paths.normalize(path) : null;
+  }
 
   /// The folders [project]'s files are in, each with the name the phone
   /// gives it: a folder's project, its own, unnamed; a workspace's, each of
@@ -526,6 +954,7 @@ class WorkspaceBridge {
   }
 
   Future<Map<String, Object?>> _listFiles(Project project) async {
+    await _reach(project);
     final (:files, :paths) = _filesOf(project);
     final listed = <String>[];
     var truncated = false;
@@ -558,28 +987,65 @@ class WorkspaceBridge {
     };
   }
 
-  Future<Map<String, Object?>> _readFile(Project project, String path) async {
-    final (:files, :paths) = _filesOf(project);
-    // In its folders; else one its agents changed elsewhere, as the
-    // phone is told of it (by its full path).
-    final full =
-        _fullPath(project, path) ??
-        _changesIn(project).keys
-            .where((c) => paths.equals(c, path))
-            .firstOrNull;
+  /// What is in [project]'s folder at [path], all of it: the phone shows
+  /// what Git ignores too, as the Explorer does.
+  Future<Map<String, Object?>> _listFolder(Project project, String path) async {
+    await _reach(project);
+    final roots = _rootsOf(project);
+    // A workspace's root: its folders, by the names the phone has them.
+    if (path.isEmpty && roots.first.$1.isNotEmpty) {
+      return {
+        'folders': [for (final (name, _) in roots) name],
+        'files': const <String>[],
+      };
+    }
+    final full = path.isEmpty
+        ? roots.first.$2
+        : roots.where((r) => r.$1 == path).firstOrNull?.$2 ??
+              _fullPath(project, path);
     if (full == null) {
-      throw LinkRemoteException(LinkErrors.notFound, 'No file $path');
+      throw LinkRemoteException(LinkErrors.notFound, 'No folder $path');
     }
-    final String text;
+    final List<IdeFile> entries;
     try {
-      text = await files.read(full);
-    } on IdeBinaryFileException {
-      return {'binary': true};
-    } on IdeFileTooLargeException catch (error) {
-      return {'tooLarge': true, 'size': error.size};
+      entries = await _filesOf(project).files.list(full);
     } on Object {
+      throw LinkRemoteException(LinkErrors.notFound, 'No folder $path');
+    }
+    return {
+      'folders': [
+        for (final entry in entries)
+          if (entry.isDirectory) entry.name,
+      ],
+      'files': [
+        for (final entry in entries)
+          if (!entry.isDirectory) entry.name,
+      ],
+    };
+  }
+
+  Future<Map<String, Object?>> _readFile(Project project, String path) async {
+    await _reach(project);
+    final (:files, :paths) = _filesOf(project);
+    String? full;
+    String? text;
+    for (final candidate in _candidates(project, path)) {
+      try {
+        text = await files.read(candidate);
+        full = candidate;
+        break;
+      } on IdeBinaryFileException {
+        return {'binary': true};
+      } on IdeFileTooLargeException catch (error) {
+        return {'tooLarge': true, 'size': error.size};
+      } on Object {
+        continue; // Not there: the next place it may be.
+      }
+    }
+    if (full == null || text == null) {
       throw LinkRemoteException(LinkErrors.notFound, 'No file $path');
     }
+    final file = full;
     if (text.length > LinkLimits.file) {
       return {'tooLarge': true, 'size': text.length};
     }
@@ -588,7 +1054,7 @@ class WorkspaceBridge {
       if (thread.project != project || !thread.isOpen) continue;
       final session = thread.session;
       final change = session.fileChanges
-          .where((c) => paths.equals(c.path, full))
+          .where((c) => paths.equals(c.path, file))
           .firstOrNull;
       if (change == null) continue;
       if (change.kind == FileChangeKind.added) {
@@ -712,6 +1178,16 @@ class _Follow {
   final LinkPeer peer;
   final Duration throttle;
 
+  /// The same following, of [session] (its conversation read anew).
+  _Follow over(ChatSession session) => _Follow(
+    id: id,
+    session: session,
+    peer: peer,
+    throttle: throttle,
+    pathOf: pathOf,
+    window: window,
+  );
+
   /// How many of the last items the phone follows at first, if it pages
   /// back through the rest (see [earlier]); null for all of them.
   final int? window;
@@ -723,6 +1199,12 @@ class _Follow {
   /// The session's index of the phone's first item: 0 unless it has a
   /// [window].
   int _from = 0;
+
+  /// [_from], as it is now (items put before the first move it).
+  int get from {
+    _syncFrom();
+    return _from;
+  }
 
   /// The session's [ChatSession.prependedCount] as last seen, to move
   /// [_from] along with items put before the first.
@@ -738,6 +1220,14 @@ class _Follow {
   Timer? _timer;
   bool _disposed = false;
 
+  /// Slims what follows the first update against what was sent (see
+  /// [LinkSessionWire]).
+  final _slimmer = LinkSessionSlimmer();
+
+  /// The JSON of the first item an update changes, as sent before; set by
+  /// [_update] when it was sent.
+  Object? _before;
+
   Map<String, Object?> start() {
     _prependedSeen = session.prependedCount;
     if (window case final window?) {
@@ -746,7 +1236,7 @@ class _Follow {
     session
       ..attach()
       ..addListener(_changed);
-    return _update(full: true)!.toJson();
+    return _slimmer.encode(_update(full: true)!, full: true);
   }
 
   void _changed() {
@@ -755,9 +1245,17 @@ class _Follow {
       _timer = null;
       if (_disposed) return;
       final update = _update();
-      if (update != null) peer.emit(LinkEvents.session, update.toJson());
+      if (update == null) return;
+      final full = update.start == 0 && _wasFull;
+      peer.emit(
+        LinkEvents.session,
+        _slimmer.encode(update, full: full, before: full ? null : _before),
+      );
     });
   }
+
+  /// The last [_update] was a whole one (rewound before the window).
+  bool _wasFull = false;
 
   /// What changed since last sent; everything when [full]. Null when
   /// nothing did.
@@ -794,8 +1292,10 @@ class _Follow {
     final earlier = window == null
         ? null
         : _from > 0 || session.hasEarlierHistory || session.loadingEarlier;
+    final goal = _goal(session.goal);
     final restText = jsonEncode([
       earlier,
+      goal,
       session.isStreaming,
       interaction,
       [for (final choice in choices) choice.toJson()],
@@ -812,6 +1312,10 @@ class _Follow {
       for (var i = start; i < count; i++)
         encoded[i] ?? ChatCodec.encode(items[i]),
     ];
+    _wasFull = full;
+    _before = !full && start < count && start < _sentJson.length
+        ? jsonDecode(_sentJson[start])
+        : null;
     _sentJson = [
       ..._sentJson.take(start),
       for (final item in json) jsonEncode(item),
@@ -829,8 +1333,23 @@ class _Follow {
       changes: changes,
       tasks: tasks,
       earlier: earlier,
+      goal: goal,
     );
   }
+
+  /// [goal] as the phone reads it (see [LinkSessionUpdate.goal]).
+  static Map<String, Object?>? _goal(KernelGoal? goal) => switch (goal) {
+    null => null,
+    final goal => {
+      'condition': goal.condition,
+      'state': goal.state.name,
+      if (goal.checks > 0) 'checks': goal.checks,
+      'reason': ?goal.lastReason,
+      'setAt': ?goal.setAt?.millisecondsSinceEpoch,
+      'duration': ?goal.duration?.inMilliseconds,
+      'tokens': ?goal.tokens,
+    },
+  };
 
   /// Moves [_from] along with the items put before the session's first
   /// (the phone's own first is still the same one).
@@ -939,5 +1458,79 @@ class _Follow {
     _timer?.cancel();
     session.removeListener(_changed);
     session.detach();
+  }
+}
+
+/// A task's output the phone watches: looked at every so often, and what
+/// was added sent ([LinkEvents.output]); all of its tail again when it was
+/// cut, or more came at once than the phone keeps.
+@visibleForTesting
+class OutputWatch {
+  OutputWatch({
+    required this.session,
+    required this.task,
+    required String text,
+    required this.read,
+    required this.emit,
+    required Duration every,
+  }) : _length = text.length,
+       _end = text.substring(math.max(0, text.length - 64)) {
+    _timer = Timer.periodic(every, (_) => unawaited(_look()));
+  }
+
+  final String session;
+  final String task;
+  final Future<String?> Function() read;
+  final void Function(LinkOutput output) emit;
+  late final Timer _timer;
+
+  /// How much of it the phone has.
+  int _length;
+
+  /// The end of what the phone has, to tell more added from it rewritten.
+  String _end;
+  bool _looking = false;
+  bool _disposed = false;
+
+  Future<void> _look() async {
+    if (_looking || _disposed) return;
+    _looking = true;
+    try {
+      final text = await read();
+      if (text == null || _disposed || text.length == _length) return;
+      final follows =
+          text.length > _length &&
+          text.substring(_length - _end.length, _length) == _end;
+      final added = follows ? text.length - _length : null;
+      if (added != null && added <= LinkLimits.output) {
+        emit(
+          LinkOutput(
+            session: session,
+            task: task,
+            offset: text.length,
+            text: text.substring(_length),
+          ),
+        );
+      } else {
+        emit(
+          LinkOutput(
+            session: session,
+            task: task,
+            offset: text.length,
+            text: WorkspaceBridge._tail(text),
+            reset: true,
+          ),
+        );
+      }
+      _length = text.length;
+      _end = text.substring(math.max(0, text.length - 64));
+    } finally {
+      _looking = false;
+    }
+  }
+
+  void dispose() {
+    _disposed = true;
+    _timer.cancel();
   }
 }
