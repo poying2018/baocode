@@ -61,7 +61,6 @@ void main() {
             })}\n\n',
           );
       } else {
-        final body = jsonDecode(await utf8.decodeStream(request)) as Map;
         expect(body['method'], 'initialize');
         request.response
           ..headers.set(HttpHeaders.contentTypeHeader, 'application/json')
@@ -85,8 +84,8 @@ void main() {
       'type': 'http',
       'url': 'http://127.0.0.1:${server.port}/mcp',
     });
-    expect(seen, ['application/json']);
-    expect(lengths.single, greaterThan(0));
+    expect(seen, everyElement('application/json'));
+    expect(lengths, everyElement(greaterThan(0)));
     expect(seen.toSet(), {'application/json'});
     expect(result.status, McpProbeStatus.connected, reason: result.message);
     // Its tools then, in the session it opened: for their switches.

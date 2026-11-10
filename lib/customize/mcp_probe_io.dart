@@ -354,7 +354,11 @@ Future<List<McpProbeTool>?> _remoteTools(
     request.headers
       ..set(HttpHeaders.acceptHeader, 'application/json, text/event-stream')
       ..set(HttpHeaders.contentTypeHeader, 'application/json');
-    request.add(utf8.encode(message));
+    // Sized ahead, as `initialize` is: a server reading only by
+    // Content-Length refuses a chunked body (HTTP 411).
+    final body = utf8.encode(message);
+    request.contentLength = body.length;
+    request.add(body);
     final response = await request.close();
     if (response.statusCode >= 300) {
       await response.drain<void>().catchError((Object _) {});
