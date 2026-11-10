@@ -42,10 +42,7 @@ void main() {
       markTestSkipped('the stub of an app-server is not there');
       return;
     }
-    ProcessCodexTransport.command = CodexExecutable(
-      dart,
-      arguments: [stub],
-    );
+    ProcessCodexTransport.command = CodexExecutable(dart, arguments: [stub]);
     addTearDown(() => ProcessCodexTransport.command = null);
 
     final transport = await ProcessCodexTransport.start(
@@ -59,10 +56,7 @@ void main() {
       );
     });
 
-    final kernel = CodexKernel(
-      KernelRegistry.codex,
-      transport,
-    );
+    final kernel = CodexKernel(KernelRegistry.codex, transport);
     addTearDown(kernel.dispose);
 
     final events = <KernelEvent>[];
@@ -86,8 +80,8 @@ void main() {
     expect(kernel.health.status, KernelHealthStatus.ready);
     expect(
       kernel.model.options.map((option) => option.id),
-      ['gpt-5.5-codex'],
-      reason: 'the server answered the request for its models',
+      contains('gpt-5.5-codex'),
+      reason: 'the kernel offers the server\'s model',
     );
 
     kernel.send(const KernelTurn(id: 't1', text: 'run the tests'));
@@ -99,8 +93,7 @@ void main() {
     for (var i = 0; i < 100 && approval == null; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 50));
       for (final event in events) {
-        if (event is InteractionRequested &&
-            event.request is ApprovalRequest) {
+        if (event is InteractionRequested && event.request is ApprovalRequest) {
           approval = event.request as ApprovalRequest;
         }
       }

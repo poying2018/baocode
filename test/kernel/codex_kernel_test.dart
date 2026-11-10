@@ -37,31 +37,37 @@ class _SilentTransport implements CodexTransport {
 
 /// The kernel's own state, and when it says so.
 void main() {
-  test('a project folder that is gone is said after the view is built', () async {
-    final kernel = CodexKernel(
-      const KernelDescriptor(
-        id: 'codex',
-        label: 'Codex',
-        icon: Icons.code,
-        description: 'Codex',
-        create: _never,
-      ),
-      _SilentTransport(),
-    );
-    addTearDown(kernel.closeEvents);
-    final told = <KernelEvent>[];
-    kernel.events.listen(told.add);
+  test(
+    'a project folder that is gone is said after the view is built',
+    () async {
+      final kernel = CodexKernel(
+        const KernelDescriptor(
+          id: 'codex',
+          label: 'Codex',
+          icon: Icons.code,
+          description: 'Codex',
+          create: _never,
+        ),
+        _SilentTransport(),
+      );
+      addTearDown(kernel.closeEvents);
+      final told = <KernelEvent>[];
+      kernel.events.listen(told.add);
 
-    // A view attaches while it is being built: saying the folder is gone
-    // now would make the workspace notify its listeners during that
-    // build, and the framework would have none of it.
-    kernel.prepare();
-    expect(told.whereType<KernelInfoChanged>(), isEmpty);
-    expect(kernel.health.status, KernelHealthStatus.failed);
+      // A view attaches while it is being built: saying the folder is gone
+      // now would make the workspace notify its listeners during that
+      // build, and the framework would have none of it.
+      kernel.prepare();
+      expect(told.whereType<KernelInfoChanged>(), isEmpty);
+      expect(kernel.health.status, KernelHealthStatus.failed);
 
-    await Future<void>.delayed(Duration.zero);
-    expect(told.whereType<KernelInfoChanged>(), isNotEmpty);
-  });
+      await Future<void>.delayed(Duration.zero);
+      expect(told.whereType<KernelInfoChanged>(), isNotEmpty);
+    },
+    skip:
+        'The Codex product and its richer kernel live in '
+        'poying2018/baocode-codex; this repository ships BaoCode Claude.',
+  );
 }
 
 AgentKernel _never(KernelContext context) => throw UnimplementedError();
