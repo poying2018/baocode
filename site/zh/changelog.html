@@ -30,6 +30,28 @@
   <h1>更新日志</h1>
   <p class="subtitle">BaoCode 每个版本的变化。</p>
 
+  <section class="release" id="v1.10.1">
+    <h2 class="plain"><a href="#v1.10.1">1.10.1</a></h2>
+    <p>BaoCode Claude 1.10.1</p>
+    <p>工作台的分屏、卡片与终端对齐上游，并补上 1.10.0 遗漏的命令与修复。</p>
+    <p>新功能</p>
+    <ul>
+    <li>分屏顶部有一整行：各窗格的标签页、项目名和关闭按钮在卡片上，Open in Editor 所有窗格共用一个。</li>
+    <li>终端和侧栏按钮在每个对话的卡片上（Windows 也一样），终端面板显示在所属对话下方。</li>
+    <li>IDE 标题栏搜索框旁有前进/后退（#539）；Ctrl+L / ⌘L 的“Add Selection to Chat”重新可用。</li>
+    <li>在别处继续过的对话可以就地重新读取。</li>
+    </ul>
+    <p>修复</p>
+    <ul>
+    <li><code>/btw</code> 与 <code>/fork</code> 重新接通它们打开的对话。</li>
+    <li>图片 diff 通过项目文件读取字节，远程项目也能正确显示。</li>
+    <li>Markdown 拖放和草稿里的代码片段按项目的路径写法命名，POSIX 项目在 Windows 上保留斜杠。</li>
+    <li>搜索结果跟随打开文件的未保存修改，以及磁盘上的变化。</li>
+    <li>SSH 主机移除后，其项目按“随主机一同移除”的记录恢复，重启后也正确。</li>
+    <li>MCP 探测的每个请求都带 Content-Length，严格服务器也能应答；下载页重新列出 Android 版。</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.10.0">
     <h2 class="plain"><a href="#v1.10.0">1.10.0</a></h2>
     <p>BaoCode Claude 1.10.0</p>

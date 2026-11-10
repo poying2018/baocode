@@ -30,6 +30,37 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v1.10.1">
+    <h2 class="plain"><a href="#v1.10.1">1.10.1</a></h2>
+    <p>BaoCode Claude 1.10.1</p>
+    <p>The workbench's panes, cards and terminals as upstream has them, with the
+    commands and fixes that 1.10.0 left out.</p>
+    <p>New</p>
+    <ul>
+    <li>Panes have the row along their top: each one's tabs, its project and its
+    close button on its card, and Open in Editor once for all of them.</li>
+    <li>The terminal's and the side panel's buttons are on each conversation's
+    card, on Windows too, and the panel is under its own conversation.</li>
+    <li>Go Back and Go Forward beside the title bar's search, in the IDE as in the
+    window's header (#539); Add Selection to Chat (Ctrl+L / Cmd+L) reaches the
+    composer again.</li>
+    <li>A conversation gone on with elsewhere can be read anew in place.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>/btw and /fork reach the conversations they open again.</li>
+    <li>An image's diff reads its bytes through the project's files, a remote
+    project's too.</li>
+    <li>A markdown drop or a draft's code names its file the project's way: a POSIX
+    project keeps its slashes on Windows.</li>
+    <li>Search results follow an open file's unsaved edits and a file changed on
+    disk.</li>
+    <li>A host's projects come back by what went off with it, across restarts too.</li>
+    <li>MCP probes size every request, so servers that read only by Content-Length
+    answer; the download pages list the Android app again.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v1.10.0">
     <h2 class="plain"><a href="#v1.10.0">1.10.0</a></h2>
     <p>BaoCode Claude 1.10.0</p>
