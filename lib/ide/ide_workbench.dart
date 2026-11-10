@@ -514,6 +514,15 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
       IdeWorkspace(hasFolder: true) => widget.textSearch(root, query),
       _ => _searchOpenFiles(query),
     },
+    // The results follow their files: an open one's text in the editor,
+    // unsaved edits and all; others' on disk.
+    read: (path) async =>
+        widget.workspace.documents
+            .where((doc) => doc.isFile && doc.path == path)
+            .firstOrNull
+            ?.text ??
+        widget.workspace.files.read(path),
+    watch: (directory) => widget.workspace.watchFolder(directory),
   );
   final _searchKey = GlobalKey<IdeSearchViewState>();
 
@@ -1589,7 +1598,15 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   void _documentEdited() {
     _symbols?.update(widget.workspace.active);
     _scheduleAutoSave();
+    _refreshSearchResults();
   }
+
+  /// The Search view's results follow the open files, unsaved edits and
+  /// all.
+  void _refreshSearchResults() => _search.refresh([
+    for (final doc in widget.workspace.documents)
+      if (doc.isFile) doc.path,
+  ]);
 
   /// Follows the active editor: remembers it for Quick Open and reveals it
   /// in the explorer, as VS Code's `explorer.autoReveal` does.
@@ -1597,6 +1614,7 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     _rootsChanged();
     _keepViewSoon();
     _symbols?.update(widget.workspace.active);
+    _refreshSearchResults();
     _forgetClosedNavigation();
     _watchEdits();
     final documents = widget.workspace.documents;
