@@ -79,6 +79,10 @@ Future<int> _post(Uri url, Object body, Map<String, String> headers) async {
     request.write(jsonEncode(body));
     final response = await request.close();
     await response.drain<void>();
+    // The proxy records the call as its response closes, a turn of the
+    // loop after the client reads the last of it.
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
     return response.statusCode;
   } finally {
     client.close(force: true);
