@@ -15,13 +15,12 @@ import 'package:baocode/workspace/workspace.dart';
 import 'first_frame_test.dart' show LongTurnFeed;
 
 /// The app. The test's variant picks the platform; macOS and Windows 11
-/// have the system's material under the window — once Settings →
-/// Appearance has turned the blur on, which these tests do: the material
-/// is what they are about.
+/// have the system's material under the window.
 Future<void> pumpMacApp(WidgetTester tester, {double width = 1400}) async {
   tester.view.physicalSize = Size(width, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  // The material is a setting, off by default (Settings → Appearance).
   WindowBlur.enabled.value = true;
   addTearDown(() => WindowBlur.enabled.value = false);
   await tester.pumpWidget(BaoCodeApp(workspace: Workspace.mock()));
@@ -138,16 +137,18 @@ void main() {
   testWidgets('on macOS the sidebar and the conversation both show the '
       'material through', (tester) async {
     await pumpMacApp(tester);
-    // The window itself paints nothing over the material; the theme's
-    // transition holds a transparent layer as it changes it.
+    // One tint over the material under the sidebar and between the cards
+    // (the window's canvas paints nothing): the sidebar on it, none of its
+    // own; the conversation's card a denser one, on it too.
     expect(colorsUnder(tester, find.byType(Sidebar)), [
+      AppColors.sidebarSurface,
       Colors.transparent,
       Colors.transparent,
     ]);
-    expect(sidebarColor(tester).a, lessThan(0.85));
+    expect(sidebarColor(tester), Colors.transparent);
+    expect(AppColors.sidebarSurface.a, lessThan(0.85));
     expect(colorsUnder(tester, find.byType(ChatScreen)), [
       AppColors.sidebarSurface,
-      Colors.transparent,
       Colors.transparent,
       Colors.transparent,
     ]);
@@ -168,6 +169,7 @@ void main() {
     (tester) async {
       await pumpMacApp(tester);
       expect(colorsUnder(tester, find.byType(Sidebar)), [
+        AppColors.sidebarSurface,
         Colors.transparent,
         Colors.transparent,
       ]);
@@ -176,7 +178,6 @@ void main() {
       expect(AppColors.sidebarSurface.a, closeTo(0.96, 0.001));
       expect(colorsUnder(tester, find.byType(ChatScreen)), [
         AppColors.sidebarSurface,
-        Colors.transparent,
         Colors.transparent,
         Colors.transparent,
       ]);
