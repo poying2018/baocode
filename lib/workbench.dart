@@ -18,11 +18,12 @@ import 'images/image_tools.dart';
 import 'channel/channel_setup.dart';
 import 'channel/channel_gate.dart';
 import 'channel/channel_setup_welcome.dart';
+import 'chat/aside_layers.dart';
 import 'chat/chat_column.dart';
 import 'chat/chat_keys.dart';
 import 'chat/chat_models.dart' show FileChange, FileChangeKind;
 import 'chat/chat_screen.dart';
-import 'chat/chat_session.dart' show ChatSession;
+import 'chat/chat_session.dart' show ChatSession, ComposerMessage;
 import 'chat/composer/composer_files.dart' show ComposerFile;
 import 'chat/composer/composer_mock_data.dart' show Suggestion;
 import 'chat/composer/file_drop.dart';
@@ -131,6 +132,7 @@ import 'stash/stash_thread_view.dart' show sidebarStashes;
 import 'stash/stash_view.dart';
 import 'stash/stash_welcome.dart' show showStashWelcome;
 import 'workspace/agent_work_path.dart';
+import 'workspace/aside_card.dart';
 import 'workspace/chat_branch_bar.dart';
 import 'workspace/chat_quota_bar.dart';
 import 'workspace/chat_drag.dart';
@@ -4190,6 +4192,7 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     AgentThread? pane,
     ChatPanePlace place = _whole,
     OpenEditor? Function()? openEditor,
+    bool layered = true,
   }) {
     final thread = pane ?? _workspace.current;
     // Windows keeps the toggle, the pin and the editor button in its header
@@ -4198,6 +4201,8 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
     // in the top left pane, by the traffic lights, and the pin and the
     // editor button in the top right one.
     final header = WindowControls.drawsHeader;
+    // The sidebar not docked: hidden, or a drawer.
+    final sidebarHidden = showToggle;
     // The side panel at the window's left has it, by the traffic lights.
     showToggle =
         showToggle && place.topLeft && (embedded || !_sidePanelAtWindowLeft);
@@ -4329,10 +4334,34 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
             ? null
             : (name) => _commandFileOf(thread, name),
         openEditor: openEditor ?? () => _sidePanelEditor(thread),
+        onSideQuestion: (question) => _askBeside(thread, question),
+        onFork: (message) =>
+            unawaited(_forkFromComposer(thread, message, embedded: embedded)),
+        asideAt: _asideCards(thread, embedded: embedded),
+        back: switch (_workspace.parentOf(thread)) {
+          final parent? => (
+            label: parent.localizedTitle(context.l10n),
+            onBack: () => _showAside(parent, embedded: embedded),
+          ),
+          null => null,
+        },
       ),
     );
-    if (place.alone || embedded) return chat;
-    return _paneRail(thread, chat);
+    if (!layered) return chat;
+    final shown = _withAsides(
+      thread,
+      chat,
+      (other) => _buildChat(
+        showToggle: sidebarHidden,
+        embedded: embedded,
+        pane: other,
+        place: place,
+        openEditor: openEditor,
+        layered: false,
+      ),
+    );
+    if (place.alone || embedded) return shown;
+    return _paneRail(thread, shown);
   }
 
   /// [chat], a pane among others, with the side panel's rail over its top
@@ -4369,6 +4398,122 @@ class _WorkbenchState extends State<Workbench> implements WindowDelegate {
       );
     },
   );
+
+  // --- Asides (/btw) -------------------------------------------------------
+
+  /// `/btw` [question] in [thread]: asked in a conversation beside it,
+  /// which its card there opens; asked of [thread] itself while it has
+  /// nothing to copy.
+  void _askBeside(AgentThread thread, ComposerMessage question) {
+    if (!_workspace.canAskBeside(thread)) {
+      thread.session.send(question);
+      return;
+    }
+    unawaited(_workspace.askBeside(thread, question));
+  }
+
+  /// `/fork` in [thread]: copied as the sidebar's Fork does and the copy
+  /// opened where [thread] shows (in the IDE's chat, as a tab of its own),
+  /// [message] sent there; a notice where [thread] cannot be copied.
+  Future<void> _forkFromComposer(
+    AgentThread thread,
+    ComposerMessage message, {
+    required bool embedded,
+  }) async {
+    if (thread.id == null || !thread.session.canFork) {
+      _notifications.notify(IdeSeverity.info, context.l10n.forkUnavailable);
+      return;
+    }
+    final forked = await _workspace.fork(thread, message: message);
+    if (forked == null || !mounted) return;
+    if (embedded) {
+      _openIdeChat(thread.project.path, forked);
+    } else if (_agentThread != null) {
+      _showInWindow(forked);
+    } else {
+      _workspace.select(forked);
+    }
+  }
+
+  /// Shows [thread], an aside or the one it was asked beside, in place of
+  /// the other: in the IDE's chat, in its tab.
+  void _showAside(AgentThread thread, {required bool embedded}) {
+    if (embedded) {
+      _openIdeChat(thread.project.path, thread);
+    } else {
+      _workspace.select(thread);
+    }
+  }
+
+  /// The cards of the conversations asked beside [thread], after the item
+  /// of [thread]'s each was copied up to; none without any.
+  Widget? Function(String itemId)? _asideCards(
+    AgentThread thread, {
+    required bool embedded,
+  }) {
+    final at = _workspace.asidesAt(thread);
+    if (at.isEmpty) return null;
+    return (id) => switch (at[id]) {
+      final asides? => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, aside) in asides.indexed)
+            Padding(
+              padding: EdgeInsets.only(top: i == 0 ? 0 : 6),
+              child: AsideCard(
+                key: ObjectKey(aside),
+                workspace: _workspace,
+                aside: aside,
+                onOpen: () => _showAside(aside, embedded: embedded),
+              ),
+            ),
+        ],
+      ),
+      null => null,
+    };
+  }
+
+  /// What each family of conversations (one and its asides) showed last,
+  /// by the one asked beside: told apart, the other comes in or goes.
+  final Expando<AgentThread> _asideShown = Expando();
+
+  /// [chat], [thread]'s, over the one it was asked beside, as a subagent's
+  /// is over its session's (see [AsideLayers]), [chatOf] building that
+  /// one's: coming in from it, shown just before. Or, [thread] one asked
+  /// beside, its aside shown just before going back. Not where the other
+  /// shows elsewhere (another pane): no conversation is built twice.
+  Widget _withAsides(
+    AgentThread thread,
+    Widget chat,
+    Widget Function(AgentThread other) chatOf,
+  ) {
+    final parent = _workspace.parentOf(thread);
+    final root = parent ?? thread;
+    final before = _asideShown[root];
+    _asideShown[root] = thread;
+    final switched =
+        before != null &&
+        !identical(before, thread) &&
+        _workspace.threads.contains(before);
+    bool free(AgentThread other) => !_workspace.grid.contains(other);
+    if (parent != null) {
+      if (!free(parent)) return chat;
+      return AsideLayers(
+        key: ObjectKey(thread),
+        under: chatOf(parent),
+        over: chat,
+        entering: switched,
+      );
+    }
+    final leaving = switched && free(before) ? before : null;
+    // Wrapped once it has asides, so the leaving one can go over it.
+    if (leaving == null && _workspace.asidesOf(thread).isEmpty) return chat;
+    return AsideLayers(
+      key: ObjectKey(thread),
+      under: chat,
+      leaving: leaving == null ? null : chatOf(leaving),
+    );
+  }
 
   /// The file in front on the side panel, while it shows [thread]'s: on
   /// the files page, where it is edited (its cursor and selection with
