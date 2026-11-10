@@ -453,11 +453,11 @@ void main() {
     expect(picker('Codex'), findsOneWidget);
     expect(picker('GPT-5.5 Codex'), findsOneWidget);
 
-    // Codex has Plan as its own collaboration mode.
+    // Codex has no Plan mode.
     await tester.tap(picker('Agent'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Read-only: answer questions'), findsOneWidget);
-    expect(find.text('Plan'), findsOneWidget);
+    expect(find.text('Plan'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump(const Duration(milliseconds: 300));
 
