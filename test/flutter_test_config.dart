@@ -45,7 +45,12 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   // ViewCollection of several, and on Windows itself their updates
   // interleave in ways the model takes for a broken tree. The hosts CI
   // runs (where the check was written) see the one view it models.
-  if (!Platform.isWindows) checkDesktopSemantics();
+  if (Platform.isWindows) {
+    // What the check makes as it starts, for the tests that use bindings.
+    TestWidgetsFlutterBinding.ensureInitialized();
+  } else {
+    checkDesktopSemantics();
+  }
   KernelRegistry.use(MockKernels.all);
   textMateWorkerLauncher = () async => TextMateInProcessWorker.create();
   MonacoLanguageAssets.defaultPacks = () => LanguagePackRegistry.instance;
