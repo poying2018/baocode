@@ -128,10 +128,22 @@ Future<void> writeAtomically(String path, String contents) async {
   final temp = File('$path.$pid.${_asides++}.tmp');
   try {
     await temp.writeAsString(contents, flush: true);
-    try {
-      await temp.rename(path);
-    } on FileSystemException {
-      await File(path).writeAsString(contents, flush: true);
+    for (var attempt = 0; ; attempt++) {
+      try {
+        await temp.rename(path);
+        return;
+      } on FileSystemException {
+        // The rename cannot replace the file (Windows, while another
+        // program holds it): write in place instead. Another writer may
+        // hold it too, so wait a moment and try again.
+        try {
+          await File(path).writeAsString(contents, flush: true);
+          return;
+        } on FileSystemException {
+          if (attempt >= 4) rethrow;
+          await Future<void>.delayed(Duration(milliseconds: 10 << attempt));
+        }
+      }
     }
   } finally {
     try {

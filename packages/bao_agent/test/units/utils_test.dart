@@ -447,6 +447,25 @@ void main() {
       expect(sh.nativePath('/usr/bin'), isNull);
     });
 
+    test('on Windows: BaoCode Bash, where the app installed it, before '
+        'Git\'s; the one set before both', () {
+      const bao =
+          r'C:\Users\me\AppData\Roaming\BaoCode\tools\bash-exe\bash.exe';
+      const git = r'C:\Program Files\Git\bin\bash.exe';
+      final found = windows({Shell.baoBashVariable: bao}, {bao, git});
+      expect((found.executable, found.posix, found.baoBash), (bao, true, true));
+      // Uninstalled since.
+      expect(windows({Shell.baoBashVariable: bao}, {git}).executable, git);
+      expect(windows({Shell.baoBashVariable: bao}, {git}).baoBash, isFalse);
+      expect(
+        windows(
+          {Shell.baoBashVariable: bao, 'CLAUDE_CODE_GIT_BASH_PATH': git},
+          {bao, git},
+        ).executable,
+        git,
+      );
+    });
+
     test('elsewhere: the user\'s bash or zsh, else bash, else sh', () {
       Shell find(Map<String, String> env, Set<String> files) =>
           Shell.find(env, windows: false, exists: files.contains);
@@ -467,6 +486,29 @@ void main() {
         'ls',
         '/tmp/cwd',
       ]);
+    });
+  });
+
+  group('caseFoldedEnvironment', () {
+    const environment = {
+      'Path': r'C:\Windows',
+      'NO_PROXY': 'localhost',
+      'HTTPS_PROXY': 'http://127.0.0.1:7897',
+      'https_proxy': 'http://127.0.0.1:7897',
+      'PATH': r'C:\rg;C:\Windows',
+      'no_proxy': 'localhost,127.0.0.1',
+    };
+
+    test('on Windows, one of names that differ only in case: the last', () {
+      expect(caseFoldedEnvironment(environment, windows: true), {
+        'https_proxy': 'http://127.0.0.1:7897',
+        'PATH': r'C:\rg;C:\Windows',
+        'no_proxy': 'localhost,127.0.0.1',
+      });
+    });
+
+    test('elsewhere, as it is', () {
+      expect(caseFoldedEnvironment(environment, windows: false), environment);
     });
   });
 

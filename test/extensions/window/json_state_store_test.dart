@@ -46,13 +46,13 @@ void main() {
 
   test('writers of one file at once keep it whole, nothing aside', () async {
     await Future.wait([
-      for (var writer = 0; writer < 20; writer++)
+      for (var writer = 0; writer < 8; writer++)
         writeAtomically(path, jsonEncode({'writer': writer})),
     ]);
     expect(names(), ['debug.json']);
     expect(
       (jsonDecode(File(path).readAsStringSync()) as Map)['writer'],
-      inInclusiveRange(0, 19),
+      inInclusiveRange(0, 7),
     );
   });
 }

@@ -36,6 +36,12 @@ constexpr int kMaxRetries = 30;
 constexpr UINT kTrayMessage = WM_APP + 0x41;
 constexpr UINT kTrayId = 1;
 
+// While the tray icon is asked for, how often it is looked for, and put
+// back if gone (or put up, if it could not be: the taskbar not there yet,
+// at sign-in). Explorer's TaskbarCreated alone was not enough (#860).
+constexpr UINT_PTR kTrayTimer = 0x4244;
+constexpr UINT kTrayCheckMilliseconds = 15000;
+
 // The tray menu's commands; an agent's is kAgentCommand plus its place, a
 // window's kWindowCommand plus its.
 constexpr UINT kShowCommand = 1;
@@ -308,6 +314,12 @@ Attention::Attention(flutter::BinaryMessenger* messenger, HWND window,
       taskbar_created_(::RegisterWindowMessageW(L"TaskbarCreated")),
       taskbar_button_created_(
           ::RegisterWindowMessageW(L"TaskbarButtonCreated")) {
+  // Let through from Explorer even with the app run as administrator: the
+  // system keeps lower-integrity messages from it otherwise.
+  if (taskbar_created_ != 0) {
+    ::ChangeWindowMessageFilterEx(window_, taskbar_created_, MSGFLT_ALLOW,
+                                  nullptr);
+  }
   channel_->SetMethodCallHandler(
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
@@ -469,7 +481,7 @@ std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
   }
   if (message == taskbar_created_ && taskbar_created_ != 0) {
     // Explorer started again: the tray is new, and empty.
-    if (icon_added_) {
+    if (icon_added_ || tray_) {
       icon_added_ = false;
       ShowIcon();
     } else if (tray_) {
@@ -478,6 +490,15 @@ std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
       RetryIcon();
     }
     return std::nullopt;
+  }
+  if (message == WM_TIMER && wparam == kTrayTimer) {
+    if (!tray_) {
+      ::KillTimer(window_, kTrayTimer);
+    } else if (!icon_added_ || !IconThere()) {
+      icon_added_ = false;
+      ShowIcon();
+    }
+    return 0;
   }
   if (message == taskbar_button_created_ && taskbar_button_created_ != 0) {
     // A taskbar button made anew (the window shown again) has no count.
@@ -622,43 +643,28 @@ void Attention::ShowIcon() {
   const std::wstring tooltip =
       tray_ && !tray_->tooltip.empty() ? tray_->tooltip : AppWindowTitle();
   wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
-  if (icon_added_) {
-    if (!::Shell_NotifyIconW(NIM_MODIFY, &data)) {
-      // The icon is gone (Explorer restarted, or took it away): add it
-      // again, and say so.
-      log_folder::WriteTrayLog("tray: NIM_MODIFY failed, adding again");
-      icon_added_ = false;
-      ShowIcon();
-      return;
-    }
-  } else if (::Shell_NotifyIconW(NIM_ADD, &data)) {
-    icon_added_ = true;
-  } else {
-    // The tray did not take it — but it may have it already: Windows
-    // refuses to add an icon that is there, and says so with a false
-    // (the error code is left over, and says nothing). NIM_MODIFY tells
-    // the two apart: it takes the icon that is there and refuses the
-    // one that is not.
-    if (::Shell_NotifyIconW(NIM_MODIFY, &data)) {
-      // It is there: the add was refused for that reason alone.
-      icon_added_ = true;
-      log_folder::WriteTrayLog("tray: already there (the add was refused)");
+  bool shown = icon_added_ && ::Shell_NotifyIconW(NIM_MODIFY, &data);
+  if (!shown) {
+    // Not up, or gone from under it: put up anew. Up after all (a modify
+    // that failed otherwise), it is changed instead.
+    if (::Shell_NotifyIconW(NIM_ADD, &data)) {
+      shown = true;
+      data.uVersion = NOTIFYICON_VERSION_4;
+      ::Shell_NotifyIconW(NIM_SETVERSION, &data);
     } else {
-      // The tray would not take it: Explorer may be starting, or the
-      // icon may be refused. Said, so a user who cannot find the icon
-      // can say so.
-      log_folder::WriteTrayLog("tray: NIM_ADD failed (hwnd=%p valid=%d)",
-                                window_, ::IsWindow(window_) ? 1 : 0);
-      if (icon_ != nullptr) {
-        ::DestroyIcon(icon_);
+      // Windows refuses to add an icon that is there, and says so with a
+      // false: NIM_MODIFY tells the two apart.
+      shown = ::Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
+      if (!shown) {
+        // Explorer may be starting, or the icon may be refused. Said, so a
+        // user who cannot find the icon can say so.
+        log_folder::WriteTrayLog("tray: NIM_ADD failed (hwnd=%p valid=%d)",
+                                 window_, ::IsWindow(window_) ? 1 : 0);
       }
-      icon_ = icon;
-      return;
     }
   }
-  if (icon_added_) {
-    data.uVersion = NOTIFYICON_VERSION_4;
-    ::Shell_NotifyIconW(NIM_SETVERSION, &data);
+  icon_added_ = shown;
+  if (shown) {
     // The icon is up: no need to try again.
     if (retry_timer_ != 0) {
       ::KillTimer(window_, retry_timer_);
@@ -666,13 +672,28 @@ void Attention::ShowIcon() {
     }
     retry_count_ = 0;
   }
+  if (tray_) {
+    ::SetTimer(window_, kTrayTimer, kTrayCheckMilliseconds, nullptr);
+  }
   if (icon_ != nullptr) {
     ::DestroyIcon(icon_);
   }
   icon_ = icon;
 }
 
+bool Attention::IconThere() const {
+  NOTIFYICONIDENTIFIER identifier = {};
+  identifier.cbSize = sizeof(identifier);
+  identifier.hWnd = window_;
+  identifier.uID = kTrayId;
+  RECT rect = {};
+  return SUCCEEDED(::Shell_NotifyIconGetRect(&identifier, &rect));
+}
+
 void Attention::RemoveIcon() {
+  if (!tray_) {
+    ::KillTimer(window_, kTrayTimer);
+  }
   if (!icon_added_) {
     return;
   }

@@ -192,8 +192,13 @@ class IdeWorkbench extends StatefulWidget {
   /// name and folders.
   static const createWorkspaceCommandId = 'baocode.workspace.create';
 
-  /// Add Folder to Workspace...: of a multi-folder workspace (see
-  /// [IdeWorkspace.isMultiRoot]), the host asking for the folder.
+  /// Add Folder to Workspace...: the host's command, which asks for a
+  /// folder and adds it to the workspace, or to the project's folder.
+  static const addRootFolderCommandId = 'workbench.action.addRootFolder';
+
+  /// Add Folder to Workspace...: of a multi-folder workspace, or of a
+  /// project's folder (see [IdeWorkspace.projectFolder]), the host asking
+  /// for the folder.
   final VoidCallback? onAddFolder;
 
   /// Remove Folder from Workspace, of a workspace folder's explorer row.
@@ -2658,9 +2663,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
   }
 
   /// Create New Terminal (⌃⇧`), shown and focused: on [profile]'s shell,
-  /// else the default profile's.
-  void _newTerminal({TerminalProfile? profile}) {
-    _terminals?.create(profile: profile);
+  /// else the default profile's, in [cwd] (else where the workspace starts).
+  void _newTerminal({TerminalProfile? profile, String? cwd}) {
+    _terminals?.create(profile: profile, cwd: cwd);
     _showTerminal();
   }
 
@@ -4406,7 +4411,8 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                               for (final (_, git) in workspace.repositories)
                                 git,
                             ],
-                            onAddFolder: workspace.isMultiRoot
+                            onAddFolder:
+                                workspace.isMultiRoot || workspace.projectFolder
                                 ? widget.onAddFolder
                                 : null,
                             onRemoveFolder: workspace.isMultiRoot
@@ -5129,8 +5135,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
                         final terminals? => TerminalTitleActions(
                           terminals: terminals,
                           onNew: _newTerminal,
-                          onNewWithProfile: (profile) =>
-                              _newTerminal(profile: profile),
+                          onNewWithProfile: (profile, {cwd}) =>
+                              _newTerminal(profile: profile, cwd: cwd),
+                          folders: widget.workspace.roots,
                           onSelectDefaultProfile: () =>
                               unawaited(_selectDefaultProfile()),
                         ),

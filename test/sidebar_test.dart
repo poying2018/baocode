@@ -528,7 +528,9 @@ void main() {
       'right click or its … button (#90)', (tester) async {
     final workspace = await pumpApp(tester);
     final archived = workspace.threads.skip(1).take(2).toList();
-    final heading = inSidebar(find.text('Archived'));
+    final heading = inSidebar(
+      find.text('${archived.first.project.name} · archived'),
+    );
     Future<void> archiveAndShow() async {
       for (final thread in archived) {
         workspace.setArchived(thread, true);
@@ -625,18 +627,19 @@ void main() {
     );
     expect(workspace.threads.where((thread) => thread.archived), hasLength(13));
 
-    expect(inSidebar(find.text('Archived')), findsOneWidget);
-    expect(
-      inSidebar(find.textContaining(RegExp(r'^Chat here0 .*here$'))),
-      findsOneWidget,
-    );
     // Not listed under a project of its own, but among the archived ones,
-    // its project named on its row, as any there.
+    // under a heading of its folder, as any there.
     expect(
-      inSidebar(find.textContaining(RegExp(r'^Chat monad0 .*monad$'))),
+      inSidebar(find.text('${Project.at(r'C:\here').name} · archived')),
       findsOneWidget,
     );
-    expect(inSidebar(find.text('monad')), findsNothing);
+    expect(
+      inSidebar(find.text('${Project.at(r'C:\monad').name} · archived')),
+      findsOneWidget,
+    );
+    expect(inSidebar(find.text('Chat here0')), findsOneWidget);
+    expect(inSidebar(find.text('Chat monad0')), findsOneWidget);
+    expect(inSidebar(find.text(r'C:\monad')), findsNothing);
   });
 
   testWidgets('shown, the archived agents are scrolled to', (tester) async {
@@ -679,7 +682,11 @@ void main() {
     expect(
       tester
           .getRect(scrollable)
-          .contains(tester.getCenter(inSidebar(find.text('Archived')))),
+          .contains(
+            tester.getCenter(
+              inSidebar(find.textContaining(' · archived')).first,
+            ),
+          ),
       isTrue,
     );
   });
@@ -1656,6 +1663,9 @@ void main() {
     expect(keptThread(workspace, 'a1').archived, isTrue);
     expect(keptThread(workspace, 'a2').archived, isTrue);
     expect(inSidebar(find.text('Chat a1')), findsNothing);
+    // Nothing of it left to list, the folder goes with them (#862).
+    expect(inSidebar(find.text('a')), findsNothing);
+    expect(workspace.isHidden(keptThread(workspace, 'a1').project), isTrue);
 
     // Off the list until it is opened again...
     await pickFromMenu(tester, 'b', 'Remove from List');
@@ -1683,7 +1693,7 @@ void main() {
     await tester.runAsync(workspace.refresh);
     await tester.pump();
     expect(inSidebar(find.text('Chat b2')), findsOneWidget);
-    expect(workspace.isHidden(workspace.selected.project), isFalse);
+    expect(workspace.isHidden(keptThread(workspace, 'b2').project), isFalse);
   });
 
   testWidgets('pinned projects stay on top, dragged among themselves; kept '

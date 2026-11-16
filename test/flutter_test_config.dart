@@ -18,6 +18,7 @@ import 'package:baocode/kernel/claude_code/claude_core_setting.dart';
 import 'package:baocode/kernel/kernel_registry.dart';
 import 'package:baocode/models/featured_upstreams.dart';
 import 'package:baocode/kernel/mock/mock_kernels.dart';
+import 'package:baocode/main.dart' show BaoCodeApp;
 import 'package:baocode/platform/context_menu.dart';
 import 'package:baocode/platform/shell_command.dart';
 import 'package:baocode/theme/workbench_theme.dart';
@@ -40,7 +41,11 @@ import 'semantics_tree.dart';
 /// pick, which the kernel's tests were written for: those of BaoCode's
 /// own core say so. Diffs show as they do by default.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  checkDesktopSemantics();
+  // The check models one engine view's tree; the app's windows are a
+  // ViewCollection of several, and on Windows itself their updates
+  // interleave in ways the model takes for a broken tree. The hosts CI
+  // runs (where the check was written) see the one view it models.
+  if (!Platform.isWindows) checkDesktopSemantics();
   KernelRegistry.use(MockKernels.all);
   textMateWorkerLauncher = () async => TextMateInProcessWorker.create();
   MonacoLanguageAssets.defaultPacks = () => LanguagePackRegistry.instance;
@@ -48,6 +53,10 @@ Future<void> testExecutable(FutureOr<void> Function() testMain) async {
   setUp(() {
     IdeDiffOptions.instance.reset();
     rootBundle.clear();
+    // As the tests were written, on the hosts CI runs them: Windows' engine
+    // is given no semantics on Windows itself (see BaoCodeApp), and the
+    // tests find their widgets by it.
+    BaoCodeApp.debugWithoutSemantics = false;
     ClaudeCore.current = () => ClaudeCore.cli;
     UserMessageStyle.current.value = UserMessageStyle.sticky;
     ShellCommand.debugInstaller = _NoShellCommand();

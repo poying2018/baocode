@@ -3,7 +3,8 @@ import 'dart:io' show Platform;
 import 'dart:convert' show jsonEncode;
 import 'dart:ui' show AppExitResponse, AppExitType;
 
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:flutter/foundation.dart'
+    show kDebugMode, kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show
@@ -21,10 +22,12 @@ import 'package:bao_editor/monaco/flutter/language_assets.dart';
 
 import 'base/quiet_view.dart';
 import 'base/smooth_scroll.dart' show BaoScrollBehavior;
+import 'bash_exe/bao_bash.dart';
 import 'bots/bots.dart';
 import 'browser/browser_bridge.dart';
 import 'browser/browser_tools.dart' show BrowserHistory;
 import 'chat/composer/composer_files.dart' show ComposerFile, pastedAsPicture;
+import 'chat/chat_session.dart';
 import 'chat/chat_width.dart';
 import 'chat/reply_scroll.dart';
 import 'chat/edit_detail.dart';
@@ -32,6 +35,7 @@ import 'chat/user_message_style.dart';
 import 'chat/widgets/chat_minimap.dart';
 import 'chat/widgets/pixel_loader.dart';
 import 'chat/resume_after_reset.dart';
+import 'chat/rewind_files_setting.dart';
 import 'chat/widgets/turn_footer.dart' show LiveTurnStatsSetting;
 import 'customize/customization_store.dart';
 import 'diagnostics/app_event_watch.dart';
@@ -68,6 +72,7 @@ import 'kernel/claude_code/turn_stats_stub.dart'
 import 'kernel/commit_attribution.dart';
 import 'kernel/extension_switches.dart';
 import 'kernel/prompt_suggestions.dart';
+import 'workspace/session_tools.dart';
 import 'chat/composer/composer_polish.dart' show ComposerPolishSetting;
 import 'kernel/queued_messages.dart';
 import 'keybindings/keybindings_sync.dart';
@@ -253,6 +258,7 @@ Future<void> main(List<String> arguments) async {
         ? null
         : PreferenceStore.file(
             p.join(DataDirectory.current.stateDir, 'drafts.json'),
+            true,
           ),
     // The data folder's icons/, the upstreams of models' pictures too.
     icons: IconLibrary.current = IconLibrary(storage: IconStorage.directory()),
@@ -337,6 +343,9 @@ Future<void> main(List<String> arguments) async {
         AttentionSettings.parse(files?.settings.values ?? const {}).tray,
   );
   await windows.start();
+  // The `code` command of the remote hosts' terminals (see ServerCli).
+  SshHosts.instance.onCode = (host, client, cwd, args) =>
+      windows.handleRemoteCode(host, cwd, args, stat: client.stat);
   // The stash (docs/stash.md): its shortcut works from any app, its panel
   // made hidden a moment after the windows, to show at once.
   if (files != null) {
@@ -440,6 +449,10 @@ Future<void> main(List<String> arguments) async {
       link: link,
       customizations: customizations,
     );
+    // Before the feature tips start: they tell it whether the app ran
+    // here before.
+    BaoBash.current = settings.bash?..noteStart();
+    ChatSession.userSent = BaoBash.current?.countSent;
     _startTelemetry(files, link);
   }
   // The theme extensions (lib/extensions/): color and file icon themes
@@ -516,6 +529,9 @@ void followSettingsFiles(SettingsFiles files) {
   QueuedMessages.current = () =>
       QueuedMessages.parse(files.settings[QueuedMessages.settingKey]);
   // Read as each agent starts, and as each message is sent.
+  SessionToolsSetting.current = () => SessionToolsSetting.enabled(
+    files.settings[SessionToolsSetting.settingKey],
+  );
   PromptSuggestions.current = () =>
       PromptSuggestions.enabled(files.settings[PromptSuggestions.settingKey]);
   // The composer's Polish button, shown or not as it changes.
@@ -544,6 +560,20 @@ void followSettingsFiles(SettingsFiles files) {
           // A settings file that does not parse is left as it is; its
           // error is shown.
           debugPrint('${ResumeAfterResetSetting.settingKey} not kept: $error');
+        }),
+  );
+  // A message edited and sent again: whether the files changed after it
+  // go back, asked unless set (there, or in its prompt).
+  RewindFilesSetting.current = () =>
+      RewindFilesSetting.parse(files.settings[RewindFilesSetting.settingKey]);
+  RewindFilesSetting.write = (value) => unawaited(
+    files.settings
+        .update(
+          RewindFilesSetting.settingKey,
+          value == RewindFilesSetting.fallback ? null : value.name,
+        )
+        .catchError((Object error) {
+          debugPrint('${RewindFilesSetting.settingKey} not kept: $error');
         }),
   );
   // Settings → Customize's switches: the skills, MCP servers and tools
@@ -849,6 +879,13 @@ class BaoCodeApp extends StatefulWidget {
   /// What the IDE's terminals run on; none when null.
   final TerminalBackend? terminalBackend;
 
+  /// Whether each window's app has no semantics (see
+  /// _BaoCodeAppState._withoutSemantics): on Windows itself, unless a test
+  /// says. Tests that target Windows from another host keep theirs, to find
+  /// widgets by.
+  @visibleForTesting
+  static bool? debugWithoutSemantics;
+
   @override
   State<BaoCodeApp> createState() => _BaoCodeAppState();
 }
@@ -1063,79 +1100,97 @@ class _BaoCodeAppState extends State<BaoCodeApp>
 
   /// A window's app: its own navigator, dialogs, overlay and focus; what
   /// it shows built anew as its folder changes.
-  Widget _app(AppWindow window) => MaterialApp(
-    // The product's name: BaoCode, or the codex one.
-    title: AppPaths.displayName(
-      Platform.environment,
-      executable: Platform.resolvedExecutable,
-    ),
-    debugShowCheckedModeBanner: false,
-    theme: buildAppTheme(),
-    themeAnimationDuration: Duration.zero,
-    scrollBehavior: const BaoScrollBehavior(),
-    builder: (context, child) => ValueListenableBuilder<int>(
-      valueListenable: CodeFont.uiScale,
-      builder: (context, percent, scaled) {
-        // The whole window is zoomed, not its text alone: its fixed heights,
-        // icons and gaps grow with the text they hold.
-        final zoom = percent / 100;
-        final media = UiZoom.zoomed(MediaQuery.of(context), zoom);
-        // The traffic lights in the middle of the title bar, as it grows.
-        WindowControls.setTitleBarDrop(
-          (AppMetrics.titleBarHeight * zoom - AppMetrics.nativeTitleBarHeight) /
-              2,
-          viewId: window.viewId,
-        );
-        // Windows blurs glyphs drawn at a fractional pixel size.
-        TextScaler snapped(TextScaler scaler) => AppPlatform.isWindows
-            ? PixelSnappedTextScaler(scaler, media.devicePixelRatio)
-            : scaler;
-        final system = media.textScaler;
-        return SystemTextScale(
-          // A terminal at a size of its own: the zoom taken back off.
-          scaler: snapped(
-            zoom == 1 ? system : TextScaler.linear(system.scale(1) / zoom),
-          ),
-          child: MediaQuery(
-            data: media.copyWith(textScaler: snapped(system)),
-            child: UiZoom(scale: zoom, child: scaled),
-          ),
-        );
-      },
-      child: _themeTransition.wrap(
-        child ?? const SizedBox.shrink(),
-        canvas: AppColors.windowCanvas,
+  Widget _app(AppWindow window) => _withoutSemantics(
+    MaterialApp(
+      // The product's name: BaoCode, or the codex one.
+      title: AppPaths.displayName(
+        Platform.environment,
+        executable: Platform.resolvedExecutable,
       ),
-    ),
-    locale: _locale.locale,
-    supportedLocales: AppLocale.supportedLocales,
-    localizationsDelegates: const [
-      AppLocalizations.delegate,
-      GlobalMaterialLocalizations.delegate,
-      GlobalCupertinoLocalizations.delegate,
-      GlobalWidgetsLocalizations.delegate,
-    ],
-    home: window.isStash
-        ? Material(
-            type: MaterialType.transparency,
-            child: StashPanelView(
-              controller: StashController.current!,
-              viewId: window.viewId,
+      debugShowCheckedModeBanner: false,
+      theme: buildAppTheme(),
+      themeAnimationDuration: Duration.zero,
+      scrollBehavior: const BaoScrollBehavior(),
+      builder: (context, child) => ValueListenableBuilder<int>(
+        valueListenable: CodeFont.uiScale,
+        builder: (context, percent, scaled) {
+          // The whole window is zoomed, not its text alone: its fixed heights,
+          // icons and gaps grow with the text they hold.
+          final zoom = percent / 100;
+          final media = UiZoom.zoomed(MediaQuery.of(context), zoom);
+          // The traffic lights in the middle of the title bar, as it grows.
+          WindowControls.setTitleBarDrop(
+            (AppMetrics.titleBarHeight * zoom -
+                    AppMetrics.nativeTitleBarHeight) /
+                2,
+            viewId: window.viewId,
+          );
+          // Windows blurs glyphs drawn at a fractional pixel size.
+          TextScaler snapped(TextScaler scaler) => AppPlatform.isWindows
+              ? PixelSnappedTextScaler(scaler, media.devicePixelRatio)
+              : scaler;
+          final system = media.textScaler;
+          return SystemTextScale(
+            // A terminal at a size of its own: the zoom taken back off.
+            scaler: snapped(
+              zoom == 1 ? system : TextScaler.linear(system.scale(1) / zoom),
             ),
-          )
-        : Workbench(
-            key: ValueKey((window.viewId, window.generation)),
-            workspace: _workspace,
-            windows: _windows,
-            window: window,
-            languagesFor: widget.languagesFor,
-            themeExtensions: widget.themeExtensions,
-            gitFor: widget.gitFor,
-            repositoriesIn: widget.repositoriesIn,
-            terminalBackend: widget.terminalBackend,
-            settings: _settings,
-            conversations: widget.conversations ?? const NoConversationSearch(),
-            customizations: widget.customizations,
-          ),
+            child: MediaQuery(
+              data: media.copyWith(textScaler: snapped(system)),
+              child: UiZoom(scale: zoom, child: scaled),
+            ),
+          );
+        },
+        child: _themeTransition.wrap(
+          child ?? const SizedBox.shrink(),
+          canvas: AppColors.windowCanvas,
+        ),
+      ),
+      locale: _locale.locale,
+      supportedLocales: AppLocale.supportedLocales,
+      localizationsDelegates: const [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      home: window.isStash
+          ? Material(
+              type: MaterialType.transparency,
+              child: StashPanelView(
+                controller: StashController.current!,
+                viewId: window.viewId,
+              ),
+            )
+          : Workbench(
+              key: ValueKey((window.viewId, window.generation)),
+              workspace: _workspace,
+              windows: _windows,
+              window: window,
+              languagesFor: widget.languagesFor,
+              themeExtensions: widget.themeExtensions,
+              gitFor: widget.gitFor,
+              repositoriesIn: widget.repositoriesIn,
+              terminalBackend: widget.terminalBackend,
+              settings: _settings,
+              conversations:
+                  widget.conversations ?? const NoConversationSearch(),
+              customizations: widget.customizations,
+            ),
+    ),
   );
+
+  /// [app] with no semantics on Windows: only a screen reader would read
+  /// them, and the app makes no claim to work with one. Windows' engine
+  /// turns them on at another app's first question for the view's
+  /// accessibility (input methods and translators ask too, before the view
+  /// answers them itself, see view_window.cpp), and its bridge then
+  /// crashes on the tree as the app's changes move it: on a node with no
+  /// parent in CreateRemoveReparentedNodesUpdate (at every start on 1.9.4,
+  /// on some machines), or in HitTestSync. With nothing under the root
+  /// there is nothing to move, and no tree to keep up each frame.
+  static Widget _withoutSemantics(Widget app) =>
+      (BaoCodeApp.debugWithoutSemantics ?? AppPlatform.isWindowsHost)
+      ? ExcludeSemantics(child: app)
+      : app;
 }

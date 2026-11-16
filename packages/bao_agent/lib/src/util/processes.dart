@@ -70,6 +70,28 @@ Future<void> killTree(int pid, {bool force = false, bool? windows}) async {
   );
 }
 
+/// [environment] as a process is given it on Windows (when [windows];
+/// where this runs, when not given), where a name is the same in any case:
+/// of names that differ only in case, the last, as it is spelled. Both in
+/// one environment (`NO_PROXY` and `no_proxy`) break .NET Framework's
+/// programs, MSBuild among them (#976).
+Map<String, String> caseFoldedEnvironment(
+  Map<String, String> environment, {
+  bool? windows,
+}) {
+  if (!(windows ?? Platform.isWindows)) return environment;
+  final names = <String, String>{};
+  final folded = <String, String>{};
+  for (final MapEntry(:key, :value) in environment.entries) {
+    if (names[key.toUpperCase()] case final earlier? when earlier != key) {
+      folded.remove(earlier);
+    }
+    names[key.toUpperCase()] = key;
+    folded[key] = value;
+  }
+  return folded;
+}
+
 Future<List<int>> _descendants(int pid) async {
   try {
     final result = await Process.run('ps', ['-A', '-o', 'pid=,ppid=']);
@@ -99,14 +121,30 @@ Future<List<int>> _descendants(int pid) async {
 }
 
 /// The shell commands are run in: the user's, when it is bash or zsh;
-/// else bash; on Windows, Git's bash where it is installed.
+/// else bash; on Windows, the one set by `CLAUDE_CODE_GIT_BASH_PATH`, else
+/// BaoCode Bash where the app installed it ([baoBashVariable]), else Git's
+/// bash where it is installed, else cmd.exe.
 class Shell {
-  const Shell(this.executable, {this.posix = true, this.msys = false});
+  const Shell(
+    this.executable, {
+    this.posix = true,
+    this.msys = false,
+    this.baoBash = false,
+  });
+
+  /// The variable the app names BaoCode Bash's `bash.exe` in
+  /// (github.com/baocode-dev/bash-exe): bash 5.3 with `rg`, `grep`, `sed`,
+  /// `awk`, `find`, `jq` and the like built in, that takes `C:\x` and
+  /// `/c/x` alike.
+  static const baoBashVariable = 'BAOCODE_BASH';
 
   final String executable;
 
   /// Whether it takes POSIX shell commands (not cmd.exe).
   final bool posix;
+
+  /// Whether it is BaoCode Bash, its tools there whatever is installed.
+  final bool baoBash;
 
   /// Whether it says its paths the MSYS way (Git's bash on Windows:
   /// `/c/Users/me` where the machine has `C:\Users\me`).
@@ -139,8 +177,15 @@ class Shell {
     exists ??= (path) => File(path).existsSync();
     if (windows ?? Platform.isWindows) {
       final path = p.windows;
+      if (environment['CLAUDE_CODE_GIT_BASH_PATH'] case final set?
+          when exists(set)) {
+        // Git's bash says its paths the MSYS way.
+        return Shell(set, msys: true);
+      }
+      if (environment[baoBashVariable] case final bao? when exists(bao)) {
+        return Shell(bao, baoBash: true);
+      }
       final candidates = [
-        environment['CLAUDE_CODE_GIT_BASH_PATH'],
         // Git's own, by the git on the PATH (`Git\cmd\git.exe`).
         for (final dir
             in (environment['PATH'] ?? environment['Path'] ?? '').split(';'))
@@ -151,7 +196,7 @@ class Shell {
         if (environment['LOCALAPPDATA'] case final local?)
           path.join(local, 'Programs', 'Git', 'bin', 'bash.exe'),
       ];
-      for (final candidate in candidates.whereType<String>()) {
+      for (final candidate in candidates) {
         // Git's bash says its paths the MSYS way.
         if (exists(candidate)) return Shell(candidate, msys: true);
       }

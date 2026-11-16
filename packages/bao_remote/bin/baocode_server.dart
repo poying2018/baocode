@@ -10,6 +10,8 @@
 //       unless resuming one.
 //   baocode-server --daemon <id> …
 //       that daemon, out of the SSH session.
+//   baocode-server code <cwd> <args…>
+//       the `code` command of its terminals (see ServerCli).
 
 import 'dart:async';
 import 'dart:convert';
@@ -31,6 +33,12 @@ const _product = String.fromEnvironment(
 /// Whether this server carries Claude Code.
 bool get _hasClaudeCode => _product != 'baocode-codex';
 
+/// The binary the `code` command runs: this one, compiled; none when run
+/// from its sources (`dart bin/baocode_server.dart`).
+final String? _cliExecutable = Platform.script.path.endsWith('.dart')
+    ? null
+    : Platform.resolvedExecutable;
+
 Future<void> main(List<String> arguments) async {
   // `agent <claude's arguments>`: BaoCode's own core, run here as the CLI
   // would be (see ServerClaude.startBuiltin). The codex product's server
@@ -46,6 +54,15 @@ Future<void> main(List<String> arguments) async {
         environment: Platform.environment,
       ),
     );
+  }
+  if (arguments.firstOrNull == ServerCli.cliArgument) {
+    final code = await runCodeCommand(
+      arguments.sublist(1),
+      environment: Platform.environment,
+      errors: stderr,
+    );
+    await stderr.flush();
+    exit(code);
   }
   final home =
       Platform.environment['HOME'] ??
@@ -89,8 +106,13 @@ Future<void> main(List<String> arguments) async {
       }
 
       final clean = await session.runDaemon(
-        serve: (peer) =>
-            RemoteServer(peer, dataDir: dataDir, version: _version, log: say),
+        serve: (peer) => RemoteServer(
+          peer,
+          dataDir: dataDir,
+          version: _version,
+          cliExecutable: _cliExecutable,
+          log: say,
+        ),
         log: say,
       );
       await log?.close().then((_) {}, onError: (Object _) {});
@@ -111,6 +133,7 @@ Future<void> main(List<String> arguments) async {
           peer,
           dataDir: dataDir,
           version: _version,
+          cliExecutable: _cliExecutable,
           log: (message) => stderr.writeln('baocode-server: $message'),
         ),
       ),
@@ -126,6 +149,7 @@ Future<void> main(List<String> arguments) async {
     peer,
     dataDir: dataDir,
     version: _version,
+    cliExecutable: _cliExecutable,
     log: log,
   );
   Future<void> exitWith(int code) async {

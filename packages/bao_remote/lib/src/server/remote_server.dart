@@ -20,6 +20,7 @@ import '../rpc/rpc_peer.dart';
 import '../search/local_search.dart';
 import 'server_lsp.dart';
 import 'server_claude.dart';
+import 'server_cli.dart';
 import 'server_pty.dart';
 import 'server_review.dart';
 import 'server_streams.dart';
@@ -53,14 +54,21 @@ class RemoteServer {
     this.peer, {
     required this.dataDir,
     this.version = '',
+    String? cliExecutable,
     void Function(String message)? log,
   }) : _log = log ?? ((_) {}) {
     _streams = ServerStreams(peer);
+    _cli = ServerCli(
+      peer,
+      directory: p.join(dataDir, 'remote-cli'),
+      executable: cliExecutable,
+    );
     ServerReview(peer, checkpoints: p.join(dataDir, 'checkpoints'));
     _pty = ServerPty(
       peer,
       log: _log,
       claudeDirectory: hasClaudeCode ? () => _claude.commandDirectory() : null,
+      cli: _cli,
     );
     _tcp = ServerTcp(peer);
     _lsp = ServerLsp(
@@ -89,6 +97,7 @@ class RemoteServer {
   final String version;
   final void Function(String message) _log;
   late final ServerStreams _streams;
+  late final ServerCli _cli;
   late final ServerPty _pty;
   late final ServerTcp _tcp;
   late final ServerLsp _lsp;
@@ -157,6 +166,15 @@ class RemoteServer {
       final args = paramsOf(params);
       await _filesOf(args)
           .writeBytes(args['path'] as String, decodeBytes(args['data']));
+      return null;
+    };
+    handlers[RemoteProtocol.fsAppendBytes] = (params, _) async {
+      final args = paramsOf(params);
+      await _filesOf(args).appendBytes(
+        args['path'] as String,
+        args['offset'] as int,
+        decodeBytes(args['data']),
+      );
       return null;
     };
     handlers[RemoteProtocol.fsReadBytes] = (params, _) async {
@@ -501,6 +519,7 @@ class RemoteServer {
       _streams.closeAll(),
       _tcp.closeAll(),
       _lsp.cancelAll(),
+      _cli.close(),
     ]);
     peer.close();
   }();
