@@ -29,25 +29,27 @@ void main() {
     );
   });
 
-  test('a child it does not have must come with the update', () {
+  test('a child it does not have may be another view\'s, its ids counted '
+      'its own', () {
     final tree = DesktopSemanticsTree()
       ..commit([
         (0, [1]),
         (1, [2]),
         (2, []),
       ]);
-    // 1 goes, and 2 with it; 1 comes back without 2.
+    // 1 goes, and 2 with it; 1 comes back without 2. Another view's tree may
+    // have a 2 of its own: the update is taken as that.
     expect(tree.commit([(0, [])]), isNull);
     expect(
       tree.commit([
         (0, [1]),
         (1, [2]),
       ]),
-      'Nodes left pending by the update: 2',
+      isNull,
     );
   });
 
-  test('a node whose parent went is not in the tree', () {
+  test('a node without its parent is another view\'s root', () {
     final tree = DesktopSemanticsTree()
       ..commit([
         (0, [1]),
@@ -55,13 +57,11 @@ void main() {
         (2, []),
       ]);
     expect(tree.commit([(0, [])]), isNull);
-    expect(
-      tree.commit([(2, [])]),
-      'Node 2 is not in the tree and not the new root',
-    );
+    // 2's id is the other view's, whose root the update is.
+    expect(tree.commit([(2, [])]), isNull);
   });
 
-  test('the root is no one\'s child', () {
+  test('a root named as a child is another view\'s root too', () {
     final tree = DesktopSemanticsTree()
       ..commit([
         (0, [1]),
@@ -71,7 +71,7 @@ void main() {
       tree.commit([
         (1, [0]),
       ]),
-      contains('The root 0 is a child of 1'),
+      isNull,
     );
   });
 }

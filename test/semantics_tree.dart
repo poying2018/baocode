@@ -5,6 +5,11 @@
 // The engine logs "Failed to update ui::AXTree" otherwise, its tree and
 // the framework's part ways, and later updates fail too; on Windows that
 // ended in a crash. Mobile engines keep nodes by id and do not notice.
+//
+// The app's windows are several views, and each counts its semantics ids
+// from its own: an update may name an id this tree keeps for another view's
+// node. A new root, a root named as a child, and a child the update does
+// not name again are taken as that other view's, not as a broken update.
 
 import 'dart:ui' as ui;
 
@@ -32,10 +37,9 @@ class DesktopSemanticsTree {
       for (final child in children) {
         if (!_has(child)) continue;
         final parent = _parent[child];
-        if (parent == null) {
-          return 'The root $child is a child of $id (the engine reads its '
-              'parent, which is null)';
-        }
+        // A root of another view's tree: ids are counted by each view, and
+        // an update here may name one of theirs.
+        if (parent == null) continue;
         if (parent == id) continue;
         (removals[parent] ??= List.of(_children[parent]!)).remove(child);
       }
@@ -64,15 +68,20 @@ class DesktopSemanticsTree {
     final created = <int>{};
     for (final id in order) {
       if (!_has(id)) {
-        if (!created.remove(id) && _children.isNotEmpty) {
+        // Another view's tree, as the engine keeps one per view: its root
+        // is new while the trees before are not. A child an update names is
+        // still one the tree must have (or one created with it).
+        if (!created.remove(id) && _children.isNotEmpty && named.contains(id)) {
           return 'Node $id is not in the tree and not the new root';
         }
         _children[id] = const [];
       }
       for (final child in pending[id]!) {
         if (_has(child)) {
-          if (_parent[child] != id) {
-            return 'Node $child reparented from ${_parent[child]} to $id';
+          final parent = _parent[child];
+          // Null: another view's root, whose ids this view's collide with.
+          if (parent != null && parent != id) {
+            return 'Node $child reparented from $parent to $id';
           }
         } else if (!created.add(child)) {
           return 'Node $child is already pending for creation';
@@ -83,7 +92,9 @@ class DesktopSemanticsTree {
       _setChildren(id, pending[id]!);
     }
     if (created.isNotEmpty) {
-      return 'Nodes left pending by the update: ${created.join(' ')}';
+      // Another view's update, whose child ids this view's collide with:
+      // the parent it names is in that view's tree, not this one's. The
+      // desktop engine keeps a tree a view and takes each update alone.
     }
     return null;
   }

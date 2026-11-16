@@ -41,16 +41,9 @@ import 'semantics_tree.dart';
 /// pick, which the kernel's tests were written for: those of BaoCode's
 /// own core say so. Diffs show as they do by default.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  // The check models one engine view's tree; the app's windows are a
-  // ViewCollection of several, and on Windows itself their updates
-  // interleave in ways the model takes for a broken tree. The hosts CI
-  // runs (where the check was written) see the one view it models.
-  if (Platform.isWindows) {
-    // What the check makes as it starts, for the tests that use bindings.
-    TestWidgetsFlutterBinding.ensureInitialized();
-  } else {
-    checkDesktopSemantics();
-  }
+  // Every update the app's windows send, applied as the desktop engines
+  // apply theirs (see semantics_tree.dart).
+  checkDesktopSemantics();
   KernelRegistry.use(MockKernels.all);
   textMateWorkerLauncher = () async => TextMateInProcessWorker.create();
   MonacoLanguageAssets.defaultPacks = () => LanguagePackRegistry.instance;
