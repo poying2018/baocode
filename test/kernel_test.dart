@@ -19,6 +19,7 @@ import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_transport.dart';
 import 'package:baocode/kernel/claude_code/claude_code_translator.dart';
 import 'package:baocode/kernel/claude_code/claude_environment.dart';
+import 'package:baocode/kernel/claude_code/claude_goal.dart';
 import 'package:baocode/kernel/claude_code/claude_sdk_tools.dart';
 import 'package:baocode/kernel/claude_code/claude_storage_io.dart';
 import 'package:baocode/kernel/claude_code/cli_locator.dart';
@@ -6954,7 +6955,6 @@ void main() {
     final theirs = arguments(userServers: true);
     expect(theirs[theirs.indexOf('--tools') + 1], 'Bash,Read');
     expect(theirs, isNot(contains('--strict-mcp-config')));
-    });
   });
 
   group('commit attribution', () {
@@ -7958,3 +7958,30 @@ class _KeptTurns implements TurnStats {
   Future<Map<String, TurnRecord>> read(String sessionId) async =>
       sessions[sessionId] ?? const {};
 }
+
+/// A CLI whose answers to `get_usage` are [replies], in turn (the last
+/// one again once they run out).
+class _UsageCli extends FakeCli {
+  _UsageCli(this.replies);
+
+  final List<Map<String, Object?>> replies;
+  var _asked = 0;
+
+  @override
+  void write(Map<String, Object?> message) {
+    final request = message['request'];
+    if (request is! Map || request['subtype'] != 'get_usage') {
+      return super.write(message);
+    }
+    written.add(message);
+    push({
+      'type': 'control_response',
+      'response': {
+        'subtype': 'success',
+        'request_id': message['request_id'],
+        'response': replies[(_asked++).clamp(0, replies.length - 1)],
+      },
+    });
+  }
+}
+
