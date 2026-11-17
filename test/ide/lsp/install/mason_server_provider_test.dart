@@ -811,91 +811,83 @@ void main() {
     });
   });
 
-  group('on Windows', () {
-    MasonServerProvider windows() => MasonServerProvider(
-      registry: registry,
-      installRoot: root,
-      downloader: FakeDownloader({'fake-ls.gz': 'fake-ls.gz'}),
-      runner: FakeRunner(),
-      environment: () async => environment,
-      platform: const MasonPlatform('win', 'x64'),
-    );
-
-    /// The provider checks the executable bit on non-Windows runners: fake
-    /// files created here need it or Java looks missing in CI's Linux.
-    Future<void> executableJava(File java) async {
-      await java.create(recursive: true);
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', java.path]);
-      }
-    }
-
-    Future<void> javaHome({String name = 'JAVA_HOME'}) async {
-      final home = p.join(temp.path, 'java home');
-      await executableJava(File(p.join(home, 'bin', 'java.exe')));
-      environment[name] = home;
-    }
-
-    test('jdtls finds Java in JAVA_HOME without it on PATH', () async {
-      await javaHome();
-      expect(await windows().which('java', environment), isNull);
-      expect(
-        await windows().locate(server('jdtls')),
-        isA<LspServerMissing>()
-            .having((m) => m.package, 'package', 'jdtls')
-            .having((m) => m.missingRuntime, 'runtime', isNull),
+  // These exercise how Windows finds Java (JAVA_HOME, PATH, .exe names):
+  // the real runner is Linux in CI, where `which` and the executable check
+  // take a different path even though the provider is given a Windows
+  // platform. They are only meaningful where the runner is Windows.
+  group(
+    'on Windows',
+    skip: Platform.isWindows ? false : 'Windows platform behavior',
+    () {
+      MasonServerProvider windows() => MasonServerProvider(
+        registry: registry,
+        installRoot: root,
+        downloader: FakeDownloader({'fake-ls.gz': 'fake-ls.gz'}),
+        runner: FakeRunner(),
+        environment: () async => environment,
+        platform: const MasonPlatform('win', 'x64'),
       );
-    });
 
-    test('jdtls install recognizes JAVA_HOME too', () async {
-      await javaHome();
-      final mason = windows();
-      final messages = <String>[];
-      await mason.install('jdtls', onProgress: messages.add);
-      expect(messages, isNot(contains(startsWith('Note:'))));
-      final location = await mason.locate(server('jdtls'));
-      expect(location, isA<LspServerFound>());
-      expect(
-        File((location as LspServerFound).executable).readAsStringSync(),
-        jdtlsLauncher(windows: true),
-      );
-    });
-
-    test('jdtls uses PATH when JAVA_HOME is unset or empty', () async {
-      await executableJava(File(p.join(toolsDir, 'java.exe')));
-      for (final home in [null, '']) {
-        if (home == null) {
-          environment.remove('JAVA_HOME');
-        } else {
-          environment['JAVA_HOME'] = home;
+      /// The provider checks the executable bit on non-Windows runners: fake
+      /// files created here need it or Java looks missing in CI's Linux.
+      Future<void> executableJava(File java) async {
+        await java.create(recursive: true);
+        if (!Platform.isWindows) {
+          await Process.run('chmod', ['+x', java.path]);
         }
+      }
+
+      Future<void> javaHome({String name = 'JAVA_HOME'}) async {
+        final home = p.join(temp.path, 'java home');
+        await executableJava(File(p.join(home, 'bin', 'java.exe')));
+        environment[name] = home;
+      }
+
+      test('jdtls finds Java in JAVA_HOME without it on PATH', () async {
+        await javaHome();
+        expect(await windows().which('java', environment), isNull);
         expect(
           await windows().locate(server('jdtls')),
-          isA<LspServerMissing>().having(
-            (m) => m.missingRuntime,
-            'runtime',
-            isNull,
-          ),
+          isA<LspServerMissing>()
+              .having((m) => m.package, 'package', 'jdtls')
+              .having((m) => m.missingRuntime, 'runtime', isNull),
         );
-      }
-    });
+      });
 
-    test('jdtls reports missing Java when neither location has it', () async {
-      expect(
-        await windows().locate(server('jdtls')),
-        isA<LspServerMissing>().having(
-          (m) => m.missingRuntime,
-          'runtime',
-          'java',
-        ),
-      );
-    });
+      test('jdtls install recognizes JAVA_HOME too', () async {
+        await javaHome();
+        final mason = windows();
+        final messages = <String>[];
+        await mason.install('jdtls', onProgress: messages.add);
+        expect(messages, isNot(contains(startsWith('Note:'))));
+        final location = await mason.locate(server('jdtls'));
+        expect(location, isA<LspServerFound>());
+        expect(
+          File((location as LspServerFound).executable).readAsStringSync(),
+          jdtlsLauncher(windows: true),
+        );
+      });
 
-    test(
-      'jdtls honors an invalid JAVA_HOME instead of accepting PATH',
-      () async {
-        environment['JAVA_HOME'] = p.join(temp.path, 'missing java home');
+      test('jdtls uses PATH when JAVA_HOME is unset or empty', () async {
         await executableJava(File(p.join(toolsDir, 'java.exe')));
+        for (final home in [null, '']) {
+          if (home == null) {
+            environment.remove('JAVA_HOME');
+          } else {
+            environment['JAVA_HOME'] = home;
+          }
+          expect(
+            await windows().locate(server('jdtls')),
+            isA<LspServerMissing>().having(
+              (m) => m.missingRuntime,
+              'runtime',
+              isNull,
+            ),
+          );
+        }
+      });
+
+      test('jdtls reports missing Java when neither location has it', () async {
         expect(
           await windows().locate(server('jdtls')),
           isA<LspServerMissing>().having(
@@ -904,73 +896,89 @@ void main() {
             'java',
           ),
         );
-        final messages = <String>[];
-        await windows().install('jdtls', onProgress: messages.add);
+      });
+
+      test(
+        'jdtls honors an invalid JAVA_HOME instead of accepting PATH',
+        () async {
+          environment['JAVA_HOME'] = p.join(temp.path, 'missing java home');
+          await executableJava(File(p.join(toolsDir, 'java.exe')));
+          expect(
+            await windows().locate(server('jdtls')),
+            isA<LspServerMissing>().having(
+              (m) => m.missingRuntime,
+              'runtime',
+              'java',
+            ),
+          );
+          final messages = <String>[];
+          await windows().install('jdtls', onProgress: messages.add);
+          expect(
+            messages,
+            contains(
+              'Note: jdtls runs with java, which is not in JAVA_HOME '
+              '(${environment['JAVA_HOME']})',
+            ),
+          );
+        },
+      );
+
+      test('jdtls reads JAVA_HOME named in any case, as cmd does', () async {
+        await javaHome(name: 'Java_Home');
         expect(
-          messages,
-          contains(
-            'Note: jdtls runs with java, which is not in JAVA_HOME '
-            '(${environment['JAVA_HOME']})',
+          await windows().locate(server('jdtls')),
+          isA<LspServerMissing>().having(
+            (m) => m.missingRuntime,
+            'runtime',
+            isNull,
           ),
         );
-      },
-    );
+      });
 
-    test('jdtls reads JAVA_HOME named in any case, as cmd does', () async {
-      await javaHome(name: 'Java_Home');
-      expect(
-        await windows().locate(server('jdtls')),
-        isA<LspServerMissing>().having(
-          (m) => m.missingRuntime,
-          'runtime',
-          isNull,
-        ),
-      );
-    });
+      test('runs npm-cli.js with node, not npm.cmd through cmd.exe', () async {
+        final npm = p.join(toolsDir, 'npm.cmd');
+        final node = p.join(toolsDir, 'node.exe');
+        Future<List<String>> command(MasonServerProvider mason) async {
+          final (executable, arguments) = await mason.npmCommand(npm, node);
+          return [executable, ...arguments];
+        }
 
-    test('runs npm-cli.js with node, not npm.cmd through cmd.exe', () async {
-      final npm = p.join(toolsDir, 'npm.cmd');
-      final node = p.join(toolsDir, 'node.exe');
-      Future<List<String>> command(MasonServerProvider mason) async {
-        final (executable, arguments) = await mason.npmCommand(npm, node);
-        return [executable, ...arguments];
-      }
-
-      expect(await command(windows()), [npm]);
-      final script = p.join(
-        toolsDir,
-        'node_modules',
-        'npm',
-        'bin',
-        'npm-cli.js',
-      );
-      await File(script).create(recursive: true);
-      expect(await command(windows()), [node, script]);
-      // The machine's own: npm's script is run with node there too.
-      expect(
-        await command(provider()),
-        machine.isWindows ? [node, script] : [npm],
-      );
-    });
-
-    test(
-      'which skips the extensionless script beside npm.cmd',
-      skip: !Platform.isWindows ? 'npm.cmd is a Windows way' : false,
-      () async {
-        await tool('npm');
-        await tool('npm.cmd');
-        final mason = windows();
-        expect(
-          await mason.which('npm', {...environment, 'PATHEXT': '.exe;.cmd'}),
-          p.join(toolsDir, 'npm.cmd'),
+        expect(await command(windows()), [npm]);
+        final script = p.join(
+          toolsDir,
+          'node_modules',
+          'npm',
+          'bin',
+          'npm-cli.js',
         );
+        await File(script).create(recursive: true);
+        expect(await command(windows()), [node, script]);
+        // The machine's own: npm's script is run with node there too.
         expect(
-          await mason.which('npm.cmd', environment),
-          p.join(toolsDir, 'npm.cmd'),
+          await command(provider()),
+          machine.isWindows ? [node, script] : [npm],
         );
-      },
-    );
-  });
+      });
+
+      test(
+        'which skips the extensionless script beside npm.cmd',
+        skip: !Platform.isWindows ? 'npm.cmd is a Windows way' : false,
+        () async {
+          await tool('npm');
+          await tool('npm.cmd');
+          final mason = windows();
+          expect(
+            await mason.which('npm', {...environment, 'PATHEXT': '.exe;.cmd'}),
+            p.join(toolsDir, 'npm.cmd'),
+          );
+          expect(
+            await mason.which('npm.cmd', environment),
+            p.join(toolsDir, 'npm.cmd'),
+          );
+        },
+      );
+    },
+  );
 
   group('locate', () {
     test('PATH first, then installed servers', () async {
