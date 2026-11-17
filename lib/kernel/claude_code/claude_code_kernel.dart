@@ -26,7 +26,6 @@ import '../commit_attribution.dart';
 import '../extension_switches.dart';
 import '../kernel_event.dart';
 import '../kernel_types.dart';
-import '../prompt_suggestions.dart';
 import '../transcript.dart';
 import '../queued_messages.dart';
 import 'claude_code_transport.dart';
@@ -115,7 +114,6 @@ class ClaudeCodeKernel
         ForksConversation,
         RenamesSession,
         AcceptsImages,
-        SuggestsPrompts,
         ManagesMcpServers,
         ConfirmsModelSwitch,
         WatchesEdits,
@@ -456,11 +454,6 @@ class ClaudeCodeKernel
   /// at start, so another is taken up by a restart (see [_applyWindow]).
   int? _launchedWindow;
 
-  /// Whether the process was started to suggest the next prompt
-  /// ([PromptSuggestions]): taken only at start, so a change is taken up by
-  /// a restart (see [_applyWindow]).
-  bool _launchedSuggestions = true;
-
   /// What the process was started with, its flag settings' permission
   /// rules sent again with the [ExtensionSwitches] as they change.
   ClaudeLaunch? _launched;
@@ -528,7 +521,6 @@ class ClaudeCodeKernel
   // them was told, shown in all of them.
   static List<RateLimitWindow> _limits = const [];
   static final Set<ClaudeCodeKernel> _live = {};
-  String? _suggestion;
   List<McpServer>? _servers;
 
   // --- Lifecycle ------------------------------------------------------------------
@@ -633,7 +625,6 @@ class ClaudeCodeKernel
       _launchedProvider = target.provider;
       _launchedModel = custom != null ? _model : null;
       _launchedWindow = _autocompact;
-      _launchedSuggestions = PromptSuggestions.current();
       _appliedSwitches = ExtensionSwitches.current();
       final sdkServers = ClaudeSdkTools.serversFor(_cwd);
       final transport = await _start(
@@ -650,7 +641,6 @@ class ClaudeCodeKernel
               : null,
           thinking: custom != null && direct && effort == 'none' ? false : null,
           autocompact: _autocompact,
-          promptSuggestions: _launchedSuggestions,
           switches: _appliedSwitches,
           attribution: CommitAttribution.current(),
           env: env,
@@ -699,7 +689,9 @@ class ClaudeCodeKernel
       _subscription = transport.messages.listen(_receive);
       _applyInitialize(
         await control.request('initialize', {
-          'promptSuggestions': _launchedSuggestions,
+          // The app's own, in the agent's replies (ReplySuggestions): none
+          // of the CLI's, each a request of its own.
+          'promptSuggestions': false,
           if (sdkServers.isNotEmpty) 'sdkMcpServers': sdkServers,
           if (_editWatch != null) 'hooks': _editHooks,
         }),
@@ -903,8 +895,6 @@ class ClaudeCodeKernel
   /// compacts where it was told at start, whatever it is told after. Done
   /// only as a message is sent, so a pick leaves the conversation be.
   ///
-  /// So is the prompt suggestions' setting turned on or off since.
-  ///
   /// So is another provider, or one whose setup changed: the session goes
   /// on, resumed, on it. That even with tasks at work in the background
   /// (a server it started), which end with the process, or the CLI still
@@ -913,11 +903,7 @@ class ClaudeCodeKernel
   void _applyWindow() {
     if (!_running) return;
     final otherProvider = _providerKey != _launchedProvider;
-    if (!otherProvider &&
-        _autocompact == _launchedWindow &&
-        PromptSuggestions.current() == _launchedSuggestions) {
-      return;
-    }
+    if (!otherProvider && _autocompact == _launchedWindow) return;
     if (!otherProvider && _busy) return;
     _teardown();
     _translator.endTasks();
@@ -1016,22 +1002,7 @@ class ClaudeCodeKernel
       _applyWindow();
       _beginTurn(turn.id);
     }
-    if (_suggestion != null) {
-      _suggestion = null;
-      emitInfoChanged();
-    }
-    emit(
-      ItemUpserted(
-        nextSeq,
-        turn.id,
-        UserMessageItem(
-          text: turn.text,
-          queued: busy,
-          images: turn.images,
-          sentAt: DateTime.now(),
-        ),
-      ),
-    );
+    emit(ItemUpserted(nextSeq, turn.id, _sentItem(turn, queued: busy)));
     // Taken now, as the message was sent.
     final ask = _work == 'ask';
     if (hold) {
@@ -1124,6 +1095,20 @@ class ClaudeCodeKernel
       // taken up next, as when the user stops the turn.
       if (turn.now && _queued.contains(turn.id) && !spareBackground) cancel();
     });
+  }
+
+  /// [turn] as it shows once sent, until the CLI reads it back: a message
+  /// another agent sent (`<agent-message>`), as its card, as read back.
+  static UserMessageItem _sentItem(KernelTurn turn, {bool queued = false}) {
+    final fromAgent = ClaudeTranslator.agentMessage(turn.text);
+    return UserMessageItem(
+      text: fromAgent?.text ?? turn.text,
+      queued: queued,
+      images: turn.images,
+      sentAt: DateTime.now(),
+      fromAgent: fromAgent?.from,
+      fromSession: fromAgent?.session,
+    );
   }
 
   void _beginTurn(String id, {bool unprompted = false}) {
@@ -1515,9 +1500,6 @@ class ClaudeCodeKernel
   @override
   void moveToBackground(String toolUseId) =>
       _tell('background_tasks', {'tool_use_id': toolUseId});
-
-  @override
-  String? get promptSuggestion => _suggestion;
 
   // --- MCP servers ------------------------------------------------------------------
 
@@ -2055,18 +2037,6 @@ class ClaudeCodeKernel
         _rateLimits(message['rate_limit_info']);
       case 'command_lifecycle':
         _lifecycle(message);
-      case 'prompt_suggestion':
-        final suggestion = (message['suggestion'] as String?)?.trim();
-        // One turned off since the process started is not offered.
-        if (_turn == null &&
-            _queued.isEmpty &&
-            suggestion != _suggestion &&
-            PromptSuggestions.current()) {
-          _suggestion = suggestion == null || suggestion.isEmpty
-              ? null
-              : suggestion;
-          emitInfoChanged();
-        }
       default:
         _translator.translate(message);
     }
@@ -2251,15 +2221,10 @@ class ClaudeCodeKernel
         final wasQueued = _queued.remove(id);
         if (wasQueued) {
           emit(
-            ItemUpserted(
-              nextSeq,
-              id,
-              UserMessageItem(
-                text: _sent[id]?.text ?? '',
-                images: _sent[id]?.images ?? const [],
-                sentAt: DateTime.now(),
-              ),
-            ),
+            ItemUpserted(nextSeq, id, switch (_sent[id]) {
+              final turn? => _sentItem(turn),
+              null => UserMessageItem(text: '', sentAt: DateTime.now()),
+            }),
           );
         }
         if (_turn != id &&
@@ -3891,9 +3856,11 @@ class ClaudeCodeKernel
       request['decision_reason_code'] != null;
 
   /// Plan's commands are left to the classifier with the approvals that
-  /// approve for the user; asked about with the others.
+  /// approve for the user, where it runs on the model: on another
+  /// provider's there is none to leave them to (see [_permission]), and
+  /// the CLI, told to use it all the same, refuses what it cannot check.
   bool get _reviewsPlan =>
-      _approval == 'auto' || _approval == 'bypassPermissions';
+      _classifies && (_approval == 'auto' || _approval == 'bypassPermissions');
 
   /// Whether the auto mode classifier runs on the model: not on another
   /// provider's.

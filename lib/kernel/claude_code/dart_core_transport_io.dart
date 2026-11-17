@@ -6,6 +6,7 @@ import 'package:bao_agent/bao_agent.dart';
 import '../../bash_exe/bao_bash.dart';
 import '../../models/launch_environment.dart';
 import '../../network/network_proxy_io.dart';
+import '../../network/tls.dart';
 import 'claude_code_transport.dart';
 import 'claude_environment.dart';
 import 'core_ripgrep_io.dart';
@@ -62,10 +63,9 @@ class DartCoreTransport implements ClaudeCodeTransport {
       ..addAll(ClaudeLaunch.environment)
       ..addAll(ClaudeEnvironment.stateDirectory(base));
     await CoreRipgrep.addTo(environment);
-    // Its commands run with BaoCode Bash, where it is installed (Windows).
-    if (BaoBash.executable case final bash?) {
-      environment[Shell.baoBashVariable] = bash;
-    }
+    // Its commands run in the shell Settings → General → Command Line
+    // picks (Windows): BaoCode Bash where installed, unless another.
+    environment.addAll(BaoBash.coreEnvironment());
     final instructions = launch.instructions;
     return EngineOptions(
       cwd: launch.cwd,
@@ -95,8 +95,10 @@ class DartCoreTransport implements ClaudeCodeTransport {
           : instructions == null || instructions.isEmpty
           ? ClaudeLaunch.appendedSystemPrompt
           : '${ClaudeLaunch.appendedSystemPrompt}\n\n$instructions',
-      promptSuggestions: launch.promptSuggestions,
       environment: environment,
+      // The machine's own certificates, as the app's requests trust them:
+      // the core bundles Mozilla's roots alone.
+      rootCertificates: pemCertificates(await systemCertificatesPem()),
     );
   }
 

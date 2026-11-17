@@ -14,6 +14,8 @@ import '../kernel/kernel_types.dart';
 import '../keybindings/chat_keybindings.dart';
 import '../l10n/l10n.dart';
 import '../models/model_welcome.dart';
+import '../bash_exe/bao_bash.dart';
+import '../bash_exe/bao_bash_view.dart' show BaoBashHint;
 import '../remote/remote_location.dart';
 import '../remote/remote_status.dart' show ClaudeInstallBanner, SshHostBanner;
 import '../stash/stash_actions.dart';
@@ -32,6 +34,7 @@ import 'chat_history_view.dart';
 import 'chat_keys.dart';
 import 'chat_models.dart';
 import 'chat_session.dart';
+import 'session_links.dart';
 import 'open_editor.dart';
 import 'resume_after_reset.dart';
 import 'chat_width.dart';
@@ -47,6 +50,7 @@ import 'panels/limit_reset_panel.dart';
 import 'panels/context_usage_panel.dart';
 import 'panels/goal_panel.dart';
 import 'panels/queue_panel.dart';
+import 'panels/reply_suggestion_bar.dart';
 import 'panels/reset_credits_hint.dart';
 import 'side_panel/file_link.dart';
 import 'side_panel/file_open.dart';
@@ -803,10 +807,43 @@ class _ChatScreenState extends State<ChatScreen>
     );
   }
 
-  Widget? _buildActivityStrip() {
+  /// What the agent suggests the user send next, while nothing is typed:
+  /// one picked is put in the composer, to be edited and sent.
+  Widget? _buildReplySuggestions() {
+    final suggestions = _session.replySuggestions;
+    if (suggestions.isEmpty) return null;
+    final draft = _session.draft;
+    if ((draft.content?.trim().isNotEmpty ?? false) ||
+        draft.images.isNotEmpty) {
+      return null;
+    }
+    return ReplySuggestionBar(
+      suggestions: suggestions,
+      onPick: (said) => draft.restore(said, const []),
+      onSend: (said) => _session.send(
+        ComposerMessage(text: said),
+        editor: widget.openEditor,
+        from: UserPlace.computer,
+      ),
+    );
+  }
+
+  /// The strip over the composer, with the conversations this one handed
+  /// work to as they stand (see [SessionLinks]).
+  Widget _activityStrip() {
+    final handed = SessionLinks.of(context)?.handedFrom(_session);
+    if (handed == null) return _PanelSlot(child: _buildActivityStrip());
+    return ValueListenableBuilder(
+      valueListenable: handed,
+      builder: (context, handed, _) =>
+          _PanelSlot(child: _buildActivityStrip(handed)),
+    );
+  }
+
+  Widget? _buildActivityStrip([List<HandedConversation> handed = const []]) {
     final tasks = _session.tasks ?? const [];
     final changes = _session.fileChanges;
-    if (!ActivityStrip.hasContent(tasks, changes)) return null;
+    if (!ActivityStrip.hasContent(tasks, changes, handed: handed)) return null;
     final links = widget.fileLinks;
     final open = links == null
         ? widget.onOpenChange
@@ -821,6 +858,11 @@ class _ChatScreenState extends State<ChatScreen>
     return ActivityStrip(
       tasks: tasks,
       changes: changes,
+      handed: handed,
+      onOpenHanded: switch (SessionLinks.of(context)) {
+        final links? => (conversation) => links.open(conversation.id),
+        null => null,
+      },
       root: _session.root ?? '.',
       paths: _session.paths,
       onKeep: _session.keepAllChanges,
@@ -1440,6 +1482,13 @@ class _ChatScreenState extends State<ChatScreen>
               // Claude Code being downloaded for this machine, or put on
               // a remote project's host.
               ClaudeInstallBanner(location: _session.kernelContext.cwd),
+              // Windows: BaoCode Bash recommended to whoever runs commands
+              // in neither it nor Git Bash, for a project on this machine.
+              if (BaoBash.current case final bash?
+                  when !RemoteLocation.isRemote(
+                    _session.kernelContext.cwd ?? '',
+                  ))
+                BaoBashHint(bash: bash),
               // Reset credits of the model's ChatGPT accounts about to
               // expire: a plan to use them.
               ResetCreditsHint(model: _session.models?.selected.id),
@@ -1553,7 +1602,12 @@ class _ChatScreenState extends State<ChatScreen>
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Before all: the agent stopped, till the usage limit resets.
+        // On top of all: what the agent suggests to put in the composer.
+        ListenableBuilder(
+          listenable: _session.draft,
+          builder: (context, _) => _PanelSlot(child: _buildReplySuggestions()),
+        ),
+        // Then: the agent stopped, till the usage limit resets.
         ListenableBuilder(
           listenable: ResumeAfterReset.current,
           builder: (context, _) => _PanelSlot(child: _buildLimitPanel()),
@@ -1598,7 +1652,7 @@ class _ChatScreenState extends State<ChatScreen>
             _ => null,
           },
         ),
-        _PanelSlot(child: _buildActivityStrip()),
+        _activityStrip(),
         ChatComposer(
           key: _composerKey,
           session: _session,

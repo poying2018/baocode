@@ -35,27 +35,13 @@ class AppVersion implements Comparable<AppVersion> {
     if (match == null) return null;
     final preRelease = match.group(4)?.split('.') ?? const <String>[];
     if (preRelease.any((part) => part.isEmpty)) return null;
-    // A number too big to be one is not a version, not a crash: the
-    // text may be anything a manifest says.
-    int? part(int group) {
-      final text = match.group(group);
-      if (text == null) return 0;
-      return int.tryParse(text);
-    }
-
-    final major = part(1);
-    final minor = part(2);
-    final patch = part(3);
-    final build = part(5);
-    if (major == null || minor == null || patch == null || build == null) {
-      return null;
-    }
+    int part(int group) => int.parse(match.group(group) ?? '0');
     return AppVersion(
-      major,
-      minor,
-      patch,
+      part(1),
+      part(2),
+      part(3),
       preRelease: preRelease,
-      build: build,
+      build: part(5),
     );
   }
 
@@ -121,6 +107,6 @@ class AppVersion implements Comparable<AppVersion> {
 
 /// The version this app is: pubspec.yaml's `version`, which
 /// test/update/version_test.dart keeps this in step with.
-const appVersionString = '1.10.5+39';
+const appVersionString = '2.0.0+33';
 
 final AppVersion currentAppVersion = AppVersion.parse(appVersionString);

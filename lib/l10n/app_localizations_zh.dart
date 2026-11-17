@@ -1630,6 +1630,60 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String sessionStepDone(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'new': '开了对话',
+      'send': '派活给',
+      'wait': '等了',
+      'read': '看了',
+      'stop': '停下了',
+      'changes': '查看了改动',
+      'list': '列出了对话',
+      'other': '统筹了',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String sessionStepRunning(String action) {
+    String _temp0 = intl.Intl.selectLogic(action, {
+      'new': '正在开对话',
+      'send': '正在派活给',
+      'wait': '正在等',
+      'read': '正在看',
+      'stop': '正在停下',
+      'changes': '正在查看改动',
+      'list': '正在列出对话',
+      'other': '正在统筹',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get sessionOpen => '打开对话';
+
+  @override
+  String sessionStatus(String status) {
+    String _temp0 = intl.Intl.selectLogic(status, {
+      'running': '进行中',
+      'waiting': '等你回答',
+      'done': '已完成',
+      'failed': '出错了',
+      'other': '',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get sessionAnswer => '去回答';
+
+  @override
+  String get sessionShowMore => '展开';
+
+  @override
+  String get sessionShowLess => '收起';
+
+  @override
   String get sidePanelPlan => '计划';
 
   @override
@@ -2443,6 +2497,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imageDefaultSet => '已设为默认图片模型';
 
   @override
+  String get imageCopyPrompt => '复制提示词';
+
+  @override
   String get toolProposingGoal => '正在提议目标';
 
   @override
@@ -3182,6 +3239,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queuedRemove => '移出队列';
 
   @override
+  String get replySuggestionHint => '单击放进输入框润色 · 双击直接发送';
+
+  @override
   String get stopConfirmMessage => '要停止 Agent 吗？';
 
   @override
@@ -3602,11 +3662,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get generalSettingsQueuedDuringTurn => '插入当前任务';
 
   @override
-  String get generalSettingsPromptSuggestions => '建议下一条提示';
+  String get generalSettingsPromptSuggestions => '推荐回复';
 
   @override
   String get generalSettingsPromptSuggestionsDescription =>
-      '每轮结束后在输入框里给出灰色的下一条消息建议，按 Tab 采用。每条建议都会带着整段对话额外请求一次模型，关掉可以节省 token。从下一条消息起生效；目前仅支持 Claude Code。';
+      '每轮结束后，在输入框上方给出两三句你可能想发的话：单击放进输入框润色，双击直接发送；输入框空着时按 Tab 采用第一句。由 Agent 在回复末尾顺手写出，不额外请求模型。从下一条消息起生效。';
 
   @override
   String generalSettingsCommitAttributionLabel(String name) {
@@ -7697,23 +7757,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get remoteSignInConnect => '连接';
 
   @override
-  String remoteFolderPlaceholder(String host) {
-    return '$host 上的文件夹：选择一个，或输入路径';
-  }
-
-  @override
-  String get remoteFolderRefresh => '重新读取文件夹';
-
-  @override
-  String get remoteOpenThisFolder => '打开此文件夹';
-
-  @override
   String get remoteParentFolder => '上级文件夹';
-
-  @override
-  String remoteGoTo(String path) {
-    return '前往 $path';
-  }
 
   @override
   String remoteListFailed(String path) {
@@ -7727,21 +7771,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get remoteFileHostPlaceholder => '选择主机，浏览它的文件';
-
-  @override
-  String remoteFilePlaceholder(String host) {
-    return '$host 上的文件：选择一个，或输入路径';
-  }
-
-  @override
-  String remoteOpenFile(String path) {
-    return '打开 $path';
-  }
-
-  @override
-  String remoteOpenFailed(String path) {
-    return '无法打开 $path';
-  }
 
   @override
   String get remoteRecentFiles => '最近的远程文件';
@@ -13485,7 +13514,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsSessionToolsDescription =>
-      'Agent 能列出你的其他对话、在不唤醒的情况下查看进展、给它们派活（没在运行的会恢复，正忙的会排队）并等待结果。适合用一个对话统筹其他对话；改动后新启动的 Agent 才有。';
+      'Agent 能列出你的其他对话、在不唤醒的情况下查看进展、开新对话或给已有对话派活（需要时放进单独的 worktree），对方做完、出错或等你回答时会自动回报；也能停下它们、查看改了哪些文件。适合用一个对话统筹其他对话；改动后新启动的 Agent 才有。';
 
   @override
   String get generalSettingsCommandLine => '命令行';
@@ -13495,11 +13524,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get baoBashDescription =>
-      '让智能体在 Windows 上用上完整的 bash：自带 rg、grep、sed、awk、find、jq、tar 等八十多个常用命令，不需要装 Git for Windows；C:\\ 和 /c/ 两种路径都认。内置内核会用它运行命令。';
+      '让智能体在 Windows 上用上完整的 bash：自带 rg、grep、sed、awk、find、jq、tar 等八十多个常用命令，不需要装 Git for Windows；C:\\ 和 /c/ 两种路径都认。内置内核和 Claude Code 内核都会用它运行命令。';
 
   @override
-  String get baoBashNotInstalled =>
-      '未安装：智能体现在用 Git Bash 运行命令，没装 Git Bash 时用 cmd.exe。';
+  String get baoBashNotInstalled => '还没安装。';
 
   @override
   String baoBashInstalled(String version) {
@@ -13544,4 +13572,159 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get baoBashNoticeLater => '暂不';
+
+  @override
+  String get baoBashSource => '开源地址：';
+
+  @override
+  String get baoBashHintInstall => '安装并使用';
+
+  @override
+  String get commandLineShell => '运行命令的 Shell';
+
+  @override
+  String get commandLineShellDescription =>
+      '智能体在 Windows 上用它运行命令。Claude Code CLI 内核只能用 bash：选了 cmd 或 PowerShell 时，它仍用 Git Bash。';
+
+  @override
+  String get commandLineShellCustom => '自定义…';
+
+  @override
+  String commandLineShellInUse(String path) {
+    return '正在使用：$path';
+  }
+
+  @override
+  String commandLineShellFallback(String shell, String path) {
+    return '$shell 还不能用，命令暂时用 $path 运行。';
+  }
+
+  @override
+  String get commandLineCustomPath => '自定义 Shell';
+
+  @override
+  String get commandLineCustomPathDescription =>
+      '运行命令的程序：bash.exe、cmd.exe、powershell.exe 或 pwsh.exe。';
+
+  @override
+  String remoteBrowserFolderTitle(String host) {
+    return '在 $host 上打开文件夹';
+  }
+
+  @override
+  String remoteBrowserFileTitle(String host) {
+    return '在 $host 上打开文件';
+  }
+
+  @override
+  String get remoteBrowserPlaces => '位置';
+
+  @override
+  String get remoteBrowserRecent => '最近位置';
+
+  @override
+  String get remoteBrowserHome => '主目录';
+
+  @override
+  String get remoteBrowserThisPc => '此电脑';
+
+  @override
+  String get remoteBrowserRoot => '根目录';
+
+  @override
+  String remoteBrowserLocalDisk(String drive) {
+    return '本地磁盘 ($drive)';
+  }
+
+  @override
+  String get remoteBrowserBack => '后退';
+
+  @override
+  String get remoteBrowserForward => '前进';
+
+  @override
+  String get remoteBrowserRefresh => '刷新';
+
+  @override
+  String get remoteBrowserFilter => '筛选';
+
+  @override
+  String get remoteBrowserView => '显示选项';
+
+  @override
+  String get remoteBrowserShowHidden => '隐藏的项目';
+
+  @override
+  String get remoteBrowserShowSystem => '受保护的操作系统文件';
+
+  @override
+  String get remoteBrowserNewFolder => '新建文件夹';
+
+  @override
+  String get remoteBrowserOpen => '打开';
+
+  @override
+  String get remoteBrowserEmpty => '这个文件夹是空的。';
+
+  @override
+  String get remoteBrowserNoFolders => '这里没有文件夹。';
+
+  @override
+  String remoteBrowserNoMatch(String filter) {
+    return '没有与“$filter”匹配的项目。';
+  }
+
+  @override
+  String remoteBrowserHiddenCount(int count) {
+    return '$count 个隐藏的项目';
+  }
+
+  @override
+  String get remoteBrowserShowHiddenNow => '显示';
+
+  @override
+  String get remoteBrowserEditPath => '前往路径';
+
+  @override
+  String get remoteBrowserPathPlaceholder => '输入路径，如 ~/code、/srv/app、D:\\work';
+
+  @override
+  String remoteBrowserNotFound(String path) {
+    return '找不到 $path。';
+  }
+
+  @override
+  String remoteBrowserNotFolder(String path) {
+    return '$path 是文件，不是文件夹。';
+  }
+
+  @override
+  String remoteBrowserMakeFailed(String error) {
+    return '无法新建文件夹：$error';
+  }
+
+  @override
+  String get remoteBrowserFolderAction => '打开文件夹';
+
+  @override
+  String get remoteBrowserFileAction => '打开文件';
+
+  @override
+  String remoteBrowserSaveTitle(String host) {
+    return '保存到 $host';
+  }
+
+  @override
+  String get remoteBrowserSaveAction => '另存为';
+
+  @override
+  String get remoteBrowserSaveName => '保存为：';
+
+  @override
+  String get remoteBrowserSave => '保存';
+
+  @override
+  String remoteBrowserReplace(String name) {
+    return '“$name”已存在，要替换它吗？';
+  }
 }

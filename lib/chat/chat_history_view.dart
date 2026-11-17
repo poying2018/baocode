@@ -15,6 +15,7 @@ import '../diagnostics/frame_watch.dart';
 import '../ide/ide_find_widget.dart';
 import '../ide/ide_hover.dart';
 import '../l10n/l10n.dart';
+import '../platform/event_log.dart';
 import '../theme/app_theme.dart';
 import '../theme/workbench_theme.dart' show themeColors;
 import 'chat_column.dart';
@@ -26,6 +27,7 @@ import 'chat_session.dart';
 import 'composer/composer.dart';
 import 'composer/composer_draft.dart';
 import 'reply_scroll.dart';
+import 'selection_recorder.dart';
 import 'rewind_files_prompt.dart';
 import 'side_panel/file_link_menu.dart';
 import 'steadiness.dart';
@@ -202,10 +204,24 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       (fold.kind == StepFoldKind.work && _unfoldedTurns.contains(fold.start));
 
   void _toggleFold(StepFold fold) {
+    final open = !_isFoldOpen(fold);
     for (var index = fold.start; index < fold.end; index++) {
       _animateItem(index);
     }
-    setState(() => _foldOpen[fold.key] = !_isFoldOpen(fold));
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      final items = [for (var i = fold.start; i < fold.end; i++) i];
+      if (open) {
+        _entering.addAll(items);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _entering.clear());
+      } else {
+        _leaving.addAll(items);
+        _leavingDone?.cancel();
+        _leavingDone = Timer(_motionDuration * 2, () {
+          if (mounted) setState(_leaving.clear);
+        });
+      }
+    }
+    setState(() => _foldOpen[fold.key] = open);
   }
 
   /// What row [index] shows. Of a run under way the user has not opened
@@ -655,8 +671,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       });
     } else if (_listController.isAttached) {
       // In view, its marks bring the match into view themselves.
-      final (first, last) = _listController.visibleRange ?? (-1, -1);
-      if (index >= first && index <= last) return;
+      if (_listController.visibleRange case (final first, final last)
+          when index >= _itemOfRow(first) && index <= _itemOfRow(last)) {
+        return;
+      }
     }
     // Brought near, its marks bring the match into view once built.
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -667,6 +685,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   @override
   void initState() {
     super.initState();
+    _selectionFocusNode.addListener(_recordFocus);
     _scrollController
       ..laidOut = _keepShownLaidOut
       ..stopAt = _replyStart;
@@ -790,6 +809,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
       _closingIndex = null;
       _foldOpen.clear();
       _unfoldedTurns.clear();
+      // Another conversation's rows: the list takes them as it finds them.
+      _rows = const [];
+      _leaving.clear();
+      _entering.clear();
       _wasLive = widget.feed.isStreaming;
       _refold();
       _seeItems();
@@ -866,6 +889,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     UserMessageStyle.current.removeListener(_handleStyleChanged);
     _reselectTimer?.cancel();
     _scrubEnded?.cancel();
+    _leavingDone?.cancel();
     _autoScroller?.stopAutoScroll();
     _editorMoved.dispose();
     _editorReveal.dispose();
@@ -1048,7 +1072,11 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     _motions
       ..clear()
       ..addAll(motions);
-    _hiddenRows.clear();
+    // The same rows, of the items now at their indexes; the new ones come
+    // with the next [_syncRows].
+    _rows = [for (final index in _rows) index + count];
+    _leaving.clear();
+    _entering.clear();
     _seenItems += count;
     _appearing.clear();
     _endHandoff();
@@ -1074,22 +1102,28 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     if (!_scrollController.hasClients ||
         !_listController.isAttached ||
         _listController.isLocked ||
-        _listController.numberOfItems + count != _feed.itemCount) {
+        _listController.numberOfItems != _rows.length) {
       return false;
     }
     final position = _scrollController.position;
     if (!position.hasPixels) return false;
-    var above = 0.0;
-    for (var i = 0; i < count; i++) {
-      // Estimated as row i.
-      _listController.addItem(i);
-      above += _listController.extentForIndex(i).$1;
+    final shown = _firstShown();
+    // Still laid out as it was, at its row before.
+    final shownRow = shown == null ? null : _rowOf(shown.index);
+    // The new rows, estimated.
+    _syncRows();
+    var added = 0;
+    while (added < _rows.length && _rows[added] < count) {
+      added++;
     }
-    if (_firstShown() case (:final index, above: _)) {
-      // Still laid out as it was, at its index before.
-      _keepShown = switch (_endAboveOf(index + count, laidOutAt: index)) {
+    var above = 0.0;
+    for (var row = 0; row < added; row++) {
+      above += _listController.extentForIndex(row).$1;
+    }
+    if (shown case (:final index, above: _)) {
+      _keepShown = switch (_endAboveOf(index, laidOutRow: shownRow)) {
         final end? => (
-          index: index + count,
+          index: index,
           above: end,
           scrolled: _scrollController.scrolled,
         ),
@@ -1127,18 +1161,20 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// by where the list has it, so also while it is laid out. Its end, not
   /// its top: the room above it is not the same when a turn comes before
   /// it.
-  double? _endAboveOf(int index, {int? laidOutAt}) {
+  double? _endAboveOf(int index, {int? laidOutRow}) {
     final sliver = _findSliver();
     if (sliver == null || !_scrollController.hasClients) return null;
     for (var child = sliver.firstChild; child != null;) {
       final data = child.parentData! as SliverMultiBoxAdaptorParentData;
-      if (data.index == (laidOutAt ?? index)) {
+      if (laidOutRow == null
+          ? _indexOf(child) == index
+          : data.index == laidOutRow) {
         final offset = data.layoutOffset;
         if (offset == null) return null;
         return _scrollController.position.pixels -
             sliver.constraints.precedingScrollExtent -
             offset -
-            _listController.extentForIndex(index).$1;
+            _listController.extentForIndex(_rowOf(index)).$1;
       }
       child = sliver.childAfter(child);
     }
@@ -1175,10 +1211,10 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// view's, once the rows put before it are laid out.
   void _keepAt(int index, double above) {
     if (!_scrollController.hasClients || !_listController.isAttached) return;
-    if (index >= _feed.itemCount) return;
+    if (index >= _feed.itemCount || _rows.isEmpty) return;
     final height = _scrollController.position.viewportDimension;
     _listController.jumpToItem(
-      index: index,
+      index: _rowOf(index),
       scrollController: _scrollController,
       alignment: above < 0 && height > 0 ? -above / height : 0,
       rect: Rect.fromLTWH(0, math.max(above, 0), 0, 0),
@@ -1285,7 +1321,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     }
     _syncEdgeFades();
     _scheduleStickyUpdate();
-    if (_pointersDown > 0) _scheduleDragReselect();
+    if (_pointersDown > 0) {
+      if (_recordNow()) {
+        _selectionDelegate.recorder.step('scroll ${_scrollOffset()}');
+      }
+      _scheduleDragReselect();
+    }
     _wantEarlier();
   }
 
@@ -1357,6 +1398,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     }
     _pressFocused = false;
     if (_dragFrom != null) {
+      _selectionDelegate.beginDrag();
       // Once the focus has moved (in a microtask).
       scheduleMicrotask(() {
         _pressFocused = _dragFrom != null && _selectionFocusNode.hasFocus;
@@ -1374,10 +1416,48 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         event.kind == PointerDeviceKind.mouse &&
         event.buttons == kPrimaryMouseButton &&
         HardwareKeyboard.instance.isShiftPressed;
+    _selectionDelegate.recorder.step(
+      'press ${_ChatSelectionDelegate._offset(event.position)} '
+      '${event.kind.name} buttons ${event.buttons}'
+      '${_dragFrom == null ? ', no text drag' : ''}'
+      '${onBar ? ', on the bar' : ''}${own ? ', in its own selection' : ''}'
+      '${_selectionDelegate.extending ? ', shift' : ''}; '
+      '$_pointersDown held, focus '
+      '${_selectionFocusNode.hasFocus ? 'here' : 'elsewhere'}, '
+      'scroll ${_scrollOffset()}',
+    );
   }
+
+  String _scrollOffset() => _scrollController.hasClients
+      ? _scrollController.position.pixels.toStringAsFixed(1)
+      : '-';
+
+  /// When a move or a scroll was last recorded: not more than one each
+  /// 50 ms of either.
+  DateTime _lastRecorded = DateTime(0);
+
+  bool _recordNow() {
+    final now = DateTime.now();
+    if (now.difference(_lastRecorded) < const Duration(milliseconds: 50)) {
+      return false;
+    }
+    _lastRecorded = now;
+    return true;
+  }
+
+  void _recordFocus() => _selectionDelegate.recorder.step(
+    'focus ${_selectionFocusNode.hasFocus ? 'here' : 'gone'}',
+  );
 
   void _handlePointerUp(PointerEvent event) {
     if (!_pressedDevices.remove(event.device)) return;
+    _selectionDelegate.recorder.step(
+      '${switch (event) {
+        PointerUpEvent() => 'release',
+        PointerCancelEvent() => 'cancel',
+        _ => 'release unseen, moved',
+      }} ${_ChatSelectionDelegate._offset(event.position)}',
+    );
     final from = _dragFrom;
     _dragFrom = null;
     if (from != null &&
@@ -1407,6 +1487,29 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         ..extending = false
         ..suspended = false;
     }
+  }
+
+  /// Checks what the drag made of a move once the selection's gesture has
+  /// seen it too: gestures see a move after every [Listener].
+  void _handlePointerMove(PointerMoveEvent event) {
+    if (_pointersDown > 0 && _recordNow()) {
+      _selectionDelegate.recorder.step(
+        'move ${_ChatSelectionDelegate._offset(event.position)}',
+      );
+    }
+    final from = _dragFrom;
+    if (from == null) return;
+    final to = event.position;
+    scheduleMicrotask(() {
+      if (!mounted ||
+          _dragFrom != from ||
+          _pointersDown != 1 ||
+          _selectionDelegate.suspended ||
+          _selectionDelegate.extending) {
+        return;
+      }
+      _selectionDelegate.followDrag(from, to);
+    });
   }
 
   /// A device moving with no button down, though its release never came
@@ -1481,8 +1584,9 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     return false;
   }
 
-  static int _indexOf(RenderBox item) =>
-      (item.parentData! as SliverMultiBoxAdaptorParentData).index!;
+  /// The item of a laid-out row.
+  int _indexOf(RenderBox item) =>
+      _itemOfRow((item.parentData! as SliverMultiBoxAdaptorParentData).index!);
 
   /// The item under (or nearest to) [globalPosition] and the point within it.
   _ItemPoint? _locateItemPoint(Offset globalPosition) {
@@ -2288,42 +2392,95 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
           ),
           child: ChatFindRow(
             index: index,
-            child: _HeightMotion(motion: _motions[index] ?? 0, child: child),
+            child: _HeightMotion(
+              motion: _motions[index] ?? 0,
+              fromNothing: _entering.contains(index),
+              child: child,
+            ),
           ),
         ),
       );
 
-  /// The rows folded away, as last built, by what they were built from.
-  final Map<int, (Object, Widget)> _hiddenRows = {};
+  // --- Rows ------------------------------------------------------------------
+  //
+  // The list has a row for each item that shows; a closed fold's items have
+  // none. A long conversation is mostly turns' work folded away, thousands
+  // of items: rows of no height for them would all be within the list's
+  // reach, all built and laid out each time the history is (a second a
+  // frame for 5,600 of them). So the list's rows are numbered apart from
+  // the items: [_rows] has the item of each.
 
-  /// Row [index], folded away: the very widget it was last built as while
-  /// nothing it is made of changed, which Flutter then does not rebuild. A
-  /// long conversation has hundreds of these rows within the list's reach,
-  /// of no height; each rebuild of the history (a word streamed, the pointer
-  /// coming in) would otherwise build and lay them all out again. The same
-  /// rows as shown ones, all the same: a fold opening or closing animates
-  /// them in place.
-  Widget _hiddenRow(int index) {
-    final made = (
-      widget.maxContentWidth,
-      _columnRight,
-      _columnLeft,
-      _room,
-      ChatMinimap.roomFrom,
-      _insetOf(index),
-      _motions[index] ?? 0,
-    );
-    if (_hiddenRows[index] case (final from, final row) when from == made) {
-      return row;
+  /// The item of each row of the list, in order.
+  List<int> _rows = const [];
+
+  /// Items a fold closing hides: rows still while they shrink to nothing.
+  final Set<int> _leaving = {};
+  Timer? _leavingDone;
+
+  /// Items a fold opening shows: their rows, new, grow from nothing.
+  final Set<int> _entering = {};
+
+  bool _hasRow(int index) =>
+      !_isHidden(index) ||
+      index == _editingIndex ||
+      _leaving.contains(index) ||
+      widget.after?.call(index) != null;
+
+  /// The row of item [index]; for one with none, the row before it (the
+  /// first, if none is).
+  int _rowOf(int index) {
+    var low = 0;
+    var high = _rows.length;
+    while (low < high) {
+      final mid = (low + high) >> 1;
+      if (_rows[mid] <= index) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
     }
-    final row = _row(
-      index,
-      gap: 0,
-      child: const SizedBox(width: double.infinity),
-    );
-    _hiddenRows[index] = (made, row);
-    return row;
+    return math.max(0, low - 1);
   }
+
+  /// The item of [row]; past the last item for one past the last row.
+  int _itemOfRow(int row) => row < _rows.length ? _rows[row] : _feed.itemCount;
+
+  /// The rows as the items show now. The list is told of each row come or
+  /// gone, so the extents it measured stay with their rows.
+  void _syncRows() {
+    final rows = [
+      for (var index = 0; index < _feed.itemCount; index++)
+        if (_hasRow(index)) index,
+    ];
+    if (listEquals(rows, _rows)) return;
+    final before = _rows;
+    _rows = rows;
+    // Not laid out yet, or with other rows (another conversation's): it
+    // takes them as it finds them.
+    if (!_listController.isAttached ||
+        _listController.numberOfItems != before.length) {
+      return;
+    }
+    var old = 0;
+    var row = 0;
+    while (old < before.length || row < rows.length) {
+      if (row == rows.length ||
+          (old < before.length && before[old] < rows[row])) {
+        _listController.removeItem(row);
+        old++;
+      } else if (old == before.length || rows[row] < before[old]) {
+        _listController.addItem(row);
+        row++;
+      } else {
+        old++;
+        row++;
+      }
+    }
+  }
+
+  /// Row [index], folded away while it shrinks to nothing (see [_leaving]).
+  Widget _hiddenRow(int index) =>
+      _row(index, gap: 0, child: const SizedBox(width: double.infinity));
 
   double _insetOf(int index) =>
       _feed.itemAt(index) is UserMessageItem ? 0 : UserMessageBubble.radius;
@@ -2447,16 +2604,13 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     );
   }
 
-  /// The height taken for item [index] until it is laid out, toward the
-  /// list's extent (and so its scrollbar): none for one a closed fold
-  /// hides. A long conversation is mostly turns' work folded away; taken at
-  /// the list's default for each, the bar would stand for many times the
-  /// height there is, a small drag on it going far, and the list correcting
-  /// itself all the way up. (Asked with no index, the list wants one height
-  /// for all, unless none: 0.)
-  double _estimateExtent(int? index, double crossAxisExtent) => switch (index) {
+  /// The height taken for [row] until it is laid out, toward the list's
+  /// extent (and so its scrollbar): none for one a closed fold hides (see
+  /// [_leaving]). (Asked with no row, the list wants one height for all,
+  /// unless none: 0.)
+  double _estimateExtent(int? row, double crossAxisExtent) => switch (row) {
     null => 0,
-    _ when index < _feed.itemCount && _isHidden(index) => 0,
+    _ when row < _rows.length && _isHidden(_rows[row]) => 0,
     _ => 100,
   };
 
@@ -2562,11 +2716,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   /// down it, laid out yet or not.
   void _seek(int index, double fraction) {
     if (!_scrollController.hasClients || !_listController.isAttached) return;
-    if (index >= _feed.itemCount) return;
+    if (index >= _feed.itemCount || _rows.isEmpty) return;
     _setAnchored(false);
-    final (extent, _) = _listController.extentForIndex(index);
+    final row = _rowOf(index);
+    final (extent, _) = _listController.extentForIndex(row);
     _listController.jumpToItem(
-      index: index,
+      index: row,
       scrollController: _scrollController,
       alignment: 0,
       rect: Rect.fromLTWH(0, fraction * extent, 0, 0),
@@ -2656,6 +2811,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
   @override
   Widget build(BuildContext context) {
     _built = null;
+    _syncRows();
     if (widget.minimapRoom case final room? when room.value != _keepsRoom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) room.value = _keepsRoom;
@@ -2704,6 +2860,7 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
         onPointerDown: _handlePointerDown,
         onPointerUp: _handlePointerUp,
         onPointerCancel: _handlePointerUp,
+        onPointerMove: _handlePointerMove,
         onPointerHover: _handlePointerHover,
         // Runs before the list handles the signal (that is resolved after
         // every target has seen it).
@@ -2789,7 +2946,19 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                         child: SuperListView.builder(
                                           controller: _scrollController,
                                           listController: _listController,
-                                          itemCount: _feed.itemCount,
+                                          itemCount: _rows.length,
+                                          // Rows come and go before others
+                                          // (folds opening and closing):
+                                          // each keeps its own.
+                                          findChildIndexCallback: (key) =>
+                                              switch (key) {
+                                                ValueKey<int>(:final value)
+                                                    when _rows.isNotEmpty &&
+                                                        _rows[_rowOf(value)] ==
+                                                            value =>
+                                                  _rowOf(value),
+                                                _ => null,
+                                              },
                                           extentEstimation: _estimateExtent,
                                           cacheExtent: _cache,
                                           padding: EdgeInsets.fromLTRB(
@@ -2801,17 +2970,25 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                                             _gutter,
                                             24,
                                           ),
-                                          itemBuilder: (context, index) =>
-                                              _isHidden(index) &&
-                                                  index != _editingIndex &&
-                                                  widget.after?.call(index) ==
-                                                      null
-                                              ? _hiddenRow(index)
-                                              : _row(
-                                                  index,
-                                                  gap: _gapBefore(index),
-                                                  child: _buildItem(index),
-                                                ),
+                                          itemBuilder: (context, row) {
+                                            final index = _rows[row];
+                                            return KeyedSubtree(
+                                              key: ValueKey(index),
+                                              child:
+                                                  _isHidden(index) &&
+                                                      index != _editingIndex &&
+                                                      widget.after?.call(
+                                                            index,
+                                                          ) ==
+                                                          null
+                                                  ? _hiddenRow(index)
+                                                  : _row(
+                                                      index,
+                                                      gap: _gapBefore(index),
+                                                      child: _buildItem(index),
+                                                    ),
+                                            );
+                                          },
                                         ),
                                       ),
                                     ),
@@ -3154,6 +3331,9 @@ class _ItemSelectionScopeState extends State<_ItemSelectionScope> {
   @override
   void didUpdateWidget(_ItemSelectionScope oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_registrar.index != widget.index) {
+      widget.delegate._renumbered(_registrar.index, widget.index);
+    }
     _registrar.index = widget.index;
   }
 
@@ -3253,11 +3433,109 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
   void _addItemSelectable(Selectable selectable, _ItemRegistrar item) {
     _items[selectable] = item;
     add(selectable);
+    _noteList(added: item.index);
   }
 
   void _removeItemSelectable(Selectable selectable) {
-    _items.remove(selectable);
+    final item = _items.remove(selectable)?.index ?? -1;
     remove(selectable);
+    _noteList(removed: item);
+  }
+
+  // --- The list of text, as recorded -------------------------------------
+
+  /// What a drag on the text went through, for when it goes wrong.
+  final SelectionRecorder recorder = SelectionRecorder();
+
+  // The list's changes since they were last recorded: text added, taken
+  // off, items numbered anew (the first few of each).
+  final List<int> _added = [];
+  final List<int> _removed = [];
+  final List<String> _renumberings = [];
+  int _addCount = 0;
+  int _removeCount = 0;
+  int _renumberCount = 0;
+  bool _listNoted = false;
+
+  void _noteList({int? added, int? removed}) {
+    if (added != null && _addCount++ < 6) _added.add(added);
+    if (removed != null && _removeCount++ < 6) _removed.add(removed);
+    if (_listNoted || _disposed) return;
+    _listNoted = true;
+    scheduleMicrotask(_recordList);
+  }
+
+  void _renumbered(int from, int to) {
+    if (_renumberCount++ < 4) _renumberings.add('$from→$to');
+    _noteList();
+  }
+
+  /// Records the list's changes, and whether it is still whole: each text
+  /// listed once, registered, in the order of its items. (Within an item
+  /// the order is by where the text is, checked only when written out.)
+  void _recordList() {
+    _listNoted = false;
+    if (_disposed) return;
+    String some(List<Object> listed, int count) =>
+        '${listed.join(',')}${count > listed.length ? ',…' : ''}';
+    recorder.listChanged(
+      [
+        if (_addCount > 0) '+$_addCount (items ${some(_added, _addCount)})',
+        if (_removeCount > 0)
+          '-$_removeCount (items ${some(_removed, _removeCount)})',
+        if (_renumberCount > 0)
+          'items renumbered $_renumberCount '
+              '(${some(_renumberings, _renumberCount)})',
+        '${selectables.length} listed',
+      ].join(' '),
+    );
+    _added.clear();
+    _removed.clear();
+    _renumberings.clear();
+    _addCount = _removeCount = _renumberCount = 0;
+    _checkList();
+  }
+
+  void _checkList() {
+    final off = _listOff(geometry: false);
+    if (off == null) {
+      recorder.listWhole();
+    } else {
+      recorder.listOff(off);
+    }
+  }
+
+  /// What is off in the list, or null when it is whole: text listed twice,
+  /// no longer registered, out of order (by item; with [geometry], within
+  /// an item too).
+  String? _listOff({required bool geometry}) {
+    final seen = <Selectable>{};
+    var twice = 0;
+    var unregistered = 0;
+    final misordered = <String>[];
+    var misorders = 0;
+    for (final (index, selectable) in selectables.indexed) {
+      if (!seen.add(selectable)) twice++;
+      if (!_items.containsKey(selectable)) unregistered++;
+      if (index == 0) continue;
+      final previous = selectables[index - 1];
+      final a = _itemOf(previous);
+      final b = _itemOf(selectable);
+      final off =
+          a > b ||
+          (geometry && a == b && compareOrder(previous, selectable) > 0);
+      if (off && misorders++ < 5) {
+        misordered.add('#${index - 1} (item $a) > #$index (item $b)');
+      }
+    }
+    if (twice == 0 && unregistered == 0 && misorders == 0) return null;
+    return [
+      if (twice > 0) '$twice listed twice',
+      if (unregistered > 0) '$unregistered unregistered',
+      if (misorders > 0)
+        '$misorders out of order: ${misordered.join(', ')}'
+            '${misorders > misordered.length ? ', …' : ''}',
+    ].join('; ');
   }
 
   int _itemOf(Selectable selectable) => _items[selectable]?.index ?? -1;
@@ -3324,12 +3602,107 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
 
   @override
   SelectionResult dispatchSelectionEvent(SelectionEvent event) {
+    final outer = _walk;
+    final walk = _walk = event is SelectionEdgeUpdateEvent ? [] : null;
+    _lastAsked = null;
+    final SelectionResult result;
+    try {
+      result = _dispatch(event);
+    } finally {
+      _walk = outer;
+    }
+    final asked = _lastAsked;
+    recorder.step(
+      '${_dispatchingOwn ? 'own' : 'got'} ${_describeEvent(event)} → '
+      '${result.name}; edges #$currentSelectionStartIndex, '
+      '#$currentSelectionEndIndex, ${value.status.name}'
+      '${walk == null || walk.isEmpty ? '' : '; asked ${walk.join(' ')}'}'
+      '${walk != null && walk.length >= _walkMost ? ' …' : ''}'
+      '${asked == null ? '' : ', the last ${_describeSelectable(asked)}'}',
+    );
+    return result;
+  }
+
+  /// The text an edge update asked, in order, and what each answered: where
+  /// the edge went and why.
+  List<String>? _walk;
+  Selectable? _lastAsked;
+  static const _walkMost = 40;
+
+  @override
+  SelectionResult dispatchSelectionEventToChild(
+    Selectable selectable,
+    SelectionEvent event,
+  ) {
+    final result = super.dispatchSelectionEventToChild(selectable, event);
+    if (_walk case final walk? when walk.length < _walkMost) {
+      final answer = switch (result) {
+        SelectionResult.next => 'next',
+        SelectionResult.previous => 'prev',
+        SelectionResult.end => 'END',
+        SelectionResult.pending => 'pending',
+        SelectionResult.none => 'none',
+      };
+      walk.add(
+        '#${selectables.indexOf(selectable)}/${_itemOf(selectable)}:$answer',
+      );
+      _lastAsked = selectable;
+    }
+    return result;
+  }
+
+  static String _describeEvent(SelectionEvent event) => switch (event) {
+    SelectionEdgeUpdateEvent(
+      :final type,
+      :final globalPosition,
+      :final granularity,
+    ) =>
+      '${type == SelectionEventType.startEdgeUpdate ? 'start' : 'end'} '
+          '${_offset(globalPosition)}'
+          '${granularity == TextGranularity.character ? '' : ' ${granularity.name}'}',
+    ClearSelectionEvent() => 'clear',
+    SelectAllSelectionEvent() => 'select all',
+    SelectWordSelectionEvent(:final globalPosition) =>
+      'word ${_offset(globalPosition)}',
+    SelectParagraphSelectionEvent(:final globalPosition) =>
+      'paragraph ${_offset(globalPosition)}',
+    GranularlyExtendSelectionEvent(:final isEnd, :final forward) =>
+      'extend ${isEnd ? 'end' : 'start'} ${forward ? 'forward' : 'back'}',
+    DirectionallyExtendSelectionEvent(:final isEnd, :final direction) =>
+      'extend ${isEnd ? 'end' : 'start'} ${direction.name}',
+    _ => event.type.name,
+  };
+
+  /// [selectable]'s place and selection, kinds only.
+  String _describeSelectable(Selectable selectable) {
+    final box = _globalBoxes(selectable)
+        .fold<Rect?>(null, (all, rect) => all?.expandToInclude(rect) ?? rect);
+    final geometry = selectable.value;
+    return '#${selectables.indexOf(selectable)} '
+        '${selectable.runtimeType} item ${_itemOf(selectable)}'
+        '${_items.containsKey(selectable) ? '' : ' unregistered'} '
+        '${box == null ? 'no box' : _rect(box)} '
+        '${geometry.status.name}, ${selectable.contentLength} long';
+  }
+
+  SelectionResult _dispatch(SelectionEvent event) {
     if (suspended &&
         (event is SelectionEdgeUpdateEvent ||
             event is ClearSelectionEvent ||
             event is SelectWordSelectionEvent ||
             event is SelectParagraphSelectionEvent)) {
       return SelectionResult.none;
+    }
+    if (!_dispatchingOwn) {
+      switch (event) {
+        case ClearSelectionEvent():
+          _clears++;
+        case SelectionEdgeUpdateEvent(type: SelectionEventType.startEdgeUpdate):
+          _starts++;
+        case SelectionEdgeUpdateEvent():
+          _ends++;
+        default:
+      }
     }
     final SelectionResult result;
     switch (event) {
@@ -3367,7 +3740,9 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
         _start = _edgeAt(event.globalPosition, event.granularity);
         _refreshEdgeLocations();
         result = super.dispatchSelectionEvent(event);
+        if (!_dispatchingOwn) _startWent = currentSelectionStartIndex;
       case SelectionEdgeUpdateEvent():
+        if (!_dispatchingOwn) _endSeen = true;
         _all = false;
         _end = _edgeAt(event.globalPosition, event.granularity);
         _dragEnd = event;
@@ -3401,11 +3776,11 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
 
   // --- A drag on text that selects nothing ---------------------------------
   //
-  // Seen on users' machines: in one stretch of a conversation a drag selects
-  // nothing, for as long as the app runs (the stretch moving with the
-  // text). The selection's edges go, in list order, to the text under them;
-  // there they went elsewhere, so the list was off. The drag is done again
-  // on a clean list, and what was off reported (errors.log).
+  // Seen on users' machines (#928): now and then a drag on the text selects
+  // nothing. Its edges go, in list order, to the text under them; there
+  // they went elsewhere, or nowhere. The drag is done again on a clean
+  // list, as it is dragged; and what led to it is written out ([recorder]):
+  // a line in the event log, the steps before it in hangs/selection-*.txt.
 
   static Iterable<Rect> _globalBoxes(Selectable selectable) {
     final transform = selectable.getTransformTo(null);
@@ -3417,47 +3792,128 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
   static bool _holds(Selectable selectable, Offset position) =>
       _globalBoxes(selectable).any((box) => box.contains(position));
 
-  static int _reports = 0;
+  /// The drag held now was done again here ([followDrag]): its end follows
+  /// the pointer from here too, when the selection's own gesture does not.
+  bool _following = false;
 
-  /// After a drag from [from] to [to] within one piece of text: when nothing
-  /// came of it, drags again on the list rid of text listed twice or no
-  /// longer registered, in order.
-  void checkDrag(Offset from, Offset to) {
-    if ((to - from).distance < 12) return;
-    if (!selectables.any((s) => _holds(s, from) && _holds(s, to))) return;
-    if (getSelectedContent()?.plainText.trim().isNotEmpty ?? false) return;
-    final before = _describeAround(from);
+  /// An end update came from elsewhere (the selection's gesture) since the
+  /// pointer last moved.
+  bool _endSeen = false;
+  bool _dispatchingOwn = false;
+
+  // The selection events from elsewhere (the selection's gesture, keys,
+  // wheel steps) since the press, and the listed text the last start from
+  // elsewhere went to: a gesture given up on clears; one that never came
+  // sends nothing.
+  int _clears = 0;
+  int _starts = 0;
+  int _ends = 0;
+  int _startWent = -1;
+  static int _logged = 0;
+
+  /// A press on the list: the events counted from here, and the list
+  /// checked (it may have changed where nothing tells, in Flutter's own).
+  void beginDrag() {
+    _clears = _starts = _ends = 0;
+    _startWent = -1;
+    _checkList();
+  }
+
+  /// Where the drag pressed at [from] stands, before it is done again.
+  String _trace(Offset from) {
+    String at(int index) => index < 0 || index >= selectables.length
+        ? '#$index'
+        : '#$index (item ${_itemOf(selectables[index])})';
+    return 'pressed in ${at(selectables.indexWhere((s) => _holds(s, from)))}, '
+        'its start went to ${at(_startWent)}, edges at '
+        '#$currentSelectionStartIndex, #$currentSelectionEndIndex; since the '
+        'press $_clears clears, $_starts starts, $_ends ends from elsewhere; '
+        '${selectables.length} listed, '
+        '${_listOff(geometry: true) ?? 'whole'}';
+  }
+
+  /// Drags again from [from] to [to] on the list rid of text listed twice
+  /// or no longer registered, in order; then writes what led to it, [when]
+  /// it was noticed: a line in the event log, and when that put it right
+  /// (it was no drag on blank space), the steps before it.
+  void _dragAgain(String when, Offset from, Offset to) {
+    final trace = _trace(from);
+    final around = _describeAround(from);
     final seen = <Selectable>{};
     selectables = [
       for (final selectable in selectables)
         if (_items.containsKey(selectable) && seen.add(selectable)) selectable,
     ]..sort(compareOrder);
-    dispatchSelectionEvent(const ClearSelectionEvent());
-    dispatchSelectionEvent(
-      SelectionEdgeUpdateEvent.forStart(globalPosition: from),
+    recorder.step('drag done again ($when)');
+    _dispatchingOwn = true;
+    try {
+      dispatchSelectionEvent(const ClearSelectionEvent());
+      dispatchSelectionEvent(
+        SelectionEdgeUpdateEvent.forStart(globalPosition: from),
+      );
+      dispatchSelectionEvent(
+        SelectionEdgeUpdateEvent.forEnd(globalPosition: to),
+      );
+    } finally {
+      _dispatchingOwn = false;
+    }
+    if (_logged++ >= 20) return;
+    final healed = value.status == SelectionStatus.uncollapsed;
+    final headline =
+        'a drag on text had selected nothing ($when, '
+        '${(to - from).distance.round()} px from ${_offset(from)} to '
+        '${_offset(to)}); done again, '
+        '${healed ? 'selected' : 'still nothing'}';
+    final file = healed
+        ? recorder.dump(headline, [trace, around, ..._describeHeld(from)])
+        : null;
+    appEvent(
+      'selection',
+      '$headline: $trace${file == null ? '' : '; steps in $file'}',
     );
-    dispatchSelectionEvent(SelectionEdgeUpdateEvent.forEnd(globalPosition: to));
+  }
+
+  /// The text that holds [position], and what is selected in it now.
+  List<String> _describeHeld(Offset position) => [
+    for (final selectable in selectables)
+      if (_holds(selectable, position))
+        'now ${_describeSelectable(selectable)}',
+  ];
+
+  /// While a drag pressed on text from [from] is held, the pointer at [to]:
+  /// when it has selected nothing by now, done again there and then (see
+  /// [checkDrag]), not only once let go; and its end kept under the pointer
+  /// when nothing else moves it.
+  void followDrag(Offset from, Offset to) {
+    final seen = _endSeen;
+    _endSeen = false;
+    // Done again once, unless cleared since (its gesture given up on).
+    if (!_following || value.status == SelectionStatus.none) {
+      if (value.status == SelectionStatus.uncollapsed) return;
+      if ((to - from).distance < 12) return;
+      if (!selectables.any((s) => _holds(s, from))) return;
+      _dragAgain('while held', from, to);
+      _following = true;
+    } else if (!seen) {
+      _dispatchingOwn = true;
+      try {
+        dispatchSelectionEvent(
+          SelectionEdgeUpdateEvent.forEnd(globalPosition: to),
+        );
+      } finally {
+        _dispatchingOwn = false;
+      }
+    }
+  }
+
+  /// After a drag from [from] to [to] within one piece of text: when nothing
+  /// came of it, drags again ([_dragAgain]).
+  void checkDrag(Offset from, Offset to) {
+    if ((to - from).distance < 12) return;
+    if (!selectables.any((s) => _holds(s, from) && _holds(s, to))) return;
+    if (getSelectedContent()?.plainText.trim().isNotEmpty ?? false) return;
+    _dragAgain('let go', from, to);
     _dragEnd = null;
-    if (_reports++ >= 3) return;
-    final healed = getSelectedContent()?.plainText.trim().isNotEmpty ?? false;
-    // What the text that holds it made of the drag done again.
-    final held = [
-      for (final (index, selectable) in selectables.indexed)
-        if (_holds(selectable, from) && _holds(selectable, to))
-          '#$index: ${selectable.value.status.name}, '
-              '${selectable.value.hasContent ? '' : 'no '}content, '
-              '${selectable.contentLength} long',
-    ];
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: FlutterError(
-          'A drag on text selected nothing '
-          '(${healed ? 'selected' : 'still nothing'} done again).\n'
-          'Dragged to ${_offset(to)}; held by ${held.join('; ')}.\n$before',
-        ),
-        library: 'chat selection',
-      ),
-    );
   }
 
   // Rect's and Offset's own toString is not in a release build.
@@ -3529,6 +3985,7 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
       _refreshEdgeLocations();
       super.didChangeSelectables();
       _rememberEndText();
+      _checkList();
     });
   }
 
@@ -3575,7 +4032,11 @@ class _ChatSelectionDelegate extends StaticSelectionContainerDelegate
     );
   }
 
-  void endDrag() => _dragEnd = null;
+  void endDrag() {
+    _dragEnd = null;
+    _following = false;
+    _endSeen = false;
+  }
 
   /// [count] items came in before all the others (earlier history): the
   /// selection's ends are in the items [count] on.
@@ -3902,9 +4363,17 @@ class _AppearState extends State<_Appear> with SingleTickerProviderStateMixin {
 /// over a moment rather than at once; any other change at once. Moving
 /// already, it takes a new height in its stride.
 class _HeightMotion extends StatefulWidget {
-  const _HeightMotion({required this.motion, required this.child});
+  const _HeightMotion({
+    required this.motion,
+    this.fromNothing = false,
+    required this.child,
+  });
 
   final int motion;
+
+  /// New, it grows from no height (with [motion] changed, as it would
+  /// have, had it been there).
+  final bool fromNothing;
   final Widget child;
 
   @override
@@ -3928,6 +4397,7 @@ class _HeightMotionState extends State<_HeightMotion>
   @override
   Widget build(BuildContext context) => _HeightMotionBox(
     motion: widget.motion,
+    fromNothing: widget.fromNothing,
     progress: _progress,
     onStart: () {
       if (mounted) _progress.forward(from: 0);
@@ -3939,18 +4409,25 @@ class _HeightMotionState extends State<_HeightMotion>
 class _HeightMotionBox extends SingleChildRenderObjectWidget {
   const _HeightMotionBox({
     required this.motion,
+    required this.fromNothing,
     required this.progress,
     required this.onStart,
     super.child,
   });
 
   final int motion;
+  final bool fromNothing;
   final Animation<double> progress;
   final VoidCallback onStart;
 
   @override
   _RenderHeightMotion createRenderObject(BuildContext context) =>
-      _RenderHeightMotion(motion, progress, onStart: onStart);
+      _RenderHeightMotion(
+        motion,
+        progress,
+        onStart: onStart,
+        fromNothing: fromNothing,
+      );
 
   @override
   void updateRenderObject(
@@ -3965,7 +4442,17 @@ class _HeightMotionBox extends SingleChildRenderObjectWidget {
 }
 
 class _RenderHeightMotion extends RenderProxyBox {
-  _RenderHeightMotion(this._motion, this._progress, {required this.onStart});
+  _RenderHeightMotion(
+    this._motion,
+    this._progress, {
+    required this.onStart,
+    bool fromNothing = false,
+  }) {
+    if (fromNothing) {
+      _from = _to = 0;
+      _armed = true;
+    }
+  }
 
   VoidCallback onStart;
 
