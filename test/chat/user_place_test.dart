@@ -2,6 +2,7 @@ import 'package:baocode/chat/chat_models.dart';
 import 'package:baocode/chat/chat_session.dart';
 import 'package:baocode/kernel/agent_kernel.dart';
 import 'package:baocode/kernel/claude_code/claude_code_kernel.dart';
+import 'package:baocode/kernel/prompt_suggestions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -10,6 +11,11 @@ import '../kernel_test.dart' show FakeCli;
 void main() {
   testWidgets('the agent is told, unseen, as the user writes from the phone '
       'or comes back to the computer', (tester) async {
+    // The place notes are what is under test: reply suggestions are a
+    // separate setting, off here so they do not join the message.
+    final wasWanted = PromptSuggestions.current;
+    PromptSuggestions.current = () => false;
+    addTearDown(() => PromptSuggestions.current = wasWanted);
     final cli = FakeCli();
     late final KernelDescriptor descriptor;
     descriptor = KernelDescriptor(
