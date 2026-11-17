@@ -152,6 +152,7 @@ class Shell {
     this.executable, {
     this.kind = ShellKind.posix,
     this.baoBash = false,
+    this.msys = false,
   });
 
   /// The variable the app names BaoCode Bash's `bash.exe` in
@@ -237,7 +238,7 @@ class Shell {
       if (environment['CLAUDE_CODE_GIT_BASH_PATH'] case final set?
           when exists(set)) {
         // Git's bash says its paths the MSYS way.
-        return Shell(set, msys: true);
+        return Shell(set);
       }
       if (bao != null && exists(bao)) return Shell(bao, baoBash: true);
       if (gitBash(environment, exists: exists) case final git?) {
