@@ -570,7 +570,7 @@ void main() {
           .dy;
       expect(rect.left, greaterThanOrEqualTo(0));
       expect(rect.height, lessThan(line));
-      expect(rect.center.dy, moreOrLessEquals(lineTop + line / 2));
+      expect(rect.center.dy, moreOrLessEquals(lineTop + line / 2, epsilon: 0.5)); // font metrics round to half a pixel
     }
 
     expectCentered(0);
