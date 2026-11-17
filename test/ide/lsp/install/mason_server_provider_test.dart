@@ -821,14 +821,18 @@ void main() {
       platform: const MasonPlatform('win', 'x64'),
     );
 
-    Future<void> javaHome({String name = 'JAVA_HOME'}) async {
-      final home = p.join(temp.path, 'java home');
-      final java = File(p.join(home, 'bin', 'java.exe'));
+    /// The provider checks the executable bit on non-Windows runners: fake
+    /// files created here need it or Java looks missing in CI's Linux.
+    Future<void> executableJava(File java) async {
       await java.create(recursive: true);
-      // The provider checks the executable bit on non-Windows runners.
       if (!Platform.isWindows) {
         await Process.run('chmod', ['+x', java.path]);
       }
+    }
+
+    Future<void> javaHome({String name = 'JAVA_HOME'}) async {
+      final home = p.join(temp.path, 'java home');
+      await executableJava(File(p.join(home, 'bin', 'java.exe')));
       environment[name] = home;
     }
 
@@ -858,7 +862,7 @@ void main() {
     });
 
     test('jdtls uses PATH when JAVA_HOME is unset or empty', () async {
-      await File(p.join(toolsDir, 'java.exe')).create();
+      await executableJava(File(p.join(toolsDir, 'java.exe')));
       for (final home in [null, '']) {
         if (home == null) {
           environment.remove('JAVA_HOME');
@@ -891,7 +895,7 @@ void main() {
       'jdtls honors an invalid JAVA_HOME instead of accepting PATH',
       () async {
         environment['JAVA_HOME'] = p.join(temp.path, 'missing java home');
-        await File(p.join(toolsDir, 'java.exe')).create();
+        await executableJava(File(p.join(toolsDir, 'java.exe')));
         expect(
           await windows().locate(server('jdtls')),
           isA<LspServerMissing>().having(
