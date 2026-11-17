@@ -127,20 +127,15 @@ class FakeRunner implements CommandRunner {
       case 'npm':
         final prefix = arguments[arguments.indexOf('--prefix') + 1];
         await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls'));
-        await touch(
-          p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
-        );
+        await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'));
       case 'node'
           when arguments.isNotEmpty && arguments.first.endsWith('npm-cli.js'):
         // Run as node with npm's own script (Windows): the same install,
         // the same things left behind.
         final prefix = arguments[arguments.indexOf('--prefix') + 1];
         await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls'));
-        await touch(
-          p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
-        );
-      case 'python'
-          when arguments.contains('-m') && arguments.contains('venv'):
+        await touch(p.join(prefix, 'node_modules', '.bin', 'fake-npm-ls.cmd'));
+      case 'python' when arguments.contains('-m') && arguments.contains('venv'):
         // The venv's own python: where pip runs from.
         await touch(p.join(arguments.last, 'bin', 'python'));
       case 'python':
@@ -372,8 +367,9 @@ void main() {
 
   /// The path of the tool [name] as this machine spells it: with the
   /// extension Windows gives it.
-  String toolPath(String name) =>
-      Platform.isWindows ? p.join(toolsDir, '$name.cmd') : p.join(toolsDir, name);
+  String toolPath(String name) => Platform.isWindows
+      ? p.join(toolsDir, '$name.cmd')
+      : p.join(toolsDir, name);
 
   /// A Windows-style Node folder: only `npm.cmd` (and node) on PATH, npm's
   /// Bash script beside it as a plain extensionless file, and its
@@ -540,7 +536,9 @@ void main() {
       final dir = p.join(root, 'fake-tar');
       final manifest = (await mason.installed('fake-tar'))!;
       // The wrapper is a `.cmd` on Windows: it is what `cmd.exe` runs.
-      final wrapperName = machine.isWindows ? 'fake-tar-node.cmd' : 'fake-tar-node';
+      final wrapperName = machine.isWindows
+          ? 'fake-tar-node.cmd'
+          : 'fake-tar-node';
       expect(manifest.bin, {
         'fake-tar-ls': 'libexec/fake-ls-1.0/bin/fake-ls',
         'fake-tar-node': 'mason-bin/$wrapperName',
@@ -552,7 +550,9 @@ void main() {
         wrapper.readAsStringSync(),
         machine.isWindows
             ? contains(r'node "%~dp0..\libexec\fake-ls-1.0\bin\fake-ls"')
-            : contains(r'exec node "$dir/libexec/fake-ls-1.0/bin/fake-ls" "$@"'),
+            : contains(
+                r'exec node "$dir/libexec/fake-ls-1.0/bin/fake-ls" "$@"',
+              ),
       );
       expect(_executable(wrapper), isTrue);
       final location = await mason.locate(server('fake-tar-node', 'fake-tar'));
@@ -629,48 +629,51 @@ void main() {
       );
     });
 
-    test('npm on Windows: npm.cmd answers for npm, run through node',
-        skip: !Platform.isWindows
-            ? 'npm.cmd and the node lookup are Windows ways'
-            : false, () async {
-      final runner = FakeRunner();
-      final mason = provider(runner: runner, platform: win);
-      // node there, but only npm's Bash script (nvm-windows', the
-      // installer's folder keeps it beside npm.cmd): the bare name is not
-      // a Win32 program, and starting it is what says so.
-      await File(p.join(toolsDir, 'node.exe')).writeAsString('node');
-      await File(p.join(toolsDir, 'npm')).writeAsString('#!/bin/sh\n');
-      await expectLater(
-        mason.install('fake-npm'),
-        throwsA(
-          isA<LspInstallException>().having(
-            (e) => e.message,
-            'message',
-            'Installing fake-npm needs npm, which is not on PATH',
+    test(
+      'npm on Windows: npm.cmd answers for npm, run through node',
+      skip: !Platform.isWindows
+          ? 'npm.cmd and the node lookup are Windows ways'
+          : false,
+      () async {
+        final runner = FakeRunner();
+        final mason = provider(runner: runner, platform: win);
+        // node there, but only npm's Bash script (nvm-windows', the
+        // installer's folder keeps it beside npm.cmd): the bare name is not
+        // a Win32 program, and starting it is what says so.
+        await File(p.join(toolsDir, 'node.exe')).writeAsString('node');
+        await File(p.join(toolsDir, 'npm')).writeAsString('#!/bin/sh\n');
+        await expectLater(
+          mason.install('fake-npm'),
+          throwsA(
+            isA<LspInstallException>().having(
+              (e) => e.message,
+              'message',
+              'Installing fake-npm needs npm, which is not on PATH',
+            ),
           ),
-        ),
-      );
-      // npm.cmd answering: its own npm-cli.js runs with node, the quotes
-      // of a Program Files path and a spaced user name kept by both.
-      await windowsTools();
-      await mason.install('fake-npm');
-      final (npm, arguments, env) = runner.calls.single;
-      expect(p.basename(npm).toLowerCase(), 'node.exe');
-      expect(
-        arguments.first,
-        endsWith(p.join('node_modules', 'npm', 'bin', 'npm-cli.js')),
-      );
-      expect(arguments, containsAllInOrder(['install', '--no-audit']));
-      expect(env?['PATH'], toolsDir);
-      final dir = p.join(root, 'fake-npm');
-      expect(
-        (await mason.locate(
-          server('fake-npm-ls', 'fake-npm'),
-        ) as LspServerFound).executable,
-        // The bin is the .cmd on Windows, as npm writes it there.
-        p.join(dir, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
-      );
-    });
+        );
+        // npm.cmd answering: its own npm-cli.js runs with node, the quotes
+        // of a Program Files path and a spaced user name kept by both.
+        await windowsTools();
+        await mason.install('fake-npm');
+        final (npm, arguments, env) = runner.calls.single;
+        expect(p.basename(npm).toLowerCase(), 'node.exe');
+        expect(
+          arguments.first,
+          endsWith(p.join('node_modules', 'npm', 'bin', 'npm-cli.js')),
+        );
+        expect(arguments, containsAllInOrder(['install', '--no-audit']));
+        expect(env?['PATH'], toolsDir);
+        final dir = p.join(root, 'fake-npm');
+        expect(
+          (await mason.locate(
+            server('fake-npm-ls', 'fake-npm'),
+          ) as LspServerFound).executable,
+          // The bin is the .cmd on Windows, as npm writes it there.
+          p.join(dir, 'node_modules', '.bin', 'fake-npm-ls.cmd'),
+        );
+      },
+    );
 
     test('pypi: a venv in place, with the extra', () async {
       // The runtime is `python3` elsewhere, `python` on Windows.
@@ -820,7 +823,12 @@ void main() {
 
     Future<void> javaHome({String name = 'JAVA_HOME'}) async {
       final home = p.join(temp.path, 'java home');
-      await File(p.join(home, 'bin', 'java.exe')).create(recursive: true);
+      final java = File(p.join(home, 'bin', 'java.exe'));
+      await java.create(recursive: true);
+      // The provider checks the executable bit on non-Windows runners.
+      if (!Platform.isWindows) {
+        await Process.run('chmod', ['+x', java.path]);
+      }
       environment[name] = home;
     }
 
@@ -941,22 +949,23 @@ void main() {
       );
     });
 
-    test('which skips the extensionless script beside npm.cmd',
-        skip: !Platform.isWindows
-            ? 'npm.cmd is a Windows way'
-            : false, () async {
-      await tool('npm');
-      await tool('npm.cmd');
-      final mason = windows();
-      expect(
-        await mason.which('npm', {...environment, 'PATHEXT': '.exe;.cmd'}),
-        p.join(toolsDir, 'npm.cmd'),
-      );
-      expect(
-        await mason.which('npm.cmd', environment),
-        p.join(toolsDir, 'npm.cmd'),
-      );
-    });
+    test(
+      'which skips the extensionless script beside npm.cmd',
+      skip: !Platform.isWindows ? 'npm.cmd is a Windows way' : false,
+      () async {
+        await tool('npm');
+        await tool('npm.cmd');
+        final mason = windows();
+        expect(
+          await mason.which('npm', {...environment, 'PATHEXT': '.exe;.cmd'}),
+          p.join(toolsDir, 'npm.cmd'),
+        );
+        expect(
+          await mason.which('npm.cmd', environment),
+          p.join(toolsDir, 'npm.cmd'),
+        );
+      },
+    );
   });
 
   group('locate', () {
@@ -1009,8 +1018,9 @@ void main() {
       }
       final expected = Platform.isWindows ? '$path.cmd' : path;
       expect(
-        (await mason.locate(server('bin/nested-ls')) as LspServerFound)
-            .executable,
+        (await mason.locate(
+          server('bin/nested-ls'),
+        ) as LspServerFound).executable,
         expected,
       );
     });
