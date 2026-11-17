@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:baocode/platform/context_menu.dart';
 import 'package:baocode/platform/context_menu_io.dart';
+import 'package:baocode/platform/shell_command_io.dart' show windowsPowerShell;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -127,7 +128,9 @@ void main() {
     WindowsContextMenu menu() => WindowsContextMenu(
       executable: exe,
       run: (executable, arguments, {environment}) async {
-        expect(executable, 'powershell.exe');
+        // PowerShell's full path where it is installed, its bare name
+        // where not: what the app resolves on this machine.
+        expect(executable, windowsPowerShell);
         environments.add(environment);
         // The status script is the one without values.
         return ProcessResult(0, 0, environment == null ? where : '', '');
