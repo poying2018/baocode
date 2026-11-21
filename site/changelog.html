@@ -30,6 +30,85 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v2.0.3">
+    <h2 class="plain"><a href="#v2.0.3">2.0.3</a></h2>
+    <p>Mostly about bots looking after your agents: they start conversations, hand out work, wait for it and check the files changed, just as an agent in a conversation does. Also, Quick Open finds every file of a large project, and big folders on a Linux remote host no longer stall the connection.</p>
+    <p>New</p>
+    <ul>
+    <li>Bots manage agents with the same tools as a conversation: a new conversation can be given a model or a worktree on a new branch; a message to a busy one is queued instead of refused; whole replies are read, a conversation waited for, and the files it changed checked.</li>
+    <li>When a conversation is compacted early, the divider says why: the provider refused the request as too long, the model taking less than the context set. The divider is translated too.</li>
+    <li>Java: the modules of a multi-module project share one language server; when a project fails to import you get a notice with its log, instead of only &quot;No references found&quot;. Thanks to @bestK.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Conversations a bot handed work to are still known as its own after the desktop restarts, and it is still told when they are done.</li>
+    <li>After the desktop restarts, the phone is no longer pushed the bot's earlier messages again.</li>
+    <li>A bot without Agent notifications tells you, when it hands out work, that it won't hear when it is done.</li>
+    <li>Quick Open (⌘P / Ctrl+P) finds every file of a very large project, not only the first 50,000.</li>
+    <li>Linux remote hosts: with tens of thousands of folders watched, a batch rename or a reconnect no longer stalls the connection for tens of seconds.</li>
+    <li>Diagnostics: on a Mac, the window suddenly not taking clicks while typing with an input method is now logged, to track it down.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.2">
+    <h2 class="plain"><a href="#v2.0.2">2.0.2</a></h2>
+    <p>Mostly fixes in this one: the mouse wheel no longer stops working on Windows, and workspace windows are titled by their name, not an ID. New models of a ChatGPT subscription show up without waiting for a BaoCode release.</p>
+    <p>New</p>
+    <ul>
+    <li>New models of a ChatGPT subscription no longer wait for a BaoCode update: the model list asks baocode.dev for the latest Codex version first, so a new model shows up without a restart. The per-upstream &quot;Codex Version&quot; setting is gone.</li>
+    </ul>
+    <p>Phone (phone app 0.2.2)</p>
+    <ul>
+    <li>Push your iPhone with curl: turn on Settings → Notifications → Push from scripts, and your scripts, shortcuts and CI can notify the phone; a tap can open a link or run a shortcut. See baocode.dev/push.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Windows: the mouse wheel no longer stops scrolling altogether after a display change or waking from sleep, until the window was resized.</li>
+    <li>A workspace's window title, the Window menu and Switch Window show the workspace's name instead of an ID, and follow it when renamed.</li>
+    <li>Conversations an agent starts by itself in a temporary folder (/tmp and the like) no longer fill the sidebar; only those you opened or wrote to from the app are listed.</li>
+    <li>With the automatic core and no upstream model, connecting to an SSH host no longer installs Claude Code on it; you're asked to pick a model instead.</li>
+    <li>Suggested replies a model writes together are split into separate ones again, instead of one long pill.</li>
+    <li>Diagnostics: a key that types nothing in a text field is now logged, to track down &quot;a key suddenly stopped typing&quot;.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.1">
+    <h2 class="plain"><a href="#v2.0.1">2.0.1</a></h2>
+    <p>This release completes conversations working together: a coordinating agent can start conversations on the model it picks, and those it handed work report back by themselves. Suggested replies now come in the agent's own reply, with no extra request. SSH hosts get a folder window like Finder's. The phone shows the quota, and big pictures arrive.</p>
+    <p>New</p>
+    <ul>
+    <li>Conversations working together are on by default (Settings → General → &quot;Agents can coordinate other conversations&quot;, which turns it off). An agent can start a conversation on a task (in a new worktree on its own branch if asked) and pick its model; each conversation it started or wrote to reports back once done, failed or waiting on you, without the agent waiting on it.</li>
+    <li>Coordinating steps say what was done and to which conversation, and a click opens it; messages from another conversation show as cards, with Answer while it waits on you. The conversations at work show over the composer.</li>
+    <li>Suggested replies come at the end of the agent's reply, rather than one extra request with the whole conversation for each. They sit on top of the composer: a click puts one in to edit, a double click sends it, and Tab in an empty composer takes the first. They come in one after another.</li>
+    <li>Opening a folder or file on an SSH host shows a window like Finder's or Explorer's: home, the drives and recent places at the left, back and forward, a path bar you can type in, a filter, New Folder, and hidden files when asked. Windows hosts reach drives other than C:.</li>
+    <li>Save As in a remote project, and a new file's first save, pick the place on the host instead of saving to this computer.</li>
+    <li>Settings → Browser shows each connected browser's own name, engine version and program path, and &quot;Use This Browser&quot; picks the one agents use. While the picked one is not connected, the last connected is used.</li>
+    <li>When Claude Code's safeguards switch a conversation to a fallback model, the model button shows the model actually answering and why, and switches back in one click.</li>
+    </ul>
+    <p>Phone (with phone app 0.2.1)</p>
+    <ul>
+    <li>The model picker shows the quota of the current model: each ChatGPT subscription account's, or the Claude plan's limits, with &quot;Refresh Quota Data&quot;.</li>
+    <li>Suggested replies sit over the composer: a tap puts one in, a double tap sends it.</li>
+    <li>Coordinating steps and report cards show as on the computer.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>When every ChatGPT subscription account shows as out of quota, the quota is checked again before a request is refused. An account whose quota came back early used to stay out until its window ended, and the phone could not use it at all.</li>
+    <li>Long conversations open much faster: steps folded away no longer take rows in the list. In a conversation of 5,600 items, a frame after opening went from 1–3 seconds to a few milliseconds.</li>
+    <li>Upstreams are reached with the certificates your computer trusts (a company's CA, a proxy's), not Mozilla's roots alone, so they no longer fail with &quot;TLS failed: Handshake error&quot;. A failed handshake says why.</li>
+    <li>With full access, local_run no longer asks before every command.</li>
+    <li>The Java language server uses the JDK in JAVA_HOME first, and no longer says Java is missing because it is not on PATH.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Big pictures on the phone no longer fail with &quot;stream reset by peer&quot;.</li>
+    <li>The phone shows pictures an agent made in a multi-folder workspace.</li>
+    <li>Windows: as a bot's memory and group chats grow, Claude Code no longer fails to start on and off (its command line was too long). A bot on an upstream with a key no longer loses your MCP servers.</li>
+    <li>Windows: with a dead powershell.exe alias on the PATH, reading API keys and the local tools of SSH projects no longer fail.</li>
+    <li>Windows: dragging a Markdown table's horizontal scrollbar no longer selects text, and the pointer over it stays an arrow.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v2.0.0">
     <h2 class="plain"><a href="#v2.0.0">2.0.0</a></h2>
     <p>2.0 is a major release. Windows gets BaoCode Bash, and agents no longer fight PowerShell. One conversation can direct the others, a project can take in other folders, and your settings move to another computer in one file. The phone can send files to an agent, and an iPhone gets push notifications.</p>

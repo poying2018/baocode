@@ -26,7 +26,7 @@ import '../keybindings/chat_keybindings.dart' show ChatCommandIds;
 import '../chat/composer/file_drop.dart';
 import '../chat/open_editor.dart';
 import '../keybindings/default_keybindings.dart'
-    show commandCatalog, openSettingsCommandId;
+    show commandCatalog, openLspSettingsCommandId, openSettingsCommandId;
 import '../keybindings/key_chord.dart';
 import '../l10n/l10n.dart';
 import '../keybindings/keybinding_service.dart';
@@ -104,6 +104,7 @@ import 'ide_hover.dart';
 import 'ide_command_center.dart';
 import 'ide_layout.dart';
 import 'ide_list.dart' show IdeKeyboardList;
+import 'ide_menu.dart' show IdeMenuAction, IdeMenuSeparator, showIdeMenu;
 import 'ide_modern_ui.dart';
 import 'ide_diff_options.dart';
 import 'ide_notifications.dart';
@@ -2802,6 +2803,79 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
     }
   }
 
+  /// The actions of a language server's status bar item: its log, the LSP
+  /// settings, and a retry when a server failed or is restarting. Upstream's
+  /// `LanguageService` has these; the workbench here owns them itself.
+  void _showLanguageServerMenu(
+    LanguageServerStatus status,
+    String path,
+    Rect? anchor,
+    Offset? position,
+  ) {
+    final l10n = context.l10n;
+    final id = status.serverId;
+    unawaited(
+      showIdeMenu(
+        context,
+        anchor: anchor,
+        position: position,
+        entries: [
+          IdeMenuAction(
+            l10n.langViewLog,
+            icon: const Icon(Codicons.output),
+            onSelected: () => unawaited(_openLanguageServerLog(id, path)),
+          ),
+          IdeMenuAction(
+            l10n.langOpenLspSettings,
+            icon: const Icon(Codicons.json),
+            onSelected: () => _hostCommand(openLspSettingsCommandId)?.invoke(),
+          ),
+          if (status.state == LanguageServerState.failed ||
+              status.state == LanguageServerState.restarting) ...[
+            const IdeMenuSeparator(),
+            IdeMenuAction(
+              l10n.cmdRetryLanguageServices,
+              icon: const Icon(Codicons.refresh),
+              onSelected: () => _languages?.retry(id, path: path),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// Opens [serverId]'s recent log in a read-only tab, refreshed when it is
+  /// open already (as upstream's `LanguageService.openServerLog` does).
+  Future<void> _openLanguageServerLog(String serverId, String path) async {
+    final languages = _languages;
+    if (languages == null) return;
+    final l10n = context.l10n;
+    Future<String> read() async {
+      var lines = languages.logFor(serverId, path: path);
+      if (lines.isEmpty) lines = languages.logFor(serverId);
+      if (lines.isNotEmpty) return lines.join('\n');
+      final status = languages
+          .statusFor(path)
+          .where((status) => status.serverId == serverId)
+          .firstOrNull;
+      final fallback = status?.error ?? status?.message;
+      if (fallback != null && fallback.isNotEmpty) return fallback;
+      return l10n.langNoLogOutput(serverId);
+    }
+
+    final safeId = serverId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    final logPath = widget.workspace.paths.join(
+      widget.workspace.root,
+      '$safeId.log',
+    );
+    await widget.workspace.openRevision(
+      logPath,
+      label: l10n.langServerLogLabel,
+      read: read,
+      refresh: true,
+    );
+  }
+
   void _recommendServer(
     LanguageServerStatus status,
     String path, {
@@ -4257,7 +4331,9 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
           _revealInExplorer(path);
         },
         onAddToChat: widget.onAddToChat,
-        trash: WindowControls.canMoveToTrash
+        // A remote workspace's paths are its host's: the Trash here would
+        // not have them (and would move a same-named local file).
+        trash: _local && WindowControls.canMoveToTrash
             ? WindowControls.moveToTrash
             : null,
         commitMessage: widget.commitMessage,
@@ -5314,7 +5390,13 @@ class IdeWorkbenchState extends State<IdeWorkbench> {
           );
         }(),
         if (widget.workspace.active case final doc?)
-          ...ideLanguageStatusItems(languages, doc.path, l10n: l10n),
+          ...ideLanguageStatusItems(
+            languages,
+            doc.path,
+            l10n: l10n,
+            onOpenServerMenu: (status, {anchor, position}) =>
+                _showLanguageServerMenu(status, doc.path, anchor, position),
+          ),
       ],
       if (_statusMessage case final message?) IdeStatusBarItem(message),
     ];

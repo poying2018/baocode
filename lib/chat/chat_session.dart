@@ -400,6 +400,19 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _ => false,
   };
 
+  /// The model answering in place of the one picked ([models]' selected),
+  /// by name, since its safeguards flagged a message; null while the
+  /// picked one answers.
+  String? get fallbackModel => switch (_kernel) {
+    final ReportsModelFallback kernel => kernel.fallbackModel,
+    _ => null,
+  };
+
+  /// Back to the model picked, from [fallbackModel].
+  void endModelFallback() {
+    if (_kernel case final ReportsModelFallback kernel) kernel.endFallback();
+  }
+
   KernelChoice? get modes => switch (_kernel) {
     final SelectsMode kernel => _choice(kernel.mode),
     _ => null,
@@ -489,10 +502,11 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
     _ => null,
   };
 
-  /// Asks for the account's limits now (see [ReportsUsage.refreshUsage]).
-  void refreshUsage() {
+  /// Asks for the account's limits now (see [ReportsUsage.refreshUsage]);
+  /// done once they came.
+  Future<void> refreshUsage() async {
     if (_kernel case final ReportsUsage kernel) {
-      unawaited(kernel.refreshUsage());
+      await kernel.refreshUsage();
     }
   }
 
@@ -595,17 +609,35 @@ class ChatSession extends ChangeNotifier implements ChatFeed {
   };
 
   /// Copies the conversation into a new session titled [title] (see
-  /// [ForksConversation.fork]): all of it but a turn under way; null when
-  /// it could not.
-  Future<SessionRecord?> fork({required String title}) async {
+  /// [ForksConversation.fork]): all of it but a turn under way, or up to
+  /// the user's message [before] (by its id) when given; null when it
+  /// could not.
+  Future<SessionRecord?> fork({required String title, String? before}) async {
     if (_kernel case final ForksConversation kernel when kernel.canFork) {
-      final before = switch (_transcript.activeTurn) {
+      before ??= switch (_transcript.activeTurn) {
         final turn? when _transcript.indexOf(turn) != null => turn,
         _ => null,
       };
       return kernel.fork(before: before, title: title);
     }
     return null;
+  }
+
+  /// Where a fork from the end of the turn item [index] ends (see [fork]):
+  /// before the user's next message, by its id, or at the end (null) when
+  /// none follows. Null where it cannot be forked there: one that cannot
+  /// be forked at all, or a next message of an earlier history read whole,
+  /// which has no id.
+  ({String? before})? forkCutAfter(int index) {
+    if (!canFork) return null;
+    for (var i = index + 1; i < _transcript.length; i++) {
+      if (_transcript.itemAt(i) is! UserMessageItem) continue;
+      return switch (_transcript.idAt(i)) {
+        final id? => (before: id),
+        null => null,
+      };
+    }
+    return (before: null);
   }
 
   /// The id of the last item a fork made now would hold (see [fork]): all

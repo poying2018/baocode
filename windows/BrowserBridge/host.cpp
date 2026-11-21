@@ -23,12 +23,14 @@
 #include <ws2tcpip.h>
 #include <shlobj.h>
 #include <windows.h>
+#include <tlhelp32.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <wchar.h>
 
 #define MAX_MESSAGE (64 * 1024 * 1024)
 
@@ -145,6 +147,67 @@ static bool port_file_name(wchar_t* name, size_t size) {
          wcscat_s(name, size, L"-browser.port") == 0;
 }
 
+// The parent of [pid], as the processes' snapshot has it; 0 when none.
+static DWORD parent_of(HANDLE snapshot, DWORD pid) {
+  PROCESSENTRY32 entry = {};
+  entry.dwSize = sizeof entry;
+  for (BOOL found = Process32First(snapshot, &entry); found;
+       found = Process32Next(snapshot, &entry)) {
+    if (entry.th32ProcessID == pid) return entry.th32ParentProcessID;
+  }
+  return 0;
+}
+
+// [pid]'s executable, in [wide] (a path), [length] its characters.
+static bool image_path(DWORD pid, wchar_t* wide, DWORD* length) {
+  HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+  if (!process) return false;
+  const BOOL ok = QueryFullProcessImageNameW(process, 0, wide, length);
+  CloseHandle(process);
+  return ok != FALSE && *length > 0;
+}
+
+// The browser's executable, as the process that started this one runs it:
+// the folder says which browser it is (a fork's chrome.exe is not
+// Chrome's). Windows starts the host through cmd.exe, whose parent is the
+// browser: the chain is walked up to it. "" when it is not to be had.
+static void browser_path(char* buffer, size_t size) {
+  buffer[0] = 0;
+  HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+  if (snapshot == INVALID_HANDLE_VALUE) return;
+  DWORD pid = GetCurrentProcessId();
+  wchar_t wide[1024];
+  for (int up = 0; up < 4; up++) {
+    pid = parent_of(snapshot, pid);
+    if (pid == 0) break;
+    DWORD length = static_cast<DWORD>(sizeof wide / sizeof wide[0]);
+    if (!image_path(pid, wide, &length)) break;
+    const wchar_t* name = wcsrchr(wide, L'\\');
+    name = name ? name + 1 : wide;
+    if (_wcsicmp(name, L"cmd.exe") == 0 ||
+        _wcsicmp(name, L"conhost.exe") == 0) {
+      continue;
+    }
+    const int n = WideCharToMultiByte(CP_UTF8, 0, wide, static_cast<int>(length),
+                                      buffer, static_cast<int>(size - 1),
+                                      nullptr, nullptr);
+    if (n > 0) buffer[n] = 0;
+    break;
+  }
+  CloseHandle(snapshot);
+}
+
+// [text] as it goes in JSON: its quotes and backslashes escaped (a path
+// has no control characters in it).
+static void escape_json(const char* text, char* out, size_t size) {
+  size_t j = 0;
+  for (const char* p = text; *p && j + 3 < size; p++) {
+    if (*p == '"' || *p == '\\') out[j++] = '\\';
+    out[j++] = *p;
+  }
+  out[j] = 0;
+}
+
 // BaoCode's port and token, from its file: false while there is none
 // (BaoCode is not running) or it is not whole yet.
 static bool find_bao(unsigned* port, char* token, size_t size) {
@@ -228,13 +291,18 @@ static DWORD WINAPI from_bao(void*) {
       Sleep(1000);
       continue;
     }
-    // Who it is: the extension's origin, as the browser gave it, and the
-    // token, which says the host is one the user started.
-    char hello[640];
+    // Who it is: the extension's origin, as the browser gave it; the
+    // token, which says the host is one the user started; and the
+    // browser's own executable, which tells one from another.
+    char path[1024];
+    char escaped[2048];
+    browser_path(path, sizeof path);
+    escape_json(path, escaped, sizeof escaped);
+    char hello[4096];
     const int n = snprintf(hello, sizeof hello,
                            "{\"type\":\"hello\",\"origin\":\"%s\","
-                           "\"token\":\"%s\"}",
-                           origin, token);
+                           "\"token\":\"%s\",\"path\":\"%s\"}",
+                           origin, token, escaped);
     if (n <= 0 || n >= static_cast<int>(sizeof hello) ||
         !send_message(fd, hello, static_cast<uint32_t>(n))) {
       closesocket(fd);

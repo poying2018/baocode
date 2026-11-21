@@ -73,11 +73,13 @@ class Compaction {
   }
 
   /// Sums up the conversation and goes on from the summary. Returns
-  /// whether it did ([instructions] say what to keep).
+  /// whether it did ([instructions] say what to keep; [tooLong], that the
+  /// API refused the conversation as longer than the model takes).
   Future<bool> compact(
     SessionStore store, {
     required String trigger,
     String? instructions,
+    bool tooLong = false,
     required CancelToken cancel,
   }) async {
     final messages = store.apiMessages();
@@ -116,7 +118,12 @@ class Compaction {
       'level': 'info',
       'parentUuid': null,
       'logicalParentUuid': store.leaf,
-      'compactMetadata': {'trigger': trigger, 'preTokens': before},
+      'compactMetadata': {
+        'trigger': trigger,
+        'preTokens': before,
+        if (tooLong) 'reason': 'prompt_too_long',
+        if (tooLong) 'contextWindow': session.contextWindow,
+      },
     });
     // The session starts over from the summary: its SessionStart hooks
     // run again, what they add kept with it.
@@ -145,6 +152,8 @@ class Compaction {
         'trigger': trigger,
         'pre_tokens': before,
         'post_tokens': after,
+        if (tooLong) 'reason': 'prompt_too_long',
+        if (tooLong) 'context_window': session.contextWindow,
       },
       'uuid': boundary['uuid'],
     });

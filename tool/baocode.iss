@@ -123,6 +123,12 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ; it).
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
+; Off: the app Setup opens ([Run], an update's /RELAUNCH too) would inherit
+; it, runasoriginaluser or not where Setup was not elevated, and so would
+; every terminal and agent the app starts. They then cannot go through a
+; junction (pnpm's node_modules, Scoop's shims): ERROR_UNTRUSTED_MOUNT_POINT,
+; until the app is opened again some other way (#1169).
+RedirectionGuard=no
 DisableProgramGroupPage=yes
 ; Windows 10 or later, as the download page and the README say: Flutter's
 ; Windows build needs it, and the app would install on 8.1 and then not start.

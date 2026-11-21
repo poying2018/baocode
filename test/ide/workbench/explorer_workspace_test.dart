@@ -15,6 +15,7 @@ import 'package:baocode/ide/ide_workbench.dart';
 import 'package:baocode/ide/search/text_search.dart';
 import 'package:baocode/theme/codicons.dart';
 import 'package:baocode/workspace/workspace.dart';
+import 'package:path/path.dart' as p;
 
 import '../git/fake_git.dart';
 import 'fake_files.dart';
@@ -255,6 +256,8 @@ void main() {
       files,
       '/data/w1',
       roots: ['/w/site', '/w/api'],
+      // The fixture's paths are POSIX whatever the host (Windows included).
+      pathContext: p.posix,
       lister: (files, root) async => IdeFileListing([
         for (final path in (files as TreeFiles).contents.keys)
           if (path.startsWith('$root/')) path,
@@ -262,7 +265,10 @@ void main() {
     );
     addTearDown(index.dispose);
     await index.refresh();
-    expect(index.relativePaths, ['api/main.go', 'site/index.html']);
+    expect(index.bestFor('', limit: 10)!, [
+      (path: '/w/api/main.go', relative: 'api/main.go'),
+      (path: '/w/site/index.html', relative: 'site/index.html'),
+    ]);
   });
 }
 

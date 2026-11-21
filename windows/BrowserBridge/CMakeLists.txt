@@ -32,5 +32,5 @@ add_executable(${BROWSER_HOST_NAME} "host.cpp")
 apply_standard_settings(${BROWSER_HOST_NAME})
 target_compile_options(${BROWSER_HOST_NAME} PRIVATE /utf-8)
 target_compile_definitions(${BROWSER_HOST_NAME} PRIVATE
-  "NOMINMAX" "WIN32_LEAN_AND_MEAN")
+  "NOMINMAX" "WIN32_LEAN_AND_MEAN" "_WIN32_WINNT=0x0600")
 target_link_libraries(${BROWSER_HOST_NAME} PRIVATE "shell32.lib" "ws2_32.lib")

@@ -1461,6 +1461,16 @@ class ChatComposerState extends State<ChatComposer>
       widget.session.isStreaming &&
       !(widget.session.canQueue && _canSend);
 
+  /// Emptied: what was in it sent from elsewhere (a suggested reply put
+  /// in at a click, sent at a second).
+  void clear() {
+    _pool = {};
+    _controller.clear();
+    _leaveHistory();
+    _saveDraft();
+    _dismissedTrigger = null;
+  }
+
   void _submit() {
     // Empty while a turn runs, messages queued behind it: the first of them
     // taken up now, as its Send Now.
@@ -1613,6 +1623,7 @@ class ChatComposerState extends State<ChatComposer>
         session.permissions,
         model,
       ]) ...[choice?.options, choice?.selected],
+      session.fallbackModel,
       // What the model's label says of its settings (see
       // SessionModelPicker): their lists are made anew each time.
       if (model != null)
