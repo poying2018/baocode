@@ -35,6 +35,9 @@ class Harness {
     Future<void> Function()? stopSession,
     Duration sessionStopTimeout = const Duration(seconds: 15),
     bool firstParty = true,
+    String? systemPrompt,
+    String? coreSystemPrompt,
+    String? appendSystemPrompt,
   }) async {
     final root =
         from?.root ??
@@ -68,6 +71,9 @@ class Harness {
         effort: effort,
         thinkingDisplay: thinkingDisplay,
         strictMcpConfig: strictMcpConfig,
+        systemPrompt: systemPrompt,
+        coreSystemPrompt: coreSystemPrompt,
+        appendSystemPrompt: appendSystemPrompt,
         environment: {
           'HOME': root,
           'PATH': Platform.environment['PATH'] ?? '/usr/bin:/bin',

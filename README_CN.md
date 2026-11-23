@@ -1,41 +1,42 @@
 # BaoCode
 
-<img width="300" height="356" alt="image" src="https://github.com/user-attachments/assets/d8288f00-a7f6-41fd-8cbb-f99acfe59418" />
 
 [English](README.md) · **简体中文** · [日本語](README_JA.md) · [Français](README_FR.md) · [Español](README_ES.md)
 
-一个出色、易用的 [Claude Code](https://github.com/anthropics/claude-code) 桌面界面，内置毫秒级响应的快速 IDE。
+**开源 [Claude Code](https://github.com/anthropics/claude-code) 控制面，不仅仅是界面。**
 
-[官网](https://baocode.dev) · [下载](https://baocode.dev/download) · [更新日志](https://baocode.dev/changelog)
+细节拉满的 360FPS 界面之外，还有远程其他电脑的 Claude Code、手机随时接管、Windows 深度优化、10 倍效率的浏览器操控、完整代码编辑器、任意自定义 API、用量洞察、对话编排与 Bot。
 
-![用户对 BaoCode 的评价](docs/readme/reviews-zh.png)
+[官网](https://baocode.dev/zh/) · [下载](https://baocode.dev/zh/download) · [更新日志](https://baocode.dev/zh/changelog)
 
-![BaoCode 主窗口：按项目分组的智能体、并排显示的两个对话，以及模型选择器](site/shots/main.png)
+![BaoCode 的 Agent 模式：多台机器上的智能体、进行中的对话及其用量](https://baocode.dev/readme/agent.webp)
 
-> 本文是英文 README 的中文介绍；如内容有差异，以 [English](README.md) 为准。链接指向的文档和网站不一定提供中文版本。
+![BaoCode 的 IDE 模式：文件树和编辑器，旁边是对话](https://baocode.dev/readme/ide.webp)
 
-## 为什么做 BaoCode
+![BaoCode 能做什么：360 FPS 渲染、SSH 远程 Claude Code、浏览器操控、全模型接入、Windows 优化、用量与费用](https://baocode.dev/readme/features-zh.webp)
 
-我们每天都在使用 Claude Code。终端适合运行它，却不适合阅读它：长篇 diff 很容易滚出视野，先前的步骤难以重新找到，审查修改又需要切换应用。BaoCode 就是我们希望为它提供的那个窗口。
+## 不重复造轮子，简单自然才好用
 
-BaoCode 有意不包含自己的智能体。Claude Code 才是智能体，它拥有工具、技能、插件、MCP 服务器、子智能体和 hooks 生态。BaoCode 为它提供易于阅读的界面，并让周边功能开箱即用。它自带 Claude Code，不用另外安装；你若已装了别的版本，就用你那份，沿用你的设置和 `CLAUDE.md`。
+Claude Code 已经足够好，BaoCode 只补它缺的那部分。开箱即用，不用学新概念，用起来就像它本该如此。
+
+**为什么是 Claude Code？** 无论基于哪个内核定制，做到最后都会长成 Claude Code 的样子：同样的工具、同样的上下文管理、同样的 Skill 与 MCP。与其绕一圈重造，不如直接用它，再在协议层接入其他模型，一套配置通用全部。BaoCode 运行你已经装好的 Claude Code，沿用你的设置、登录和 `CLAUDE.md`；没装 Claude Code 的地方，由 BaoCode 内置的智能体读取同样的设置，跑在你添加的模型供应商上。
+
+**一个对话就能调度全部。** 不做复杂的编排画布。主对话通过内置 MCP 直接调度其他会话和子代理，跨服务器也一样；复杂的流程口述一遍，或写成 Skill 就能反复用。
+
+BaoCode 有意不包含自己的智能体——Claude Code 才是智能体。Windows 安装包自带 Claude Code，装完不用再装别的；你若已装了别的版本，就用你那份。
 
 ## 功能
 
-- **为阅读而生的界面。** 文件读取、搜索和命令可以折叠为单行。Claude 做出的修改可以逐文件保留或撤销；检查点保存在 BaoCode 自己的数据目录中，不会写入仓库的 `.git`。
-- **目标。** 输入 `/goal` 和你希望完成的任务，Claude 会持续工作直到达成目标，输入框上方会显示目标及进度。
-- **富文本输入。** 从编辑器复制的代码会以文件和行号引用的形式加入输入；粘贴的图片和拖入的文件可以放在句子中指定的位置。
-- **快速 IDE。** 内置编辑器、终端，以及带提交图的源代码管理。Claude Code 可以起草提交信息，并支持快捷键映射和语言服务器。
-- **统一主题。** 编辑器、对话和侧边栏采用一致的主题样式。
-- **技能、MCP 服务器及更多扩展。** 在同一处管理插件、MCP 服务器、技能、子智能体、规则、命令和 hooks，可供个人使用或限定于某个项目。
-- **多种模型。** 可以添加兼容 Anthropic API、OpenAI Chat Completions 或 OpenAI Responses 的供应商，本地代理负责与 Claude Code 之间的协议转换。密钥保存在系统密钥环中。
-- **通过 SSH 使用远程项目。** 窗口留在本机，文件、Git、搜索、终端、语言服务器和 Claude Code 则运行在远程主机上（Linux，x64 或 arm64）。
-- **通知。** 智能体需要你的操作或完成任务时，会通过系统通知、声音和角标提醒。关闭窗口后，智能体可以继续在菜单栏或系统托盘中运行。
-- **自动更新。** 可选择后台自动更新、手动更新，或关闭更新。
+### GPU 360FPS 原生绘制
 
-## 速度
+彻底放弃 Electron 与 DOM 重排。BaoCode 是原生应用，界面直接用 GPU 绘制：高吞吐流式输出稳锁高刷，滚动跟手，思考等待时自动降频。
 
-BaoCode 是原生应用，直接通过 GPU 绘制界面。以下为英文 README 中列出的 BaoCode 数值，并非本翻译重新测量的结果；实际表现取决于硬件、版本和使用场景。
+| | BaoCode | VS Code | Cursor |
+| --- | --- | --- | --- |
+| 启动 | 约 0.18 秒 | 约 2–3 秒 | 约 2–3 秒 |
+| 单窗口空闲内存 | 约 120 MB | 约 970 MB | 约 1.9 GB |
+| 单窗口进程数 | 2 | 8 | 13 |
+| Windows 下载大小 | 约 16 MB | 约 244 MB | 约 214 MB |
 
 | 指标 | BaoCode |
 | --- | --- |
@@ -53,7 +54,7 @@ Windows 版自带 Claude Code，装完不用再装别的。
 
 ## 从源码构建
 
-BaoCode 使用 Flutter 开发，Dart SDK 要求为 `^3.13.4`。
+BaoCode 是 Flutter 应用（Dart SDK `^3.13.4`）。
 
 ```sh
 flutter pub get
@@ -65,25 +66,29 @@ flutter run -d windows
 ```sh
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe（需要 Inno Setup）
 flutter build linux --release && sh tool/package_linux_deb.sh   # BaoCode-<version>-linux-{amd64,arm64}.deb 和 .tar.gz，在 Ubuntu 上
-dart run tool/build_remote_server.dart    # 用于 Linux x64 和 arm64 的 SSH 远程服务器
+dart run tool/build_remote_server.dart    # SSH 远程服务端，用于 Linux、macOS 和 Windows 主机
 ```
 
-完整测试套件运行较慢，开发时应只运行与修改相关的测试，例如 `flutter test test/update`。
+完整测试套件很慢，只跑和改动相关的测试，例如 `flutter test test/update`。
 
-推送 `v*` 标签后，CI 会构建并发布发行版本。版本号、签名及发布位置的说明见 [docs/release.md](docs/release.md)。更多文档位于 [docs/](docs)，包括[自动更新](docs/auto-update.md)、[SSH 远程](docs/ssh-remote.md)和 [Windows](docs/windows.md)，其中部分文档为中文。
+推送 `v*` 标签后，CI 会构建并发布。版本号、签名和发布位置见 [docs/release.md](docs/release.md)。更多文档在 [docs/](docs)：[自动更新](docs/auto-update.md)、[SSH 远程](docs/ssh-remote.md)、[Windows](docs/windows.md)、[手机连接](docs/mobile-link.md)。
 
 ## 仓库结构
 
 | 路径 | 内容 |
 | --- | --- |
 | [lib/](lib) | 应用代码 |
-| [packages/bao_editor](packages/bao_editor) | 编辑器，以及语法高亮、主题和快捷键支持 |
-| [packages/bao_xterm](packages/bao_xterm) | xterm.js 的 Dart 移植版本 |
-| [packages/bao_pty](packages/bao_pty) | Dart 伪终端支持：macOS、Linux 使用 forkpty，Windows 使用 ConPTY |
+| [packages/bao_agent](packages/bao_agent) | 内置智能体，使用 Claude Code 的 stream-json 协议 |
+| [packages/bao_editor](packages/bao_editor) | 移植到 Flutter 的 Monaco：编辑器、语法高亮、VS Code 主题和快捷键 |
+| [packages/bao_xterm](packages/bao_xterm) | xterm.js 的 Dart 移植 |
+| [packages/bao_pty](packages/bao_pty)、[bao_conpty](packages/bao_conpty) | Dart 伪终端：macOS、Linux 用 forkpty，Windows 用 ConPTY |
 | [packages/bao_remote](packages/bao_remote) | 通过 SSH 提供服务的远程端 |
-| [windows/](windows)、[linux/](linux) | 原生平台启动器 |
+| [packages/bao_link](packages/bao_link)、[bao_iroh](packages/bao_iroh) | 和手机的连接：扫码配对，经 iroh 端到端加密 |
+| [packages/bao_markdown](packages/bao_markdown) | 所见即所得的 Markdown 编辑器 |
+| [packages/bao_websearch](packages/bao_websearch) | 不用搜索 API 的网页搜索，任何模型都能用 |
+| [browser_extension/](browser_extension) | 浏览器扩展 |
 | [tool/](tool) | 构建、打包及发布脚本 |
-| [site/](site) | 官网 [baocode.dev](https://baocode.dev) 的源码 |
+| [site/](site) | 官网 [baocode.dev](https://baocode.dev/zh/) 的源码 |
 | [docs/](docs) | 设计文档 |
 
 ## 反馈

@@ -2,38 +2,42 @@
 
 [English](README.md) · [简体中文](README_CN.md) · [日本語](README_JA.md) · [Français](README_FR.md) · **Español**
 
-Una interfaz de escritorio fácil de usar para [Claude Code](https://github.com/anthropics/claude-code), con un IDE integrado que responde en milisegundos.
+**El plano de control de código abierto para [Claude Code](https://github.com/anthropics/claude-code). Mucho más que una interfaz.**
+
+Más allá de una interfaz a 360 FPS cuidada hasta el último detalle: Claude Code en tus otras máquinas, control desde el móvil, una optimización a fondo para Windows, control del navegador 10× más rápido, un editor de código completo, cualquier API personalizada, el seguimiento del consumo, la orquestación de conversaciones y Bots.
 
 [Sitio web](https://baocode.dev) · [Descargar](https://baocode.dev/download) · [Historial de cambios](https://baocode.dev/changelog)
 
-![Lo que dicen los usuarios de BaoCode](docs/readme/reviews.png)
+![BaoCode en modo Agent: agentes en varias máquinas, una conversación en curso y su consumo](https://baocode.dev/readme/agent.webp)
 
-![Ventana principal de BaoCode: agentes agrupados por proyecto, dos conversaciones en paralelo y selector de modelo](site/shots/main.png)
+![BaoCode en modo IDE: el árbol de archivos y el editor, con la conversación al lado](https://baocode.dev/readme/ide.webp)
+
+![Lo que hace BaoCode: renderizado a 360 FPS, Claude Code por SSH, el navegador, cualquier modelo, Windows, uso y coste](https://baocode.dev/readme/features-en.webp)
 
 > Presentación en español del README en inglés. Si hay diferencias, consulta [English](README.md). Los sitios y documentos enlazados no necesariamente están traducidos al español.
 
-## Por qué BaoCode
+## Sin reinventar la rueda, solo lo que funciona
 
-Usamos Claude Code todos los días. El terminal es un buen lugar para ejecutarlo, pero no para leer sus resultados: los diffs largos desaparecen de la pantalla, cuesta volver a encontrar los pasos anteriores y revisar los cambios exige cambiar de aplicación. BaoCode es la ventana que queríamos para trabajar con él.
+Claude Code ya es muy bueno; BaoCode solo añade lo que le falta. Funciona nada más instalarlo, sin nada nuevo que aprender, y se siente como siempre debió ser.
 
-BaoCode no tiene un agente propio, por diseño. Claude Code es el agente, con su ecosistema de herramientas, skills, plugins, servidores MCP, subagentes y hooks. BaoCode ofrece una interfaz legible y hace que las funciones complementarias estén listas para usar. Claude Code viene incluido: no hay nada que instalar; el tuyo, si ya lo tienes, se usa en su lugar, con tu configuración y tu `CLAUDE.md`.
+**¿Por qué Claude Code?** Personaliza lo suficiente cualquier núcleo de agente y acabará con la forma de Claude Code: las mismas herramientas, la misma gestión del contexto, los mismos skills y el mismo MCP. En lugar de reconstruirlo dando un rodeo, BaoCode lo usa directamente y conecta los demás modelos en la capa del protocolo, así que una sola configuración sirve para todos. Ejecuta el Claude Code que ya tienes, con tus ajustes, tu sesión iniciada y tu `CLAUDE.md`; donde Claude Code no está instalado, el agente integrado de BaoCode lee los mismos ajustes y funciona con un proveedor de modelos que añadas.
+
+**Una conversación dirige el resto.** Sin lienzo de orquestación. A través del MCP integrado, la conversación principal dirige otras sesiones y subagentes, también en otros servidores; describe un flujo complejo una vez, o escríbelo como skill para reutilizarlo.
+
+BaoCode no tiene agente propio: Claude Code es el agente. La descarga para Windows incluye el propio Claude Code, así que no hay nada que instalar; si ya tienes tu propia versión, se usa esa.
 
 ## Funciones
 
-- **Una interfaz hecha para leer.** Las lecturas de archivos, búsquedas y comandos se contraen en una sola línea. Puedes conservar o deshacer los cambios de Claude por archivo. Los puntos de control se guardan en el directorio de datos de BaoCode, nunca en el `.git` del repositorio.
-- **Objetivos.** Escribe `/goal` y lo que quieres lograr: Claude continúa trabajando hasta cumplirlo. El objetivo y su progreso aparecen encima del campo de entrada.
-- **Entrada de texto enriquecido.** El código copiado del editor se inserta como referencia a su archivo y sus líneas. Las imágenes pegadas y los archivos arrastrados se colocan donde quieras dentro de la frase.
-- **IDE rápido.** Incluye editor, terminal y control de código fuente con un grafo de commits. Claude Code puede redactar los mensajes de commit. Admite mapas de atajos y servidores de lenguaje.
-- **Temas coherentes.** El editor, la conversación y la barra lateral comparten el mismo tema.
-- **Skills, servidores MCP y más.** Gestiona plugins, servidores MCP, skills, subagentes, reglas, comandos y hooks en un solo lugar, para uso personal o para un proyecto concreto.
-- **Varios modelos.** Añade un proveedor compatible con la API de Anthropic, OpenAI Chat Completions u OpenAI Responses. Un proxy local traduce el protocolo para Claude Code. Las claves permanecen en el llavero del sistema.
-- **Proyectos remotos por SSH.** La ventana se queda en tu equipo; los archivos, Git, las búsquedas, los terminales, los servidores de lenguaje y Claude Code se ejecutan en el host remoto (Linux, x64 o arm64).
-- **Notificaciones.** Una notificación del sistema, un sonido y una insignia te avisan cuando un agente termina o necesita tu atención. Los agentes pueden seguir trabajando en la barra de menús o la bandeja del sistema al cerrar la ventana.
-- **Actualizaciones.** Puedes elegir actualizaciones automáticas en segundo plano, manuales o desactivarlas.
+### Renderizado nativo por GPU a 360 FPS
 
-## Velocidad
+Sin Electron, sin reflujo del DOM. BaoCode es una aplicación nativa que dibuja su interfaz directamente en la GPU: los flujos rápidos de tokens siguen la frecuencia de refresco de tu pantalla, el desplazamiento sigue tu mano y la aplicación se frena sola mientras espera.
 
-BaoCode es una aplicación nativa que dibuja directamente su interfaz en la GPU. Estos valores proceden del README en inglés; no se han vuelto a medir para esta traducción. Los resultados reales dependen del hardware, la versión y el uso.
+| | BaoCode | VS Code | Cursor |
+| --- | --- | --- | --- |
+| Arranque | ≈ 0,18 s | ≈ 2–3 s | ≈ 2–3 s |
+| Memoria, una ventana en reposo | ≈ 120 MB | ≈ 970 MB | ≈ 1,9 GB |
+| Procesos, una ventana | 2 | 8 | 13 |
+| Tamaño de descarga, Windows | ≈ 16 MB | ≈ 244 MB | ≈ 214 MB |
 
 | Indicador | BaoCode |
 | --- | --- |
@@ -51,44 +55,48 @@ La descarga para Windows incluye el propio Claude Code: no hay nada que instalar
 
 ## Compilar desde el código fuente
 
-BaoCode es una aplicación Flutter; requiere el SDK de Dart `^3.13.4`.
+BaoCode es una aplicación Flutter (Dart SDK `^3.13.4`).
 
 ```sh
 flutter pub get
 flutter run -d windows
 ```
 
-Para crear las distribuciones en `build/installers/`:
+Para compilar lo que se publica, en `build/installers/`:
 
 ```sh
 dart run tool/build_windows.dart          # BaoCode-<version>-setup.exe (requiere Inno Setup)
-dart run tool/build_remote_server.dart    # servidor SSH remoto para Linux x64 y arm64
+flutter build linux --release && sh tool/package_linux_deb.sh   # BaoCode-<version>-linux-{amd64,arm64}.deb y .tar.gz, en Ubuntu
+dart run tool/build_remote_server.dart    # el servidor remoto SSH, para equipos Linux, macOS y Windows
 ```
 
-La suite completa de pruebas es lenta: ejecuta solo las pruebas relacionadas con tus cambios, por ejemplo `flutter test test/update`.
+La suite de pruebas completa es lenta; ejecuta las pruebas de lo que hayas cambiado, por ejemplo `flutter test test/update`.
 
-La CI compila y publica las versiones cuando se envía un tag `v*`. Consulta [docs/release.md](docs/release.md) para las versiones, las firmas y los destinos de publicación. En [docs/](docs) también hay información sobre [actualizaciones automáticas](docs/auto-update.md), [SSH remoto](docs/ssh-remote.md) y [Windows](docs/windows.md). Algunos documentos están en chino.
+La CI compila y publica las versiones cuando se sube una etiqueta `v*`; las versiones, la firma y el destino de las publicaciones se explican en [docs/release.md](docs/release.md). Más documentación en [docs/](docs): [actualización automática](docs/auto-update.md), [SSH remoto](docs/ssh-remote.md), [Windows](docs/windows.md), [el enlace con el móvil](docs/mobile-link.md) (algunos están en chino).
 
 ## Estructura del repositorio
 
-| Ruta | Contenido |
+| Ruta | Qué es |
 | --- | --- |
 | [lib/](lib) | La aplicación |
-| [packages/bao_editor](packages/bao_editor) | Editor, resaltado de sintaxis, temas y atajos |
-| [packages/bao_xterm](packages/bao_xterm) | Adaptación de xterm.js a Dart |
-| [packages/bao_pty](packages/bao_pty) | Pseudoterminales para Dart: forkpty en macOS y Linux, ConPTY en Windows |
-| [packages/bao_remote](packages/bao_remote) | Componente del host remoto servido por SSH |
-| [windows/](windows), [linux/](linux) | Ejecutores nativos |
+| [packages/bao_agent](packages/bao_agent) | El agente integrado, que habla el protocolo stream-json de Claude Code |
+| [packages/bao_editor](packages/bao_editor) | Monaco, portado a Flutter: el editor, su resaltado de sintaxis, los temas y atajos de VS Code |
+| [packages/bao_xterm](packages/bao_xterm) | Un port de xterm.js a Dart |
+| [packages/bao_remote](packages/bao_remote) | El equipo remoto servido por SSH |
+| [packages/bao_link](packages/bao_link), [bao_iroh](packages/bao_iroh) | El enlace con tu móvil: emparejamiento por QR, conexiones cifradas de extremo a extremo sobre iroh |
+| [packages/bao_markdown](packages/bao_markdown) | Un editor de Markdown que muestra el resultado mientras escribes |
+| [packages/bao_websearch](packages/bao_websearch) | Búsqueda web para cualquier modelo, sin API de búsqueda |
+| [browser_extension/](browser_extension) | La extensión de navegador |
 | [tool/](tool) | Scripts de compilación, empaquetado y publicación |
-| [site/](site) | Código del sitio [baocode.dev](https://baocode.dev) |
+| [site/](site) | El sitio web, [baocode.dev](https://baocode.dev) |
 | [docs/](docs) | Notas de diseño |
 
 ## Comentarios
 
-Se agradecen las issues y las Pull Requests. Comente primero el cambio en una issue; no se aceptan Pull Requests demasiado grandes ni las que no se hayan discutido antes. Consulte [CONTRIBUTING.md](CONTRIBUTING.md).
+Las issues y las pull requests son bienvenidas. Comenta un cambio en una issue antes de escribirlo; no se aceptan pull requests grandes ni pull requests de cambios que no se hayan comentado antes. Consulta [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licencia
 
-BaoCode se distribuye bajo la [GNU General Public License v3.0](LICENSE) (GPL-3.0-only). Los paquetes de editor y terminal de [packages/](packages) (bao_editor, bao_xterm, bao_pty) usan la licencia MIT. Los componentes de terceros conservan sus propias licencias, disponibles junto a su código fuente.
+BaoCode se distribuye bajo la [GNU General Public License v3.0](LICENSE) (GPL-3.0-only). Los paquetes de editor y terminal en [packages/](packages) (bao_editor, bao_xterm, bao_pty) son MIT. Los componentes de terceros mantienen sus propias licencias, que se encuentran junto a ellos en el árbol de código fuente.
 
-BaoCode es un proyecto independiente, sin afiliación con Anthropic ni respaldo de esa empresa.
+BaoCode es un proyecto independiente, no afiliado a Anthropic ni respaldado por Anthropic.

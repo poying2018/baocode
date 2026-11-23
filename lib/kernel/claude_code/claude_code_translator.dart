@@ -1283,12 +1283,14 @@ class ClaudeTranslator {
       // Its verb the web kind's, in the app's language.
       'WebFetch' => ToolCallItem(
         kind: ToolKind.web,
+        tool: name,
         target: _string(input['url']) ?? '',
         status: status,
         output: output,
       ),
       'WebSearch' => ToolCallItem(
         kind: ToolKind.web,
+        tool: name,
         label: tense('Searched the web', 'Searching the web'),
         target: _string(input['query']) ?? '',
         status: status,
@@ -1300,8 +1302,10 @@ class ClaudeTranslator {
         target: _string(input['skill']) ?? _string(input['command']) ?? '',
         status: status,
       ),
+      // Loads tools' definitions, MCP tools' mostly: drawn with their mark.
       'ToolSearch' => ToolCallItem(
         kind: ToolKind.search,
+        tool: name,
         label: tense('Looked up tools', 'Looking up tools'),
         target: _string(input['query']) ?? '',
         status: status,
@@ -1590,7 +1594,11 @@ class ClaudeTranslator {
       _toolItem(
         tool,
         outcome,
-        output: outcome == _Outcome.done ? _short(text) : _tail(text),
+        output: outcome != _Outcome.done
+            ? _tail(text)
+            : tool.name == 'WebSearch'
+            ? _searchOutput(text)
+            : _short(text),
         images: _resultImages(block['content']),
         imageFiles: _savedImages(block['content']),
       ),
@@ -2371,6 +2379,20 @@ class ClaudeTranslator {
   static String? _short(String text) {
     if (text.isEmpty) return null;
     return text.length > 2000 ? '${text.substring(0, 2000)}…' : text;
+  }
+
+  /// A web search's output shortened as [_short], but its `Links: [...]`
+  /// line kept whole however long: the sites' icons are read from it, and
+  /// fifteen results with redirect URLs run past 2000 characters.
+  static String? _searchOutput(String text) {
+    if (text.isEmpty) return null;
+    if (text.length <= 2000) return text;
+    final lines = text.split('\n');
+    final at = lines.indexWhere((line) => line.startsWith('Links:'));
+    if (at < 0) return _short(text);
+    final links = lines[at];
+    final rest = _short([...lines.take(at), ...lines.skip(at + 1)].join('\n'));
+    return rest == null ? links : '$rest\n$links';
   }
 
   /// The end of a long output, where errors are.

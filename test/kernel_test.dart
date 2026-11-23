@@ -1,5 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:baocode/chat/widgets/web_step_icons.dart';
+
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -263,6 +266,60 @@ List<String> shown(Transcript transcript) => [
 ].where((line) => line.isNotEmpty).toList();
 
 void main() {
+  test("BaoCode's own core for Antigravity's: the session's model, or one "
+      'its roles pick', () async {
+    Future<bool> builtinCore(Map<String, Object?> roles, String model) async {
+      final providers = ModelProviders.memory(
+        providers: [
+          ModelProvider.fromJson({
+            'id': 'ds',
+            'name': 'DeepSeek',
+            'protocol': 'anthropic',
+            'baseUrl': 'https://example.com',
+            'models': [
+              {'id': 'deepseek-v4'},
+            ],
+            'roles': roles,
+          })!,
+          ModelProvider.fromJson({
+            'id': 'ag',
+            'name': 'Antigravity',
+            'protocol': 'antigravity',
+            'models': [
+              {'id': 'gemini-4-neon'},
+            ],
+          })!,
+        ],
+      );
+      final launches = <ClaudeLaunch>[];
+      final kernel = ClaudeCodeKernel(
+        MockKernels.claudeCode,
+        KernelContext(cwd: '/p', settings: {'model': model}),
+        start: (launch) async {
+          launches.add(launch);
+          return FakeCli();
+        },
+        providers: providers,
+        providerEnvironment: (_, _) async => const {},
+      );
+      kernel.send(const KernelTurn(id: 'u1', text: 'hi'));
+      await pumpEventQueue();
+      kernel.dispose();
+      return launches.single.builtinCore;
+    }
+
+    expect(await builtinCore(const {}, '@ds/deepseek-v4'), isFalse);
+    expect(await builtinCore(const {}, '@ag/gemini-4-neon'), isTrue);
+    expect(
+      await builtinCore({'subagent': '@ag/gemini-4-neon'}, '@ds/deepseek-v4'),
+      isTrue,
+    );
+    expect(
+      await builtinCore({'haiku': '@ag/gemini-4-neon'}, '@ds/deepseek-v4'),
+      isTrue,
+    );
+  });
+
   group('Claude Code translator (recorded)', () {
     test('tools, a background command and a subagent', () {
       final transcript = Transcript();
@@ -586,6 +643,61 @@ void main() {
       // It says it in words of its own: "Said …".
       expect(items.map((item) => item.label), everyElement(isNull));
       expect(toolVerb(ToolKind.message), 'Said');
+    });
+
+    test("a web search's long result keeps its Links line whole", () {
+      final transcript = Transcript();
+      var seq = 0;
+      final translator = ClaudeTranslator(
+        emit: transcript.apply,
+        nextSeq: () => ++seq,
+      )..turnId = '11111111-1111-4111-8111-111111111111';
+      // Fifteen results with long redirect URLs: the list alone runs past
+      // the 2000 characters an output is cut to.
+      final links = jsonEncode([
+        for (var i = 0; i < 15; i++)
+          {
+            'title': 'Result $i',
+            'url': 'https://site$i.example/go/${'x' * 180}',
+          },
+      ]);
+      final result =
+          'Web search results for query: "q"\n\nLinks: $links\n\n'
+          '${'Summary line.\n' * 200}';
+      translator
+        ..translate({
+          'type': 'assistant',
+          'parent_tool_use_id': null,
+          'message': {
+            'id': 'msg-w1',
+            'role': 'assistant',
+            'content': [
+              {
+                'type': 'tool_use',
+                'id': 'w1',
+                'name': 'WebSearch',
+                'input': {'query': 'q'},
+              },
+            ],
+          },
+        })
+        ..translate({
+          'type': 'user',
+          'parent_tool_use_id': null,
+          'message': {
+            'role': 'user',
+            'content': [
+              {'type': 'tool_result', 'tool_use_id': 'w1', 'content': result},
+            ],
+          },
+        });
+      final item = [
+        for (var i = 0; i < transcript.length; i++) transcript.itemAt(i),
+      ].whereType<ToolCallItem>().single;
+      expect(item.output, contains('Links: $links'));
+      expect(item.output, endsWith(links));
+      expect(item.output!.length, lessThan(result.length));
+      expect(webSearchResultSites(item.output), hasLength(15));
     });
 
     test('todos written read as a step: the list its text', () {
