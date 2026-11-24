@@ -178,7 +178,12 @@ class IoLinkPlatform implements LinkPlatform {
       final response = await request.close().timeout(
         const Duration(seconds: 30),
       );
-      final text = await response.transform(utf8.decoder).join();
+      // A relay that sends its headers and then stops must not hold every
+      // push behind it: the body has a deadline of its own.
+      final text = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 30));
       Object? json;
       try {
         json = text.isEmpty ? null : jsonDecode(text);
