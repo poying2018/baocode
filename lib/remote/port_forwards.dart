@@ -348,7 +348,13 @@ class PortForwards extends ChangeNotifier {
         auto: true,
       );
       if (_find(host, spec) != null) continue;
-      unawaited(open(host, spec).then((_) {}, onError: (Object _) {}));
+      unawaited(
+        open(host, spec).then(
+          (_) {},
+          onError: (Object error) =>
+              debugPrint('port forward ${spec.port}: $error'),
+        ),
+      );
     }
   }
 
