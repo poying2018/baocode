@@ -54,9 +54,14 @@ import 'package:crypto/crypto.dart' as crypto;
 const _releasesBase = 'https://github.com/poying2018/baocode/releases/download';
 
 /// [name]'s link, for the file whose SHA-256 is [sha256]. The version is
-/// the marketing one (1.5.1), as the release's tag carries it.
-Uri _link(AppVersion version, String name, String sha256) =>
-    Uri.parse('$_releasesBase/v${version.marketing}/$name');
+/// the marketing one (1.5.1), as the release's tag carries it. The hash in
+/// the query is no part of what the app reads (the file's name is), and it
+/// keeps a re-release of one version from handing back the old file where
+/// the asset's address is cached.
+Uri _link(AppVersion version, String name, String sha256) => Uri.parse(
+  '$_releasesBase/v${version.marketing}/$name'
+  '?sha256=${sha256.toLowerCase().substring(0, 16)}',
+);
 
 /// The Linux packages built (tool/package_linux_deb.sh), the same.
 const _linuxArchitectures = ['x64', 'arm64'];

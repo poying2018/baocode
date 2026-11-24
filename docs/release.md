@@ -197,7 +197,8 @@ dart run tool/build_windows.dart --remote-release <VERSION>  # 指定的那份
     - 工具：`dart tool/bump_claude_version.dart`（只说现状，落后时退出码 1）、`--write`（写进 pin）。SHA-256 取自官方 manifest，不必下载那 283 MB 就能拿到；真正的二进制仍由构建时下载并按 pin 校验。
     - 那个工作流直接往 `main` 提交。**若仓库对 `main` 设了保护而拒绝 bot 的推送，第一次跑会失败**——那时改成开 PR，或给 bot 直推权限。
   - 代价：安装包大了不少（Claude Code 的二进制约 283 MB，压缩后安装包约 114 MB；1.6.2 是 21 MB）。
-- **密钥只在 `release` 环境里**，只有 `v*` 标签能用（见 7.2）。PR 和手动运行拿不到。
+- **密钥在仓库的 Actions secrets 里**（仓库级，`Settings → Secrets and variables → Actions`；不在某个
+  environment 的 secrets 里），只有拿着写权限跑的工作流能读；PR 读不到（见 7.1）。
 - Flutter 版本固定在工作流的 `FLUTTER_VERSION`，升级 Flutter 时一起改。
 
 ### 4.1 一个仓库一个产品
@@ -303,9 +304,9 @@ releases/download/1.2.0.18-3bb062c7fa29   服务端：一个构建一个标签�
 ### 7.1 GitHub（应用发版需要的全部）
 
 1. **环境**：Settings → Environments → New environment，名字 `release`。
-   - Deployment branches and tags → Selected branches and tags → 加三条 **Tag**，规则 `v*`、`test-*` 和 `server-*`。只有这几种标签触发的运行能用这个环境里的密钥。
+   - Deployment branches and tags → Selected branches and tags → 加三条 **Tag**，规则 `v*`、`test-*` 和 `server-*`。只有这几种标签触发的运行会进入这个环境（`remote.yml` 的发布 job 用它拿写权限）。
    - 可选：Required reviewers 加上你自己。每次发布要你在 Actions 里点一下批准，多一道保险。
-2. **环境密钥**（`release` 环境 → Environment secrets）：
+2. **仓库密钥**（Settings → Secrets and variables → Actions → Repository secrets；实测 2026-11-24 在仓库级，`release` 环境里没有 secret）：
 
    | 名字 | 值 |
    | --- | --- |

@@ -77,7 +77,10 @@ jobs:
       # build a host needs (docs/ssh-remote.md, 9.3).
       - name: Build for Linux and macOS, x64 and arm64
         run: |
-          dart run tool/build_remote_server.dart --out build/remote --all \
+          # --all wants seven builds, and Windows' two are built by no runner
+          # here: the platforms this flow publishes are named outright.
+          dart run tool/build_remote_server.dart --out build/remote \
+            --only linux-x64,linux-arm64,linux-riscv64,darwin-x64,darwin-arm64 \
             --product "$PRODUCT" \
             --macos-x64-dart "$RUNNER_TEMP/dart-x64/dart-sdk/bin/dart"
       - id: version
@@ -197,4 +200,4 @@ jobs:
             echo '```'
             echo "dart run tool/build_windows.dart --remote-release $VERSION --product $PRODUCT"
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY
+          } >> "$GITHUB_STEP_SUMMARY"

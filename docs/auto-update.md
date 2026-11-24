@@ -318,16 +318,16 @@ macOS 包、dmg、`remote/<VERSION>/`）是另一套布局，本仓库不用它�
 
 ### 5.3 下载链接规则（`UpdateUrlPolicy`）
 
-允许：
+允许（`UpdateUrlPolicy.domains`）：
 
-- `https://baocode.dev/...`、`https://<任意子域>.baocode.dev/...`（主机名不区分大小写）
+- `https://github.com/...`、`https://<任意子域>.github.com/...`，以及 `githubusercontent.com` 的同样两种（主机名不区分大小写；GitHub 的资产下载会重定向到它）
 
 拒绝：
 
 - `http://`、其他协议、相对路径
-- 带端口：`https://baocode.dev:8443/`
-- 带用户信息：`https://user@baocode.dev/`
-- 相似域名：`baocode.dev.evil.example`、`notbaocode.dev`
+- 带端口：`https://github.com:8443/`
+- 带用户信息：`https://user@github.com/`
+- 相似域名：`github.com.evil.example`、`notgithub.com`
 
 例外：设置了 `BAOCODE_UPDATE_URL` 时，清单同源（协议 + 主机 + 端口）的链接也会被接受，方便本地测试。
 
@@ -480,6 +480,8 @@ flutter test test/update
 | `<数据目录>/User/settings.json` → `update.mode` | 更新方式 |
 | `<数据目录>/state/storage.json` → `update.skippedVersion` | 跳过的版本 |
 | `<数据目录>/state/storage.json` → `update.lastChecked` | 上次检查时间（UTC ISO 8601） |
+| `<数据目录>/state/storage.json` → `update.installingVersion` | 退出时开始安装的版本（没装上时下次启动提示） |
+| `<数据目录>/state/storage.json` → `update.highWaterVersion` | 本安装运行/安装过的最新版本：低于它的清单视为旧清单重放，不提供 |
 
 | 环境变量 | 作用 |
 | --- | --- |
@@ -600,4 +602,4 @@ baocode.dev。改完后跑 `flutter test test/update`。
 - **没有增量更新**：每次都下载完整的安装包。
 - **拒绝 UAC 之后**：应用已经退出，需要用户手动重新打开（下次启动会再提示更新）。
 - **macOS 的 /Applications 归 root 所有时**：当前用户能改名 .app 但删不掉旧版本的内容时，`.baocode-old` 可能会残留。
-- **服务端的 `release` 环境**：`BAOCODE_UPDATE_SIGNING_KEY` 这个 secret 只在 `release` 环境里可用（见 [release.md 第 7 节](release.md#7-第一次发布前的准备)）。R2 存储桶与 `dl.baocode.dev` 是上游的，不需要准备。
+- **签名密钥的位置**：`BAOCODE_UPDATE_SIGNING_KEY` 是**仓库级**的 Actions secret（`Settings → Secrets and variables → Actions`），不在 `release` 环境里（2026-11-24 实测）。`release` 环境只给 `remote.yml` 的发布 job 提供写权限与审批。R2 存储桶与 `dl.baocode.dev` 是上游的，不需要准备。

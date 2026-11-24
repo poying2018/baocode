@@ -298,7 +298,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 
 ## 4. 能力接口矩阵
 
-`ClaudeCodeKernel` 声明的 21 个接口（`claude_code_kernel.dart:91-114`）。
+`ClaudeCodeKernel` 声明的 25 个接口（`claude_code_kernel.dart:96-120`）。
 **UI 按接口显示功能，没声明就没入口。**
 
 | 接口 | 用途 | Claude Code | Codex |
@@ -311,8 +311,9 @@ claude -p --input-format stream-json --output-format stream-json --verbose
 | `ProvidesCommands` | `/` 命令列表 | ✅ | ✅ |
 | `SuggestsFiles` | `@` 文件建议 | ✅ | ✅ |
 | `ReportsContext` / `ReportsUsage` / `ReportsUsageLimit` | 上下文/用量/限额 | ✅ | ✅ |
-| `SuggestsPrompts` | 下一条提示建议 | ✅ | ✅ |
 | `ManagesMcpServers` | MCP 列表与管理 | ✅ | ✅ |
+| `ReportsModelFallback` | 主模型被安全策略拦下时，由备用模型接着答 | ✅ | ❌ |
+| `WatchesEdits` | 把编辑监看交给宿主（改动审查、检查点） | ✅ | ❌ |
 | `QueuesMessages` | 排队消息的撤回/插队 | ✅ | ✅ |
 | `RewindsConversation` / `ForksConversation` / `RenamesSession` | 回退/分叉/改名 | ✅ | ✅ |
 | `LoadsHistory` | 长会话按需读更早 | ✅ | ✅ |

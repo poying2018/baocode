@@ -401,6 +401,20 @@ jobs:
           for file in out/BaoCodeClaude-*; do
             gh release upload "v$MARKETING" "$file" --clobber
           done
+      - name: Upload the channel build, beside the release it joins
+        if: env.CHANNEL_ONLY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A channel build is published on its own tag beside the version
+          # already released: its installer and the manifest that names it
+          # join that release, which keeps the place every app reads.
+          for file in out/BaoCodeClaude-*-channel.exe; do
+            [ -f "$file" ] || { echo "::error::No channel installer was gathered"; exit 1; }
+            gh release upload "v$MARKETING" "$file" --clobber
+          done
+          gh release upload "v$MARKETING" out/latest.json --clobber
+          gh release edit "v$MARKETING" --latest=true
       - name: Upload the remote server, where servers.json says
         if: env.CHANNEL_ONLY != 'true'
         env:

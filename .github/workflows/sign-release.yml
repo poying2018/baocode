@@ -20,9 +20,9 @@ on:
         description: 'Release tag (e.g. v1.2.0+14)'
         required: true
       asset:
-        description: 'Installer asset name in that release'
-        required: true
-        default: 'BaoCodeClaude-1.9.4-setup.exe'
+        description: 'Installer asset name in that release (empty: the standard one)'
+        required: false
+        default: ''
       notes-zh:
         description: 'Release notes (zh), optional'
         required: false
@@ -53,10 +53,24 @@ jobs:
       - name: Dependencies
         run: flutter pub get
 
-      - name: Download the installer
+      - id: installer
+        name: Find and download the installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          ASSET: ${{ inputs.asset }}
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/${{ inputs.asset }}" \
-            "https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/${{ inputs.asset }}"
+          asset="$ASSET"
+          if [ -z "$asset" ]; then
+            # The standard build of the release named: no stale default to
+            # outlive it, and the channel build's own file is not it.
+            asset=$(gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
+              --jq '[.assets[].name | select(test("^BaoCodeClaude-.*-setup\\.exe$")) | select(endswith("-channel.exe") | not)][0] // ""')
+          fi
+          [ -n "$asset" ] || { echo "::error::No installer found in $TAG: name one with the asset input."; exit 1; }
+          curl -fsSL -o "$RUNNER_TEMP/$asset" \
+            "https://github.com/${{ github.repository }}/releases/download/$TAG/$asset"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
 
       - name: Sign the manifest
         env:
@@ -70,7 +84,7 @@ jobs:
             exit 1
           fi
           printf '%s\n' "$SIGNING_SEED" > "$BAOCODE_UPDATE_SIGNING_KEY"
-          args=(--windows "$RUNNER_TEMP/${{ inputs.asset }}" \
+          args=(--windows "$RUNNER_TEMP/${{ steps.installer.outputs.asset }}" \
                 --manifest "$RUNNER_TEMP/latest.json")
           [ -n "$NOTES_ZH" ] && args+=(--notes-zh "$NOTES_ZH")
           [ -n "$NOTES_EN" ] && args+=(--notes-en "$NOTES_EN")
