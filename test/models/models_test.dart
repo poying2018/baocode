@@ -1429,6 +1429,15 @@ void main() {
         ).hasSecrets,
         isFalse,
       );
+      // A provider's own env may name a credential the launch does not:
+      // its settings go in the file too.
+      expect(
+        const ClaudeLaunch(
+          cwd: '/p',
+          env: {'AWS_SECRET_ACCESS_KEY': 'secret'},
+        ).hasSecrets,
+        isTrue,
+      );
     });
 
     test('the user\'s CLAUDE_CODE_EFFORT_LEVEL is set empty, Claude\'s own '

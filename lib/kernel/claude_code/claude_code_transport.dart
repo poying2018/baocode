@@ -176,11 +176,22 @@ class ClaudeLaunch {
   /// place: so that a key in them is in no command line.
   final String? settingsPath;
 
+  /// Names that say an entry holds a credential, though the launch did not
+  /// set it as one of its own: a provider's own env may carry Bedrock's
+  /// keys or a gateway's token.
+  static final _credentialName = RegExp(
+    r'TOKEN|KEY|SECRET|PASSWORD|CREDENTIAL|AUTH',
+    caseSensitive: false,
+  );
+
   /// Whether [settings] hold a secret: they then go in a file
   /// ([settingsPath]), not the command line.
   bool get hasSecrets => switch (env) {
-    final env? => ClaudeModelVariables.secrets.any(
-      (name) => env[name]?.isNotEmpty ?? false,
+    final env? => env.entries.any(
+      (entry) =>
+          entry.value.isNotEmpty &&
+          (ClaudeModelVariables.secrets.contains(entry.key) ||
+              _credentialName.hasMatch(entry.key)),
     ),
     null => false,
   };
