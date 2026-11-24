@@ -424,6 +424,10 @@ class UpdateService extends ChangeNotifier {
         text,
         policy: UpdateUrlPolicy.forManifest(manifestUrl),
       );
+      // The app looked, and what answered was a manifest: recorded before
+      // the product is judged, so another product's release does not make
+      // every check look like one that never happened.
+      store.lastChecked = _now();
       // The two products are separate programs: a release of one is not an
       // update of the other, and is not offered as one.
       if (!manifest.isFor(product)) {
@@ -432,7 +436,6 @@ class UpdateService extends ChangeNotifier {
         _setStatus(UpdateStatus.upToDate);
         return const UpdateUpToDate();
       }
-      store.lastChecked = _now();
       _installed = manifest.version.marketing == current.marketing
           ? manifest
           : null;
