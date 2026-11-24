@@ -122,9 +122,9 @@ const _openSshFiles = [
 /// own needs no install and no download. The version is pinned here, and
 /// the build checked against its SHA-256, so that a build carries that one
 /// build and no other: after choosing another version, update these two.
-const _claudeVersion = '2.1.311';
+const _claudeVersion = '2.1.325';
 const _claudeSha256 =
-    '966f4b2ce962298f5dee6a942e8c47c8f97392e69e728e622319a98b259c0680';
+    '87e0cb6ae0f4775da388cd3043f4d8097ef961dcddbf55fe90bc61ffc3f57a30';
 
 /// Where that build is: the release's own file for Windows x64.
 const _claudeUrl =
