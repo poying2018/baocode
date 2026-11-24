@@ -262,6 +262,32 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
     for (var index = fold.start; index < fold.end; index++) _feed.itemAt(index),
   ];
 
+  /// A fold's line, its items read once for the four things the line says
+  /// of them (edits, images, web icons, and the tally or the work).
+  Widget _workFoldLine(StepFold fold, Duration worked) {
+    final items = _itemsIn(fold);
+    return WorkFoldLine(
+      worked: worked,
+      stopped: fold.stopped,
+      edits: turnEdits(items),
+      images: foldImages(items),
+      webIcons: foldWebIcons(items),
+      expanded: _isFoldOpen(fold),
+      onToggle: () => _toggleFold(fold),
+    );
+  }
+
+  Widget _stepsFoldLine(StepFold fold) {
+    final items = _itemsIn(fold);
+    return StepsFoldLine(
+      tally: StepTally(items),
+      images: foldImages(items),
+      webIcons: foldWebIcons(items),
+      expanded: _isFoldOpen(fold),
+      onToggle: () => _toggleFold(fold),
+    );
+  }
+
   // --- Turn costs ------------------------------------------------------------
   //
   // Each finished turn's cost at the current model prices (UsagePrices),
@@ -3076,27 +3102,12 @@ class _ChatHistoryViewState extends State<ChatHistoryView>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (row.work case StepFold(:final worked?) && final fold) ...[
-                    WorkFoldLine(
-                      worked: worked,
-                      stopped: fold.stopped,
-                      edits: turnEdits(_itemsIn(fold)),
-                      images: foldImages(_itemsIn(fold)),
-                      webIcons: foldWebIcons(_itemsIn(fold)),
-                      expanded: _isFoldOpen(fold),
-                      onToggle: () => _toggleFold(fold),
-                    ),
+                    _workFoldLine(fold, worked),
                     // Words under it stand apart, as under any step.
                     if (row.steps == null && row.item && !isStep(item))
                       const SizedBox(height: 10),
                   ],
-                  if (row.steps case final fold?)
-                    StepsFoldLine(
-                      tally: StepTally(_itemsIn(fold)),
-                      images: foldImages(_itemsIn(fold)),
-                      webIcons: foldWebIcons(_itemsIn(fold)),
-                      expanded: _isFoldOpen(fold),
-                      onToggle: () => _toggleFold(fold),
-                    ),
+                  if (row.steps case final fold?) _stepsFoldLine(fold),
                   ?shown,
                   ?footer,
                 ],
