@@ -1061,6 +1061,11 @@ class ClaudeCodeKernel
     final askEnded = _inAsk && !ask;
     _inAsk = ask;
     _whenReady((transport) {
+      // Stopped before the CLI was handed it: the interrupt that stopped it
+      // came first, when there was nothing there to stop, so the CLI would
+      // take the message up and run a turn the session has already ended —
+      // shown as one of its own, and the next message queued behind it.
+      if (_stoppedTurns.contains(turn.id)) return;
       // Queued to go now, with tasks in the background: the CLI's interrupt
       // ends those too, so the CLI stops the turn for it itself, once the
       // call under way is done.
