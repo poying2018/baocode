@@ -1,7 +1,7 @@
 // The Windows bundle carries a pinned Claude Code: its version and checksum
 // are in tool/build_windows.dart (_claudeVersion, _claudeSha256). Three other
 // files name that same version — the doc, the mock transport's comment, the
-// test's header — and each of them said 2.1.281 while the pin was 2.1.311.
+// test's header — and each of them said 2.1.281 while the pin was 2.1.325.
 // They say the pin's version now, and this holds them to it.
 import 'dart:io';
 

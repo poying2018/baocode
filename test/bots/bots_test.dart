@@ -1261,7 +1261,7 @@ void main() {
       expect(notes(assistant).last, contains('done: "${second.title}"'));
       await pumpEventQueue();
       expect(store.preferences['watching'], {
-        mia.id: [second.id],
+        mia.id: [BotTools.idOf(second)],
       });
     });
 

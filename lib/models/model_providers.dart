@@ -63,6 +63,7 @@ class ModelProviders extends ChangeNotifier {
   static ModelProviders current = ModelProviders.memory();
 
   static const providersKey = 'models.providers';
+  static const providersOrderedKey = 'models.providers.ordered';
   static const builtinHiddenKey = 'models.builtin.hidden';
   static const defaultKey = 'models.default';
   static const auxiliaryKey = 'models.auxiliary';
@@ -80,13 +81,14 @@ class ModelProviders extends ChangeNotifier {
   SecretStore get secrets => _secrets ?? SecretStore.instance;
 
   List<ModelProvider>? _cache;
+  bool? _orderedOverride;
 
   void _changed() {
     _cache = null;
     notifyListeners();
   }
 
-  /// All of them, in the order they were added.
+  /// All of them, in the order they were added (or kept by [reorder]).
   List<ModelProvider> get providers => _cache ??= [
     for (final json in switch (_read(providersKey)) {
       final List list => list,
@@ -94,6 +96,11 @@ class ModelProviders extends ChangeNotifier {
     })
       ?ModelProvider.fromJson(json),
   ];
+
+  /// Whether the user has ordered [providers] themselves: Settings → Models
+  /// then keeps this order instead of leading with magpie or a featured site.
+  bool get providersOrdered =>
+      _orderedOverride ?? (_read(providersOrderedKey) == true);
 
   /// Those offered in the picker.
   List<ModelProvider> get enabled => [
@@ -104,11 +111,17 @@ class ModelProviders extends ChangeNotifier {
   ModelProvider? provider(String? id) =>
       providers.where((provider) => provider.id == id).firstOrNull;
 
+  /// Whether [ref] is a model of an Antigravity CLI upstream.
+  bool _onAgy(String? ref) =>
+      provider(parseModelRef(ref)?.provider)?.protocol == ProviderProtocol.agy;
+
   /// Qualified names the CLI can use through the local model proxy.
-  /// Antigravity is only supported by BaoCode's own core.
+  /// Antigravity is only supported by BaoCode's own core; the Antigravity
+  /// CLI is no API, not through the proxy at all.
   List<String> get proxyModelRefs => [
     for (final provider in enabled)
-      if (provider.protocol != ProviderProtocol.antigravity)
+      if (provider.protocol != ProviderProtocol.antigravity &&
+          provider.protocol != ProviderProtocol.agy)
         for (final model in provider.enabledModels)
           if (provider.connected || provider.endpointOf(model) != null)
             modelRef(provider.id, model.id),
@@ -197,11 +210,15 @@ class ModelProviders extends ChangeNotifier {
   /// ([exact]); automatic, [model] (the session's, or new sessions'
   /// default), by its provider's Haiku tier. A null model is Claude
   /// Code's own Haiku; picked while it is not [builtinAvailable], it is
-  /// automatic.
+  /// automatic. The Antigravity CLI's models are not asked (it is no API):
+  /// automatic on one is Claude Code's own.
   ({String? model, bool exact}) auxiliary(String? model) =>
       switch (auxiliaryModel) {
         builtinProviderId when builtinAvailable => (model: null, exact: true),
-        null || builtinProviderId => (model: model, exact: false),
+        null || builtinProviderId => (
+          model: _onAgy(model) ? null : model,
+          exact: false,
+        ),
         final String picked => (model: picked, exact: true),
       };
 
@@ -263,6 +280,40 @@ class ModelProviders extends ChangeNotifier {
       list[index] = provider;
     }
     await _writeProviders(list);
+  }
+
+  /// Puts [providers] in [ids]'s order (any omitted stay after, in theirs),
+  /// and marks the list as ordered by the user ([providersOrdered]).
+  Future<void> reorder(List<String> ids) async {
+    final current = providers;
+    if (current.length < 2) return;
+    final byId = {for (final provider in current) provider.id: provider};
+    final seen = <String>{};
+    final ordered = [
+      for (final id in ids)
+        if (byId[id] case final provider? when seen.add(id)) provider,
+      for (final provider in current)
+        if (seen.add(provider.id)) provider,
+    ];
+    final unchanged =
+        providersOrdered &&
+        ordered.length == current.length &&
+        Iterable<int>.generate(current.length)
+            .every((i) => ordered[i].id == current[i].id);
+    if (unchanged) return;
+    _cache = ordered;
+    _orderedOverride = true;
+    notifyListeners();
+    try {
+      await _write(providersKey, [
+        for (final provider in ordered) provider.toJson(),
+      ]);
+      if (_read(providersOrderedKey) != true) {
+        await _write(providersOrderedKey, true);
+      }
+    } finally {
+      _orderedOverride = null;
+    }
   }
 
   /// Adds a copy of provider [id] named [name], its key with it; not its

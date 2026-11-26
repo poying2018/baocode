@@ -93,7 +93,7 @@ void main() {
         (line) => line.startsWith(r'gh release upload "$version"'),
       );
       final probe = lines.indexWhere((line) => line.contains('.files[].url'));
-      final manifest = lines.indexWhere(
+      final manifest = lines.lastIndexWhere(
         (line) =>
             line.startsWith('gh release upload') &&
             line.contains('out/latest.json'),

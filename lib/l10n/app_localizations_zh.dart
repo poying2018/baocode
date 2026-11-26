@@ -1832,6 +1832,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get agentImageUntitled => '图片';
 
   @override
+  String get welcomeDemoTitle => '演示：对比并重写一个限流中间件';
+
+  @override
+  String get welcomeDemoNoModel => '这是演示。要开始真正的对话，请先配置你自己的模型。';
+
+  @override
   String get chatTitleSummarize => '总结新标题';
 
   @override
@@ -1962,27 +1968,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get sidebarDeleteAgentTitle => '删除智能体？';
-
-  @override
-  String sidebarDeleteAgentMessage(String title) {
-    return '“$title”及其对话将被移除。';
-  }
-
-  @override
-  String get sidebarDeleteAgentsTitle => '删除智能体？';
-
-  @override
-  String sidebarDeleteAgentsMessage(int count) {
-    return '$count 个智能体及其对话将被删除，内核中的记录也会一并删除。此操作无法撤销。';
-  }
-
-  @override
-  String sidebarDeleteAgentMessageKernel(String title, String kernel) {
-    return '“$title”及其对话将被删除，$kernel 中的记录也会一并删除。此操作无法撤销。';
-  }
-
-  @override
   String get sidebarSearchAgents => '搜索智能体…';
 
   @override
@@ -2053,7 +2038,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String sidebarDeleteCount(int count) {
-    return '删除 $count 个智能体…';
+    return '删除 $count 个智能体';
   }
 
   @override
@@ -2069,11 +2054,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get sidebarDetachAside => '从主对话分离';
-
-  @override
-  String sidebarDeleteAsidesToo(int count) {
-    return '它的 $count 个 /btw 子对话也会一并删除。';
-  }
 
   @override
   String get btwCommandDetail => '在旁边另开一个对话提问';
@@ -2118,18 +2098,30 @@ class AppLocalizationsZh extends AppLocalizations {
   String get sidebarUnarchiveAll => '全部取消归档';
 
   @override
-  String get sidebarDeleteArchived => '删除全部已归档…';
-
-  @override
-  String get sidebarDeleteArchivedTitle => '删除已归档的智能体？';
-
-  @override
-  String sidebarDeleteArchivedMessage(int count) {
-    return '$count 个已归档的智能体及其对话将被删除，内核中的记录也会一并删除。此操作无法撤销。';
-  }
+  String get sidebarDeleteArchived => '删除全部已归档';
 
   @override
   String get sidebarRemoveFromList => '从列表移除';
+
+  @override
+  String sidebarAgentDeleted(String title) {
+    return '已删除「$title」';
+  }
+
+  @override
+  String sidebarAgentsDeleted(int count) {
+    return '已删除 $count 个智能体';
+  }
+
+  @override
+  String sidebarProjectRemoved(String name) {
+    return '已从列表移除「$name」';
+  }
+
+  @override
+  String sidebarWorkspaceDeleted(String name) {
+    return '已删除工作区「$name」';
+  }
 
   @override
   String get sidebarDropToPin => '拖到这里置顶';
@@ -2583,6 +2575,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String quoteChip(int number) {
+    return '引用 #$number';
+  }
+
+  @override
+  String get chatQuote => '引用';
+
+  @override
+  String get chatQuoteAside => '顺带一提';
+
+  @override
   String pastedTextGone(String path) {
     return '这段粘贴的内容已不在 $path。';
   }
@@ -2683,6 +2686,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get turnFork => '从这里 Fork';
+
+  @override
+  String get turnRetry => '重试本轮';
 
   @override
   String get turnCopied => '已复制';
@@ -3273,7 +3279,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get queuedRemove => '移出队列';
 
   @override
-  String get replySuggestionHint => '单击放进输入框，双击直接发送';
+  String replySuggestionHint(String key) {
+    return '单击放进输入框，双击直接发送，按住 $key 单击可多选';
+  }
 
   @override
   String get stopConfirmMessage => '要停止 Agent 吗？';
@@ -3700,7 +3708,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get generalSettingsPromptSuggestionsDescription =>
-      '每轮结束后，在输入框上方给出两三句你可能想发的话：单击放进输入框润色，双击直接发送；输入框空着时按 Tab 采用第一句。由 Agent 在回复末尾顺手写出，不额外请求模型。从下一条消息起生效。';
+      '每轮结束后，在输入框上方给出两到四句你可能想发的话：单击放进输入框润色，双击直接发送；按住 ⌘ 或 Ctrl 单击可多选，每句一行；输入框空着时按 Tab 采用第一句。由 Agent 在回复末尾顺手写出，不额外请求模型。从下一条消息起生效。';
 
   @override
   String generalSettingsCommitAttributionLabel(String name) {
@@ -6355,6 +6363,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get modelsDragToReorder => '拖动排序';
+
+  @override
   String get modelsFeaturedWhy => '为什么我看到这个？';
 
   @override
@@ -6791,6 +6802,65 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get agyCli => 'Antigravity ACP';
+
+  @override
+  String get agyProtocolDescription =>
+      'BaoCode 通过 ACP（Agent Client Protocol）驱动本机的 Antigravity CLI，不经本地代理。';
+
+  @override
+  String get agyCliDescription =>
+      'Google 官方的 Antigravity CLI，由 BaoCode 安装并保持最新。BaoCode 只通过官方 ACP 和它通信，完全符合官方 ACP 策略，不会导致封号。';
+
+  @override
+  String agyVersion(String version) {
+    return '版本 $version';
+  }
+
+  @override
+  String get agyNotInstalled => '未安装';
+
+  @override
+  String agyUpdateAvailable(String version) {
+    return '有新版本 $version';
+  }
+
+  @override
+  String get agyInstall => '安装';
+
+  @override
+  String get agyUpdate => '更新';
+
+  @override
+  String agyInstalling(int percent) {
+    return '正在安装… $percent%';
+  }
+
+  @override
+  String get agyAccount => 'Google 账号';
+
+  @override
+  String get agyAccountDescription =>
+      '登录会打开浏览器。登录状态和终端里的 agy 共用：退出登录时终端那边也会退出。';
+
+  @override
+  String get agySignIn => '登录';
+
+  @override
+  String get agySignOut => '退出登录';
+
+  @override
+  String get agySigningIn => '等待浏览器完成登录…';
+
+  @override
+  String agySignedIn(int count) {
+    return '已登录：$count 个模型';
+  }
+
+  @override
+  String get agyNotSignedIn => '未登录';
+
+  @override
   String get modelsTest => '测试连接';
 
   @override
@@ -6867,6 +6937,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get modelsTestModelFailed => '失败';
+
+  @override
+  String get modelsCopyTestError => '复制错误信息';
 
   @override
   String modelsTestFirstText(String seconds) {
@@ -10320,6 +10393,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get cmdModelWelcome => '设置模型...';
+
+  @override
+  String get cmdWelcomeDemo => '查看演示对话';
 
   @override
   String get modelWelcomeTitle => '选一个模型开始';

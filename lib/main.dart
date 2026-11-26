@@ -64,6 +64,7 @@ import 'kernel/claude_code/claude_code_kernel.dart';
 import 'kernel/claude_code/claude_core_setting.dart';
 import 'kernel/claude_code/claude_onboarding.dart';
 import 'kernel/claude_code/claude_path_setting.dart';
+import 'kernel/claude_code/forked_runs.dart';
 import 'kernel/claude_code/process_transport.dart';
 import 'kernel/codex/codex_transport_factory.dart';
 import 'kernel/claude_code/turn_stats_stub.dart'
@@ -97,6 +98,7 @@ import 'platform/native_md_clipboard.dart';
 import 'platform/app_binding.dart';
 import 'platform/app_platform.dart';
 import 'platform/data_dir.dart';
+import 'platform/held_keys.dart';
 import 'platform/error_log.dart';
 import 'platform/event_log.dart';
 import 'platform/open_requests.dart';
@@ -132,6 +134,7 @@ import 'telemetry/telemetry_service.dart';
 import 'telemetry/telemetry_store.dart';
 import 'theme/app_theme.dart';
 import 'theme/code_font.dart';
+import 'theme/linux_code_fonts.dart';
 import 'theme/pixel_snapped_text_scaler.dart';
 import 'theme/ui_zoom.dart';
 import 'theme/window_blur.dart';
@@ -156,6 +159,7 @@ import 'workspace/agent_title.dart';
 import 'workspace/main_window.dart';
 import 'workspace/preference_store.dart';
 import 'workspace/window_controls.dart';
+import 'workspace/welcome.dart';
 import 'workspace/workspace.dart';
 
 /// Whether this product carries Claude Code: BaoCode does, the codex one
@@ -235,6 +239,7 @@ Future<void> main(List<String> arguments) async {
       (key) => files.settings[key],
     ).timeout(const Duration(seconds: 1), onTimeout: () {});
     followSettingsFiles(files);
+    await LinuxCodeFonts.start();
     // The channel build's first start: set up before anything else shows.
     await _beginChannelSetup(files);
     _openChannelGate(files);
@@ -268,6 +273,8 @@ Future<void> main(List<String> arguments) async {
     titler: claudeAgentTitle,
     l10n: () =>
         lookupAppLocalizations(locale.locale ?? AppLocale.systemLocale()),
+    // A new user: ~/BaoCode, and the demo conversation there.
+    welcome: kIsWeb ? null : Welcome.io(),
   )..load();
   // The conversations' titles and projects, kept with their calls.
   UsageLedger.titleOf = (session) => switch (workspace.threads
@@ -417,6 +424,9 @@ Future<void> main(List<String> arguments) async {
         .layoutAtLaunch(workspace.layout);
   }
   WindowControls.trackActiveView();
+  // The modifiers held as the system has them, not one the app missed
+  // going up.
+  if (WindowControls.isDesktop) HeldKeys.start();
   // What an editor copies, its tags and all, on the clipboard itself.
   if (WindowControls.isDesktop) {
     MdClipboard.instance = const NativeMdClipboard();
@@ -630,6 +640,9 @@ void followSettingsFiles(SettingsFiles files) {
   ClaudeCodeKernel.turnStats = turnStatsIn(
     p.join(DataDirectory.current.path, 'turn-stats'),
   );
+  // A skill run from a slash command, read as it goes from what the CLI
+  // writes of it (it sends nothing of it until done).
+  ClaudeCodeKernel.forkedRuns = forkedRunsHere();
   // The calls to custom upstreams (Settings → Usage, the side panel's
   // Usage page): in the data folder, a file a day, kept as long as the
   // user says.
@@ -919,6 +932,7 @@ class _BaoCodeAppState extends State<BaoCodeApp>
   /// windows' blur, which every surface over it is tinted for.
   static final Listenable _codeFont = Listenable.merge([
     CodeFont.families,
+    LinuxCodeFonts.resolved,
     CodeFont.size,
     CodeFont.ligatures,
     WindowBlur.enabled,
@@ -958,6 +972,8 @@ class _BaoCodeAppState extends State<BaoCodeApp>
         appEvent('app', 'quit cancelled: the update would not start');
         return AppExitResponse.cancel;
       }
+      // What is queued behind the turns stopped, back in the composers.
+      await _workspace.keepQueued();
       await Future.wait([
         // The codex product has no Claude Code: none of its processes run,
         // and none are stopped.

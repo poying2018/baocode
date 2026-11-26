@@ -10,6 +10,7 @@ import '../permissions/shell_command.dart';
 import '../util/ids.dart';
 import '../util/json.dart';
 import '../util/processes.dart';
+import '../util/windows_paths.dart';
 import 'tool.dart';
 
 /// Runs a shell command.
@@ -371,8 +372,12 @@ ${_shellNote(session)}- ${_search(session)} Keep a search narrow (a folder, a fi
       // Left in the temp folder.
     }
     if (ended == null || ended.isEmpty) return null;
-    // The shell may say its paths its own way (Git's bash on Windows).
-    final native = shell.nativePath(ended) ?? ended;
+    // The shell may say its paths its own way (Git's bash on Windows), and
+    // Git Bash's `pwd` may use `/c/x` or `/cygdrive/c/x`.
+    if (Platform.isWindows) {
+      ended = shell.nativePath(ended) ?? windowsDrivePath(ended);
+    }
+    final native = ended;
     final permissions = context.session.permissions;
     if (permissions.inWorkingDirectories(native) ||
         _sameDirectory(native, context.cwd)) {

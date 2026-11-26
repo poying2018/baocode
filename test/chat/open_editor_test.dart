@@ -146,5 +146,6 @@ void main() {
         {'type': 'text', 'text': 'elsewhere'},
       ],
     });
+    await tester.pump(const Duration(milliseconds: 300));
   });
 }

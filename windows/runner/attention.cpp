@@ -450,26 +450,23 @@ std::optional<LRESULT> Attention::HandleMessage(HWND window, UINT message,
       return std::nullopt;
     }
     if (tray_) {
-      // The window is hidden to the tray: there is an icon to bring it
-      // back. (The icon may be late in coming up — Explorer starting, or
-      // the tray refusing it once; it is put up again, and as often as it
-      // takes.) The window waits until it is there, so that a window
-      // hidden with no icon to click is not the app gone as far as the
-      // user is concerned.
-      if (icon_added_) {
-        ::ShowWindow(window, SW_HIDE);
-        return 0;
+      // Hidden only with the icon up to bring it back: with none (it could
+      // not go up), minimized, its taskbar button left (#1107).
+      if (!icon_added_ || !IconThere()) {
+        icon_added_ = false;
+        ShowIcon();
       }
-      ShowIcon();
       if (icon_added_) {
         log_folder::WriteTrayLog("tray: added on the close, hiding the window");
         ::ShowWindow(window, SW_HIDE);
         return 0;
       }
-      // Still not there: the window stays, so the user still has it.
+      // Still not there: minimize instead of hiding, so the taskbar button
+      // remains a way back to the app.
       log_folder::WriteTrayLog(
-          "tray: no icon to hide to; the window stays");
-      return std::nullopt;
+          "tray: no icon to hide to; minimizing the window");
+      ::ShowWindow(window, SW_MINIMIZE);
+      return 0;
     }
     return std::nullopt;
   }
@@ -654,14 +651,24 @@ void Attention::ShowIcon() {
     } else {
       // Windows refuses to add an icon that is there, and says so with a
       // false: NIM_MODIFY tells the two apart.
+      const DWORD error = ::GetLastError();
       shown = ::Shell_NotifyIconW(NIM_MODIFY, &data) != FALSE;
       if (!shown) {
         // Explorer may be starting, or the icon may be refused. Said, so a
         // user who cannot find the icon can say so.
         log_folder::WriteTrayLog("tray: NIM_ADD failed (hwnd=%p valid=%d)",
                                  window_, ::IsWindow(window_) ? 1 : 0);
+        if (tray_ && !told_tray_failed_) {
+          told_tray_failed_ = true;
+          channel_->InvokeMethod(
+              "trayFailed", std::make_unique<flutter::EncodableValue>(
+                                static_cast<int64_t>(error)));
+        }
       }
     }
+  }
+  if (shown) {
+    told_tray_failed_ = false;
   }
   icon_added_ = shown;
   if (shown) {

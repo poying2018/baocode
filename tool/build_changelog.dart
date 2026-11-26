@@ -71,6 +71,7 @@ enum _Page {
     heading: 'Changelog',
     lead: 'What changed in each version of BaoCode.',
     download: 'Download',
+    theme: 'Appearance: system',
     empty: 'No versions yet.',
   ),
   zh(
@@ -82,6 +83,7 @@ enum _Page {
     heading: '更新日志',
     lead: 'BaoCode 每个版本的变化。',
     download: '下载',
+    theme: '外观：跟随系统',
     empty: '还没有版本。',
   );
 
@@ -94,6 +96,7 @@ enum _Page {
     required this.heading,
     required this.lead,
     required this.download,
+    required this.theme,
     required this.empty,
   });
 
@@ -107,6 +110,10 @@ enum _Page {
   final String heading;
   final String lead;
   final String download;
+
+  /// The header's light-or-dark button, as it first reads (head.js keeps
+  /// it to the one picked).
+  final String theme;
   final String empty;
 
   /// The page in the other language, which the header links to.

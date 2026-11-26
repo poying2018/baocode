@@ -13,6 +13,7 @@ import 'package:bao_agent/src/engine/tasks.dart';
 import 'package:bao_agent/src/engine/transcript.dart';
 import 'package:bao_agent/src/util/json.dart';
 import 'package:bao_agent/src/util/processes.dart';
+import 'package:bao_agent/src/util/windows_paths.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -538,6 +539,16 @@ void main() {
         '/tmp/cwd',
       ]);
     });
+  });
+
+  test('windowsDrivePath', () {
+    expect(windowsDrivePath('/e/project/a.sql'), 'E:/project/a.sql');
+    expect(windowsDrivePath('/cygdrive/c/Users'), 'C:/Users');
+    expect(windowsDrivePath('/C:/Users'), 'C:/Users');
+    expect(windowsDrivePath('/d'), 'D:/');
+    expect(windowsDrivePath('/tmp/a'), '/tmp/a');
+    expect(windowsDrivePath(r'C:\a'), r'C:\a');
+    expect(windowsDrivePath('a/b'), 'a/b');
   });
 
   group('caseFoldedEnvironment', () {

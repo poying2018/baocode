@@ -903,6 +903,14 @@
   "@agentImageUntitled": {
     "description": "The title of an agent first asked something with images alone, none from a file (pasted)."
   },
+  "welcomeDemoTitle": "Demo: a rate limiter, compared and rewritten",
+  "@welcomeDemoTitle": {
+    "description": "The title of the demo conversation a new user first sees: nothing in it ran; what they send starts a conversation of their own."
+  },
+  "welcomeDemoNoModel": "This is a demo. To start a real conversation, set up a model of your own.",
+  "@welcomeDemoNoModel": {
+    "description": "Above the composer of the demo conversation, beside the Set Up a Model button, while no model is set up."
+  },
   "chatTitleSummarize": "Summarize into a new title",
   "@chatTitleSummarize": {
     "description": "In the list under a chat's title being renamed: has a model title the conversation from what the user asked."
@@ -1025,35 +1033,6 @@
       }
     }
   },
-  "sidebarDeleteAgentTitle": "Delete agent?",
-  "sidebarDeleteAgentMessage": "“{title}” and its conversation will be removed.",
-  "@sidebarDeleteAgentMessage": {
-    "placeholders": {
-      "title": {
-        "type": "String"
-      }
-    }
-  },
-  "sidebarDeleteAgentsTitle": "Delete agents?",
-  "sidebarDeleteAgentsMessage": "{count, plural, =1{The agent and its conversation will be deleted} other{The {count} agents and their conversations will be deleted}}, from their kernels too. This cannot be undone.",
-  "@sidebarDeleteAgentsMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "sidebarDeleteAgentMessageKernel": "“{title}” and its conversation will be deleted, from {kernel} too. This cannot be undone.",
-  "@sidebarDeleteAgentMessageKernel": {
-    "placeholders": {
-      "title": {
-        "type": "String"
-      },
-      "kernel": {
-        "type": "String"
-      }
-    }
-  },
   "sidebarSearchAgents": "Search agents…",
   "ideChatHistory": "Agent History",
   "@ideChatHistory": {
@@ -1129,7 +1108,7 @@
       }
     }
   },
-  "sidebarDeleteCount": "Delete {count} Agents…",
+  "sidebarDeleteCount": "Delete {count} Agents",
   "@sidebarDeleteCount": {
     "placeholders": {
       "count": {
@@ -1156,15 +1135,6 @@
   "sidebarDetachAside": "Detach from Conversation",
   "@sidebarDetachAside": {
     "description": "The menu of a conversation asked beside another with /btw, listed under it in the sidebar: makes it a conversation of its own."
-  },
-  "sidebarDeleteAsidesToo": "{count, plural, =1{Its /btw conversation is deleted with it.} other{Its {count} /btw conversations are deleted with it.}}",
-  "@sidebarDeleteAsidesToo": {
-    "description": "After the message asking to delete an agent that has conversations asked beside it with /btw.",
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
   },
   "btwCommandDetail": "Ask in a conversation of its own, beside this one",
   "@btwCommandDetail": {
@@ -1212,17 +1182,41 @@
   "sidebarSortByTime": "Sort by Time",
   "sidebarArchiveAll": "Archive All",
   "sidebarUnarchiveAll": "Unarchive All",
-  "sidebarDeleteArchived": "Delete All Archived…",
-  "sidebarDeleteArchivedTitle": "Delete archived agents?",
-  "sidebarDeleteArchivedMessage": "{count, plural, =1{The archived agent and its conversation will be deleted} other{The {count} archived agents and their conversations will be deleted}}, from their kernels too. This cannot be undone.",
-  "@sidebarDeleteArchivedMessage": {
+  "sidebarDeleteArchived": "Delete All Archived",
+  "sidebarRemoveFromList": "Remove from List",
+  "sidebarAgentDeleted": "Deleted “{title}”",
+  "@sidebarAgentDeleted": {
+    "description": "The note at the bottom of the window, Undo beside it, once an agent is deleted.",
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarAgentsDeleted": "{count, plural, =1{Deleted 1 agent} other{Deleted {count} agents}}",
+  "@sidebarAgentsDeleted": {
     "placeholders": {
       "count": {
         "type": "int"
       }
     }
   },
-  "sidebarRemoveFromList": "Remove from List",
+  "sidebarProjectRemoved": "Removed “{name}” from the list",
+  "@sidebarProjectRemoved": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sidebarWorkspaceDeleted": "Deleted workspace “{name}”",
+  "@sidebarWorkspaceDeleted": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "sidebarDropToPin": "Drop here to pin",
   "sidebarMoreActions": "More Actions…",
   "sidebarChangeIcon": "Change Icon…",
@@ -1551,6 +1545,23 @@
       }
     }
   },
+  "quoteChip": "Quote #{number}",
+  "@quoteChip": {
+    "description": "Text quoted from the conversation, as a small tag in a message: the quote's number in the message.",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "chatQuote": "Quote",
+  "@chatQuote": {
+    "description": "Over text selected in the conversation: puts it in the message being written, as a quote of it."
+  },
+  "chatQuoteAside": "By the Way",
+  "@chatQuoteAside": {
+    "description": "Over text selected in the conversation: quotes it in a /btw message, asked in a conversation of its own beside this one."
+  },
   "pastedTextGone": "This paste is no longer at {path}.",
   "@pastedTextGone": {
     "description": "Shown in place of a long paste kept in a file that has since gone.",
@@ -1648,6 +1659,7 @@
     "description": "Hint of the button at the end of a finished turn that copies its answer."
   },
   "turnFork": "Fork from here",
+  "turnRetry": "Run this turn again",
   "@turnFork": {
     "description": "Hint of the button at the end of a finished turn that copies the conversation up to there into a new one."
   },
@@ -2219,9 +2231,14 @@
   "queuedEdit": "Take back to edit",
   "queuedSendNow": "Stop the agent and send this now",
   "queuedRemove": "Remove from the queue",
-  "replySuggestionHint": "Click to put it in the input, double-click to send it",
+  "replySuggestionHint": "Click to put it in the input, double-click to send it, {key}-click to pick more than one",
   "@replySuggestionHint": {
-    "description": "Hover of a reply the agent suggests, over the composer."
+    "description": "Hover of a reply the agent suggests, over the composer. {key} is ⌘ on macOS, Ctrl elsewhere.",
+    "placeholders": {
+      "key": {
+        "type": "String"
+      }
+    }
   },
   "stopConfirmMessage": "Stop the agent?",
   "stopConfirmDetail": "{count, plural, =1{The task running in the background will stop too.} other{The {count} tasks running in the background will stop too.}}",
@@ -2613,7 +2630,7 @@
   "@generalSettingsPromptSuggestions": {
     "description": "Settings → General switch: whether the agent suggests, at the end of each turn, what the user might send next, shown over the composer."
   },
-  "generalSettingsPromptSuggestionsDescription": "After each turn, two or three things you might send next, over the composer: click one to put it in the input and edit it, double-click to send it as it is; Tab in an empty input takes the first. The agent writes them at the end of its reply, with no extra request. Applies from the next message.",
+  "generalSettingsPromptSuggestionsDescription": "After each turn, two to four things you might send next, over the composer: click one to put it in the input and edit it, double-click to send it as it is; click with ⌘ or Ctrl held to put in more than one, each on its own line; Tab in an empty input takes the first. The agent writes them at the end of its reply, with no extra request. Applies from the next message.",
   "generalSettingsCommitAttributionLabel": "Commit Attribution: {name}",
   "@generalSettingsCommitAttributionLabel": {
     "description": "The commit attribution dropdown, as read out: its setting and the choice in effect.",
@@ -4850,6 +4867,7 @@
       }
     }
   },
+  "modelsDragToReorder": "Drag to reorder",
   "modelsFeaturedWhy": "Why am I seeing this?",
   "modelsFeaturedNote": "These sites are officially listed by {product}",
   "modelsFeaturedNoteHow": "Add the one-click import to be listed too, for free",
@@ -5168,6 +5186,26 @@
       }
     }
   },
+  "agyCli": "Antigravity ACP",
+  "agyProtocolDescription": "BaoCode drives the Antigravity CLI on this machine over ACP, the Agent Client Protocol: not through the local proxy.",
+  "agyCliDescription": "Google's own Antigravity CLI, which BaoCode installs and keeps up to date. BaoCode talks to it only over its official ACP, entirely within Google's ACP policy: no risk of an account ban.",
+  "agyVersion": "Version {version}",
+  "@agyVersion": {"placeholders": {"version": {"type": "String"}}},
+  "agyNotInstalled": "Not installed",
+  "agyUpdateAvailable": "Version {version} is out",
+  "@agyUpdateAvailable": {"placeholders": {"version": {"type": "String"}}},
+  "agyInstall": "Install",
+  "agyUpdate": "Update",
+  "agyInstalling": "Installing… {percent}%",
+  "@agyInstalling": {"placeholders": {"percent": {"type": "int"}}},
+  "agyAccount": "Google Account",
+  "agyAccountDescription": "Signing in opens the browser. The sign-in is the terminal's agy's too: signing out signs it out as well.",
+  "agySignIn": "Sign In",
+  "agySignOut": "Sign Out",
+  "agySigningIn": "Waiting for the browser…",
+  "agySignedIn": "Signed in: {count} models",
+  "@agySignedIn": {"placeholders": {"count": {"type": "int"}}},
+  "agyNotSignedIn": "Not signed in",
   "modelsTest": "Test Connection",
   "modelsTesting": "Connecting…",
   "modelsTestOk": "Connected: the upstream lists {count} models.",
@@ -5213,6 +5251,7 @@
   "modelsTestModel": "Test",
   "modelsTestModels": "Test All",
   "modelsTestModelFailed": "Failed",
+  "modelsCopyTestError": "Copy Error",
   "modelsTestFirstText": "First token {seconds}s",
   "@modelsTestFirstText": {
     "placeholders": {
@@ -7744,6 +7783,7 @@
   "cmdBrowserWelcome": "Connect Your Browser...",
   "cmdStashWelcome": "Meet Stash...",
   "cmdModelWelcome": "Set Up a Model...",
+  "cmdWelcomeDemo": "Show the Demo Conversation",
   "modelWelcomeTitle": "Pick a Model to Start",
   "modelWelcomeLead": "{product} runs your agents on a model of your choosing. Add an upstream, a service with an API key, and its models are ready to use.",
   "modelWelcomeAnyTitle": "Any upstream",

@@ -328,6 +328,7 @@ class UsageLedger extends ChangeNotifier {
   final Map<String, List<String>> _unwritten = {};
   Timer? _flush;
   Timer? _notify;
+  bool _disposed = false;
 
   /// The sessions and agents labeled already in each day's file.
   final Set<String> _labeled = {};
@@ -404,6 +405,7 @@ class UsageLedger extends ChangeNotifier {
   /// begin, are kept and end many times a second, and each page told sums
   /// its calls up again.
   void _notifySoon() {
+    if (_disposed) return;
     _notify ??= Timer(const Duration(milliseconds: 250), () {
       _notify = null;
       notifyListeners();
@@ -445,7 +447,7 @@ class UsageLedger extends ChangeNotifier {
 
   /// [key]'s call is under way, [progress] telling what it is so far.
   void begin(Object key, UsageCall Function() progress) {
-    if (!enabled) return;
+    if (!enabled || _disposed) return;
     _underway[key] = progress;
     _underwayVersion++;
     _notifySoon();
@@ -453,6 +455,7 @@ class UsageLedger extends ChangeNotifier {
 
   /// [key]'s call is over: kept ([record]) first, where it is.
   void end(Object key) {
+    if (_disposed) return;
     if (_underway.remove(key) == null) return;
     _underwayVersion++;
     _notifySoon();
@@ -469,6 +472,7 @@ class UsageLedger extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     flush();
     _notify?.cancel();
     _settings?.removeListener(_read);

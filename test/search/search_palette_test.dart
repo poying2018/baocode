@@ -128,15 +128,26 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pump();
-    // Round to the last: Settings, its pages.
+    // Round to the last: Settings, its pages. The keyboard page is below
+    // the first screenful on a small window.
+    await tester.scrollUntilVisible(
+      _inPalette(find.text('Keyboard Shortcuts', findRichText: true)),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
     expect(_rich('Keyboard Shortcuts'), findsOneWidget);
     expect(_rich('New Chat'), findsNothing);
 
+    // Scrolling the list moved focus away from the search field; the filter
+    // keys belong to it.
+    await tester.tap(_inPalette(find.byType(TextField)));
+    await tester.pump();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.sendKeyEvent(LogicalKeyboardKey.bracketRight);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-    await tester.pump();
+    await tester.pumpAndSettle();
     // Agents: the recent ones, all of them.
     expect(_inPalette(find.text('Recent Agents')), findsOneWidget);
     expect(_rich('New Chat'), findsNothing);

@@ -263,6 +263,9 @@ void main() {
     expect(session.queued, isEmpty);
     expect(find.byType(QueuePanel), findsNothing);
     expect(session.isStreaming, isTrue);
+    // UsageLedger's burst notification is a timer; let it fire before the
+    // test binding checks for pending timers.
+    await tester.pump(const Duration(milliseconds: 300));
   });
 
   testWidgets('messages sent while the agent works wait over the composer, '
@@ -820,12 +823,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.pump(const Duration(milliseconds: 300));
   });
 
   testWidgets('after a turn, its suggested replies show over the composer: '
-      'Tab takes the first, a click puts one in, a double click sends it', (
-    tester,
-  ) async {
+      'Tab takes the first, a click puts one in, ⌘ more, a double click '
+      'sends one', (tester) async {
     final session = await pumpSession(tester, MockKernels.claudeCode);
     session.send(const ComposerMessage(text: '把输入框改成随内容增高'));
     await tester.pump();
@@ -891,13 +894,79 @@ void main() {
     // At once, not once it is no double click.
     await tester.pump();
     expect(editor.controller.text, MockScript.suggestions[1]);
-    // The bar kept for a second click till then; gone after.
-    expect(bar, findsOneWidget);
+    // The bar kept while the composer holds just it, it picked there.
     await tester.pump(kDoubleTapTimeout);
+    await tester.pump();
+    expect(bar, findsOneWidget);
+    expect(tester.widget<ReplySuggestionBar>(bar).picked, [
+      MockScript.suggestions[1],
+    ]);
+    expect(session.isStreaming, isFalse);
+
+    // ⌘ held, for the system too: another put in beside it, on a line of
+    // its own, as clicked.
+    final window = const MethodChannel('baocode/window');
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      window,
+      (call) async => call.method == 'heldModifiers'
+          ? {'shift': false, 'control': false, 'alt': false, 'meta': true}
+          : null,
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        window,
+        null,
+      ),
+    );
+    Future<void> metaTap(String said) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.tap(
+        find.descendant(
+          of: bar,
+          matching: find.textContaining(said, findRichText: true),
+        ),
+      );
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pump();
+    }
+
+    await metaTap(MockScript.suggestions[0]);
+    expect(
+      editor.controller.text,
+      '${MockScript.suggestions[1]}\n${MockScript.suggestions[0]}',
+    );
+    // Clicked again so, not sent as a double click: taken out.
+    await metaTap(MockScript.suggestions[0]);
+    expect(session.isStreaming, isFalse);
+    expect(editor.controller.text, MockScript.suggestions[1]);
+    await tester.pump(kDoubleTapTimeout);
+    await metaTap(MockScript.suggestions[2]);
+    expect(tester.widget<ReplySuggestionBar>(bar).picked, [
+      MockScript.suggestions[1],
+      MockScript.suggestions[2],
+    ]);
+    // A click without it: that one alone, in place of them.
+    await tester.pump(kDoubleTapTimeout);
+    await tester.tap(
+      find.descendant(
+        of: bar,
+        matching: find.textContaining(
+          MockScript.suggestions[0],
+          findRichText: true,
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(editor.controller.text, MockScript.suggestions[0]);
+    // Something typed after: gone, once faded.
+    editor.controller.replace(
+      editor.controller.length,
+      editor.controller.length,
+      '，然后',
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     expect(bar, findsNothing);
-    expect(session.isStreaming, isFalse);
 
     // A double click sends it as it is.
     editor.controller.replace(0, editor.controller.length, '');
@@ -1445,8 +1514,9 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await settle();
-    // Its own window is 200K: no more to pick, nor to show.
-    expect(picker('Sonnet 5 · Low'), findsOneWidget);
+    // Claude Code's own models offer every context size: 1M is picked for
+    // Sonnet, while the CLI still reports the window it is running with.
+    expect(find.text('Sonnet 5 · 1M · Low'), findsOneWidget);
     expect(session.context?.window, 200000);
   });
 

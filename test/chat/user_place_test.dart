@@ -75,5 +75,6 @@ void main() {
       'back',
       'still here',
     ]);
+    await tester.pump(const Duration(milliseconds: 300));
   });
 }

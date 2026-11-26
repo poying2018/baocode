@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 2.0.4+37
+version: 2.0.9+42
 
 environment:
   sdk: ^3.13.4
@@ -64,6 +64,9 @@ dependencies:
   clock: ^1.1.2
   crypto: ^3.0.6
   csslib: ^1.0.2
+  # The Windows Credential Manager, where agy keeps its sign-in
+  # (lib/kernel/antigravity/agy_quota_io.dart).
+  ffi: ^2.1.0
   flutter:
     sdk: flutter
   flutter_localizations:
@@ -126,6 +129,9 @@ flutter:
     # Models' and their makers' logos, in one color (lib/icons/brand_logos.dart;
     # each says where it is from).
     - assets/model_icons/
+    # Antigravity's own logo, in its colors (antigravity.google's
+    # assets/image/antigravity-logo.png; lib/models/model_icons.dart).
+    - assets/provider_logos/
     # The app's icon (macos/Runner/Assets.xcassets' 128 px one), for About.
     - assets/branding/
     # Built-in keymaps: VS Code keymap extensions' keybindings (lib/keybindings/keymap.dart).
@@ -136,6 +142,8 @@ flutter:
     # Emojibase's emoji, for project icons (tool/generate_emoji.mjs).
     - assets/emoji/
     - assets/network/
+    # The demo conversation new users first see (tool/welcome_demo/export_test.dart).
+    - assets/welcome/
     # VS Code TextMate grammars and color themes (tool/generate_textmate_assets.mjs).
 
   # VS Code's icon font (tool/generate_codicons.mjs; lib/theme/codicons.dart).

@@ -30,6 +30,133 @@
   <h1>Changelog</h1>
   <p class="subtitle">What changed in each version of BaoCode.</p>
 
+  <section class="release" id="v2.0.9">
+    <h2 class="plain"><a href="#v2.0.9">2.0.9</a></h2>
+    <p>This release draws the app's own header on Linux, lets Antigravity ask you questions and no longer takes its long commands for a hang, and folds a <code>&lt;details&gt;</code> written on one line.</p>
+    <p>New</p>
+    <ul>
+    <li>Linux: the top of the window is the app's own header, as on Windows; drag its empty part to move the window, and a double click maximizes or minimizes as the system is set.</li>
+    <li>Antigravity: its questions come to you as question cards, its subagents' too.</li>
+    <li>Antigravity: its checklist of steps shows as tasks, and a message sent mid-turn goes to it at once instead of waiting for the turn to end.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>Antigravity: calls to BaoCode's own MCP tools (browser, sessions…) show what they returned instead of &quot;(no output)&quot;, and MCP tools it calls through <code>call_mcp_tool</code> are shown and approved as MCP tools, not as Bash commands.</li>
+    <li>A <code>&lt;details&gt;&lt;summary&gt;…&lt;/summary&gt;</code> written on one line folds, as does one written whole on one line, its <code>&lt;/details&gt;</code> too; a long reply is no longer cut inside one.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Antigravity: commands and MCP calls that run long are no longer taken for a hang and restarted; if it doesn't honor Stop within 15 seconds, its process is ended, so Stop still works.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.8">
+    <h2 class="plain"><a href="#v2.0.8">2.0.8</a></h2>
+    <p>This release greets new users with a demo conversation, lets you drag upstreams and their models into your own order, makes deleting undoable, and lifts the size cap on files to and from the phone.</p>
+    <p>New</p>
+    <ul>
+    <li>On first launch with no project yet, a ~/BaoCode project is set up and a demo conversation plays in it: web search, subagents, edits, tests and a picture made, none of it really run. Show the Demo Conversation in Ctrl+P plays it again.</li>
+    <li>Settings → Models: drag upstreams, and the models in each, into your own order; the model picker and every model menu follow it.</li>
+    <li>Deleting agents, removing a project from the list and deleting a workspace no longer ask first: they are hidden at once, with Undo at the bottom left for 5 seconds.</li>
+    <li>Files to and from the phone go in pieces, with no 8 MB cap.</li>
+    <li>The built-in core honors CLAUDE_AUTOCOMPACT_PCT_OVERRIDE to compact earlier.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>File edits show folded to one line by default, opening to the diff; Settings → Appearance switches back to the card.</li>
+    <li>The conversation is 1040 wide by default; 720 is still the narrowest.</li>
+    <li>More than three background tasks are no longer folded by default.</li>
+    <li>With no model set up, the model welcome no longer pops up by itself: the banner and button below the conversation open it.</li>
+    <li>Pictures made in past conversations still show with the image model turned off.</li>
+    <li>In a multi-folder workspace, the commit panel lists only the repository picked in the Git log.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>Antigravity: session info updates no longer overwrite an existing title.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.7">
+    <h2 class="plain"><a href="#v2.0.7">2.0.7</a></h2>
+    <p>This release lets you copy, quote or ask by the way about text selected in the conversation, frees the chat grid from its 2×2, runs a stopped or failed last turn again in one click, and fixes several issues on Linux and Windows.</p>
+    <p>New</p>
+    <ul>
+    <li>Text selected in the conversation gets a bar over it: Copy, Quote (into the message being written, as a tag) and By the Way.</li>
+    <li>The chat grid is no longer a fixed 2×2: split panes along rows or columns, as many as the window has room for.</li>
+    <li>A stopped or failed last turn has a Run this turn again button; the model can be changed first, and as with an edit you're asked whether the files it changed go back.</li>
+    <li>The agent suggests two to four replies; hold ⌘ or Ctrl while clicking to pick several and send them together.</li>
+    <li>Images sent are kept as files and the agent is told where, so it can upload or attach the very one you sent.</li>
+    <li>The conversation's files page has Open in Terminal.</li>
+    <li>A model that failed its test: click Failed to copy the error, or use Copy Error in the row's menu.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>A skill run from a slash command (such as /code-review) shows its work as it goes instead of staying empty until done.</li>
+    <li>Messages queued behind a running turn go back into the composer when the app quits, kept for the next run.</li>
+    <li>A conversation with scheduled jobs or a loop waiting keeps its process when you switch away, so they come on time.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>The selection bar showing on only every other selection.</li>
+    <li>A message's editor opening off its message when Interface Size isn't 100%, or going out of view in a short window.</li>
+    <li>Windows: closing the window with no tray icon up minimizes it instead of leaving the app running out of reach; PowerShell Store execution aliases are recognized.</li>
+    <li>Windows: Ctrl+Y redoes in the markdown editor and the composer.</li>
+    <li>Linux: the package declares its GL libraries, fixing a crash at start on minimal desktops; a certificate bundle with stray bytes no longer drops every certificate; code fonts stay monospaced under CJK locales.</li>
+    <li>Suggested replies with inline code in them no longer all show as plain text.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.6">
+    <h2 class="plain"><a href="#v2.0.6">2.0.6</a></h2>
+    <p>This release adds the Antigravity ACP upstream, so one conversation can move between its models and other upstreams', opens files picked in the search palette or a terminal in the chat's side panel, and fixes PDFs failing on OpenAI upstreams.</p>
+    <p>New</p>
+    <ul>
+    <li>Antigravity ACP upstream: BaoCode installs and updates Google's official Antigravity CLI and drives it over ACP. Sign in with a Google account to use its Gemini, Claude and GPT models, and switch between them and other upstreams' models in the same conversation.</li>
+    <li>The context panel of an Antigravity conversation estimates what fills the context (system prompt, rules, skills, messages) and shows the account's weekly limits and when they reset.</li>
+    <li>Antigravity's commands, edits, reads and web searches show as Claude Code's do; in full access its commands no longer ask one by one; its turns appear in the usage records.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>In the chat layout, a file picked in the search palette (Ctrl+P) or clicked in a terminal opens in the agent's side panel instead of switching to the IDE.</li>
+    <li>Claude Code's own models always offer 200K / 400K / 1M context.</li>
+    <li>The built-in core reads images and PDFs as Claude Code does: large images are resized, long PDFs are read by pages, and re-reading an unchanged file is pointed out.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A PDF read by the built-in core is no longer sent to OpenAI upstreams as text and failing; an upstream's failure is shown instead of retried silently.</li>
+    <li>Antigravity: a failed command with no output no longer causes a 400 error; finished turns show the output speed; a 1M context shows as 1M.</li>
+    </ul>
+  </section>
+
+  <section class="release" id="v2.0.5">
+    <h2 class="plain"><a href="#v2.0.5">2.0.5</a></h2>
+    <p>This release brings web search to models without native web search, lets the phone relay setting list several relays as fallbacks, and keeps a new chat's draft when you switch its project.</p>
+    <p>New</p>
+    <ul>
+    <li>Upstreams without native web search (such as OpenAI Chat-compatible ones) can now search the web: BaoCode asks several search engines at once and merges their results.</li>
+    <li>Settings → Mobile: list several relays in order (BaoCode's or custom addresses); when the current one is out of reach for 5 seconds the next is used, and the earlier one is taken back once it answers.</li>
+    </ul>
+    <p>Improved</p>
+    <ul>
+    <li>Web search steps reliably show the result sites' icons, and dark icons stand on a light plate so they stay visible on dark themes.</li>
+    <li>Claude Code's ToolSearch steps show the MCP icon.</li>
+    <li>The conversation sidebar's list fades out at its scroll edges instead of being cut off.</li>
+    <li>Usage pages stay responsive with many subagents at work.</li>
+    </ul>
+    <p>Phone (phone app 0.2.5)</p>
+    <ul>
+    <li>A sent message can be sent again unchanged.</li>
+    <li>The question, approval or plan card the agent is waiting on folds down to its heading with a tap.</li>
+    <li>Fixed conversation cards from bots showing &quot;No longer listed&quot;.</li>
+    </ul>
+    <p>Fixed</p>
+    <ul>
+    <li>A new chat's draft (text and images) is kept when you switch its project after typing.</li>
+    <li>Custom subagent models work across upstreams, and only send an effort level the model offers. Thanks to @zmaker127.</li>
+    <li>Windows: /c/x paths written by agents working in Git Bash now open as drive C:.</li>
+    </ul>
+  </section>
+
   <section class="release" id="v2.0.4">
     <h2 class="plain"><a href="#v2.0.4">2.0.4</a></h2>
     <p>This release adds Antigravity account support, letting you sign in with a Google account for chat, web search and image generation, along with forking from any finished turn, a Built-in Core settings page, and much faster file search.</p>

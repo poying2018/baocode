@@ -6,7 +6,9 @@
 #include "login_window.h"
 #include "flutter/generated_plugin_registrant.h"
 
+#include <fontconfig/fontconfig.h>
 #include <gdk/gdkkeysyms.h>
+#include <initializer_list>
 #include <string.h>
 
 struct _MyApplication {
@@ -233,6 +235,95 @@ static gboolean on_key_press(GtkWidget* widget, GdkEventKey* event,
   return FALSE;
 }
 
+// The widget the view takes its pointer events in: FlView's event box.
+static GtkWidget* find_event_box(GtkWidget* widget) {
+  if (GTK_IS_EVENT_BOX(widget)) return widget;
+  if (!GTK_IS_CONTAINER(widget)) return nullptr;
+  GList* children = gtk_container_get_children(GTK_CONTAINER(widget));
+  GtkWidget* found = nullptr;
+  for (GList* item = children; item != nullptr && found == nullptr;
+       item = item->next) {
+    found = find_event_box(GTK_WIDGET(item->data));
+  }
+  g_list_free(children);
+  return found;
+}
+
+// dragWindow: moves the window with the press under way, by the header the
+// app draws (see WindowControls.movesByHeader). The press is the window
+// manager's from then on, and its release never comes to the view, which
+// would take the next press for the same one still held: the view is told
+// of the release here, at [time] (the pointer event's, in milliseconds).
+static void drag_window(MyApplication* self, guint32 time) {
+  if (self->window == nullptr) return;
+  GdkDisplay* display = gtk_widget_get_display(GTK_WIDGET(self->window));
+  GdkSeat* seat = gdk_display_get_default_seat(display);
+  GdkDevice* pointer = seat == nullptr ? nullptr : gdk_seat_get_pointer(seat);
+  if (pointer == nullptr) return;
+  // Where it is on the screen, for X11; Wayland's compositor knows.
+  gint x = 0;
+  gint y = 0;
+  gdk_device_get_position(pointer, nullptr, &x, &y);
+  gtk_window_begin_move_drag(self->window, GDK_BUTTON_PRIMARY, x, y, time);
+
+  GtkWidget* target =
+      self->view == nullptr ? nullptr : find_event_box(self->view);
+  if (target == nullptr) target = self->view;
+  GdkWindow* window = target == nullptr ? nullptr : gtk_widget_get_window(target);
+  if (window == nullptr) return;
+  GdkEvent* release = gdk_event_new(GDK_BUTTON_RELEASE);
+  release->button.window = GDK_WINDOW(g_object_ref(window));
+  release->button.send_event = TRUE;
+  release->button.time = time;
+  release->button.button = GDK_BUTTON_PRIMARY;
+  gdk_window_get_device_position_double(window, pointer, &release->button.x,
+                                        &release->button.y, nullptr);
+  gdk_event_set_device(release, pointer);
+  gdk_event_set_source_device(release, pointer);
+  gboolean handled = FALSE;
+  g_signal_emit_by_name(target, "button-release-event", release, &handled);
+  gdk_event_free(release);
+}
+
+static void toggle_maximized(GtkWindow* window) {
+  if (gtk_window_is_maximized(window)) {
+    gtk_window_unmaximize(window);
+  } else {
+    gtk_window_maximize(window);
+  }
+}
+
+// handleTitleDoubleClick: what GTK's settings say a double click on a title
+// bar does (maximize, by default).
+static void title_double_click(GtkWindow* window) {
+  g_autofree gchar* action = nullptr;
+  g_object_get(gtk_widget_get_settings(GTK_WIDGET(window)),
+               "gtk-titlebar-double-click", &action, nullptr);
+  if (action == nullptr || strcmp(action, "toggle-maximize") == 0) {
+    toggle_maximized(window);
+  } else if (strcmp(action, "minimize") == 0) {
+    gtk_window_iconify(window);
+  } else if (strcmp(action, "lower") == 0) {
+    GdkWindow* gdk_window = gtk_widget_get_window(GTK_WIDGET(window));
+    if (gdk_window != nullptr) gdk_window_lower(gdk_window);
+  }
+}
+
+// Tells the app whether the window is maximized, for its maximize button.
+static gboolean window_state_cb(GtkWidget* widget, GdkEventWindowState* event,
+                                gpointer user_data) {
+  (void)widget;
+  MyApplication* self = MY_APPLICATION(user_data);
+  if ((event->changed_mask & GDK_WINDOW_STATE_MAXIMIZED) != 0 &&
+      self->window_channel != nullptr) {
+    g_autoptr(FlValue) maximized = fl_value_new_bool(
+        (event->new_window_state & GDK_WINDOW_STATE_MAXIMIZED) != 0);
+    fl_method_channel_invoke_method(self->window_channel, "maximized",
+                                    maximized, nullptr, nullptr, nullptr);
+  }
+  return FALSE;
+}
+
 static void reveal_path(const char* path) {
   if (path == nullptr || path[0] == '\0') return;
   g_autofree char* target = g_file_test(path, G_FILE_TEST_IS_DIR)
@@ -241,6 +332,64 @@ static void reveal_path(const char* path) {
   char* argv[] = {(char*)"xdg-open", target, nullptr};
   g_spawn_async(nullptr, argv, nullptr, G_SPAWN_SEARCH_PATH, nullptr, nullptr,
                 nullptr, nullptr);
+}
+
+// codeFontFiles: for each family named, the files of its regular, bold,
+// italic and bold italic faces as Fontconfig matches them, for the app to
+// load itself (see linux_code_fonts.dart), and whether it is installed at
+// all. FcFontMatch answers with a substitute too, so only a face of the
+// family itself counts (for `monospace`, any monospaced one). A face in a
+// collection but its first is installed without a file: Flutter's loader
+// reads only the first.
+static FlValue* code_font_files(FlValue* args) {
+  FlValue* result = fl_value_new_map();
+  if (fl_value_get_type(args) != FL_VALUE_TYPE_LIST) return result;
+  for (size_t i = 0; i < fl_value_get_length(args); ++i) {
+    FlValue* value = fl_value_get_list_value(args, i);
+    if (fl_value_get_type(value) != FL_VALUE_TYPE_STRING) continue;
+    const auto* family = reinterpret_cast<const FcChar8*>(fl_value_get_string(value));
+    // Taken by the entry below: g_steal_pointer gives a gpointer in C++
+    // with the GLib the release builds use.
+    FlValue* files = fl_value_new_list();
+    bool installed = false;
+    for (int weight : {FC_WEIGHT_REGULAR, FC_WEIGHT_BOLD}) {
+      for (int slant : {FC_SLANT_ROMAN, FC_SLANT_ITALIC}) {
+        FcPattern* query = FcPatternCreate();
+        FcPatternAddString(query, FC_FAMILY, family);
+        FcPatternAddInteger(query, FC_WEIGHT, weight);
+        FcPatternAddInteger(query, FC_SLANT, slant);
+        FcConfigSubstitute(nullptr, query, FcMatchPattern);
+        FcDefaultSubstitute(query);
+        FcResult status;
+        FcPattern* match = FcFontMatch(nullptr, query, &status);
+        FcPatternDestroy(query);
+        if (match == nullptr) continue;
+        FcChar8* name;
+        bool exact = false;
+        for (int j = 0; FcPatternGetString(match, FC_FAMILY, j, &name) == FcResultMatch; ++j) {
+          if (FcStrCmpIgnoreCase(family, name) == 0) exact = true;
+        }
+        int spacing = 0;
+        if (FcStrCmpIgnoreCase(family, reinterpret_cast<const FcChar8*>("monospace")) == 0) {
+          exact = FcPatternGetInteger(match, FC_SPACING, 0, &spacing) == FcResultMatch &&
+                  spacing == FC_MONO;
+        }
+        installed = installed || exact;
+        FcChar8* path;
+        int index;
+        if (exact && FcPatternGetInteger(match, FC_INDEX, 0, &index) == FcResultMatch &&
+            index == 0 && FcPatternGetString(match, FC_FILE, 0, &path) == FcResultMatch) {
+          fl_value_append_take(files, fl_value_new_string(reinterpret_cast<const char*>(path)));
+        }
+        FcPatternDestroy(match);
+      }
+    }
+    FlValue* entry = fl_value_new_map();
+    fl_value_set_string_take(entry, "files", files);
+    fl_value_set_string_take(entry, "installed", fl_value_new_bool(installed));
+    fl_value_set_string_take(result, fl_value_get_string(value), entry);
+  }
+  return result;
 }
 
 // baocode/window: the calls WindowControls makes when this host is a desktop.
@@ -253,7 +402,27 @@ static void window_method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
   FlValue* args = fl_method_call_get_args(call);
   g_autoptr(FlMethodResponse) response = nullptr;
 
-  if (strcmp(name, "pickDirectory") == 0) {
+  if (strcmp(name, "codeFontFiles") == 0) {
+    g_autoptr(FlValue) result = code_font_files(args);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+  } else if (strcmp(name, "heldModifiers") == 0) {
+    // The modifiers held now, as the system has them: the app's own may
+    // have missed one going up (see held_keys.dart).
+    GdkKeymap* keymap = gdk_keymap_get_for_display(gdk_display_get_default());
+    const guint state = gdk_keymap_get_modifier_state(keymap);
+    g_autoptr(FlValue) result = fl_value_new_map();
+    fl_value_set_string_take(result, "shift",
+                             fl_value_new_bool((state & GDK_SHIFT_MASK) != 0));
+    fl_value_set_string_take(
+        result, "control", fl_value_new_bool((state & GDK_CONTROL_MASK) != 0));
+    fl_value_set_string_take(result, "alt",
+                             fl_value_new_bool((state & GDK_MOD1_MASK) != 0));
+    fl_value_set_string_take(
+        result, "meta",
+        fl_value_new_bool(
+            (state & (GDK_SUPER_MASK | GDK_MOD4_MASK | GDK_META_MASK)) != 0));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+  } else if (strcmp(name, "pickDirectory") == 0) {
     GSList* names = choose_files(self->window, GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
                                  "Open Folder", FALSE, nullptr, nullptr, FALSE);
     g_autoptr(FlValue) result = nullptr;
@@ -323,6 +492,27 @@ static void window_method_call_cb(FlMethodChannel* channel, FlMethodCall* call,
     }
     g_autoptr(FlValue) result = fl_value_new_bool(!full_screen);
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+  } else if (strcmp(name, "windowCommand") == 0) {
+    const char* command = nullptr;
+    if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_STRING) {
+      command = fl_value_get_string(args);
+    }
+    if (self->window != nullptr && command != nullptr) {
+      if (strcmp(command, "minimize") == 0) {
+        gtk_window_iconify(self->window);
+      } else if (strcmp(command, "maximize") == 0) {
+        toggle_maximized(self->window);
+      } else if (strcmp(command, "close") == 0) {
+        gtk_window_close(self->window);
+      }
+    }
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(name, "dragWindow") == 0) {
+    drag_window(self, static_cast<guint32>(map_number(args, "time")));
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
+  } else if (strcmp(name, "handleTitleDoubleClick") == 0) {
+    if (self->window != nullptr) title_double_click(self->window);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
   } else if (strcmp(name, "showContextMenu") == 0) {
     FlValue* items = nullptr;
     if (args != nullptr && fl_value_get_type(args) == FL_VALUE_TYPE_MAP) {
@@ -362,9 +552,13 @@ static void my_application_activate(GApplication* application) {
   self->window = window;
   g_object_add_weak_pointer(G_OBJECT(window), (gpointer*)&self->window);
 
-  // The app paints its own header on Windows only. Everywhere else the
-  // system draws the caption, so this is a normal title bar (no GTK
-  // header bar stacked on top of the Flutter view).
+  // The app draws its own header, the window buttons at its right as on
+  // Windows (see WindowControls.drawsHeader). A title bar of GTK's own that
+  // is never shown makes GTK draw the window's frame itself: its shadow and
+  // resize edges, with no caption of the system's over the view.
+  gtk_window_set_titlebar(window, gtk_drawing_area_new());
+  g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_cb),
+                   self);
   gtk_window_set_title(window, "BaoCode");
   gtk_window_set_default_size(window, kDefaultWidth, kDefaultHeight);
   GdkGeometry geometry = {};

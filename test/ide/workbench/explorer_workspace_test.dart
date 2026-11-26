@@ -201,30 +201,36 @@ void main() {
 
     await chord(tester, LogicalKeyboardKey.keyG, control: true, shift: true);
     await tester.pumpAndSettle();
-    // Each under its header in the local changes (#76), with its branch
-    // (the status bar's the one shown) and its changes.
+    // The repository picked alone is listed, under its header when the
+    // workspace has several (#1316). The first is shown until another is.
     expect(find.text('Repositories'), findsNothing);
-    for (final (root, branch) in [('site', 'main'), ('api', 'dev')]) {
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey('r:${inRoot(root)}')),
-          matching: find.textContaining(
-            RegExp('^$root\\s+$branch\$'),
-            findRichText: true,
-          ),
+    expect(
+      find.descendant(
+        of: find.byKey(ValueKey('r:${inRoot('site')}')),
+        matching: find.textContaining(
+          RegExp(r'^site\s+main$'),
+          findRichText: true,
         ),
-        findsOneWidget,
-      );
-    }
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(ValueKey('r:${inRoot('api')}')), findsNothing);
     expect(_statusBar('main'), findsOneWidget);
     expect(find.text('index.html'), findsWidgets);
-    expect(find.text('new.go'), findsOneWidget);
+    expect(find.text('new.go'), findsNothing);
 
-    // The one clicked is the one shown.
-    await tester.tap(find.byKey(ValueKey('r:${inRoot('api')}')).first);
+    // Another picked in the log's repository menu is the one shown.
+    final workspace = tester
+        .state<IdeWorkbenchState>(find.byType(IdeWorkbench))
+        .widget
+        .workspace;
+    workspace.selectRepository(
+      workspace.repositories.firstWhere((r) => r.$1 == inRoot('api')).$2,
+    );
     await tester.pumpAndSettle();
     expect(_statusBar('dev'), findsOneWidget);
     expect(_statusBar('main'), findsNothing);
+    expect(find.text('new.go'), findsOneWidget);
   });
 
   test('Search runs in each folder, as one search', () async {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:baocode/ide/git/repository_scan.dart';
 import 'package:baocode/ide/ide_status_bar.dart';
+import 'package:baocode/ide/ide_workbench.dart';
 import 'package:baocode/ide/ide_workspace.dart';
 
 import '../git/fake_git.dart';
@@ -124,28 +125,33 @@ void main() {
 
     await chord(tester, LogicalKeyboardKey.keyG, control: true, shift: true);
     await tester.pumpAndSettle();
-    // Every repository under its header in the local changes (#76): its
-    // branch after its name, and its changes.
+    // The first repository alone, under its header; another picked in the
+    // log's repository menu replaces it (#1316).
     expect(find.text('Repositories'), findsNothing);
-    final appHeader = find.byKey(ValueKey('r:${inRoot('app')}')).first;
     expect(
       find.descendant(
-        of: appHeader,
+        of: find.byKey(ValueKey('r:$testRoot')),
         matching: find.textContaining(
-          RegExp(r'^app\s+dev$'),
+          RegExp(r'^project\s+main$'),
           findRichText: true,
         ),
       ),
       findsOneWidget,
     );
+    expect(find.byKey(ValueKey('r:${inRoot('app')}')), findsNothing);
     expect(find.text('README.md'), findsWidgets);
-    expect(find.text('new.dart'), findsOneWidget);
+    expect(find.text('new.dart'), findsNothing);
 
-    // The one clicked is the one shown (the status bar's branch).
-    expect(_statusBar('dev'), findsNothing);
-    await tester.tap(appHeader);
+    final workspace = tester
+        .state<IdeWorkbenchState>(find.byType(IdeWorkbench))
+        .widget
+        .workspace;
+    workspace.selectRepository(
+      workspace.repositories.firstWhere((r) => r.$1 == inRoot('app')).$2,
+    );
     await tester.pumpAndSettle();
     expect(_statusBar('dev'), findsOneWidget);
+    expect(find.text('new.dart'), findsOneWidget);
   });
 }
 

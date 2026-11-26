@@ -3386,6 +3386,18 @@ abstract class AppLocalizations {
   /// **'Image'**
   String get agentImageUntitled;
 
+  /// The title of the demo conversation a new user first sees: nothing in it ran; what they send starts a conversation of their own.
+  ///
+  /// In en, this message translates to:
+  /// **'Demo: a rate limiter, compared and rewritten'**
+  String get welcomeDemoTitle;
+
+  /// Above the composer of the demo conversation, beside the Set Up a Model button, while no model is set up.
+  ///
+  /// In en, this message translates to:
+  /// **'This is a demo. To start a real conversation, set up a model of your own.'**
+  String get welcomeDemoNoModel;
+
   /// In the list under a chat's title being renamed: has a model title the conversation from what the user asked.
   ///
   /// In en, this message translates to:
@@ -3614,36 +3626,6 @@ abstract class AppLocalizations {
   /// **'Archived · {count}'**
   String sidebarArchivedCount(int count);
 
-  /// No description provided for @sidebarDeleteAgentTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete agent?'**
-  String get sidebarDeleteAgentTitle;
-
-  /// No description provided for @sidebarDeleteAgentMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'“{title}” and its conversation will be removed.'**
-  String sidebarDeleteAgentMessage(String title);
-
-  /// No description provided for @sidebarDeleteAgentsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete agents?'**
-  String get sidebarDeleteAgentsTitle;
-
-  /// No description provided for @sidebarDeleteAgentsMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{The agent and its conversation will be deleted} other{The {count} agents and their conversations will be deleted}}, from their kernels too. This cannot be undone.'**
-  String sidebarDeleteAgentsMessage(int count);
-
-  /// No description provided for @sidebarDeleteAgentMessageKernel.
-  ///
-  /// In en, this message translates to:
-  /// **'“{title}” and its conversation will be deleted, from {kernel} too. This cannot be undone.'**
-  String sidebarDeleteAgentMessageKernel(String title, String kernel);
-
   /// No description provided for @sidebarSearchAgents.
   ///
   /// In en, this message translates to:
@@ -3761,7 +3743,7 @@ abstract class AppLocalizations {
   /// No description provided for @sidebarDeleteCount.
   ///
   /// In en, this message translates to:
-  /// **'Delete {count} Agents…'**
+  /// **'Delete {count} Agents'**
   String sidebarDeleteCount(int count);
 
   /// An agent's menu in the sidebar: copies the id of its session, which Claude Code finds the conversation by.
@@ -3787,12 +3769,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Detach from Conversation'**
   String get sidebarDetachAside;
-
-  /// After the message asking to delete an agent that has conversations asked beside it with /btw.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{Its /btw conversation is deleted with it.} other{Its {count} /btw conversations are deleted with it.}}'**
-  String sidebarDeleteAsidesToo(int count);
 
   /// The /btw command in the composer's command list: what follows is asked in a new conversation copied from this one, listed under it.
   ///
@@ -3869,26 +3845,38 @@ abstract class AppLocalizations {
   /// No description provided for @sidebarDeleteArchived.
   ///
   /// In en, this message translates to:
-  /// **'Delete All Archived…'**
+  /// **'Delete All Archived'**
   String get sidebarDeleteArchived;
-
-  /// No description provided for @sidebarDeleteArchivedTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Delete archived agents?'**
-  String get sidebarDeleteArchivedTitle;
-
-  /// No description provided for @sidebarDeleteArchivedMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'{count, plural, =1{The archived agent and its conversation will be deleted} other{The {count} archived agents and their conversations will be deleted}}, from their kernels too. This cannot be undone.'**
-  String sidebarDeleteArchivedMessage(int count);
 
   /// No description provided for @sidebarRemoveFromList.
   ///
   /// In en, this message translates to:
   /// **'Remove from List'**
   String get sidebarRemoveFromList;
+
+  /// The note at the bottom of the window, Undo beside it, once an agent is deleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted “{title}”'**
+  String sidebarAgentDeleted(String title);
+
+  /// No description provided for @sidebarAgentsDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Deleted 1 agent} other{Deleted {count} agents}}'**
+  String sidebarAgentsDeleted(int count);
+
+  /// No description provided for @sidebarProjectRemoved.
+  ///
+  /// In en, this message translates to:
+  /// **'Removed “{name}” from the list'**
+  String sidebarProjectRemoved(String name);
+
+  /// No description provided for @sidebarWorkspaceDeleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted workspace “{name}”'**
+  String sidebarWorkspaceDeleted(String name);
 
   /// No description provided for @sidebarDropToPin.
   ///
@@ -4712,6 +4700,24 @@ abstract class AppLocalizations {
   /// **'Pasted text #{number}'**
   String pastedTextChip(int number);
 
+  /// Text quoted from the conversation, as a small tag in a message: the quote's number in the message.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote #{number}'**
+  String quoteChip(int number);
+
+  /// Over text selected in the conversation: puts it in the message being written, as a quote of it.
+  ///
+  /// In en, this message translates to:
+  /// **'Quote'**
+  String get chatQuote;
+
+  /// Over text selected in the conversation: quotes it in a /btw message, asked in a conversation of its own beside this one.
+  ///
+  /// In en, this message translates to:
+  /// **'By the Way'**
+  String get chatQuoteAside;
+
   /// Shown in place of a long paste kept in a file that has since gone.
   ///
   /// In en, this message translates to:
@@ -4795,6 +4801,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fork from here'**
   String get turnFork;
+
+  /// No description provided for @turnRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Run this turn again'**
+  String get turnRetry;
 
   /// No description provided for @turnCopied.
   ///
@@ -5738,11 +5750,11 @@ abstract class AppLocalizations {
   /// **'Remove from the queue'**
   String get queuedRemove;
 
-  /// Hover of a reply the agent suggests, over the composer.
+  /// Hover of a reply the agent suggests, over the composer. {key} is ⌘ on macOS, Ctrl elsewhere.
   ///
   /// In en, this message translates to:
-  /// **'Click to put it in the input, double-click to send it'**
-  String get replySuggestionHint;
+  /// **'Click to put it in the input, double-click to send it, {key}-click to pick more than one'**
+  String replySuggestionHint(String key);
 
   /// No description provided for @stopConfirmMessage.
   ///
@@ -6443,7 +6455,7 @@ abstract class AppLocalizations {
   /// No description provided for @generalSettingsPromptSuggestionsDescription.
   ///
   /// In en, this message translates to:
-  /// **'After each turn, two or three things you might send next, over the composer: click one to put it in the input and edit it, double-click to send it as it is; Tab in an empty input takes the first. The agent writes them at the end of its reply, with no extra request. Applies from the next message.'**
+  /// **'After each turn, two to four things you might send next, over the composer: click one to put it in the input and edit it, double-click to send it as it is; click with ⌘ or Ctrl held to put in more than one, each on its own line; Tab in an empty input takes the first. The agent writes them at the end of its reply, with no extra request. Applies from the next message.'**
   String get generalSettingsPromptSuggestionsDescription;
 
   /// The commit attribution dropdown, as read out: its setting and the choice in effect.
@@ -10836,6 +10848,12 @@ abstract class AppLocalizations {
   /// **'Offer {name} in the model picker'**
   String modelsEnableProvider(String name);
 
+  /// No description provided for @modelsDragToReorder.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder'**
+  String get modelsDragToReorder;
+
   /// No description provided for @modelsFeaturedWhy.
   ///
   /// In en, this message translates to:
@@ -11556,6 +11574,102 @@ abstract class AppLocalizations {
   /// **'The key could not be kept: {error}'**
   String modelsApiKeyError(String error);
 
+  /// No description provided for @agyCli.
+  ///
+  /// In en, this message translates to:
+  /// **'Antigravity ACP'**
+  String get agyCli;
+
+  /// No description provided for @agyProtocolDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'BaoCode drives the Antigravity CLI on this machine over ACP, the Agent Client Protocol: not through the local proxy.'**
+  String get agyProtocolDescription;
+
+  /// No description provided for @agyCliDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Google\'s own Antigravity CLI, which BaoCode installs and keeps up to date. BaoCode talks to it only over its official ACP, entirely within Google\'s ACP policy: no risk of an account ban.'**
+  String get agyCliDescription;
+
+  /// No description provided for @agyVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version}'**
+  String agyVersion(String version);
+
+  /// No description provided for @agyNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get agyNotInstalled;
+
+  /// No description provided for @agyUpdateAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Version {version} is out'**
+  String agyUpdateAvailable(String version);
+
+  /// No description provided for @agyInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get agyInstall;
+
+  /// No description provided for @agyUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update'**
+  String get agyUpdate;
+
+  /// No description provided for @agyInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing… {percent}%'**
+  String agyInstalling(int percent);
+
+  /// No description provided for @agyAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Account'**
+  String get agyAccount;
+
+  /// No description provided for @agyAccountDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Signing in opens the browser. The sign-in is the terminal\'s agy\'s too: signing out signs it out as well.'**
+  String get agyAccountDescription;
+
+  /// No description provided for @agySignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In'**
+  String get agySignIn;
+
+  /// No description provided for @agySignOut.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign Out'**
+  String get agySignOut;
+
+  /// No description provided for @agySigningIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the browser…'**
+  String get agySigningIn;
+
+  /// No description provided for @agySignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in: {count} models'**
+  String agySignedIn(int count);
+
+  /// No description provided for @agyNotSignedIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in'**
+  String get agyNotSignedIn;
+
   /// No description provided for @modelsTest.
   ///
   /// In en, this message translates to:
@@ -11699,6 +11813,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Failed'**
   String get modelsTestModelFailed;
+
+  /// No description provided for @modelsCopyTestError.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Error'**
+  String get modelsCopyTestError;
 
   /// No description provided for @modelsTestFirstText.
   ///
@@ -17569,6 +17689,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Set Up a Model...'**
   String get cmdModelWelcome;
+
+  /// No description provided for @cmdWelcomeDemo.
+  ///
+  /// In en, this message translates to:
+  /// **'Show the Demo Conversation'**
+  String get cmdWelcomeDemo;
 
   /// No description provided for @modelWelcomeTitle.
   ///
