@@ -24,6 +24,7 @@ import 'server_claude.dart';
 import 'server_cli.dart';
 import 'server_pty.dart';
 import 'server_review.dart';
+import 'server_skills.dart';
 import 'server_streams.dart';
 import 'server_tcp.dart';
 import '../platform/process_tree.dart';
@@ -106,6 +107,7 @@ class RemoteServer {
   /// Claude Code, when this server carries it (the codex product's does
   /// not).
   late final ServerClaude _claude;
+  late final ServerSkills _skills = ServerSkills();
   final Map<String, LocalFiles> _files = {};
   final Map<int, _ServerProcess> _processes = {};
   int _nextProcess = 0;
@@ -467,6 +469,8 @@ class RemoteServer {
         final value = (await ClaudeEnvironment.of())[setting];
         return value == null || value.isEmpty ? null : setting;
       };
+      handlers[RemoteProtocol.claudeStageSkills] = (params, _) =>
+          _skills.stage(paramsOf(params));
     }
   }
 
@@ -530,6 +534,7 @@ class RemoteServer {
       _tcp.closeAll(),
       _lsp.cancelAll(),
       _cli.close(),
+      _skills.dispose(),
     ]);
     peer.close();
   }();

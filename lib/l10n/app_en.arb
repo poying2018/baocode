@@ -4574,6 +4574,25 @@
   "explorerExcludeSetting": "Hidden files and folders",
   "explorerExcludeSettingDescription": "Files and folders the explorer does not show, comma separated: a name (`node_modules`, `*.log`) matches anywhere, a path (`build/**`, `src/generated`) matches within the folder.",
   "explorerExcludeSettingPlaceholder": "e.g. .git, node_modules, *.log",
+  "gitAutoFetchSetting": "Git auto-fetch",
+  "gitAutoFetchSettingDescription": "Periodically fetch the current branch's remote in the background so incoming commits appear without a manual Fetch. (git.autofetchInterval)",
+  "gitAutoFetchOff": "Off",
+  "gitAutoFetchMinutes": "{minutes, plural, =1{Every 1 minute} other{Every {minutes} minutes}}",
+  "@gitAutoFetchMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "gitAutoFetchSeconds": "Every {seconds} seconds",
+  "@gitAutoFetchSeconds": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "claudePathSetting": "Path",
   "claudePathSettingDescription": "Empty: the newest Claude Code on this machine, or the one {product} carries. A path: always that one, e.g. one you built. (claudeCode.path)",
   "@claudePathSettingDescription": {
@@ -7814,7 +7833,7 @@
   "remoteAddServer": "Add SSH Server...",
   "remoteEditServer": "Edit",
   "settingsSectionSsh": "SSH Servers",
-  "settingsSshKeywords": "ssh remote server host jump bastion key password core",
+  "settingsSshKeywords": "ssh remote server host jump bastion key password core skills",
   "sshSettingsDescription": "The servers remote projects connect to: their address, how they sign in, a jump host, and the core each runs.",
   "sshSettingsServers": "Servers",
   "sshSettingsServersDescription": "Those added in the app, and the hosts the sidebar has.",
@@ -9868,6 +9887,9 @@
   "remoteLocalAccessDetail": "Agents on these hosts may run commands on this computer (asking you each time), copy files both ways and forward ports.",
   "remoteLocalAccessNoAsking": "Runs commands without asking",
   "remoteLocalAccessAskAgain": "Ask Each Time",
+  "remoteShareUserSkillsGroup": "Skills",
+  "remoteShareUserSkills": "Share Local User Skills",
+  "remoteShareUserSkillsDetail": "Project this computer’s user skills (~/.claude/skills) into a temporary directory for remote agents without changing files on the remote host. Remote skills with the same name take precedence.",
   "sidePanelPorts": "Ports",
   "portsEmpty": "No ports are forwarded. A server on {host} that prints its http://localhost address is forwarded here on its own.",
   "@portsEmpty": {
@@ -10074,5 +10096,29 @@
   "remoteBrowserSaveName": "Save As:",
   "remoteBrowserSave": "Save",
   "remoteBrowserReplace": "“{name}” already exists. Replace it?",
-  "@remoteBrowserReplace": {"placeholders": {"name": {"type": "String"}}}
+  "@remoteBrowserReplace": {"placeholders": {"name": {"type": "String"}}},
+  "tailStart": "Tail File (Follow Changes)",
+  "@tailStart": {
+    "description": "Tooltip for the eye icon button that starts Notepad++-style tailing on the active file."
+  },
+  "tailStop": "Stop Tailing",
+  "@tailStop": {
+    "description": "Tooltip for the eye icon button when tailing is active."
+  },
+  "tailSaveFirst": "Save changes to start tailing",
+  "@tailSaveFirst": {
+    "description": "Tooltip for the disabled tail button when the file has unsaved changes."
+  },
+  "tailResume": "Scroll to Bottom & Resume Tail",
+  "@tailResume": {
+    "description": "Tooltip for the floating button shown when tailing is paused by scrolling up."
+  },
+  "cmdToggleTail": "Toggle Tail (Follow File)",
+  "@cmdToggleTail": {
+    "description": "Command palette title for toggling tail mode on the active file."
+  },
+  "tailReadOnlyHint": "Read-only while tailing (tail -f). Stop tailing to edit.",
+  "@tailReadOnlyHint": {
+    "description": "Inline tooltip shown at the caret when trying to edit a file while tail mode is active."
+  }
 }

@@ -64,8 +64,11 @@ done
 dest="$1"; shift
 if [ -n "$config" ]; then
   # What ssh -G says: the config, the user's strictness as FAKE_STRICT.
-  printf 'hostname %s\nport %s\nstricthostkeychecking %s\nuserknownhostsfile %s %s\n' \
-    "$dest" "${FAKE_PORT:-22}" "${FAKE_STRICT:-ask}" "$HOME/.ssh/known_hosts" "$HOME/.ssh/known_hosts2"
+  printf 'hostname %s\nport %s\nstricthostkeychecking %s\nuserknownhostsfile %s %s\nconnecttimeout %s\n' \
+    "$dest" "${FAKE_PORT:-22}" "${FAKE_STRICT:-ask}" "$HOME/.ssh/known_hosts" "$HOME/.ssh/known_hosts2" "${FAKE_CONNECT_TIMEOUT:-none}"
+  [ -n "${FAKE_PROXY_JUMP:-}" ] && printf 'proxyjump %s\n' "$FAKE_PROXY_JUMP"
+  [ -n "${FAKE_PROXY_COMMAND:-}" ] && printf 'proxycommand %s\n' "$FAKE_PROXY_COMMAND"
+  [ -n "${FAKE_CONTROL_MASTER:-}" ] && printf 'controlmaster %s\n' "$FAKE_CONTROL_MASTER"
   exit 0
 fi
 printf '%s\n' "$all" >> "$FAKE_LOG.args"
@@ -103,6 +106,20 @@ case "$dest" in
       pw=$("$SSH_ASKPASS" "me@stubborn's password: ")
       [ "$pw" = hunter2 ] && break
     done ;;
+  otp-flaky-resume)
+    # First connect succeeds after OTP; resume asks OTP then fails unreachable.
+    otp=$("$SSH_ASKPASS" "Verification code: ") || { echo "Permission denied" >&2; exit 255; }
+    echo "otp:$otp" >> "$FAKE_LOG.otp"
+    case "$*" in
+      *--resume*) echo "Connection closed by remote host" >&2; exit 255 ;;
+    esac ;;
+  otp-drop-after-ready)
+    # Asks OTP, prints probe + ready, then drops with exit 255 before initialize.
+    otp=$("$SSH_ASKPASS" "Verification code: ") || { echo "Permission denied" >&2; exit 255; }
+    echo "BAOCODE-PROBE Linux x86_64"
+    echo "BAOCODE-READY"
+    echo "Connection closed by remote host" >&2
+    exit 255 ;;
   stranger)
     # Learned without a word where told to, else asked.
     case "$all" in
@@ -175,15 +192,11 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
     expect(installed.readAsBytesSync(), serverScript());
     expect(binaries.reads, ['linux-x64']);
     expect(progress.any((line) => line.contains('Installing')), isTrue);
+    // Probe, install and launch all run over a single ssh connection.
     expect(commands(), [
-      'sh -s',
-      // The folder is quoted as one word in the host's shell, so that a
-      // path with a space in it does not split (ssh_launcher's _quoted).
-      startsWith(
-        "sh -c 'mkdir -p '.baocode-server/1-abc' && gzip -dc >",
-      ),
-      matches(
-        r'^\.baocode-server/1-abc/baocode-server --session [0-9a-f]{32}$',
+      allOf(
+        startsWith("sh -c '"),
+        contains('.baocode-server/1-abc/baocode-server --session '),
       ),
     ]);
 
@@ -196,13 +209,15 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
     await connection.close();
     await connection.done;
 
-    // Again: already there, so not sent again.
+    // Again: already there, so not sent again; still one ssh connection.
     log.deleteSync();
     final again = await launcher.connect(SshTarget.parse('dev'));
     expect(binaries.reads, ['linux-x64']);
     expect(commands(), [
-      'sh -s',
-      startsWith('.baocode-server/1-abc/baocode-server --session '),
+      allOf(
+        startsWith("sh -c '"),
+        contains('.baocode-server/1-abc/baocode-server --session '),
+      ),
     ]);
     await again.close();
   }, timeout: const Timeout(Duration(minutes: 2)));
@@ -228,57 +243,59 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
     expect(await failure('strict'), SshFailure.hostKey);
   });
 
-  test('a password is asked for each ssh, again when refused', () async {
-    final binaries = FakeBinaries('1-abc', {'linux-x64': serverScript()});
-    final asked = <SshPrompt>[];
-    var answers = ['wrong', 'hunter2'];
-    final launcher = SshLauncher(
-      ssh: fakeSsh,
-      binaries: binaries,
-      start: starter(),
-      prompter: (prompt) async {
-        asked.add(prompt);
-        if (answers.isEmpty) return 'hunter2';
-        return answers.removeAt(0);
-      },
-    );
-    expect(
-      launcher.arguments(SshTarget.parse('dev'), 'cmd'),
-      contains('BatchMode=no'),
-    );
-    final connection = await launcher.connect(SshTarget.parse('secret'));
-    expect(connection.hello.home, home.path);
-    // The probe twice (the first refused), the upload, the server.
-    expect(
-      [for (final prompt in asked) prompt.retry],
-      [false, true, false, false],
-    );
-    expect(asked.first.text, "me@secret's password: ");
-    expect(asked.first.target.text, 'secret');
-    await connection.close();
+  test(
+    'a password is asked once per connect (single ssh), again when refused',
+    () async {
+      final binaries = FakeBinaries('1-abc', {'linux-x64': serverScript()});
+      final asked = <SshPrompt>[];
+      var answers = ['wrong', 'hunter2'];
+      final launcher = SshLauncher(
+        ssh: fakeSsh,
+        binaries: binaries,
+        start: starter(),
+        prompter: (prompt) async {
+          asked.add(prompt);
+          if (answers.isEmpty) return 'hunter2';
+          return answers.removeAt(0);
+        },
+      );
+      expect(
+        launcher.arguments(SshTarget.parse('dev'), 'cmd'),
+        contains('BatchMode=no'),
+      );
+      final connection = await launcher.connect(SshTarget.parse('secret'));
+      expect(connection.hello.home, home.path);
+      // One ssh does probe, upload and launch: only the refused first try and
+      // its retry are asked.
+      expect([for (final prompt in asked) prompt.retry], [false, true]);
+      expect(asked.first.text, "me@secret's password: ");
+      expect(asked.first.target.text, 'secret');
+      await connection.close();
 
-    // Cancelled: said so, nothing more asked.
-    asked.clear();
-    answers = [];
-    final cancelling = SshLauncher(
-      ssh: fakeSsh,
-      binaries: binaries,
-      start: starter(),
-      prompter: (prompt) async {
-        asked.add(prompt);
-        return null;
-      },
-    );
-    await expectLater(
-      cancelling.connect(SshTarget.parse('secret')),
-      throwsA(
-        isA<SshConnectException>()
-            .having((e) => e.failure, 'failure', SshFailure.authentication)
-            .having((e) => e.message, 'message', contains('cancelled')),
-      ),
-    );
-    expect(asked, hasLength(1));
-  }, timeout: const Timeout(Duration(minutes: 2)));
+      // Cancelled: said so, nothing more asked.
+      asked.clear();
+      answers = [];
+      final cancelling = SshLauncher(
+        ssh: fakeSsh,
+        binaries: binaries,
+        start: starter(),
+        prompter: (prompt) async {
+          asked.add(prompt);
+          return null;
+        },
+      );
+      await expectLater(
+        cancelling.connect(SshTarget.parse('secret')),
+        throwsA(
+          isA<SshConnectException>()
+              .having((e) => e.failure, 'failure', SshFailure.authentication)
+              .having((e) => e.message, 'message', contains('cancelled')),
+        ),
+      );
+      expect(asked, hasLength(1));
+    },
+    timeout: const Timeout(Duration(minutes: 2)),
+  );
 
   test('cancelled, ssh is ended rather than left asking again', () async {
     final asked = <SshPrompt>[];
@@ -453,7 +470,7 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
             .having((e) => e.message, 'message', contains('macOS x64')),
       ),
     );
-    expect(commands(), ['sh -s']);
+    expect(commands(), [startsWith("sh -c '")]);
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('platforms as the builds are named', () {
@@ -533,9 +550,7 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
       '-o',
       'ServerAliveInterval=15',
       '-o',
-      'ServerAliveCountMax=3',
-      '-o',
-      'ConnectTimeout=20',
+      'ServerAliveCountMax=6',
     ];
     final session = launcher.windowsSessionScript('0123456789abcdef');
     expect(session, contains('Win32_Process'));
@@ -628,8 +643,167 @@ exec '$dartExecutable' '${p.absolute('packages', 'bao_remote', 'bin', 'baocode_s
         ),
       ),
     );
-    expect(commands(), ['sh -s']);
+    expect(commands(), [startsWith("sh -c '")]);
   });
+
+  test('ConnectTimeout is added for direct hosts only, respecting config and '
+      'omitted for ProxyJump / ProxyCommand', () async {
+    Future<List<String>> optionsFor(Map<String, String> env) {
+      final launcher = SshLauncher(
+        ssh: fakeSsh,
+        binaries: FakeBinaries('1', const {}),
+        start: starter(extra: env),
+      );
+      return launcher.connectionOptions(SshTarget.parse('dev'));
+    }
+
+    expect(
+      await optionsFor(const {}),
+      containsAllInOrder(['-o', 'ConnectTimeout=20']),
+    );
+    expect(
+      await optionsFor(const {'FAKE_CONNECT_TIMEOUT': '60'}),
+      isNot(contains('ConnectTimeout=20')),
+    );
+    expect(
+      await optionsFor(const {'FAKE_PROXY_JUMP': 'login'}),
+      isNot(contains('ConnectTimeout=20')),
+    );
+    expect(
+      await optionsFor(const {'FAKE_PROXY_COMMAND': 'ssh -W %h:%p login'}),
+      isNot(contains('ConnectTimeout=20')),
+    );
+    expect(
+      await optionsFor(const {'FAKE_CONTROL_MASTER': 'auto'}),
+      containsAllInOrder([
+        '-o',
+        'ControlMaster=no',
+        '-o',
+        'ControlPath=none',
+      ]),
+    );
+    expect(
+      await optionsFor(const {'FAKE_CONTROL_MASTER': 'false'}),
+      isNot(contains('ControlMaster=no')),
+    );
+  });
+
+  test('reconnect stalls after prompting when unreachable, and connect keeps '
+      'prompted across initialize failures', () async {
+    final binaries = FakeBinaries('1-abc', {'linux-x64': serverScript()});
+    var asks = 0;
+    final launcher = SshLauncher(
+      ssh: fakeSsh,
+      binaries: binaries,
+      start: starter(),
+      maxBackoff: const Duration(seconds: 1),
+      prompter: (prompt) async {
+        asks++;
+        return 'code-$asks';
+      },
+    );
+    // Initial connect dropping after BAOCODE-READY still reports prompted=true.
+    await expectLater(
+      launcher.connect(SshTarget.parse('otp-drop-after-ready')),
+      throwsA(
+        isA<SshConnectException>()
+            .having((e) => e.failure, 'failure', SshFailure.unreachable)
+            .having((e) => e.prompted, 'prompted', isTrue),
+      ),
+    );
+    expect(asks, 1);
+
+    // Connected session whose reconnect prompts for OTP and then fails with
+    // exit 255 must stall instead of looping OTP dialogs.
+    asks = 0;
+    final connection = await launcher.connect(
+      SshTarget.parse('otp-flaky-resume'),
+    );
+    expect(asks, 1);
+    final id = RegExp(r'--session ([0-9a-f]+)')
+        .firstMatch(commands().last)!
+        .group(1)!;
+    final stalled = connection.changes.firstWhere((_) => connection.stalled);
+    await Process.run('pkill', ['-f', 'session $id']);
+    await stalled.timeout(const Duration(seconds: 20));
+    expect(connection.stalled, isTrue);
+    expect(connection.lastError?.prompted, isTrue);
+    final asksWhenStalled = asks;
+    expect(asksWhenStalled, 2);
+    // Must not keep re-prompting while stalled.
+    await Future<void>.delayed(const Duration(seconds: 2));
+    expect(asks, asksWhenStalled);
+    await connection.close();
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  test('isMuxFailure matches mux errors without matching target refused', () {
+    expect(
+      SshLauncher.isMuxFailure('mux_client_request_session: read from master failed'),
+      isTrue,
+    );
+    expect(
+      SshLauncher.isMuxFailure('ControlSocket /tmp/bc/abc already exists'),
+      isTrue,
+    );
+    expect(
+      SshLauncher.isMuxFailure('channel 0: open failed: administratively prohibited'),
+      isTrue,
+    );
+    expect(
+      SshLauncher.isMuxFailure('channel 0: open failed: connect failed: Connection refused'),
+      isFalse,
+    );
+  });
+
+  test('diagnostic log records lifecycle, drop reasons and redials without '
+      'leaking hostnames or secrets', () async {
+    final events = <String>[];
+    final launcher = SshLauncher(
+      ssh: fakeSsh,
+      binaries: FakeBinaries('1-abc', {'linux-x64': serverScript()}),
+      start: starter(extra: const {'FAKE_PROXY_JUMP': 'jump-a'}),
+      maxBackoff: const Duration(seconds: 1),
+      prompter: (prompt) async => 'secret-otp-999999',
+      log: events.add,
+    );
+    final connection = await launcher.connect(
+      SshTarget.parse('otp-flaky-resume'),
+    );
+    final id = RegExp(r'--session ([0-9a-f]+)')
+        .firstMatch(commands().last)!
+        .group(1)!;
+    final stalled = connection.changes.firstWhere((_) => connection.stalled);
+    await Process.run('pkill', ['-f', 'session $id']);
+    await stalled.timeout(const Duration(seconds: 20));
+    await connection.close();
+
+    final joined = events.join('\n');
+    expect(joined, contains('options (proxy=jump'));
+    expect(joined, contains('connect start ('));
+    expect(joined, contains('connected ('));
+    expect(joined, contains('link drop ('));
+    expect(joined, contains('reason=eof'));
+    expect(joined, contains('redial start ('));
+    expect(joined, contains('redial failed ('));
+    expect(joined, contains('stalled=true'));
+    expect(joined, contains('hint=connection_closed'));
+    // Privacy: raw hostname and OTP secret must never appear in diagnostic logs.
+    expect(joined, isNot(contains('otp-flaky-resume')));
+    expect(joined, isNot(contains('secret-otp-999999')));
+
+    expect(
+      SshLauncher.stderrHint('client_loop: send disconnect: Broken pipe'),
+      'broken_pipe',
+    );
+    expect(
+      SshLauncher.stderrHint('client_loop: send disconnect: Timeout'),
+      'keepalive_timeout',
+    );
+    expect(
+      SshLauncher.stderrHint('mux_client_hello_exchange: write packet'),
+      'mux_failure',
+    );
+  }, timeout: const Timeout(Duration(minutes: 2)));
 
   test('targets: aliases, users and ports', () {
     final plain = SshTarget.parse(' dev ');
@@ -676,9 +850,10 @@ exec /bin/sh -c "$6"
     await connection.close();
     expect(log.existsSync(), isFalse, reason: 'ssh never ran');
     expect(File('${log.path}.wsl').readAsLinesSync(), [
-      '--distribution Ubuntu --exec sh -c cd && sh -s',
-      startsWith('--distribution Ubuntu --exec sh -c cd && sh -c '),
-      startsWith('--distribution Ubuntu --exec sh -c cd && .baocode-server/'),
+      allOf(
+        startsWith("--distribution Ubuntu --exec sh -c cd && sh -c '"),
+        contains('.baocode-server/1-abc/baocode-server --session '),
+      ),
     ]);
 
     // No WSL here.

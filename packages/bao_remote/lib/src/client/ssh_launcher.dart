@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
+
+import 'package:crypto/crypto.dart' as crypto;
 
 import '../protocol.dart';
 import '../rpc/resumable_channel.dart';
@@ -28,8 +31,9 @@ class SshTarget {
   SshTarget.configured(
     String text, {
     required String destination,
+    int? port,
     required String configFile,
-  }) : this._(text.trim(), destination, null, ['-F', configFile]);
+  }) : this._(text.trim(), destination, port, ['-F', configFile]);
 
   factory SshTarget.parse(String text) {
     text = text.trim();
@@ -125,13 +129,22 @@ enum SshFailure {
 }
 
 class SshConnectException implements Exception {
-  const SshConnectException(this.failure, this.message, {this.detail});
+  const SshConnectException(
+    this.failure,
+    this.message, {
+    this.detail,
+    this.prompted = false,
+  });
 
   final SshFailure failure;
   final String message;
 
   /// What `ssh` or the server said.
   final String? detail;
+
+  /// Whether `ssh` asked to sign in during this attempt (a password, a
+  /// one-time code): retrying automatically would ask again.
+  final bool prompted;
 
   @override
   String toString() => detail == null ? message : '$message\n$detail';
@@ -230,6 +243,7 @@ class _SessionKeeper {
   }) {
     channel.linkChanges.listen((up) {
       if (up) {
+        _linkedAt = DateTime.now();
         _failures = 0;
         lastError = null;
         retryAt = null;
@@ -238,13 +252,22 @@ class _SessionKeeper {
       }
       _changed();
     });
-    unawaited(channel.ended.then((_) => _stop()));
+    unawaited(
+      channel.ended.then((why) {
+        _launcher._log(
+          target,
+          'session ended (session=$_shortId, reason=${why.name})',
+        );
+        _stop();
+      }),
+    );
   }
 
   final SshLauncher _launcher;
   final SshTarget target;
   final List<String> _extra;
   final String id;
+  String get _shortId => id.length > 8 ? id.substring(0, 8) : id;
 
   /// A Windows host's session: its daemon's port there and the token it
   /// asks first (see [SshLauncher.windowsSessionScript]), reached by
@@ -254,6 +277,22 @@ class _SessionKeeper {
   late final ResumableChannel channel = ResumableChannel(
     heartbeat: _launcher.heartbeat,
     silence: _launcher.silence,
+    onLinkDrop: (reason, silentFor, {required wasLive}) {
+      if (closing || reason.startsWith('ended:') || reason == 'replaced') {
+        return;
+      }
+      final upMs = _linkedAt == null
+          ? null
+          : DateTime.now().difference(_linkedAt!).inMilliseconds;
+      final hint = SshLauncher.stderrHint(stderr.join('\n'));
+      _launcher._log(
+        target,
+        'link drop (session=$_shortId, wasLive=$wasLive, reason=$reason, '
+        'heard=${silentFor.inMilliseconds}ms'
+        '${upMs == null ? '' : ', up=${upMs}ms'}, hint=$hint)',
+      );
+      if (wasLive) _linkedAt = null;
+    },
   );
   final StreamController<void> changes = StreamController.broadcast();
 
@@ -262,6 +301,7 @@ class _SessionKeeper {
 
   Process? _process;
   Timer? _retry;
+  DateTime? _linkedAt;
   DateTime? retryAt;
   SshConnectException? lastError;
   bool stalled = false;
@@ -288,9 +328,20 @@ class _SessionKeeper {
             '-W',
             '127.0.0.1:${windows.port}',
           ]);
-    _process = process;
     if (windows != null) process.stdin.add(utf8.encode('${windows.token}\n'));
     final said = <String>[];
+    listenStderr(process, said);
+    final gone = attachProcess(
+      process,
+      windows == null ? process.stdout : _windowsInput(process, said),
+      askpass,
+    );
+    return (process, askpass, said, gone);
+  }
+
+  /// Collects [process]'s stderr into [said] (this attempt) and [stderr]
+  /// (the session's log).
+  void listenStderr(Process process, List<String> said) {
     process.stderr
         .transform(const Utf8Decoder(allowMalformed: true))
         .transform(const LineSplitter())
@@ -301,18 +352,26 @@ class _SessionKeeper {
           if (said.length > 50) said.removeAt(0);
         }, onError: (Object _) {});
     process.stdin.done.then<void>((_) {}, onError: (Object _) {});
-    final gone = channel.attach(
+  }
+
+  /// Attaches an already-started [process] and its [input] stream (after any
+  /// bootstrap header) to [channel].
+  Future<void> attachProcess(
+    Process process,
+    Stream<List<int>> input,
+    AskpassRun? askpass,
+  ) {
+    _process = process;
+    return channel.attach(
       ChannelLink(
-        input: windows == null ? process.stdout : _windowsInput(process, said),
+        input: input,
         write: (bytes) => process.stdin.add(bytes),
         close: process.kill,
         // Signing in: the user is being asked (or just answered).
         patient: () =>
-            !channel.linked &&
-            (askpass?.busy(const Duration(seconds: 30)) ?? false),
+            !channel.linked && (askpass?.busy(_launcher.silence) ?? false),
       ),
     );
-    return (process, askpass, said, gone);
   }
 
   /// [process]'s stdout, `ssh -W`'s: where the daemon is gone (nothing
@@ -363,6 +422,11 @@ class _SessionKeeper {
 
   Future<void> _redial() async {
     if (closing || channel.isClosed || channel.linked) return;
+    final started = Stopwatch()..start();
+    _launcher._log(
+      target,
+      'redial start (session=$_shortId, attempt=${_failures + 1})',
+    );
     retryAt = null;
     _changed();
     final linked = channel.linkChanges
@@ -375,12 +439,27 @@ class _SessionKeeper {
     try {
       (process, askpass, said, gone) = await dial(resume: true);
     } on SshConnectException catch (error) {
+      _launcher._log(
+        target,
+        'redial failed (session=$_shortId, failure=${error.failure.name}, '
+        'prompted=${error.prompted}, elapsed=${started.elapsedMilliseconds}ms)',
+      );
       _failed(error);
       return;
     }
     await Future.any([linked, gone]);
+    final waiting = askpass?.waiting ?? false;
+    final prompted = askpass?.prompted ?? false;
     await askpass?.close();
-    if (channel.linked || channel.isClosed || closing) return;
+    if (channel.linked) {
+      _launcher._log(
+        target,
+        'redial ok (session=$_shortId, prompted=$prompted, '
+        'elapsed=${started.elapsedMilliseconds}ms)',
+      );
+      return;
+    }
+    if (channel.isClosed || closing) return;
     final code = await process.exitCode.timeout(
       const Duration(seconds: 2),
       onTimeout: () {
@@ -389,27 +468,42 @@ class _SessionKeeper {
       },
     );
     if (channel.isClosed || closing) return;
-    _failed(
-      _launcher._failure(
-        code,
-        said.join('\n'),
-        cancelled: askpass?.cancelled ?? false,
-        fallback: 'The connection could not be made again (exit $code).',
-        wsl: target.wslDistro != null,
-      ),
+    final saidText = said.join('\n');
+    final hint = SshLauncher.stderrHint(saidText);
+    if (code == 255 && SshLauncher.isMuxFailure(saidText)) {
+      _launcher._log(target, 'mux cleanup triggered during redial (hint=$hint)');
+      await _launcher.onMuxError?.call();
+    }
+    final error = _launcher._failure(
+      code,
+      saidText,
+      cancelled: askpass?.cancelled ?? false,
+      prompted: prompted,
+      fallback: 'The connection could not be made again (exit $code).',
+      wsl: target.wslDistro != null,
+    );
+    _failed(error, waiting: waiting);
+    _launcher._log(
+      target,
+      'redial failed (session=$_shortId, failure=${error.failure.name}, '
+      'exit=$code, waiting=$waiting, prompted=$prompted, stalled=$stalled, '
+      'hint=$hint, elapsed=${started.elapsedMilliseconds}ms)',
     );
   }
 
-  void _failed(SshConnectException error) {
+  void _failed(SshConnectException error, {bool waiting = false}) {
     lastError = error;
     _failures++;
-    stalled = switch (error.failure) {
-      SshFailure.authentication ||
-      SshFailure.hostKey ||
-      SshFailure.hostKeyChanged ||
-      SshFailure.noSsh => true,
-      _ => false,
-    };
+    stalled =
+        waiting ||
+        error.prompted ||
+        switch (error.failure) {
+          SshFailure.authentication ||
+          SshFailure.hostKey ||
+          SshFailure.hostKeyChanged ||
+          SshFailure.noSsh => true,
+          _ => false,
+        };
     _changed();
   }
 
@@ -479,7 +573,9 @@ class SshLauncher {
     this.sessionGrace,
     this.maxBackoff = const Duration(seconds: 10),
     this.heartbeat = const Duration(seconds: 5),
-    this.silence = const Duration(seconds: 30),
+    this.silence = const Duration(seconds: 60),
+    this.onMuxError,
+    this.log,
   }) : _start = start ?? Process.start,
        _askpass = askpass ?? SshAskpass();
 
@@ -511,6 +607,61 @@ class SshLauncher {
   /// lost (a network gone silent: see [ResumableChannel]).
   final Duration heartbeat;
   final Duration silence;
+
+  /// Called when `ssh` fails with a ControlMaster / mux error so stale
+  /// jump-host control sockets can be torn down before the next attempt.
+  final Future<void> Function()? onMuxError;
+
+  /// Privacy-safe diagnostic log sink (never receives hostnames, IPs,
+  /// usernames, passwords, or prompt text).
+  final void Function(String message)? log;
+
+  /// Stable, privacy-safe tag identifying [host] in diagnostic logs.
+  static String hostTag(String host) =>
+      'h:${'${crypto.sha1.convert(utf8.encode(host.trim()))}'.substring(0, 8)}';
+
+  void _log(SshTarget target, String message) =>
+      log?.call('${hostTag(target.text)} $message');
+
+  /// Privacy-safe summary of `ssh` stderr for diagnostic logs.
+  static String stderrHint(String stderr) {
+    if (stderr.trim().isEmpty) return 'none';
+    if (stderr.contains('mux_client') ||
+        stderr.contains('ControlSocket') ||
+        stderr.contains('ControlPath')) {
+      return 'mux_failure';
+    }
+    if (stderr.contains('administratively prohibited')) {
+      return 'admin_prohibited';
+    }
+    if (stderr.contains('Permission denied')) return 'permission_denied';
+    if (stderr.contains('REMOTE HOST IDENTIFICATION HAS CHANGED') ||
+        RegExp(r'Host key for \S+ has changed').hasMatch(stderr)) {
+      return 'host_key_changed';
+    }
+    if (stderr.contains('Host key verification failed') ||
+        stderr.contains('host key is known')) {
+      return 'host_key_failed';
+    }
+    if (stderr.contains('Broken pipe')) return 'broken_pipe';
+    if (stderr.contains('Connection reset')) return 'connection_reset';
+    if (stderr.contains('Connection closed by')) return 'connection_closed';
+    if (stderr.contains('closed by remote host')) return 'closed_by_remote';
+    if (stderr.contains('client_loop: send disconnect')) {
+      return 'keepalive_timeout';
+    }
+    if (stderr.contains('timed out')) return 'timed_out';
+    if (stderr.contains('Connection refused')) return 'connection_refused';
+    if (stderr.contains('Could not resolve hostname')) return 'dns_failed';
+    if (stderr.contains('No route to host')) return 'no_route';
+    if (stderr.contains('Network is unreachable')) return 'network_unreachable';
+    if (stderr.contains('kex_exchange_identification')) return 'kex_failed';
+    if (stderr.contains('stdio forwarding failed') ||
+        stderr.contains('open failed')) {
+      return 'forward_failed';
+    }
+    return 'other';
+  }
 
   /// Whether what `ssh` asks is answered (by [SshAskpass]'s script).
   bool get _prompts => prompter != null && (!_askpass.windows || _forced);
@@ -547,6 +698,8 @@ class SshLauncher {
   /// No prompts (a password fails instead), keepalives
   /// that notice a dead connection, and no escape character on the binary
   /// stream. With a [prompter], `BatchMode` is off for it to be asked.
+  /// `ConnectTimeout` is added per-target by [connectionOptions] so it
+  /// respects `~/.ssh/config` and is omitted when jumping through a proxy.
   static const defaultOptions = [
     '-T',
     '-o',
@@ -554,9 +707,7 @@ class SshLauncher {
     '-o',
     'ServerAliveInterval=15',
     '-o',
-    'ServerAliveCountMax=3',
-    '-o',
-    'ConnectTimeout=20',
+    'ServerAliveCountMax=6',
     '-e',
     'none',
   ];
@@ -666,6 +817,100 @@ class SshLauncher {
     return strict == null || strict == 'ask'
         ? const ['-o', 'StrictHostKeyChecking=accept-new']
         : const [];
+  }
+
+  /// The per-target options for [target], from `ssh -G`:
+  /// - `StrictHostKeyChecking=accept-new` unless the user's config says
+  ///   what to do with unknown host keys (not `ask`);
+  /// - `ConnectTimeout=20` for a direct host whose config sets none;
+  ///   omitted when going through a `ProxyJump` or `ProxyCommand`, where
+  ///   OpenSSH's `ConnectTimeout` also ticks while the jump host waits for
+  ///   a password or one-time verification code;
+  /// - `ControlMaster=no` and `ControlPath=none` on the outermost connection
+  ///   when the resolved config enables `ControlMaster`, so the target itself
+  ///   never attaches to a stale master on reconnect while jump hops still
+  ///   multiplex over their own persistent control sockets.
+  Future<List<String>> connectionOptions(SshTarget target) async {
+    if (target.wslDistro != null) return const [];
+    final config = await configOf(target);
+    bool configured(String? value) =>
+        value != null && value.isNotEmpty && value != 'none';
+    final strict = config['stricthostkeychecking'];
+    final proxied =
+        configured(config['proxyjump']) || configured(config['proxycommand']);
+    final hasTimeout =
+        configured(config['connecttimeout']) ||
+        options.any(
+          (option) => option.toLowerCase().startsWith('connecttimeout='),
+        );
+    final controlMaster = config['controlmaster'];
+    final hasControlMaster =
+        !_askpass.windows &&
+        configured(controlMaster) &&
+        controlMaster != 'false' &&
+        controlMaster != 'no';
+    final proxyKind = configured(config['proxyjump'])
+        ? 'jump'
+        : configured(config['proxycommand'])
+        ? 'command'
+        : 'none';
+    _log(
+      target,
+      'options (proxy=$proxyKind, mux=${hasControlMaster ? 'on' : 'off'}, '
+      'strict=${strict ?? 'default'}, timeout=${config['connecttimeout'] ?? 'none'})',
+    );
+    return [
+      if (strict == null || strict == 'ask') ...[
+        '-o',
+        'StrictHostKeyChecking=accept-new',
+      ],
+      if (!proxied && !hasTimeout) ...['-o', 'ConnectTimeout=20'],
+      if (hasControlMaster) ...[
+        '-o',
+        'ControlMaster=no',
+        '-o',
+        'ControlPath=none',
+      ],
+    ];
+  }
+
+  /// Whether [stderr] points to a broken or refused SSH ControlMaster socket
+  /// (as opposed to the destination port itself being unreachable).
+  static bool isMuxFailure(String stderr) =>
+      stderr.contains('mux_client') ||
+      stderr.contains('ControlSocket') ||
+      stderr.contains('ControlPath') ||
+      stderr.contains('administratively prohibited');
+
+  /// Asks every OpenSSH ControlMaster socket in [controlDir] to exit and
+  /// removes any stale socket left behind.
+  static Future<void> closeControlSockets(
+    String ssh,
+    String controlDir,
+  ) async {
+    final dir = Directory(controlDir);
+    if (!dir.existsSync()) return;
+    final List<FileSystemEntity> entries;
+    try {
+      entries = dir.listSync();
+    } on FileSystemException {
+      return;
+    }
+    for (final entry in entries) {
+      try {
+        await Process.run(ssh, ['-O', 'exit', '-S', entry.path, '_']).timeout(
+          const Duration(seconds: 2),
+          onTimeout: () => ProcessResult(0, 1, '', ''),
+        );
+      } on Object {
+        // Already gone.
+      }
+      try {
+        if (entry.existsSync()) entry.deleteSync();
+      } on FileSystemException {
+        // Removed by the master as it exited.
+      }
+    }
   }
 
   /// Forgets the key known for [target]'s host, in the user's known_hosts
@@ -832,6 +1077,37 @@ class SshLauncher {
     ],
   ].join(' ');
 
+  /// One-line POSIX `sh` command that probes the host, installs the server
+  /// from stdin when missing (given `gz <bytes>` or `raw <bytes>` after
+  /// `BAOCODE-NEED`), and `exec`s the session bridge — all over a single
+  /// SSH connection so a jump host or one-time code is signed in only once.
+  /// Contains no single quotes, backslashes, exclamation marks or newlines,
+  /// so any remote login shell (`sh`, `bash`, `zsh`, `fish`, `csh`, `tcsh`)
+  /// passes it intact to `sh -c`.
+  String bootstrapCommand(String id, String nonce) {
+    final session = sessionCommand(id);
+    final temporary = '$_folder/.upload-$nonce';
+    final body = [
+      r's=$(uname -s); m=$(uname -m)',
+      r'echo "BAOCODE-PROBE $s $m"',
+      r'case "$s" in Windows*|MINGW*|MSYS*|CYGWIN*) exit 0;; esac',
+      'if [ -x $serverPath ]; then echo BAOCODE-READY; exec $session; fi',
+      'if command -v gzip >/dev/null 2>&1; then echo BAOCODE-GZIP; fi',
+      'if echo x | head -c 1 >/dev/null 2>&1; then echo BAOCODE-HEADC; fi',
+      'echo BAOCODE-NEED',
+      'read -r mode size || exit 1',
+      r'case "$mode" in gz|raw) ;; *) exit 0;; esac',
+      'mkdir -p $_folder || exit 1',
+      'echo BAOCODE-SEND',
+      'if [ "\$mode" = gz ]; then head -c "\$size" | gzip -dc > $temporary || exit 1; '
+          'else head -c "\$size" > $temporary || exit 1; fi',
+      'chmod 755 $temporary && mv -f $temporary $serverPath || exit 1',
+      'echo BAOCODE-READY',
+      'exec $session',
+    ].join('; ');
+    return "sh -c '$body'";
+  }
+
   /// What the host is asked first: its system and architecture, whether
   /// this build of the server is there, and whether it can unpack gzip.
   String get probeScript =>
@@ -988,51 +1264,337 @@ exit 2
     SshTarget target, {
     void Function(String message)? onProgress,
   }) async {
+    final started = Stopwatch()..start();
     final progress = onProgress ?? (_) {};
     progress('Connecting to ${target.name}');
-    final extra = await hostKeyOptions(target);
-    final probe = await _run(
+    final extra = await connectionOptions(target);
+    final wsl = target.wslDistro != null;
+    final id = _nonce(16);
+    final shortId = id.substring(0, 8);
+    _log(
       target,
-      'sh -s',
-      extra,
-      stdin: utf8.encode(probeScript),
+      'connect start (session=$shortId, wsl=$wsl, silence=${silence.inSeconds}s)',
     );
-    var lines = const LineSplitter().convert(probe.stdout);
-    List<String> partsOf(List<String> lines) => lines
+    final keeper = _SessionKeeper(this, target, extra, id);
+    final (process, askpass) = await _startSsh(
+      target,
+      bootstrapCommand(id, _nonce()),
+      extra,
+    );
+    final said = <String>[];
+    keeper.listenStderr(process, said);
+    final stream = _BootstrapStream(process.stdout);
+    final probeLines = <String>[];
+    List<String> probeParts = const [];
+    var hasGzip = false;
+    var hasHeadC = false;
+    String? state;
+
+    Future<void> abortProcess() async {
+      try {
+        process.stdin.add(utf8.encode('abort 0\n'));
+        await process.stdin.close();
+      } on Object {
+        // Already closed.
+      }
+      process.kill();
+      await process.exitCode.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => -1,
+      );
+      await stream.cancel();
+      await keeper.close();
+    }
+
+    try {
+      while (true) {
+        final String? line;
+        try {
+          line = await _readLine(stream, askpass);
+        } on TimeoutException {
+          final prompted = askpass?.prompted ?? false;
+          final cancelled = askpass?.cancelled ?? false;
+          await askpass?.close();
+          process.kill();
+          final code = await process.exitCode.timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => -1,
+          );
+          await stream.cancel();
+          await keeper.close();
+          final saidText = said.join('\n');
+          _log(
+            target,
+            'connect failed (stage=bootstrap_timeout, session=$shortId, '
+            'exit=$code, prompted=$prompted, cancelled=$cancelled, '
+            'hint=${stderrHint(saidText)}, elapsed=${started.elapsedMilliseconds}ms)',
+          );
+          throw _failure(
+            code,
+            saidText,
+            cancelled: cancelled,
+            prompted: prompted,
+            timedOut: true,
+            wsl: wsl,
+          );
+        }
+        if (line == null) break;
+        probeLines.add(line);
+        if (line.startsWith('BAOCODE-PROBE ')) {
+          probeParts = line.split(' ');
+        } else if (line == 'BAOCODE-GZIP') {
+          hasGzip = true;
+        } else if (line == 'BAOCODE-HEADC') {
+          hasHeadC = true;
+        } else if (line == 'BAOCODE-READY' || line == 'BAOCODE-NEED') {
+          state = line;
+          break;
+        }
+      }
+
+      if (state == null) {
+        final prompted = askpass?.prompted ?? false;
+        final cancelled = askpass?.cancelled ?? false;
+        await askpass?.close();
+        final code = await process.exitCode.timeout(
+          const Duration(seconds: 10),
+          onTimeout: () {
+            process.kill();
+            return -1;
+          },
+        );
+        await stream.cancel();
+        await keeper.close();
+        if ((wsl ? code < 0 : code == 255) || cancelled) {
+          final saidText = said.join('\n');
+          final hint = stderrHint(saidText);
+          if (!wsl && code == 255 && isMuxFailure(saidText)) {
+            _log(target, 'mux cleanup triggered during connect (hint=$hint)');
+            await onMuxError?.call();
+          }
+          _log(
+            target,
+            'connect failed (stage=bootstrap_eof, session=$shortId, '
+            'exit=$code, prompted=$prompted, cancelled=$cancelled, '
+            'hint=$hint, elapsed=${started.elapsedMilliseconds}ms)',
+          );
+          throw _failure(
+            code,
+            saidText,
+            cancelled: cancelled,
+            prompted: prompted,
+            wsl: wsl,
+          );
+        }
+        // No sh there (Windows' shells), or a Unix shell of Windows': asked
+        // as Windows is.
+        if (!wsl && (probeParts.length < 3 || isWindowsSystem(probeParts[1]))) {
+          return await _connectWindows(
+            target,
+            extra,
+            probeLines.join('\n'),
+            said.join('\n'),
+            progress,
+          );
+        }
+        throw SshConnectException(
+          SshFailure.server,
+          'The host gave no answer the app understands',
+          detail: _tail('${probeLines.join('\n')}\n${said.join('\n')}'),
+          prompted: prompted,
+        );
+      }
+
+      // SSH authentication already succeeded: no further prompts on this run.
+      final prompted = askpass?.prompted ?? false;
+      await askpass?.close();
+
+      if (probeParts.length < 3) {
+        await abortProcess();
+        throw SshConnectException(
+          SshFailure.server,
+          'The host gave no answer the app understands',
+          detail: _tail('${probeLines.join('\n')}\n${said.join('\n')}'),
+          prompted: prompted,
+        );
+      }
+      final (system, machine) = (probeParts[1], probeParts[2]);
+      final platform = SshLauncher.platform(system, machine);
+      if (platform == null) {
+        await abortProcess();
+        throw SshConnectException(
+          SshFailure.unsupported,
+          'Only Linux (x64, arm64, riscv64), macOS and Windows (x64, arm64) '
+          'hosts are supported, not $system $machine',
+          prompted: prompted,
+        );
+      }
+
+      if (state == 'BAOCODE-NEED') {
+        progress('Installing the BaoCode server on ${target.name}');
+        final binary = await binaries.read(platform);
+        if (binary == null) {
+          await abortProcess();
+          throw SshConnectException(
+            SshFailure.server,
+            'This build of the app has no server for ${describe(platform)}',
+            prompted: prompted,
+          );
+        }
+        final payload = hasGzip ? GZipCodec(level: 6).encode(binary) : binary;
+        if (!hasHeadC) {
+          // Rare fallback for hosts without `head -c`.
+          await abortProcess();
+          final upload = await _run(
+            target,
+            uploadCommand(_nonce(), gzip: hasGzip),
+            extra,
+            stdin: payload,
+          );
+          if (upload.exitCode != 0) {
+            throw SshConnectException(
+              SshFailure.server,
+              'The server could not be installed on ${target.name}',
+              detail: _tail(upload.stderr),
+              prompted: prompted,
+            );
+          }
+          progress('Starting the BaoCode server on ${target.name}');
+          return await _launch(target, extra);
+        }
+        try {
+          process.stdin.add(
+            utf8.encode('${hasGzip ? 'gz' : 'raw'} ${payload.length}\n'),
+          );
+          await process.stdin.flush();
+        } on Object {
+          // Reported below once ssh exits.
+        }
+        String? ack;
+        while (true) {
+          final line = await stream.nextLine().timeout(
+            const Duration(seconds: 30),
+            onTimeout: () => null,
+          );
+          if (line == null || line == 'BAOCODE-SEND') {
+            ack = line;
+            break;
+          }
+        }
+        if (ack != 'BAOCODE-SEND') {
+          process.kill();
+          final code = await process.exitCode.timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => -1,
+          );
+          await stream.cancel();
+          await keeper.close();
+          final saidText = said.join('\n');
+          if (!wsl && code == 255 && isMuxFailure(saidText)) {
+            await onMuxError?.call();
+          }
+          if (code == 255) {
+            throw _failure(code, saidText, prompted: prompted, wsl: wsl);
+          }
+          throw SshConnectException(
+            SshFailure.server,
+            'The server could not be installed on ${target.name}',
+            detail: _tail(saidText),
+            prompted: prompted,
+          );
+        }
+        try {
+          process.stdin.add(payload);
+          await process.stdin.flush();
+        } on Object {
+          // Reported below once ssh exits.
+        }
+        String? ready;
+        while (true) {
+          final line = await stream.nextLine().timeout(
+            const Duration(minutes: 10),
+            onTimeout: () => null,
+          );
+          if (line == null || line == 'BAOCODE-READY') {
+            ready = line;
+            break;
+          }
+        }
+        if (ready != 'BAOCODE-READY') {
+          process.kill();
+          final code = await process.exitCode.timeout(
+            const Duration(seconds: 2),
+            onTimeout: () => -1,
+          );
+          await stream.cancel();
+          await keeper.close();
+          final saidText = said.join('\n');
+          if (!wsl && code == 255 && isMuxFailure(saidText)) {
+            await onMuxError?.call();
+          }
+          if (code == 255) {
+            throw _failure(code, saidText, prompted: prompted, wsl: wsl);
+          }
+          throw SshConnectException(
+            SshFailure.server,
+            'The server could not be installed on ${target.name}',
+            detail: _tail(saidText),
+            prompted: prompted,
+          );
+        }
+      }
+
+      progress('Starting the BaoCode server on ${target.name}');
+      stream.handoff();
+      final gone = keeper.attachProcess(process, stream.rest, null);
+      final connection = await _initializeKeeper(
+        keeper,
+        process,
+        null,
+        said,
+        gone,
+        prompted: prompted,
+      );
+      _log(
+        target,
+        'connected (session=$shortId, platform=$platform, '
+        'uploaded=${state == 'BAOCODE-NEED'}, prompted=$prompted, '
+        'elapsed=${started.elapsedMilliseconds}ms)',
+      );
+      return connection;
+    } on Object {
+      await askpass?.close();
+      rethrow;
+    }
+  }
+
+  /// Probes, installs (if needed) and launches the server on a Windows host.
+  Future<SshConnection> _connectWindows(
+    SshTarget target,
+    List<String> extra,
+    String shStdout,
+    String shStderr,
+    void Function(String message) progress,
+  ) async {
+    final windows = await _run(
+      target,
+      powershellCommand(windowsProbeScript),
+      extra,
+    );
+    final lines = const LineSplitter().convert(windows.stdout);
+    final parts = lines
         .firstWhere(
           (line) => line.startsWith('BAOCODE-PROBE '),
           orElse: () => '',
         )
         .split(' ');
-    var parts = partsOf(lines);
-    // No sh there (Windows' shells), or a Unix shell of Windows': asked
-    // as Windows is.
-    if (target.wslDistro == null &&
-        (parts.length < 3 || isWindowsSystem(parts[1]))) {
-      final windows = await _run(
-        target,
-        powershellCommand(windowsProbeScript),
-        extra,
-      );
-      final windowsLines = const LineSplitter().convert(windows.stdout);
-      if (partsOf(windowsLines) case final found when found.length >= 3) {
-        (lines, parts) = (windowsLines, found);
-      } else if (parts.length < 3) {
-        throw SshConnectException(
-          SshFailure.server,
-          'The host gave no answer the app understands',
-          detail: _tail(
-            '${probe.stdout}\n${probe.stderr}\n'
-            '${windows.stdout}\n${windows.stderr}',
-          ),
-        );
-      }
-    }
     if (parts.length < 3) {
       throw SshConnectException(
         SshFailure.server,
         'The host gave no answer the app understands',
-        detail: _tail('${probe.stdout}\n${probe.stderr}'),
+        detail: _tail(
+          '$shStdout\n$shStderr\n${windows.stdout}\n${windows.stderr}',
+        ),
       );
     }
     final (system, machine) = (parts[1], parts[2]);
@@ -1044,7 +1606,6 @@ exit 2
         'hosts are supported, not $system $machine',
       );
     }
-    final windows = platform.startsWith('windows-');
     if (!lines.contains('BAOCODE-PRESENT')) {
       progress('Installing the BaoCode server on ${target.name}');
       final binary = await binaries.read(platform);
@@ -1054,28 +1615,25 @@ exit 2
           'This build of the app has no server for ${describe(platform)}',
         );
       }
-      if (windows) {
-        await _uploadWindows(target, extra, binary);
-        progress('Starting the BaoCode server on ${target.name}');
-        return _launchWindows(target, extra);
-      }
-      final gzip = lines.contains('BAOCODE-GZIP');
-      final upload = await _run(
-        target,
-        uploadCommand(_nonce(), gzip: gzip),
-        extra,
-        stdin: gzip ? GZipCodec(level: 6).encode(binary) : binary,
-      );
-      if (upload.exitCode != 0) {
-        throw SshConnectException(
-          SshFailure.server,
-          'The server could not be installed on ${target.name}',
-          detail: _tail(upload.stderr),
-        );
-      }
+      await _uploadWindows(target, extra, binary);
     }
     progress('Starting the BaoCode server on ${target.name}');
-    return windows ? _launchWindows(target, extra) : _launch(target, extra);
+    return _launchWindows(target, extra);
+  }
+
+  Future<String?> _readLine(
+    _BootstrapStream stream,
+    AskpassRun? askpass, {
+    Duration wait = const Duration(seconds: 45),
+  }) async {
+    final line = stream.nextLine();
+    while (true) {
+      try {
+        return await line.timeout(wait);
+      } on TimeoutException {
+        if (!(askpass?.busy(const Duration(seconds: 60)) ?? false)) rethrow;
+      }
+    }
   }
 
   /// Puts [binary] at [windowsServerPath] on a Windows host by `sftp`, its
@@ -1132,7 +1690,12 @@ exit 2
       if (code != 0) {
         final said = await stderr;
         if (code == 255 || (askpass?.cancelled ?? false)) {
-          throw _failure(code, said, cancelled: askpass?.cancelled ?? false);
+          throw _failure(
+            code,
+            said,
+            cancelled: askpass?.cancelled ?? false,
+            prompted: askpass?.prompted ?? false,
+          );
         }
         throw SshConnectException(
           SshFailure.server,
@@ -1187,8 +1750,19 @@ exit 2
       _connectKeeper(_SessionKeeper(this, target, extra, _nonce(16)));
 
   Future<SshConnection> _connectKeeper(_SessionKeeper keeper) async {
-    final target = keeper.target;
     final (process, askpass, said, gone) = await keeper.dial(resume: false);
+    return _initializeKeeper(keeper, process, askpass, said, gone);
+  }
+
+  Future<SshConnection> _initializeKeeper(
+    _SessionKeeper keeper,
+    Process process,
+    AskpassRun? askpass,
+    List<String> said,
+    Future<void> gone, {
+    bool prompted = false,
+  }) async {
+    final target = keeper.target;
     final peer = RpcPeer(keeper.channel.messages, keeper.channel.send);
     final client = RemoteClient(peer);
     try {
@@ -1212,13 +1786,27 @@ exit 2
         onTimeout: () => -1,
       );
       await keeper.close();
-      throw _failure(
+      final saidText = said.join('\n');
+      final hint = stderrHint(saidText);
+      if (target.wslDistro == null && code == 255 && isMuxFailure(saidText)) {
+        _log(target, 'mux cleanup triggered during initialize (hint=$hint)');
+        await onMuxError?.call();
+      }
+      final failure = _failure(
         code,
-        said.join('\n'),
+        saidText,
         fallback: 'The server on ${target.name} did not start: $error',
         cancelled: askpass?.cancelled ?? false,
+        prompted: prompted || (askpass?.prompted ?? false),
         wsl: target.wslDistro != null,
       );
+      _log(
+        target,
+        'connect failed (stage=initialize, session=${keeper._shortId}, '
+        'failure=${failure.failure.name}, exit=$code, '
+        'prompted=${failure.prompted}, hint=$hint)',
+      );
+      throw failure;
     } finally {
       // Signed in, or not to be.
       await askpass?.close();
@@ -1256,12 +1844,19 @@ exit 2
     }
     final result = (exitCode: code, stdout: await stdout, stderr: await stderr);
     final cancelled = askpass?.cancelled ?? false;
+    final prompted = askpass?.prompted ?? false;
     // ssh's own failure: the connection, not the command; or ended, the
     // signing in cancelled. wsl.exe's own ends in -1 (no such
     // distribution, WSL not set up).
     final wsl = target.wslDistro != null;
     if ((wsl ? code < 0 : code == 255) || cancelled) {
-      throw _failure(code, result.stderr, cancelled: cancelled, wsl: wsl);
+      throw _failure(
+        code,
+        result.stderr,
+        cancelled: cancelled,
+        prompted: prompted,
+        wsl: wsl,
+      );
     }
     return result;
   }
@@ -1288,6 +1883,8 @@ exit 2
     String stderr, {
     String? fallback,
     bool cancelled = false,
+    bool prompted = false,
+    bool timedOut = false,
     bool wsl = false,
   }) {
     final detail = _tail(stderr.replaceAll('\u0000', ''));
@@ -1313,6 +1910,7 @@ exit 2
               stderr.contains('No ED25519 host key is known') ||
               stderr.contains('host key is known') =>
         SshFailure.hostKey,
+      _ when timedOut => SshFailure.unreachable,
       _
           when stderr.contains('Could not resolve hostname') ||
               stderr.contains('Connection refused') ||
@@ -1348,7 +1946,136 @@ exit 2
       failure,
       message,
       detail: detail.isEmpty ? null : detail,
+      prompted: prompted,
     );
+  }
+}
+
+/// Reads lines from [source] (`process.stdout`) during the bootstrap phase
+/// (`BAOCODE-PROBE`, `BAOCODE-NEED`, `BAOCODE-SEND`, `BAOCODE-READY`), then
+/// hands the remaining raw bytes of the same stream directly to
+/// [ResumableChannel] once [handoff] is called — with no bytes lost.
+class _BootstrapStream {
+  _BootstrapStream(Stream<List<int>> source) {
+    _subscription = source.listen(
+      _onData,
+      onError: _onError,
+      onDone: _onDone,
+      cancelOnError: true,
+    );
+  }
+
+  late final StreamSubscription<List<int>> _subscription;
+  final List<String> _lines = [];
+  final BytesBuilder _partial = BytesBuilder(copy: false);
+  final StreamController<List<int>> _rest = StreamController();
+  Completer<String?>? _waiting;
+  bool _handedOff = false;
+  bool _done = false;
+  Object? _error;
+
+  Stream<List<int>> get rest => _rest.stream;
+
+  /// The next line from the bootstrap phase, or null once stdout ended.
+  Future<String?> nextLine() {
+    if (_lines.isNotEmpty) return Future.value(_lines.removeAt(0));
+    if (_done) return Future.value(null);
+    return (_waiting ??= Completer<String?>()).future;
+  }
+
+  /// Hands the remaining bytes (anything already buffered after the last
+  /// consumed line, and all future chunks) straight to [rest].
+  void handoff() {
+    if (_handedOff) return;
+    _handedOff = true;
+    for (final line in _lines) {
+      _rest.add(utf8.encode('$line\n'));
+    }
+    _lines.clear();
+    if (_partial.isNotEmpty) {
+      _rest.add(_partial.takeBytes());
+    }
+    if (_done) {
+      if (_error case final error?) _rest.addError(error);
+      unawaited(_rest.close());
+    }
+  }
+
+  void _onData(List<int> data) {
+    if (_handedOff) {
+      _rest.add(data);
+      return;
+    }
+    var start = 0;
+    for (var i = 0; i < data.length; i++) {
+      if (data[i] != 0x0A) continue;
+      final Uint8List raw;
+      if (_partial.isEmpty) {
+        raw = Uint8List.sublistView(
+          data is Uint8List ? data : Uint8List.fromList(data),
+          start,
+          i,
+        );
+      } else {
+        _partial.add(data.sublist(start, i));
+        raw = _partial.takeBytes();
+      }
+      start = i + 1;
+      var line = utf8.decode(raw, allowMalformed: true);
+      if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
+      final waiting = _waiting;
+      if (waiting != null) {
+        _waiting = null;
+        waiting.complete(line);
+      } else {
+        _lines.add(line);
+      }
+      if (_handedOff) {
+        if (start < data.length) _rest.add(data.sublist(start));
+        return;
+      }
+    }
+    if (start < data.length) _partial.add(data.sublist(start));
+  }
+
+  void _onError(Object error) {
+    _error = error;
+    _done = true;
+    if (_handedOff) {
+      _rest.addError(error);
+      unawaited(_rest.close());
+    } else if (_waiting case final waiting?) {
+      _waiting = null;
+      waiting.complete(null);
+    }
+  }
+
+  void _onDone() {
+    _done = true;
+    if (_handedOff) {
+      unawaited(_rest.close());
+    } else {
+      if (_partial.isNotEmpty) {
+        var line = utf8.decode(_partial.takeBytes(), allowMalformed: true);
+        if (line.endsWith('\r')) line = line.substring(0, line.length - 1);
+        final waiting = _waiting;
+        if (waiting != null) {
+          _waiting = null;
+          waiting.complete(line);
+        } else {
+          _lines.add(line);
+        }
+      }
+      if (_waiting case final waiting?) {
+        _waiting = null;
+        waiting.complete(null);
+      }
+    }
+  }
+
+  Future<void> cancel() async {
+    await _subscription.cancel();
+    if (!_rest.isClosed) unawaited(_rest.close());
   }
 }
 

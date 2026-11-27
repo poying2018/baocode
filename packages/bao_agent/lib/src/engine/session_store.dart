@@ -95,36 +95,43 @@ class SessionStore {
     } on FileSystemException {
       return;
     }
-    for (final entry in entries) {
+    final indexByUuid = <String, int>{};
+    for (var i = 0; i < entries.length; i++) {
+      final entry = entries[i];
       if (entry['type'] == _branchMark) continue;
-      if (entry['uuid'] case final String uuid) _byUuid[uuid] = entry;
-      if (!_kept(entry)) extras.add(entry);
-    }
-    // The branch the session ended on: the file's own last line is not
-    // it, as a branch that was left is written after it.
-    final tip = _branchTip(entries, sidechain: sidechain);
-    Map<String, Object?>? last;
-    if (tip != null && _byUuid[tip] != null) {
-      last = _byUuid[tip];
-    } else {
-      for (final entry in entries.reversed) {
-        if (_kept(entry) &&
-            (sidechain || entry['isSidechain'] != true) &&
-            entry['uuid'] is String) {
-          last = entry;
-          break;
-        }
+      if (entry['uuid'] case final String uuid) {
+        _byUuid[uuid] = entry;
+        indexByUuid[uuid] = i;
       }
+      if (!_kept(entry)) extras.add(entry);
     }
     final branch = <Map<String, Object?>>[];
     final seen = <String>{};
-    for (var entry = last; entry != null;) {
+    int? previousKept(int before) {
+      for (var i = before - 1; i >= 0; i--) {
+        final entry = entries[i];
+        if (_kept(entry) && (sidechain || entry['isSidechain'] != true)) {
+          final uuid = entry['uuid'];
+          if (uuid is String && !seen.contains(uuid)) return i;
+        }
+      }
+      return null;
+    }
+
+    // A fork's own `_branchMark` names the tip; upstream also reconstructs
+    // by parent links, falling back to the earlier kept line when one is
+    // missing. The mark, when its tip is present, says where to start.
+    final tip = _branchTip(entries, sidechain: sidechain);
+    final tipAt = tip == null ? null : indexByUuid[tip];
+    for (var row = previousKept(tipAt == null ? entries.length : tipAt + 1);
+        row != null;) {
+      final entry = entries[row];
       final uuid = entry['uuid'] as String;
       if (!seen.add(uuid)) break;
       branch.add(entry);
       final parent =
           (entry['parentUuid'] ?? entry['logicalParentUuid']) as String?;
-      entry = parent == null ? null : _byUuid[parent];
+      row = parent == null ? null : (indexByUuid[parent] ?? previousKept(row));
     }
     chain.addAll(branch.reversed.where(_kept));
     // A message that was replaced is left out: the one that replaced it
@@ -291,13 +298,26 @@ class SessionStore {
       return false;
     }
     final content = asMap(entry['message'])['content'];
-    if (content is String) return !content.trimLeft().startsWith('<');
+    if (content is String) return !_isInternalTag(content);
     return asList(content).any(
       (block) =>
           asMap(block)['type'] == 'image' ||
           (asMap(block)['type'] == 'text' &&
-              !'${asMap(block)['text']}'.trimLeft().startsWith('<')),
+              !_isInternalTag('${asMap(block)['text']}')),
     );
+  }
+
+  static bool _isInternalTag(String text) {
+    final trimmed = text.trimLeft();
+    return trimmed.startsWith('<system-reminder>') ||
+        trimmed.startsWith('<command-name>') ||
+        trimmed.startsWith('<command-message>') ||
+        trimmed.startsWith('<command-args>') ||
+        trimmed.startsWith('<local-command-') ||
+        trimmed.startsWith('<task-notification>') ||
+        trimmed.startsWith('<bash-input>') ||
+        trimmed.startsWith('<bash-stdout>') ||
+        trimmed.startsWith('<bash-stderr>');
   }
 
   /// The title the session goes by: the user's, else the one made for it.

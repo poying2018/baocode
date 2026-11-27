@@ -5,6 +5,7 @@ import 'package:bao_agent/src/config/frontmatter.dart';
 import 'package:bao_agent/src/config/memory.dart';
 import 'package:bao_agent/src/config/paths.dart';
 import 'package:bao_agent/src/config/settings.dart';
+import 'package:bao_agent/src/prompts/system_prompt.dart';
 import 'package:bao_agent/src/tools/diff.dart';
 import 'package:bao_agent/src/tools/glob_pattern.dart';
 import 'package:bao_agent/src/util/cancel.dart';
@@ -677,6 +678,20 @@ void main() {
       expect(running.stderr.toString(), 'bad\n');
       expect(running.trimmed, isFalse);
     });
+  });
+
+  test('attributionReminder explicitly forbids trailers when empty', () {
+    final disabled = attributionReminder(commit: '', pr: '');
+    expect(disabled, contains('Do not add any Co-Authored-By trailer'));
+    expect(disabled, contains('Do not add any attribution'));
+
+    final enabled = attributionReminder(
+      commit: 'Co-Authored-By: BaoCode <noreply@baocode.dev>',
+      pr: 'Generated with BaoCode',
+    );
+    expect(enabled, contains('Co-Authored-By: BaoCode'));
+    expect(enabled, contains('Generated with BaoCode'));
+    expect(enabled, isNot(contains('Do not add')));
   });
 }
 

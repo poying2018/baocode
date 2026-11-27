@@ -6247,6 +6247,32 @@ class AppLocalizationsEn extends AppLocalizations {
       'e.g. .git, node_modules, *.log';
 
   @override
+  String get gitAutoFetchSetting => 'Git auto-fetch';
+
+  @override
+  String get gitAutoFetchSettingDescription =>
+      'Periodically fetch the current branch\'s remote in the background so incoming commits appear without a manual Fetch. (git.autofetchInterval)';
+
+  @override
+  String get gitAutoFetchOff => 'Off';
+
+  @override
+  String gitAutoFetchMinutes(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'Every $minutes minutes',
+      one: 'Every 1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gitAutoFetchSeconds(int seconds) {
+    return 'Every $seconds seconds';
+  }
+
+  @override
   String get claudePathSetting => 'Path';
 
   @override
@@ -11019,7 +11045,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsSshKeywords =>
-      'ssh remote server host jump bastion key password core';
+      'ssh remote server host jump bastion key password core skills';
 
   @override
   String get sshSettingsDescription =>
@@ -14383,6 +14409,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get remoteLocalAccessAskAgain => 'Ask Each Time';
 
   @override
+  String get remoteShareUserSkillsGroup => 'Skills';
+
+  @override
+  String get remoteShareUserSkills => 'Share Local User Skills';
+
+  @override
+  String get remoteShareUserSkillsDetail =>
+      'Project this computer’s user skills (~/.claude/skills) into a temporary directory for remote agents without changing files on the remote host. Remote skills with the same name take precedence.';
+
+  @override
   String get sidePanelPorts => 'Ports';
 
   @override
@@ -14793,4 +14829,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String remoteBrowserReplace(String name) {
     return '“$name” already exists. Replace it?';
   }
+
+  @override
+  String get tailStart => 'Tail File (Follow Changes)';
+
+  @override
+  String get tailStop => 'Stop Tailing';
+
+  @override
+  String get tailSaveFirst => 'Save changes to start tailing';
+
+  @override
+  String get tailResume => 'Scroll to Bottom & Resume Tail';
+
+  @override
+  String get cmdToggleTail => 'Toggle Tail (Follow File)';
+
+  @override
+  String get tailReadOnlyHint =>
+      'Read-only while tailing (tail -f). Stop tailing to edit.';
 }

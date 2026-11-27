@@ -5878,6 +5878,26 @@ class AppLocalizationsZh extends AppLocalizations {
       '例如 .git, node_modules, *.log';
 
   @override
+  String get gitAutoFetchSetting => 'Git 自动获取';
+
+  @override
+  String get gitAutoFetchSettingDescription =>
+      '定期在后台获取当前分支的远端更新，无需手动获取即可看到落后提交数。（git.autofetchInterval）';
+
+  @override
+  String get gitAutoFetchOff => '关闭';
+
+  @override
+  String gitAutoFetchMinutes(int minutes) {
+    return '每 $minutes 分钟';
+  }
+
+  @override
+  String gitAutoFetchSeconds(int seconds) {
+    return '每 $seconds 秒';
+  }
+
+  @override
   String get claudePathSetting => '路径';
 
   @override
@@ -10475,7 +10495,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get settingsSshKeywords =>
-      'ssh 远程 服务器 主机 跳板机 私钥 密码 内核 remote server host';
+      'ssh 远程 服务器 主机 跳板机 私钥 密码 内核 技能 skills remote server host';
 
   @override
   String get sshSettingsDescription => '远程项目连接的服务器：地址、登录方式、跳板机，以及每台用的内核。';
@@ -13637,6 +13657,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get remoteLocalAccessAskAgain => '改回每次询问';
 
   @override
+  String get remoteShareUserSkillsGroup => '技能';
+
+  @override
+  String get remoteShareUserSkills => '共享本机用户级 Skills';
+
+  @override
+  String get remoteShareUserSkillsDetail =>
+      '将本机的用户级 skills（~/.claude/skills）映射到远端临时目录供 SSH 内核使用，不改动远端原有配置。若远端已有同名 skill，优先保留远端版本。';
+
+  @override
   String get sidePanelPorts => '端口';
 
   @override
@@ -14010,4 +14040,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String remoteBrowserReplace(String name) {
     return '“$name”已存在，要替换它吗？';
   }
+
+  @override
+  String get tailStart => '实时追踪(tail -f)';
+
+  @override
+  String get tailStop => '停止实时追踪(tail -f)';
+
+  @override
+  String get tailSaveFirst => '请先保存更改后再开启实时追踪';
+
+  @override
+  String get tailResume => '滚动到底部并继续追踪';
+
+  @override
+  String get cmdToggleTail => '切换实时追踪(tail -f)';
+
+  @override
+  String get tailReadOnlyHint => '实时追踪(tail -f)中为只读，关闭追踪后可编辑';
 }

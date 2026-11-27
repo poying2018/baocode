@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:bao_remote/claude.dart' show ClaudeHistoryPage;
+import 'package:bao_remote/client.dart' show SshCore;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../../channel/channel_setup.dart';
 import '../../chat/chat_models.dart';
 import '../../chat/composer/paste_store.dart';
 import '../../chat/composer/remote_drops.dart';
@@ -16,6 +18,7 @@ import '../../models/model_provider.dart';
 import '../../models/model_providers.dart';
 import '../../models/model_runtime.dart';
 import '../../remote/port_forwards.dart';
+import '../../remote/remote_claude.dart' show remoteCoreOf;
 import '../../remote/remote_location.dart';
 import '../../settings/user_settings.dart';
 import '../../usage/agy_usage_meter.dart';
@@ -23,7 +26,6 @@ import '../../usage/claude_usage_meter.dart';
 import '../../usage/usage_ledger.dart';
 import '../../workspace/editor_launcher.dart' show openExternal;
 import '../agent_kernel.dart';
-import '../antigravity/agy_quota.dart';
 import '../commit_attribution.dart';
 import '../extension_switches.dart';
 import '../kernel_event.dart';
@@ -424,17 +426,17 @@ class ClaudeCodeKernel
   /// The model asked for, as the CLI names it (e.g. `opus[1m]`), or a
   /// provider's ([modelRef]). BaoCode's own core has no model of its own:
   /// on it, one of no upstream is the first upstream's model. A provider's
-  /// removed since falls back as the picker shows it: to Claude Code's own
-  /// if offered there, else to the first upstream's.
+  /// removed since (or not offered here, such as Antigravity ACP over SSH)
+  /// falls back as the picker shows it: to Claude Code's own if offered
+  /// there, else to the first offered upstream's.
   String? get _model {
     final picked = _pickedModel;
-    if (_providers.resolve(picked) != null) return picked;
-    if (_providers.builtinAvailable &&
-        (parseModelRef(picked) == null || _providers.builtinOffered)) {
+    if (_resolveCustom(picked) != null) return picked;
+    if (_builtinAvailable &&
+        (parseModelRef(picked) == null || _builtinOffered)) {
       return picked;
     }
-    return _providers.firstModel ??
-        (_providers.builtinAvailable ? picked : null);
+    return _firstModel ?? (_builtinAvailable ? picked : null);
   }
 
   set _model(String? model) => _pickedModel = model;
@@ -1258,8 +1260,6 @@ class ClaudeCodeKernel
     // ever. The turn is over either way.
     _refusePermissions();
     _permissions.clear();
-    // What the turn spent of Antigravity's limits.
-    if (_onAgy) unawaited(_agyQuota.refresh());
     // Stopped too: its work folds all the same (the session file tells it
     // was stopped).
     if (worked != null) {
@@ -2727,8 +2727,7 @@ class ClaudeCodeKernel
   }
 
   @override
-  List<RateLimitWindow> get accountLimits =>
-      _onAgy ? AgyQuota.current.windows : _limits;
+  List<RateLimitWindow> get accountLimits => _onAgy ? const [] : _limits;
 
   // The account's usage, asked for (as `/usage` does): no more than once in
   // [_usageFresh], and one request at a time for all sessions.
@@ -2756,8 +2755,11 @@ class ClaudeCodeKernel
 
   @override
   Future<void> refreshUsage() {
-    // Antigravity's account, on its model: its own limits.
-    if (_onAgy) return _agyQuota.refresh();
+    // Antigravity ACP has no official quota API.
+    if (_onAgy) {
+      _reportStats();
+      return Future.value();
+    }
     if (_usageFetchedAt case final at?
         when DateTime.now().difference(at) < _usageFresh) {
       return Future.value();
@@ -2865,16 +2867,13 @@ class ClaudeCodeKernel
     return true;
   }
 
-  /// Antigravity's limits, told to every session as they are read.
-  static final AgyQuota _agyQuota = AgyQuota.current..addListener(_reportAll);
-
   void _reportStats() => emit(
     StatsReported(
       nextSeq,
       UsageStats(
         costUsd: _cost,
-        limits: _onAgy ? _agyQuota.windows : _limits,
-        limitsState: _onAgy ? _agyQuota.state : _limitsState,
+        limits: _onAgy ? const [] : _limits,
+        limitsState: _onAgy ? LimitsState.idle : _limitsState,
         limitsOffBy: _onAgy ? null : _limitsOffBy,
         cache: switch (_requests[_lastRequest]) {
           final last? when _cachingModels.contains(_lastModel) => PromptCache(
@@ -3535,8 +3534,49 @@ class ClaudeCodeKernel
 
   // --- Providers --------------------------------------------------------------------
 
+  /// Whether Claude Code as set up where this session runs (its login,
+  /// models and settings) is available: on this machine, only on the CLI
+  /// core; on an SSH host, whenever its core is not forced to BaoCode's own
+  /// core (Automatic tries the host's CLI first).
+  bool get _builtinAvailable {
+    if (ChannelSetup.channelBuild) return false;
+    if (RemoteLocation.hostOf(_cwd) case final host?) {
+      return remoteCoreOf(host) != SshCore.builtin;
+    }
+    return _providers.builtinAvailable;
+  }
+
+  /// Whether Claude Code as set up where this session runs is in the picker.
+  bool get _builtinOffered => _builtinAvailable && !_providers.builtinHidden;
+
+  /// The provider and model [ref] picks if offered in this session
+  /// (Antigravity ACP models are local-only: see [_agyOffered]).
+  (ModelProvider, ProviderModel)? _resolveCustom(String? ref) {
+    final resolved = _providers.resolve(ref);
+    if (resolved == null) return null;
+    final (provider, info) = resolved;
+    if (provider.protocolOf(info) == ProviderProtocol.agy && !_agyOffered) {
+      return null;
+    }
+    return resolved;
+  }
+
+  /// The first upstream model offered in this session; null without one.
+  String? get _firstModel {
+    for (final provider in _providers.enabled) {
+      if (provider.protocol == ProviderProtocol.agy && !_agyOffered) continue;
+      for (final info in provider.enabledModels) {
+        if (provider.protocolOf(info) == ProviderProtocol.agy && !_agyOffered) {
+          continue;
+        }
+        return modelRef(provider.id, info.id);
+      }
+    }
+    return null;
+  }
+
   /// The provider and model of the user's [_model] picks, if it is one.
-  (ModelProvider, ProviderModel)? get _custom => _providers.resolve(_model);
+  (ModelProvider, ProviderModel)? get _custom => _resolveCustom(_model);
 
   /// Whether the model picked is Antigravity's, run on its CLI.
   bool get _onAgy => switch (_custom) {
@@ -3554,7 +3594,7 @@ class ClaudeCodeKernel
 
   /// What a session on [model] is started on: '' for Claude Code as the
   /// user set it up, else the provider and its setup.
-  String _providerKeyOf(String? model) => switch (_providers.resolve(model)) {
+  String _providerKeyOf(String? model) => switch (_resolveCustom(model)) {
     (final provider, _) => '${provider.id}|${provider.launchFingerprint}',
     null => '',
   };
@@ -3597,7 +3637,7 @@ class ClaudeCodeKernel
     // message to start one on the model now picked.
     if (_transport != null &&
         _launchedModel != null &&
-        _providers.resolve(_launchedModel) == null) {
+        _resolveCustom(_launchedModel) == null) {
       _launchedModel = null;
       release();
     }
@@ -3637,7 +3677,7 @@ class ClaudeCodeKernel
     // Picked again over the one answering in its place: switched back to.
     final again = _fallback != null;
     _fallback = null;
-    final target = _providers.resolve(id);
+    final target = _resolveCustom(id);
     final sameProvider = _providerKeyOf(id) == _onProvider;
     // Its own effort and context, if it had them: not the one before's.
     if (_pickedWindows[id] case final window?) _window = window;
@@ -3790,7 +3830,7 @@ class ClaudeCodeKernel
       return [
         // Shown unless turned off in Settings → Models; never on BaoCode's
         // own core, which runs on the upstreams alone.
-        if (_providers.builtinOffered)
+        if (_builtinOffered)
           if (_models.isEmpty)
             // Its models not known (it is not logged in, or no session has
             // started on it yet): picking this starts one, which lists them.
@@ -3840,7 +3880,7 @@ class ClaudeCodeKernel
     selected: () {
       if (_custom != null) return _model;
       // BaoCode's own core with no upstream: none to run on.
-      if (!_providers.builtinAvailable) return null;
+      if (!_builtinAvailable) return null;
       return switch (_currentModel?.value) {
         final value? => _baseOf(value),
         null => _models.isEmpty ? 'default' : null,

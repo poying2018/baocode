@@ -105,6 +105,7 @@ import 'platform/open_requests.dart';
 import 'platform/shell_command.dart';
 import 'remote/project_host.dart';
 import 'remote/remote_claude.dart';
+import 'remote/remote_skills.dart';
 import 'remote/ssh_host.dart';
 import 'search/claude_conversation_search.dart';
 import 'search/conversation_search.dart';
@@ -612,6 +613,11 @@ void followSettingsFiles(SettingsFiles files) {
   // agent starts.
   ClaudePathSetting.current = () =>
       ClaudePathSetting.parse(files.settings[ClaudePathSetting.settingKey]);
+  // Settings → SSH Servers: whether local user-level skills are projected to
+  // remote kernels on SSH/WSL hosts.
+  RemoteSkillsSetting.current = () => RemoteSkillsSetting.enabled(
+    files.settings[RemoteSkillsSetting.settingKey],
+  );
   // Settings → General → Claude Code: the core sessions run on (BaoCode's
   // own, or the CLI), read as each agent starts. Unset, the CLI where it
   // is installed (looked for on the app's PATH, then the shell's), else
@@ -734,6 +740,9 @@ void followSettingsFiles(SettingsFiles files) {
   EditorWordWrap.follow(files.settings);
   // Whether the code editors show their minimap.
   EditorMinimap.follow(files.settings);
+  // settings.json's git.autofetchInterval: seconds between background
+  // fetches of the current branch's remote (180 s by default, 0 for off).
+  GitAutoFetchSetting.follow(files.settings);
 }
 
 /// The app's updates (lib/update/): looked for as settings.json's
@@ -1144,39 +1153,42 @@ class _BaoCodeAppState extends State<BaoCodeApp>
       theme: buildAppTheme(),
       themeAnimationDuration: Duration.zero,
       scrollBehavior: const BaoScrollBehavior(),
-      builder: (context, child) => ValueListenableBuilder<int>(
-        valueListenable: CodeFont.uiScale,
-        builder: (context, percent, scaled) {
-          // The whole window is zoomed, not its text alone: its fixed heights,
-          // icons and gaps grow with the text they hold.
-          final zoom = percent / 100;
-          final media = UiZoom.zoomed(MediaQuery.of(context), zoom);
-          // The traffic lights in the middle of the title bar, as it grows.
-          WindowControls.setTitleBarDrop(
-            (AppMetrics.titleBarHeight * zoom -
-                    AppMetrics.nativeTitleBarHeight) /
-                2,
-            viewId: window.viewId,
-          );
-          // Windows blurs glyphs drawn at a fractional pixel size.
-          TextScaler snapped(TextScaler scaler) => AppPlatform.isWindows
-              ? PixelSnappedTextScaler(scaler, media.devicePixelRatio)
-              : scaler;
-          final system = media.textScaler;
-          return SystemTextScale(
-            // A terminal at a size of its own: the zoom taken back off.
-            scaler: snapped(
-              zoom == 1 ? system : TextScaler.linear(system.scale(1) / zoom),
-            ),
-            child: MediaQuery(
-              data: media.copyWith(textScaler: snapped(system)),
-              child: UiZoom(scale: zoom, child: scaled),
-            ),
-          );
-        },
-        child: _themeTransition.wrap(
-          child ?? const SizedBox.shrink(),
-          canvas: AppColors.windowCanvas,
+      builder: (context, child) => _roundCorners(
+        window.viewId,
+        ValueListenableBuilder<int>(
+          valueListenable: CodeFont.uiScale,
+          builder: (context, percent, scaled) {
+            // The whole window is zoomed, not its text alone: its fixed heights,
+            // icons and gaps grow with the text they hold.
+            final zoom = percent / 100;
+            final media = UiZoom.zoomed(MediaQuery.of(context), zoom);
+            // The traffic lights in the middle of the title bar, as it grows.
+            WindowControls.setTitleBarDrop(
+              (AppMetrics.titleBarHeight * zoom -
+                      AppMetrics.nativeTitleBarHeight) /
+                  2,
+              viewId: window.viewId,
+            );
+            // Windows blurs glyphs drawn at a fractional pixel size.
+            TextScaler snapped(TextScaler scaler) => AppPlatform.isWindows
+                ? PixelSnappedTextScaler(scaler, media.devicePixelRatio)
+                : scaler;
+            final system = media.textScaler;
+            return SystemTextScale(
+              // A terminal at a size of its own: the zoom taken back off.
+              scaler: snapped(
+                zoom == 1 ? system : TextScaler.linear(system.scale(1) / zoom),
+              ),
+              child: MediaQuery(
+                data: media.copyWith(textScaler: snapped(system)),
+                child: UiZoom(scale: zoom, child: scaled),
+              ),
+            );
+          },
+          child: _themeTransition.wrap(
+            child ?? const SizedBox.shrink(),
+            canvas: AppColors.windowCanvas,
+          ),
         ),
       ),
       locale: _locale.locale,
@@ -1231,4 +1243,20 @@ class _BaoCodeAppState extends State<BaoCodeApp>
           (AppPlatform.isWindowsHost || AppPlatform.isMacOSApp))
       ? ExcludeSemantics(child: app)
       : app;
+
+  /// [viewId]'s window's app kept inside its corners where they are round,
+  /// as GTK draws them on Linux (see WindowControls.roundCornersOf). The
+  /// clip stays when they turn square, only not clipping, so the app under
+  /// it is kept.
+  static Widget _roundCorners(int viewId, Widget app) => !AppPlatform.isLinux
+      ? app
+      : ValueListenableBuilder<double>(
+          valueListenable: WindowControls.roundCornersOf(viewId),
+          builder: (context, radius, app) => ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            clipBehavior: radius > 0 ? Clip.antiAlias : Clip.none,
+            child: app,
+          ),
+          child: app,
+        );
 }

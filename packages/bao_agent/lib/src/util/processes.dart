@@ -238,11 +238,11 @@ class Shell {
       if (environment['CLAUDE_CODE_GIT_BASH_PATH'] case final set?
           when exists(set)) {
         // Git's bash says its paths the MSYS way.
-        return Shell(set);
+        return Shell(set, msys: true);
       }
       if (bao != null && exists(bao)) return Shell(bao, baoBash: true);
       if (gitBash(environment, exists: exists) case final git?) {
-        return Shell(git);
+        return Shell(git, msys: true);
       }
       return Shell(environment['COMSPEC'] ?? 'cmd.exe', kind: ShellKind.cmd);
     }

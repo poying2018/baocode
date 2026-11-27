@@ -157,6 +157,7 @@ void main() {
       'Compare With',
       'Word Wrap',
       isNotEmpty,
+      'Tail File (Follow Changes)',
       'Command Palette...',
       isNotEmpty,
     ]);
